@@ -1,0 +1,32 @@
+# Ripgrep configuration for Claude Code optimization
+# This file should be placed at ~/.ripgreprc
+
+# Output formatting optimizations for Claude Code
+--no-heading
+--color=never  
+--json
+--max-columns=120
+# Note: --trim removed to preserve code indentation for better context
+
+# Performance and safety limits
+--max-filesize=1M
+--max-count=1000
+
+# Search behavior
+--ignore-case
+--smart-case
+--hidden
+--follow
+
+# Use ignore file for better exclusion control
+--ignore-file=~/.rgignore
+
+# Basic directory exclusions (supplemented by .rgignore)
+--glob=!node_modules/*
+--glob=!target/*
+--glob=!vendor/*
+--glob=!dist/*
+--glob=!build/*
+--glob=!coverage/*
+--glob=!*.min.js
+--glob=!*.min.css

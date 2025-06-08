@@ -1,0 +1,29 @@
+# Global ripgrep ignore file
+# This file should be placed at ~/.rgignore
+
+# Git directories (more reliable than glob patterns)
+/.git/
+**/.git/
+
+# Lock files (context-sensitive exclusion)
+# *.lock          # uncomment to ignore lock files when trimming context
+# go.sum          # uncomment to ignore during large-diff reviews
+# Cargo.lock      # uncomment to ignore during large-diff reviews
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+.DS_Store
+
+# Binary and minified files
+*.min.js
+*.min.css
+*.wasm
+*.so
+*.dylib
+*.dll
+
+# Generated documentation
+/docs/build/
+/target/doc/
