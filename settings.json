@@ -1,0 +1,91 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(~/.zshrc)",                    // Check shell settings for command behavior issues
+      
+      // Rust
+      "Bash(cargo build:*)",
+      "Bash(cargo check:*)",
+      "Bash(cargo clippy:*)",
+      "Bash(cargo fmt:*)",
+      "Bash(cargo audit:*)",
+      
+      // Go
+      "Bash(make test-unit)",
+      "Bash(make test-e2e)",
+      "Bash(make test-all)",
+      "Bash(go build:*)",
+      "Bash(go mod:*)",
+      "Bash(go vet:*)",
+      "Bash(go fmt:*)",
+      "Bash(go test:*)",
+      
+      // Node.js/Frontend
+      "Bash(npm run:*)",
+      "Bash(yarn:*)",
+      
+      // Git operations (push is excluded and requires user confirmation)
+      "Bash(git status)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git pull:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      
+      // High-performance search and file operation tools (prioritized over legacy tools)
+      "Bash(rg --json:*)",                 // JSON format search results
+     "Bash(fd:*)",                         // find
+      "Bash(bat:*)",                       // cat
+      "Bash(exa:*)",                       // ls
+      "Bash(lsd:*)",                       // ls
+      "Bash(delta:*)",                     // git diff
+
+      // GitHub CLI
+      "Bash(gh auth:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh pr checkout:*)",            // Checkout PR locally → View diff with delta → Fix immediately
+      "Bash(gh issue view:*)",
+      "Bash(gh issue list:*)",
+      "Bash(gh repo view:*)",
+      
+      // Basic file operations
+      "Bash(head:*)",
+      "Bash(tail:*)" 
+    ],
+    "deny": [
+      "Read(*.env)",
+      "Read(.aws/**)",
+      "Read(.ssh/**)",
+      "Read(~/.config/**)",
+      "Edit(.env*)",
+      "Edit(*.env)",
+      "Edit(.aws/**)",
+      "Edit(.ssh/**)",
+      "Edit(~/.config/**)",
+      "Bash(sudo:*)",
+      "WebFetch(*)",
+
+      // legacy tools
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(ls:*)"
+    ]
+  },
+  "env": {
+    "RIPGREP_CONFIG_PATH": "$HOME/.ripgreprc",
+    "GIT_PAGER": "delta", // Use delta for both Git diff and interactive add
+    "DELTA_FEATURES": "side-by-side,line-numbers",
+    "GIT_CONFIG_PARAMETERS": "interactive.diffFilter=delta --color-only",
+    "GIT_OPTIONAL_LOCKS": "0", // Avoid unnecessary locks during diff viewing sessions to stabilize Git operations
+    "DISABLE_TELEMETRY": "1", // Flag to prevent external data transmission
+    "RUST_LOG": "info",
+    "CARGO_TERM_COLOR": "always",
+    "CARGO_INCREMENTAL": "1",
+    "GO111MODULE": "on",
+    "GOPROXY": "https://proxy.golang.org,direct",
+    "NODE_ENV": "development"
+  },
+  "includeCoAuthoredBy": false
+}
+
