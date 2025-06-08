@@ -1,3 +1,4 @@
+// All comments must be deleted.
 {
   "permissions": {
     "allow": [
@@ -71,7 +72,7 @@
     ]
   },
   "env": {
-    "RIPGREP_CONFIG_PATH": "$HOME/.ripgreprc",
+    "RIPGREP_CONFIG_PATH": "$HOME/.ripgreprc",  // TODO: change full path
     "GIT_OPTIONAL_LOCKS": "0", // Avoid unnecessary locks during diff viewing sessions to stabilize Git operations
     "DISABLE_TELEMETRY": "1", // Flag to prevent external data transmission
     "RUST_LOG": "info",
