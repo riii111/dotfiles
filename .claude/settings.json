@@ -36,8 +36,7 @@
       "Bash(rg --json:*)",                 // JSON format search results
      "Bash(fd:*)",                         // find
       "Bash(bat:*)",                       // cat
-      "Bash(exa:*)",                       // ls
-      "Bash(lsd:*)",                       // ls
+      "Bash(eza:*)",                       // ls
       "Bash(delta:*)",                     // git diff
 
       // GitHub CLI
