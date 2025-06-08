@@ -75,12 +75,35 @@ javascript:
     - 'build/'
 
 ### prompts
-When running `rg`, always pass `--no-heading --color=never --json --max-columns=120`.
+- When running `rg`, always pass `--no-heading --color=never --json --trim --max-columns=120`.
 
-When using GitHub CLI commands, prefer JSON output to avoid noise:
-- Use `gh pr view --json title,body` instead of plain text output
-- Use `gh issue view --json title,body` for issue details
-- This eliminates emoji reactions and formatting artifacts from the output
+- When you need to **search for files**, use **`fd`** instead of `find`.
+- Always pass:
+
+```bash
+fd --hidden --exclude .git --exclude node_modules --color=never --print0
+```
+
+- When you want to **peek at a file’s contents**, use **`bat`** instead of `cat`.
+
+```bash
+bat --plain --paging=never --color=never
+```
+
+- For **directory listings**, call **`eza`** (modern `ls`) instead of `ls`.
+
+```bash
+eza -1 --color=never --group-directories-first
+```
+
+- **Rule:** never execute `grep`, `find`, `cat`, or ordinary `ls`.  
+- Rewrite them to **`rg` / `fd` / `bat` / `eza`** with the option sets above before running.
+
+
+- When using GitHub CLI commands, prefer JSON output to avoid noise:
+  - Use `gh pr view --json title,body` instead of plain text output
+  - Use `gh issue view --json title,body` for issue details
+  - This eliminates emoji reactions and formatting artifacts from the output
 
 ## 2. Git Operations
 
