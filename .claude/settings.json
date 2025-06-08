@@ -33,7 +33,7 @@
       "Bash(git show:*)",
       
       // High-performance search and file operation tools (prioritized over legacy tools)
-      "Bash(rg --json:*)",                 // JSON format search results
+      "Bash(rg:*)",                        // grep
      "Bash(fd:*)",                         // find
       "Bash(bat:*)",                       // cat
       "Bash(eza:*)",                       // ls
