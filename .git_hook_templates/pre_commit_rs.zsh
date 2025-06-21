@@ -21,12 +21,12 @@ _format_and_notify() {
       git add $(echo "$staged_files" | grep -E "$add_pattern") || true
     fi
     if command -v osascript &>/dev/null; then
-      osascript -e "display notification '✅ ${ok_msg}' with title '${ok_msg}'"
+      osascript -e "display notification \"${ok_msg}\" with title \"git pre-commit\""
     fi
     echo "✅ ${ok_msg}"
   else
     if command -v osascript &>/dev/null; then
-      osascript -e "display notification '❌ ${ng_msg}' with title '${ng_msg}' sound name 'Basso'"
+      osascript -e "display notification \"${ng_msg}\" with title \"git pre-commit\" sound name \"Basso\""
     fi
     echo "❌ ${ng_msg}"
     exit 1
@@ -38,7 +38,7 @@ _format_and_notify() {
 # -------------------------------------
 if echo "$staged_files" | grep -qE "\.rs$"; then
   echo "🦀 Rustファイルが検出されたのだ！"
-  _format_and_notify "cargo fmt" "\\.rs$" "Rustフォーマット成功" "cargo fmt エラー"
+  _format_and_notify "cargo fmt" "\\.rs$" "✅ Rust format successful" "❌ cargo fmt error"
 fi
 
 exit 0 

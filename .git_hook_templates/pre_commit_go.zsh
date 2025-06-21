@@ -11,13 +11,15 @@ readonly staged_files="$(git diff --cached --name-only --diff-filter=ACMR)"
 _format_and_notify() {
   local cmd="$1" ok_msg="$2" ng_msg="$3"
   if eval "$cmd"; then
-    command -v osascript &>/dev/null && \
-      osascript -e "display notification '✅ ${ok_msg}' with title '${ok_msg}'"
-    echo "✅ ${ok_msg}"
+    if command -v osascript &>/dev/null; then
+      osascript -e "display notification \"${ok_msg}\" with title \"git pre-commit\""
+    fi
+    echo "${ok_msg}"
   else
-    command -v osascript &>/dev/null && \
-      osascript -e "display notification '❌ ${ng_msg}' with title '${ng_msg}' sound name 'Basso'"
-    echo "❌ ${ng_msg}"
+    if command -v osascript &>/dev/null; then
+      osascript -e "display notification \"${ng_msg}\" with title \"git pre-commit\" sound name \"Basso\""
+    fi
+    echo "${ng_msg}"
     exit 1
   fi
 }
@@ -25,15 +27,26 @@ _format_and_notify() {
 if echo "$staged_files" | grep -qE "\.go$"; then
   echo "🐹 Goファイルが検出されたのだ！"
 
-  # goimports を個別ファイルごとに実行
-  go_files=$(echo "$staged_files" | grep "\.go$")
-  for f in $go_files; do
-    _format_and_notify "goimports -w \"$f\"" "Go format successful ($f)" "goimports error ($f)"
-  done
+  # Goモジュールのルートディレクトリを見つける
+  go_mod_dir=""
+  if [[ -f "application/new/go.mod" ]]; then
+    go_mod_dir="application/new"
+  elif [[ -f "go.mod" ]]; then
+    go_mod_dir="."
+  fi
 
-  # フォーマット済みファイルを再ステージ
-  # shellcheck disable=SC2086
-  git add $go_files
+  if [[ -n "$go_mod_dir" ]]; then
+    echo "🔧 Running golangci-lint --fix from $go_mod_dir"
+    _format_and_notify "cd \"$go_mod_dir\" && golangci-lint run --fix >/dev/null" "✅ Go format successful" "❌ golangci-lint error"
+
+    # フォーマット済みファイルを再ステージ
+    go_files=$(echo "$staged_files" | grep "\.go$")
+    for file in $go_files; do
+      git add "$file" 2>/dev/null || true
+    done
+  else
+    echo "⚠️ go.modが見つからないのだ！"
+  fi
 fi
 
 exit 0 
