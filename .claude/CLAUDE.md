@@ -30,51 +30,32 @@
 - 常に謝罪するのではなく、許可を求めることを心がけてください。
 
 ## 1. Context Filters and Noise Reduction
+
 ### context-filters
+
 exclude:
-  - '^\\s*:[^ ]+:\\s*$'           # Emoji-only lines
-  - '^LGTM!?$'                    # +1/LGTM comments  
-  - '^\\s*\\+1\\s*$'              # +1 reactions
-  - '^Reviewed-by:'               # GitHub PR review metadata
-  - '^Co-authored-by:'            # GitHub co-author attribution
-  - '^Signed-off-by:'             # Git commit signatures
-  - '^<details>'                  # GitHub collapsible sections start
-  - '^</details>'                 # GitHub collapsible sections end
-  - 'node_modules/'               # Node.js dependencies
-  - '\\.log$'                     # Log files
-  - '/target/'                    # Rust build artifacts
-  - '/vendor/'                    # Go vendor directory
-  - '\\.git/'                     # Git internal files
-  - '/dist/'                      # Build distribution files
-  - '/build/'                     # Build output directories
-  - '\\.min\\.(js|css)$'          # Minified assets
-  - 'coverage/'                   # Test coverage reports
-  - '\\.generated\\.'             # Generated files
+
+- '^\\s*:[^ ]+:\\s*$'           # Emoji-only lines
+- '^LGTM!?$'                    # +1/LGTM comments  
+- '^\\s*\\+1\\s*$'              # +1 reactions
+- '^Reviewed-by:'               # GitHub PR review metadata
+- '^Co-authored-by:'            # GitHub co-author attribution
+- '^Signed-off-by:'             # Git commit signatures
+- '^<details>'                  # GitHub collapsible sections start
+- '^</details>'                 # GitHub collapsible sections end
+- 'node_modules/'               # Node.js dependencies
+- '\\.log$'                     # Log files
+- '/target/'                    # Rust build artifacts
+- '/vendor/'                    # Go vendor directory
+- '\\.git/'                     # Git internal files
+- '/dist/'                      # Build distribution files
+- '/build/'                     # Build output directories
+- '\\.min\\.(js|css)$'          # Minified assets
+- 'coverage/'                   # Test coverage reports
+- '\\.generated\\.'             # Generated files
 
 ### prompts
-When running `rg`, always pass `--no-heading --color=never --json --trim --max-columns=120`.
 
-### language-specific-filter
-
-rust:
-  exclude:
-    - 'target/debug/'
-    - 'target/release/'  
-    - 'Cargo.lock'        # Note: For application binaries, Cargo.lock should be committed per Rust guidelines. Exclude only for large diff analysis.
-
-go:
-  exclude:
-    - 'vendor/'
-    - 'go.sum'            # Note: Contains dependency hashes, may be needed for security reviews. Skip only during large diff analysis.
-javascript:
-  exclude:
-    - 'node_modules/'
-    - 'package-lock.json'
-    - '\\.d\\.ts$'        # Type definition files
-    - 'dist/'
-    - 'build/'
-
-### prompts
 - When running `rg`, always pass `--no-heading --color=never --json --trim --max-columns=120`.
 
 - When you need to **search for files**, use **`fd`** instead of `find`.
@@ -104,6 +85,41 @@ eza -1 --color=never --group-directories-first
   - Use `gh pr view --json title,body` instead of plain text output
   - Use `gh issue view --json title,body` for issue details
   - This eliminates emoji reactions and formatting artifacts from the output
+
+### language-specific-filter
+
+rust:
+  exclude:
+    - 'target/debug/'
+    - 'target/release/'  
+    - 'Cargo.lock'        # Note: For application binaries, Cargo.lock should be committed per Rust guidelines. Exclude only for large diff analysis.
+
+go:
+  exclude:
+    - 'vendor/'
+    - 'go.sum'            # Note: Contains dependency hashes, may be needed for security reviews. Skip only during large diff analysis.
+javascript:
+  exclude:
+    - 'node_modules/'
+    - 'package-lock.json'
+    - '\\.d\\.ts$'        # Type definition files
+    - 'dist/'
+    - 'build/'
+
+### prompts
+
+This project uses ripgrep (rg) for searching with optimized settings configured in ~/.ripgreprc.
+The configuration automatically:
+- Outputs in JSON format for better parsing
+- Limits output to manage context window
+- Excludes common build artifacts and dependencies
+- Uses custom ignore patterns from ~/.rgignore
+
+When using GitHub CLI commands, prefer JSON output to avoid noise:
+
+- Use `gh pr view --json title,body` instead of plain text output
+- Use `gh issue view --json title,body` for issue details
+- This eliminates emoji reactions and formatting artifacts from the output
 
 ## 2. Git Operations
 
