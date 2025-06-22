@@ -35,7 +35,7 @@ _format_and_notify() {
 # Rust
 # -------------------------------------
 if echo "$staged_files" | grep -qE "\.rs$"; then
-  echo "🦀 Rustファイルが検出されたのだ！"
+  echo "🦀 Rustファイルが検出されました！"
   _format_and_notify "cargo fmt" "\\.rs$" "✅ Rust format successful" "❌ cargo fmt error"
 fi
 
@@ -43,10 +43,10 @@ fi
 # SQL
 # -------------------------------------
 if echo "$staged_files" | grep -qE "\.sql$"; then
-  echo "🔍 SQLファイルが検出されたのだ！"
+  echo "🔍 SQLファイルが検出されました！"
 
   if ! command -v sqlfluff &>/dev/null; then
-    echo "⚠️ sqlfluffがインストールされていないのだ！ (pip install sqlfluff)"
+    echo "⚠️ sqlfluffがインストールされてません！ (pip install sqlfluff)"
   else
     sql_files=$(echo "$staged_files" | grep "\.sql$")
     num_cores=$(sysctl -n hw.ncpu)
