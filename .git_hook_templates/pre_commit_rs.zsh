@@ -37,7 +37,7 @@ _format_and_notify() {
 # Rust
 # -------------------------------------
 if echo "$staged_files" | grep -qE "\.rs$"; then
-  echo "🦀 Rustファイルが検出されたのだ！"
+  echo "🦀 Rustファイルが検出されました！"
   _format_and_notify "cargo fmt" "\\.rs$" "✅ Rust format successful" "❌ cargo fmt error"
 fi
 
