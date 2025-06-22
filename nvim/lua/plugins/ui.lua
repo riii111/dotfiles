@@ -87,7 +87,7 @@ return {
     "nvim-telescope/telescope.nvim",
     dependencies = {
       "nvim-lua/plenary.nvim",
-      { 
+      {
         "nvim-telescope/telescope-live-grep-args.nvim",
         version = "^1.0.0",
       },
@@ -160,19 +160,19 @@ return {
   },
 
   -- Treesitter context
-  { 
-    "nvim-treesitter/nvim-treesitter-context", 
-    opts = {} 
+  {
+    "nvim-treesitter/nvim-treesitter-context",
+    opts = {}
   },
 
   -- Glance preview
-  { 
-    "dnlhc/glance.nvim", 
-    opts = {} 
+  {
+    "dnlhc/glance.nvim",
+    opts = {}
   },
 
   -- Markview for markdown
-  { 
+  {
     "OXY2DEV/markview.nvim",
     event = { "BufReadPre *.md", "BufNewFile *.md" },
     config = true,
