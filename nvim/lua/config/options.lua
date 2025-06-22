@@ -19,6 +19,9 @@ vim.opt.termguicolors = true
 vim.opt.timeoutlen = 300
 vim.opt.updatetime = 250
 
+-- Clipboard integration
+vim.opt.clipboard = "unnamedplus"
+
 -- Disable netrw (for neo-tree)
 vim.g.loaded_netrw = 1
 vim.g.loaded_netrwPlugin = 1
