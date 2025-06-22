@@ -22,11 +22,19 @@ local function apply_flate_arc_italic()
     -- StatusLine & TabLine
     StatusLine = { fg = "#e9dbdb", bg = "#22252f" },
     StatusLineNC = { fg = "#9a9fbf", bg = "#22252f" },
-    TabLine = { fg = "#9a9fbf", bg = "#22252f" },
-    TabLineFill = { bg = "#22252f" },
-    TabLineSel = { fg = "#e9dbdb", bg = "NONE", bold = true },
+    TabLine = { fg = "#9a9fbf", bg = "#08090D" },
+    TabLineFill = { bg = "#08090D" },
+    TabLineSel = { fg = "#e9dbdb", bg = "#2c2f39", bold = true },
+    
+    -- Buffer line colors (for plugins like bufferline.nvim)
+    BufferLineFill = { bg = "#08090D" },
+    BufferLineBackground = { fg = "#9a9fbf", bg = "#08090D" },
+    BufferLineBuffer = { fg = "#9a9fbf", bg = "#08090D" },
+    BufferLineBufferSelected = { fg = "#e9dbdb", bg = "#2c2f39", bold = true },
+    BufferLineTab = { fg = "#9a9fbf", bg = "#08090D" },
+    BufferLineTabSelected = { fg = "#e9dbdb", bg = "#2c2f39", bold = true },
 
-    -- Search & Visual˙
+    -- Search & Visual
     Search = { fg = "#111419", bg = "#FFE066" },
     IncSearch = { fg = "#111419", bg = "#F49E4C" },
     Visual = { bg = "#44475a" },
@@ -41,14 +49,14 @@ local function apply_flate_arc_italic()
     ErrorMsg = { fg = "#f14c4c" },
     WarningMsg = { fg = "#cca700" },
 
-    -- Syntax Groups (Examples)
+    -- Syntax Groups
     Comment = { fg = "#6272A4", italic = true },
-    Constant = { fg = "#F0AA85", italic = true, bold = true },
-    String = { fg = "#dbdbda" },
-    Character = { fg = "#ffffff" },
-    Number = { fg = "#ffffff" },
-    Boolean = { fg = "#ffffff" },
-    Float = { fg = "#ffffff" },
+    Constant = { fg = "#F0AA85" },
+    String = { fg = "#CDC8DB" },
+    Character = { fg = "#F0AA85" },
+    Number = { fg = "#F0AA85" },
+    Boolean = { fg = "#F0AA85" },
+    Float = { fg = "#F0AA85" },
     Identifier = { fg = "#ffffff" },
     Directory = { fg = "#e3e7ef" },
     Function = { fg = "#55CF9E", italic = true },
@@ -86,8 +94,8 @@ local function apply_flate_arc_italic()
     DiffText = { fg = "#A29BFE" },
 
     -- Indent guideline color adjustment (v3 compatible)
-    IndentBlanklineChar = { fg = "#44475a" }, -- Regular indent line color
-    IndentBlanklineContextChar = { fg = "#6272A4" }, -- Scope/Context indent line color
+    IndentBlanklineChar = { fg = "#44475a" },
+    IndentBlanklineContextChar = { fg = "#6272A4" },
 
     -- Diagnostics
     DiagnosticError = { fg = "#f14c4c" },
@@ -113,18 +121,20 @@ local function apply_flate_arc_italic()
     NvimTreeGitNew = { fg = "#23D18C" },
     NvimTreeGitDeleted = { fg = "#E84855" },
     NvimTreeWinSeparator = { fg = "#101019", bg = "NONE" },
-    NvimTreeCursorLine = { bg = "#22252f" }, -- Adjusted cursor line color
+    NvimTreeCursorLine = { bg = "#22252f" },
 
     -- Add TreesitterContext highlight setting for background transparency
     TreesitterContext = { bg = "NONE" },
 
-    -- Neo-Tree specific colors (ensure transparency)
-    NeoTreeNormal = { fg = "#bccae4", bg = "NONE" },
-    NeoTreeNormalNC = { fg = "#bccae4", bg = "NONE" },
-    NeoTreeEndOfBuffer = { bg = "NONE" },
+    -- Neo-Tree specific colors (custom dark background)
+    NeoTreeNormal = { fg = "#bccae4", bg = "#191A26" },
+    NeoTreeNormalNC = { fg = "#bccae4", bg = "#191A26" },
+    NeoTreeEndOfBuffer = { bg = "#191A26" },
     NeoTreeFileName = { fg = "#D8DEE9" },
-    NeoTreeWinSeparator = { fg = "#101019", bg = "NONE" },
-    NeoTreeCursorLine = { bg = "#2c2f39" },
+    NeoTreeWinSeparator = { fg = "#101019", bg = "#191A26" },
+    NeoTreeCursorLine = { bg = "#252932" },
+    NeoTreeDirectoryName = { fg = "#00cecb" }, -- Restored to original cyan color
+    NeoTreeDirectoryIcon = { fg = "#00cecb" }, -- Restored to original cyan color
 
     -- Telescope specific colors (ensure transparency)
     TelescopeBorder = { fg = "#00cecb", bg = "NONE" },
@@ -140,17 +150,25 @@ local function apply_flate_arc_italic()
     TelescopeResultsNormal = { bg = "NONE" },
     TelescopePreviewNormal = { bg = "NONE" },
 
-    -- Avante warning fix
-    AvanteConflictCurrent = { fg = "#e9dbdb", bg = "#22252f" },
-    AvanteConflictIncoming = { fg = "#e9dbdb", bg = "#22252f" },
-
     -- Treesitter specific highlights
     ["@field"] = { fg = "#00cecb", italic = true },
-    ["@variable.member.go"] = { fg = "#00cecb", italic = true },
+    ["@variable.member.go"] = { fg = "#F0AA85", italic = true }, -- Struct exported member
     ["@module.rust"] = { fg = "#ffffff" },
     ["@lsp.type.attributeBracket.rust"] = { fg = "#ffffff" },
     ["@module.go"] = { fg = "#ffffff" },
     ["@lsp.type.namespace.go"] = { fg = "#ffffff" },
+    
+    ["@variable.builtin"] = { fg = "#F0AA85" },
+    ["@variable.parameter"] = { fg = "#ffffff" },
+    ["@type.builtin"] = { fg = "#CC7832" },
+    ["@type.builtin.go"] = { fg = "#CC7832" },
+    ["@type.builtin.rust"] = { fg = "#CC7832" },
+    ["@lsp.type.variable.go"] = { fg = "#ffffff" },
+    ["@lsp.type.parameter.go"] = { fg = "#ffffff" },
+    ["@constant"] = { fg = "#F0AA85" },
+    ["@constant.builtin"] = { fg = "#F0AA85" },
+    
+    ["@field"] = { fg = "#00cecb", italic = true },
   }
 
   -- Apply all defined theme highlights
@@ -171,4 +189,3 @@ vim.api.nvim_create_autocmd("ColorScheme", {
   group = vim.api.nvim_create_augroup("UserThemeApply", { clear = true }),
 })
 
-return {} 
