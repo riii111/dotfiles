@@ -128,6 +128,25 @@ return {
     opts = {},
   },
 
+  -- TMux navigator
+  {
+    "christoomey/vim-tmux-navigator",
+    cmd = {
+      "TmuxNavigateLeft",
+      "TmuxNavigateDown",
+      "TmuxNavigateUp",
+      "TmuxNavigateRight",
+      "TmuxNavigatePrevious",
+    },
+    keys = {
+      { "<c-h>", "<cmd><C-U>TmuxNavigateLeft<cr>" },
+      { "<c-j>", "<cmd><C-U>TmuxNavigateDown<cr>" },
+      { "<c-k>", "<cmd><C-U>TmuxNavigateUp<cr>" },
+      { "<c-l>", "<cmd><C-U>TmuxNavigateRight<cr>" },
+      { "<c-\\>", "<cmd><C-U>TmuxNavigatePrevious<cr>" },
+    },
+  },
+
   -- Better escape
   {
     "max397574/better-escape.nvim",
@@ -165,17 +184,27 @@ return {
     priority = 1000,
     lazy = false,
     opts = {
-      dashboard = {
-        preset = {
-          header = table.concat({
-            "███    ██ ███████  ██████  ██    ██ ██ ███    ███",
-            "████   ██ ██      ██    ██ ██    ██ ██ ████  ████",
-            "██ ██  ██ █████   ██    ██ ██    ██ ██ ██ ████ ██",
-            "██  ██ ██ ██      ██    ██  ██  ██  ██ ██  ██  ██",
-            "██   ████ ███████  ██████    ████   ██ ██      ██",
-            "",
-            "🚀 Pure Neovim Configuration",
-          }, "\n"),
+      modules = { "explorer", "scratch", "picker" },
+      picker = {
+        ui_select = true,
+        layouts = {
+          cursor = {
+            preview = false,
+            layout = {
+              backdrop = false,
+              row = 1,
+              col = 0.3,
+              width = 60,
+              height = 15,
+              min_height = 3,
+              border = "rounded",
+              title = "{title}",
+              title_pos = "center",
+              box = "vertical",
+              { win = "input", height = 1, border = "bottom" },
+              { win = "list", border = "none" },
+            },
+          },
         },
       },
     },

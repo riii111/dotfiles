@@ -7,8 +7,7 @@ local function setup_astrocore_keymaps()
       ["<D-Right>"] = { ":vsplit<CR>", desc = "Split window right" },
       ["<C-d>"] = { "x", desc = "Forward delete character" },
 
-      -- Search
-      ["<C-h>"] = {
+      ["<C-g>"] = {
         function()
           require("telescope.builtin").live_grep()
         end,
@@ -63,6 +62,22 @@ local function setup_astrocore_keymaps()
 
       -- Neo-tree toggle
       ["<Leader>o"] = { ":Neotree toggle<CR>", desc = "Toggle file explorer" },
+      
+      -- IntelliJ IDEA-style shortcuts (general)
+      ["<M-CR>"] = { 
+        function() 
+          vim.lsp.buf.code_action() 
+        end, 
+        desc = "Code actions" 
+      },
+      ["<D-S-r>"] = { 
+        function() 
+          vim.lsp.buf.code_action({
+            context = { only = { "refactor" } }
+          })
+        end, 
+        desc = "Refactor menu" 
+      },
     },
     v = {
       -- Commenting
