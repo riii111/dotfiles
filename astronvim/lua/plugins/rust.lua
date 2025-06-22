@@ -7,10 +7,7 @@ return {
     local disable_path_pattern = "/Users/a81803/GitHub/0_private/products/miniOS"
 
     if string.find(cwd, disable_path_pattern, 1, true) then
-      vim.notify(
-        "Current project (" .. cwd .. ") matches disable pattern: Disabling rustaceanvim plugin.",
-        vim.log.levels.INFO
-      )
+      vim.notify("Current project (" .. cwd .. ") matches disable pattern: Disabling rustaceanvim plugin.", vim.log.levels.INFO)
       return false
     else
       return true

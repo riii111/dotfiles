@@ -76,70 +76,45 @@ return {
     end,
   },
 
-  -- Add avante.nvim for AI support
-  {
-    "yetone/avante.nvim",
-    version = false,
-    dependencies = {
-      "nvim-lua/plenary.nvim",
-      "MunifTanjim/nui.nvim",
-      "nvim-telescope/telescope.nvim",
-      "nvim-treesitter/nvim-treesitter",
-      "stevearc/dressing.nvim",
-      {
-        'MeanderingProgrammer/render-markdown.nvim',
-        opts = { file_types = { "markdown", "Avante" }, },
-        ft = { "markdown", "Avante" },
-      },
-      -- Add img-clip.nvim for image pasting support
-      {
-        "HakonHarnes/img-clip.nvim",
-        event = "VeryLazy",
-        opts = {
-          default = {
-            embed_image_as_base64 = false,
-            prompt_for_file_name = false,
-            drag_and_drop = { insert_mode = true, },
-            use_absolute_path = true, -- Recommended for macOS/Windows
-          },
-        },
-      },
-    },
-    event = "VeryLazy",
-    cmd = { "Avante", "AvanteAsk", "AvanteEdit", "AvanteToggle" },
-    build = "make",
-    opts = {
-       provider = "gemini",
-       gemini = {
-         model = "gemini-2.5-pro-exp-03-25",
-       },
-    },
-    config = function(_, opts)
-      require("avante").setup(opts)
-
-      -- Keymaps
-      local map = vim.keymap.set
-      local success, api = pcall(require, "avante.api")
-      if not success then
-        vim.notify("avante.api not found. Keymaps not set.", vim.log.levels.WARN)
-        return
-      end
-
-      -- Cmd+L to toggle the sidebar/chat pane
-      map("n", "<D-l>", function() api.toggle() end, { desc = "Avante: Toggle Sidebar" })
-
-      -- Cmd+Shift+C to start editing selected code (buffer chat like)
-      map({ "n", "v" }, "<D-S-c>", function() api.edit() end, { desc = "Avante: Edit Code" })
-    end,
-  },
 
   -- == Examples of Adding Plugins ==
 
   "andweeb/presence.nvim",
+  
   {
-    "ray-x/lsp_signature.nvim",
-    event = "BufRead",
-    config = function() require("lsp_signature").setup() end,
+    "ray-x/go.nvim",
+    dependencies = {
+      "ray-x/guihua.lua",
+      "neovim/nvim-lspconfig",
+      "nvim-treesitter/nvim-treesitter",
+    },
+    config = function()
+      require("go").setup({
+        goimports = "gopls",
+        fillstruct = "gopls",
+        dap_debug = false,
+        textobjects = true,
+      })
+    end,
+    event = {"CmdlineEnter"},
+    ft = {"go", 'gomod'},
+    build = ':lua require("go.install").update_all_sync()'
+  },
+
+  {
+    "mrcjkb/rustaceanvim",
+    version = "^5",
+    lazy = false,
+    ft = { "rust" },
+  },
+
+  {
+    "saecki/crates.nvim",
+    tag = "stable",
+    config = function()
+      require("crates").setup()
+    end,
+    ft = { "toml" },
   },
 
   -- == Examples of Overriding Plugins ==
@@ -309,19 +284,4 @@ return {
     end,
   },
 
-  -- Override golangci_lint_ls configuration from astrocommunity
-  {
-    "AstroNvim/astrolsp",
-    opts = function(_, opts)
-      if not opts.config then opts.config = {} end
-      opts.config.golangci_lint_ls = {
-        init_options = {
-          command = {
-            "sh", "-c", "cd application/new && golangci-lint run --out-format json --show-stats=false --issues-exit-code=1"
-          },
-        },
-      }
-      return opts
-    end,
-  },
 }
