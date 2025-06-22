@@ -4,6 +4,6 @@ SESSION_NAME=dev
 tmux kill-session -t $SESSION_NAME 2>/dev/null || true
 
 tmux new-session -s $SESSION_NAME -d 'nvim'
-tmux split-window -h -p 38 -t $SESSION_NAME 'claude'
+tmux split-window -h -p 28 -t $SESSION_NAME 'claude'
 tmux select-pane -t $SESSION_NAME:0.0
 tmux attach-session -t $SESSION_NAME
