@@ -13,23 +13,64 @@ local function setup_astrocore_keymaps()
         end,
         desc = "Search text in project",
       },
-      ["<D-S-f>"] = { 
+      -- tmux外用（Cmdキー直接）
+      ["<D-F>"] = { 
         function() 
           require("telescope").extensions.live_grep_args.live_grep_args() 
         end, 
-        desc = "Live Grep with Args" 
+        desc = "Live Grep with Args (Cmd)" 
       },
       ["<D-f>"] = { 
         function() 
           require("telescope.builtin").current_buffer_fuzzy_find() 
         end, 
-        desc = "Find in current buffer" 
+        desc = "Find in current buffer (Cmd)" 
       },
       ["<D-p>"] = { 
         function() 
           require("telescope.builtin").find_files() 
         end, 
-        desc = "Find files"
+        desc = "Find files (Cmd)"
+      },
+      
+      -- tmux内用（MetaキーとしてのCmd）
+      ["<M-F>"] = { 
+        function() 
+          require("telescope").extensions.live_grep_args.live_grep_args() 
+        end, 
+        desc = "Live Grep with Args (Meta)" 
+      },
+      ["<M-f>"] = { 
+        function() 
+          require("telescope.builtin").current_buffer_fuzzy_find() 
+        end, 
+        desc = "Find in current buffer (Meta)" 
+      },
+      ["<M-p>"] = { 
+        function() 
+          require("telescope.builtin").find_files() 
+        end, 
+        desc = "Find files (Meta)"
+      },
+      
+      -- Reliable keymaps that work in both tmux and non-tmux environments  
+      ["<C-p>"] = { 
+        function() 
+          require("telescope.builtin").find_files() 
+        end, 
+        desc = "Find files (universal)"
+      },
+      ["<C-S-f>"] = { 
+        function() 
+          require("telescope").extensions.live_grep_args.live_grep_args() 
+        end, 
+        desc = "Live Grep (universal)" 
+      },
+      ["<C-S-b>"] = { 
+        function() 
+          require("telescope.builtin").current_buffer_fuzzy_find() 
+        end, 
+        desc = "Find in buffer (universal)" 
       },
 
       -- Commenting
