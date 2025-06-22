@@ -40,7 +40,7 @@ _format_and_notify() {
 # Rust (backend)
 # -------------------------------------
 if echo "$staged_files" | grep -qE "\.rs$"; then
-  echo "🦀 Rustファイルが検出！"
+  echo "🦀 Rustファイルが検出されました！"
   _format_and_notify "cargo fmt" "\\.rs$" "✅ Rust format successful" "❌ cargo fmt error" "$repo_root/backend"
 fi
 
@@ -48,7 +48,7 @@ fi
 # SQL (root または backend 配下想定)
 # -------------------------------------
 if echo "$staged_files" | grep -qE "\.sql$"; then
-  echo "🔍 SQLファイルが検出！"
+  echo "🔍 SQLファイルが検出されました！"
   if command -v sqlfluff &>/dev/null; then
     sql_files=$(echo "$staged_files" | grep "\.sql$")
     num_cores=$(sysctl -n hw.ncpu)
@@ -66,7 +66,7 @@ fi
 # Frontend (frontend 配下)
 # -------------------------------------
 if echo "$staged_files" | grep -qE "frontend/.*\.(ts|tsx|js|jsx)$"; then
-  echo "⚛️ フロントエンドファイルが検出！"
+  echo "⚛️ フロントエンドファイルが検出されました！"
   _format_and_notify "yarn lint:fix" "frontend/.*\\.(ts|tsx|js|jsx)$" "✅ Frontend format successful" "❌ biome lint error" "$repo_root/frontend"
 fi
 
