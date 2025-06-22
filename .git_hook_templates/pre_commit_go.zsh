@@ -25,7 +25,7 @@ _format_and_notify() {
 }
 
 if echo "$staged_files" | grep -qE "\.go$"; then
-  echo "🐹 Goファイルが検出されたのだ！"
+  echo "🐹 Goファイルが検出！"
 
   # Goモジュールのルートディレクトリを見つける
   go_mod_dir=""
@@ -45,7 +45,7 @@ if echo "$staged_files" | grep -qE "\.go$"; then
       git add "$file" 2>/dev/null || true
     done
   else
-    echo "⚠️ go.modが見つからないのだ！"
+    echo "⚠️ go.modが見つかりません！"
   fi
 fi
 
