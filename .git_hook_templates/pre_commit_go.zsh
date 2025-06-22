@@ -25,7 +25,7 @@ _format_and_notify() {
 }
 
 if echo "$staged_files" | grep -qE "\.go$"; then
-  echo "🐹 Goファイルが検出！"
+  echo "🐹 Goファイルが検出されました！"
 
   # Goモジュールのルートディレクトリを見つける
   go_mod_dir=""
