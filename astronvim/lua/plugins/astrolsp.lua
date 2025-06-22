@@ -75,6 +75,9 @@ return {
           }
         }
       },
+      golangci_lint_ls = {
+        root_dir = require("lspconfig.util").root_pattern("go.mod", ".golangci.yml", ".git"),
+      },
       -- clangd = { capabilities = { offsetEncoding = "utf-8" } },
     },
     -- customize how language servers are attached
