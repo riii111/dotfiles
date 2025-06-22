@@ -20,6 +20,9 @@
       "Bash(go vet:*)",
       "Bash(go fmt:*)",
       "Bash(go test:*)",
+      "Bash(golangci-lint:*)",
+      "Bash(goimports:*)",
+
       
       // Node.js/Frontend
       "Bash(npm run:*)",
