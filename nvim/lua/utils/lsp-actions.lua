@@ -63,12 +63,28 @@ function M.language_specific_code_action()
       elseif filetype == "go" then
         M.go_quick_actions()
       else
-        local has_lspsaga, lspsaga = pcall(require, "lspsaga")
-        if has_lspsaga then
-          vim.cmd("Lspsaga code_action")
-        else
-          vim.notify("No code actions available", vim.log.levels.INFO)
-        end
+        -- Generic language - show basic menu with rename option
+        local generic_options = {
+          "Rename - Rename symbol",
+          "Code Action - Show available actions",
+        }
+        
+        vim.ui.select(generic_options, {
+          prompt = "Select Action:",
+        }, function(choice)
+          if not choice then return end
+          
+          if choice:match("^Rename") then
+            vim.lsp.buf.rename()
+          else
+            local has_lspsaga, lspsaga = pcall(require, "lspsaga")
+            if has_lspsaga then
+              vim.cmd("Lspsaga code_action")
+            else
+              vim.lsp.buf.code_action()
+            end
+          end
+        end)
       end
     end
   end)
@@ -84,6 +100,7 @@ function M.rust_refactor_menu()
     "RustLsp hover actions - Hover actions",
     "RustLsp openCargo - Open Cargo.toml",
     "RustLsp parentModule - Go to parent module",
+    "Rename - Rename symbol",
   }
 
   vim.ui.select(options, {
@@ -92,7 +109,11 @@ function M.rust_refactor_menu()
     if not choice then return end
 
     local cmd = choice:match("^(RustLsp [^-]+)")
-    vim.cmd(cmd:gsub("RustLsp ", "RustLsp "))
+    if choice:match("^Rename") then
+      vim.lsp.buf.rename()
+    else
+      vim.cmd(cmd:gsub("RustLsp ", "RustLsp "))
+    end
   end)
 end
 
@@ -107,7 +128,7 @@ function M.go_refactor_menu()
     "GoImpl - Implement interface",
     "GoGenReturn - Generate return statement",
     "GoCmt - Add comments",
-    "GoRename - Rename symbol",
+    "Rename - Rename symbol",
   }
 
   vim.ui.select(options, {
@@ -120,6 +141,8 @@ function M.go_refactor_menu()
     if cmd == "GoAddTag" then
       local tag = choice:match("(%w+)$")
       vim.cmd("GoAddTag " .. tag)
+    elseif cmd == "Rename" then
+      vim.lsp.buf.rename()
     else
       vim.cmd(cmd)
     end

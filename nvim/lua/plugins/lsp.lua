@@ -210,4 +210,45 @@ return {
       end
     end,
   },
+
+  -- Symbol usage display (IntelliJ IDEA-like)
+  {
+    "Wansmer/symbol-usage.nvim",
+    event = "LspAttach",
+    config = function()
+      require("symbol-usage").setup({
+        kinds = {
+          vim.lsp.protocol.SymbolKind.Function,
+          vim.lsp.protocol.SymbolKind.Method,
+          vim.lsp.protocol.SymbolKind.Variable,
+          vim.lsp.protocol.SymbolKind.Class,
+          vim.lsp.protocol.SymbolKind.Interface,
+          vim.lsp.protocol.SymbolKind.Module,
+          vim.lsp.protocol.SymbolKind.Property,
+          vim.lsp.protocol.SymbolKind.Struct,
+          vim.lsp.protocol.SymbolKind.Constant,
+          vim.lsp.protocol.SymbolKind.Constructor,
+          vim.lsp.protocol.SymbolKind.Enum,
+          vim.lsp.protocol.SymbolKind.EnumMember,
+          vim.lsp.protocol.SymbolKind.TypeParameter,
+        },
+        text_format = function(symbol)
+          local res = {}
+          local round_start = {"", ""}
+          local round_end = {"", ""}
+
+          if symbol.references then
+            local usage = symbol.references <= 1 and "usage" or "usages"
+            local num = symbol.references == 0 and "no" or symbol.references
+            table.insert(res, round_start[1] .. num .. " " .. usage .. round_end[1])
+          end
+
+          return table.concat(res, " ")
+        end,
+        vt_position = "end_of_line",
+      })
+    end,
+  },
+
+
 }
