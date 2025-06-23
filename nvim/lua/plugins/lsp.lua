@@ -69,10 +69,11 @@ return {
               rangeVariableTypes = false,
             },
             analyses = {
-              unusedparams = true,
-              shadow = true,
+              unusedparams = false,
+              shadow = false,
             },
-            staticcheck = true,
+            staticcheck = false, -- Disable gopls built-in diagnostics to use golangci-lint via null-ls
+            buildFlags = { "-tags=unit,e2e" },
           },
         },
       })
