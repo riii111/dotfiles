@@ -188,6 +188,12 @@ return {
       },
       picker = {
         ui_select = true,
+        sources = {
+          explorer = {
+            hidden = true,
+            ignored = false,
+          },
+        },
         layouts = {
           cursor = {
             preview = false,
