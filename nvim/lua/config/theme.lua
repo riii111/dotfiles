@@ -15,9 +15,12 @@ local function apply_flate_arc_italic()
 
     -- Pmenu
     Pmenu = { fg = "#e9dbdb", bg = "#22252f" },
-    PmenuSel = { fg = "#e9dbdb", bg = "#00cecb", bold = true },
+    PmenuSel = { fg = "#111419", bg = "#00cecb", bold = true },
     PmenuSbar = { bg = "#22252f" },
     PmenuThumb = { bg = "#00cecb" },
+    
+    -- Wildmenu (cmdline completion)
+    WildMenu = { fg = "#111419", bg = "#00cecb", bold = true },
 
     -- StatusLine & TabLine
     StatusLine = { fg = "#e9dbdb", bg = "#22252f" },

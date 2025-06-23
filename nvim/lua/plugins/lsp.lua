@@ -87,6 +87,66 @@ return {
     end,
   },
 
+  -- lspsaga for enhanced LSP UI
+  {
+    "nvimdev/lspsaga.nvim",
+    dependencies = {
+      "nvim-treesitter/nvim-treesitter",
+      "nvim-tree/nvim-web-devicons",
+    },
+    config = function()
+      require("lspsaga").setup({
+        ui = {
+          border = "rounded",
+          devicon = true,
+        },
+        lightbulb = {
+          enable = true,
+          sign = true,
+          virtual_text = false,
+          debounce = 10,
+          sign_priority = 40,
+        },
+        code_action = {
+          num_shortcut = true,
+          show_server_name = false,
+          extend_gitsigns = true,
+        },
+        diagnostic = {
+          show_code_action = true,
+          jump_num_shortcut = true,
+          keys = {
+            exec_action = "o",
+            quit = "q",
+            toggle_or_jump = "<CR>",
+          },
+        },
+        definition = {
+          width = 0.6,
+          height = 0.5,
+          keys = {
+            edit = "<C-c>o",
+            vsplit = "<C-c>v",
+            split = "<C-c>s",
+            tabe = "<C-c>t",
+            quit = "q",
+          },
+        },
+        rename = {
+          in_select = false,
+          auto_save = false,
+          project_max_width = 0.5,
+          project_max_height = 0.5,
+          keys = {
+            quit = "<C-c>",
+            exec = "<CR>",
+          },
+        },
+      })
+    end,
+    event = "LspAttach",
+  },
+
   -- DAP (Debug Adapter Protocol)
   {
     "mfussenegger/nvim-dap",

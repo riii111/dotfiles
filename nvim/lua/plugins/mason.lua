@@ -17,10 +17,12 @@ return {
       ensure_installed = {
         -- LSP servers
         "lua-language-server",
+        "sqls",
         
         -- Formatters
         "stylua",
         "goimports",
+        "sql-formatter",
         
         -- Linters
         "golangci-lint",
