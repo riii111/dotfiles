@@ -1,4 +1,61 @@
 return {
+  -- Breadcrumbs (IDEA-style)
+  {
+    "bekaboo/dropbar.nvim",
+    event = { "BufReadPre", "BufNewFile" },
+    opts = {
+      icons = {
+        enable = true,
+        kinds = {
+          symbols = {
+            Array = "󰅪 ",
+            Boolean = " ",
+            Class = " ",
+            Color = "󰏘 ",
+            Constant = "󰏿 ",
+            Constructor = " ",
+            Enum = " ",
+            EnumMember = " ",
+            Event = " ",
+            Field = " ",
+            File = "󰈔 ",
+            Folder = "󰉋 ",
+            Function = "󰊕 ",
+            Interface = " ",
+            Key = "󰌋 ",
+            Keyword = "󰌋 ",
+            Method = "󰊕 ",
+            Module = " ",
+            Namespace = "󰦮 ",
+            Null = " ",
+            Number = "󰎠 ",
+            Object = " ",
+            Operator = "󰆕 ",
+            Package = " ",
+            Property = " ",
+            Reference = "󰈇 ",
+            Snippet = " ",
+            String = " ",
+            Struct = "󰆼 ",
+            Text = "󰉿 ",
+            TypeParameter = " ",
+            Unit = "󰑭 ",
+            Value = "󰎠 ",
+            Variable = "󰀫 ",
+          },
+        },
+      },
+      bar = {
+        sources = function()
+          local sources = require("dropbar.sources")
+          return {
+            sources.path,
+            sources.treesitter,
+          }
+        end,
+      },
+    },
+  },
 
   -- Telescope fuzzy finder
   {

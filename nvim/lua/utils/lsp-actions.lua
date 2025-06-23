@@ -3,19 +3,8 @@ local M = {}
 function M.smart_code_action()
   vim.lsp.buf.code_action({
     context = { only = { "quickfix", "refactor" } },
-    apply = false,
-  }, function(actions)
-    if actions and #actions > 0 then
-      vim.lsp.buf.code_action()
-    else
-      local has_lspsaga, lspsaga = pcall(require, "lspsaga")
-      if has_lspsaga then
-        vim.cmd("Lspsaga code_action")
-      else
-        vim.notify("No code actions available", vim.log.levels.INFO)
-      end
-    end
-  end)
+    apply = true,
+  })
 end
 
 function M.rust_quick_actions()
@@ -63,14 +52,23 @@ function M.language_specific_code_action()
     apply = false,
   }, function(actions)
     if actions and #actions > 0 then
-      vim.lsp.buf.code_action()
+      if #actions == 1 then
+        vim.lsp.buf.code_action({ apply = true })
+      else
+        vim.lsp.buf.code_action()
+      end
     else
       if filetype == "rust" then
         M.rust_quick_actions()
       elseif filetype == "go" then
         M.go_quick_actions()
       else
-        M.smart_code_action()
+        local has_lspsaga, lspsaga = pcall(require, "lspsaga")
+        if has_lspsaga then
+          vim.cmd("Lspsaga code_action")
+        else
+          vim.notify("No code actions available", vim.log.levels.INFO)
+        end
       end
     end
   end)

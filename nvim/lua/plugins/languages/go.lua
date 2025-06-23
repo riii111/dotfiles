@@ -8,7 +8,7 @@ return {
     },
     config = function()
       require("go").setup({
-        goimports = "gopls",
+        goimports = "goimports",
         fillstruct = "gopls",
         dap_debug = false,
         textobjects = true,
