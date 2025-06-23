@@ -34,6 +34,28 @@ local function setup_keymaps()
         end,
         desc = "Find files"
       },
+      
+      -- Meta key aliases for tmux (Cmd keys appear as Meta in tmux)
+      ["<M-F>"] = {
+        function()
+          require("telescope").extensions.live_grep_args.live_grep_args({
+            default_text = '-g "!**/{node_modules,docs,.git,target,dist,build}/**" ',
+          })
+        end,
+        desc = "Live Grep with Args (tmux)"
+      },
+      ["<M-f>"] = {
+        function()
+          require("telescope.builtin").current_buffer_fuzzy_find()
+        end,
+        desc = "Find in current buffer (tmux)"
+      },
+      ["<M-p>"] = {
+        function()
+          require("telescope.builtin").find_files()
+        end,
+        desc = "Find files (tmux)"
+      },
 
       -- Reliable keymaps that work in both tmux and non-tmux environments  
       ["<C-p>"] = {
@@ -108,6 +130,42 @@ local function setup_keymaps()
           Snacks.explorer()
         end,
         desc = "Toggle explorer visibility"
+      },
+      
+      -- Cmd key aliases for explorer
+      ["<D-e>"] = {
+        function()
+          Snacks.explorer()
+        end,
+        desc = "Toggle explorer visibility"
+      },
+      ["<D-o>"] = {
+        function()
+          if vim.bo.filetype == "snacks_explorer" then
+            vim.cmd("wincmd p")
+          else
+            vim.cmd("wincmd w")
+          end
+        end,
+        desc = "Switch between explorer and buffer"
+      },
+      
+      -- Meta key aliases for tmux
+      ["<M-e>"] = {
+        function()
+          Snacks.explorer()
+        end,
+        desc = "Toggle explorer visibility (tmux)"
+      },
+      ["<M-o>"] = {
+        function()
+          if vim.bo.filetype == "snacks_explorer" then
+            vim.cmd("wincmd p")
+          else
+            vim.cmd("wincmd w")
+          end
+        end,
+        desc = "Switch between explorer and buffer (tmux)"
       },
 
       ["<M-CR>"] = {
