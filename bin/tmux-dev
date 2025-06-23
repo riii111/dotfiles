@@ -1,9 +1,20 @@
 #!/bin/bash
-SESSION_NAME=dev
 
-tmux kill-session -t $SESSION_NAME 2>/dev/null || true
+# Generate unique session name based on current directory and timestamp
+DIR_NAME=$(basename "$PWD")
+TIMESTAMP=$(date +%s)
+SESSION_NAME="dev-${DIR_NAME}-${TIMESTAMP}"
 
-tmux new-session -s $SESSION_NAME -d 'nvim'
-tmux split-window -h -p 28 -t $SESSION_NAME 'claude'
-tmux select-pane -t $SESSION_NAME:0.0
-tmux attach-session -t $SESSION_NAME
+# Check if a dev session already exists for this directory
+EXISTING_SESSION=$(tmux list-sessions 2>/dev/null | grep "^dev-${DIR_NAME}-" | head -1 | cut -d: -f1)
+
+if [ -n "$EXISTING_SESSION" ]; then
+    echo "Attaching to existing session: $EXISTING_SESSION"
+    tmux attach-session -t "$EXISTING_SESSION"
+else
+    echo "Creating new session: $SESSION_NAME"
+    tmux new-session -s "$SESSION_NAME" -d 'nvim'
+    tmux split-window -h -p 28 -t "$SESSION_NAME" 'claude'
+    tmux select-pane -t "$SESSION_NAME:0.0"
+    tmux attach-session -t "$SESSION_NAME"
+fi
