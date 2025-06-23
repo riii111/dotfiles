@@ -97,8 +97,6 @@ local function setup_keymaps()
       ["<F12>"] = { ":ToggleTerm<CR>", desc = "Toggle terminal (universal)" },
       ["<Leader>tt"] = { ":ToggleTerm<CR>", desc = "Toggle terminal (leader)" },
 
-      -- Test mapping
-      ["<Leader>xx"] = { ":echo 'Leader xx pressed!'<CR>", desc = "Test Leader mapping" },
 
       -- Buffer operations
       ["<D-M-Right>"] = { ":bnext<CR>", desc = "Next buffer" },
@@ -150,7 +148,7 @@ local function setup_keymaps()
         desc = "Switch between explorer and buffer"
       },
       
-      -- Meta key aliases for tmux
+      -- Meta key aliases for tmux explorer
       ["<M-e>"] = {
         function()
           Snacks.explorer()
