@@ -22,6 +22,17 @@ vim.opt.updatetime = 250
 -- Clipboard integration
 vim.opt.clipboard = "unnamedplus"
 
--- Disable netrw (for neo-tree)
+-- Disable netrw (for file explorer)
 vim.g.loaded_netrw = 1
 vim.g.loaded_netrwPlugin = 1
+
+-- Yank highlighting
+vim.api.nvim_create_autocmd("TextYankPost", {
+  group = vim.api.nvim_create_augroup("HighlightYank", { clear = true }),
+  callback = function()
+    vim.highlight.on_yank({
+      higroup = "IncSearch",
+      timeout = 500,
+    })
+  end,
+})

@@ -101,8 +101,23 @@ local function setup_astrocore_keymaps()
         desc = "Markdown preview" 
       },
 
-      -- Neo-tree toggle
-      ["<Leader>o"] = { ":Neotree toggle<CR>", desc = "Toggle file explorer" },
+      -- Snacks explorer navigation
+      ["<Leader>o"] = { 
+        function()
+          if vim.bo.filetype == "snacks_explorer" then
+            vim.cmd("wincmd p")
+          else
+            vim.cmd("wincmd w")
+          end
+        end, 
+        desc = "Switch between explorer and buffer" 
+      },
+      ["<Leader>e"] = { 
+        function()
+          Snacks.explorer()
+        end, 
+        desc = "Toggle explorer visibility" 
+      },
       
       -- IntelliJ IDEA-style shortcuts (general)
       ["<M-CR>"] = { 

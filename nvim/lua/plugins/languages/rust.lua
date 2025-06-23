@@ -3,6 +3,41 @@ return {
     "mrcjkb/rustaceanvim",
     version = "^5",
     lazy = false,
+    init = function()
+      -- Configure rustaceanvim before loading
+      vim.g.rustaceanvim = {
+        server = {
+          default_settings = {
+            ["rust-analyzer"] = {
+              cargo = {
+                extraEnv = {
+                  CARGO_TARGET_DIR = ".nvim/target",
+                },
+              },
+              procMacro = {
+                enable = true,
+              },
+              diagnostics = {
+                enable = true,
+                enableExperimental = true,
+              },
+              inlayHints = {
+                bindingModeHints = { enable = false },
+                chainingHints = { enable = true },
+                closingBraceHints = { enable = true, minLines = 25 },
+                closureReturnTypeHints = { enable = "never" },
+                lifetimeElisionHints = { enable = "never", useParameterNames = false },
+                maxLength = 25,
+                parameterHints = { enable = true },
+                reborrowHints = { enable = "never" },
+                renderColons = true,
+                typeHints = { enable = true, hideClosureInitialization = false, hideNamedConstructor = false },
+              },
+            },
+          },
+        },
+      }
+    end,
     config = function()
       -- IntelliJ IDEA-style shortcuts for Rust
       local function rust_refactor_menu()

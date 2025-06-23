@@ -12,41 +12,7 @@ return {
         fillstruct = "gopls",
         dap_debug = false,
         textobjects = true,
-        lsp_cfg = {
-          capabilities = {
-            textDocument = {
-              codeAction = {
-                dynamicRegistration = true,
-                codeActionLiteralSupport = {
-                  codeActionKind = {
-                    valueSet = {
-                      "quickfix",
-                      "refactor",
-                      "refactor.extract",
-                      "refactor.inline",
-                      "refactor.rewrite",
-                      "source",
-                      "source.organizeImports",
-                    },
-                  },
-                },
-              },
-            },
-          },
-          settings = {
-            gopls = {
-              hints = {
-                assignVariableTypes = false,
-                compositeLiteralFields = false,
-                compositeLiteralTypes = false,
-                constantValues = false,
-                functionTypeParameters = false,
-                parameterNames = false,
-                rangeVariableTypes = false,
-              },
-            },
-          },
-        },
+        lsp_cfg = false,
       })
       
       -- IntelliJ IDEA-style shortcuts for Go
@@ -128,5 +94,52 @@ return {
     event = {"CmdlineEnter"},
     ft = {"go", 'gomod'},
     build = ':lua require("go.install").update_all_sync()'
+  },
+
+  -- Go DAP integration
+  {
+    "leoluz/nvim-dap-go",
+    dependencies = {
+      "mfussenegger/nvim-dap",
+    },
+    config = function()
+      require("dap-go").setup({
+        dap_configurations = {
+          {
+            type = "go",
+            name = "Attach remote",
+            mode = "remote",
+            request = "attach",
+          },
+        },
+        delve = {
+          path = "dlv",
+          initialize_timeout_sec = 20,
+          port = "${port}",
+          args = {},
+          build_flags = "",
+        },
+      })
+      
+      -- Key mappings for Go debugging
+      vim.api.nvim_create_autocmd("FileType", {
+        pattern = "go",
+        callback = function()
+          local opts = { buffer = true, silent = true }
+          vim.keymap.set("n", "<F5>", function()
+            require("dap-go").debug_test()
+          end, vim.tbl_extend("force", opts, { desc = "Debug Go test" }))
+          
+          vim.keymap.set("n", "<leader>dt", function()
+            require("dap-go").debug_test()
+          end, vim.tbl_extend("force", opts, { desc = "Debug Go test" }))
+          
+          vim.keymap.set("n", "<leader>dl", function()
+            require("dap-go").debug_last_test()
+          end, vim.tbl_extend("force", opts, { desc = "Debug last Go test" }))
+        end,
+      })
+    end,
+    ft = "go",
   },
 }
