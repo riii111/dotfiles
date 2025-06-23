@@ -49,6 +49,35 @@ return {
           },
         },
       })
+      
+      -- Setup gopls using new Neovim 0.11 API (no more deprecation warning)
+      vim.lsp.config('gopls', {
+        cmd = { 'gopls' },
+        filetypes = { 'go', 'gomod', 'gowork', 'gotmpl' },
+        root_markers = { 'go.work', 'go.mod', '.git' },
+        capabilities = capabilities,
+        on_attach = on_attach,
+        settings = {
+          gopls = {
+            hints = {
+              assignVariableTypes = false,
+              compositeLiteralFields = false,
+              compositeLiteralTypes = false,
+              constantValues = false,
+              functionTypeParameters = false,
+              parameterNames = false,
+              rangeVariableTypes = false,
+            },
+            analyses = {
+              unusedparams = true,
+              shadow = true,
+            },
+            staticcheck = true,
+          },
+        },
+      })
+      
+      vim.lsp.enable('gopls')
 
     end,
   },

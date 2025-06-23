@@ -167,6 +167,25 @@ return {
     lazy = false,
     opts = {
       modules = { "explorer", "scratch", "picker" },
+      explorer = {
+        icons = {
+          show = {
+            file = true,
+            folder = true,
+            hidden = true,
+            git = true,
+          },
+          file = {
+            default = "󰈔",
+          },
+          folder = {
+            default = "󰉋",
+            open = "󰝰",
+            empty = "󰉖",
+            empty_open = "󰷏",
+          },
+        },
+      },
       picker = {
         ui_select = true,
         layouts = {

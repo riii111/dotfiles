@@ -4,7 +4,7 @@ local function apply_flate_arc_italic()
     -- Base colors (ensuring transparency)
     Normal = { fg = "#e9dbdb", bg = "NONE" },
     NormalNC = { fg = "#e9dbdb", bg = "NONE" },
-    NormalFloat = { fg = "#e9dbdb", bg = "#22252f" },
+    NormalFloat = { fg = "#e9dbdb", bg = "NONE" },
     FloatBorder = { fg = "#00cecb", bg = "NONE" },
     SignColumn = { bg = "NONE" },
     VertSplit = { fg = "NONE" },
@@ -18,7 +18,7 @@ local function apply_flate_arc_italic()
     PmenuSel = { fg = "#111419", bg = "#00cecb", bold = true },
     PmenuSbar = { bg = "#22252f" },
     PmenuThumb = { bg = "#00cecb" },
-    
+
     -- Wildmenu (cmdline completion)
     WildMenu = { fg = "#111419", bg = "#00cecb", bold = true },
 
@@ -28,7 +28,7 @@ local function apply_flate_arc_italic()
     TabLine = { fg = "#9a9fbf", bg = "#08090D" },
     TabLineFill = { bg = "#08090D" },
     TabLineSel = { fg = "#e9dbdb", bg = "#2c2f39", bold = true },
-    
+
     -- Buffer line colors (for plugins like bufferline.nvim)
     BufferLineFill = { bg = "#08090D" },
     BufferLineBackground = { fg = "#9a9fbf", bg = "#08090D" },
@@ -61,7 +61,6 @@ local function apply_flate_arc_italic()
     Boolean = { fg = "#F0AA85" },
     Float = { fg = "#F0AA85" },
     Identifier = { fg = "#ffffff" },
-    Directory = { fg = "#e3e7ef" },
     Function = { fg = "#55CF9E", italic = true },
     Statement = { fg = "#ffffff" },
     Conditional = { fg = "#EC53A0", italic = true },
@@ -110,34 +109,15 @@ local function apply_flate_arc_italic()
     DiagnosticUnderlineInfo = { undercurl = true, sp = "#3794ff" },
     DiagnosticUnderlineHint = { undercurl = true, sp = "#6bf178" },
 
-    -- NvimTree specific colors (ensure transparency)
-    NvimTreeNormal = { fg = "#bccae4", bg = "NONE" },
-    NvimTreeNormalNC = { fg = "#bccae4", bg = "NONE" },
-    NvimTreeEndOfBuffer = { bg = "NONE" },
-    NvimTreeRootFolder = { fg = "#9a9fbf" },
-    NvimTreeFolderName = { fg = "#A29BFE" },
-    NvimTreeFolderIcon = { fg = "#A29BFE" },
-    NvimTreeEmptyFolderName = { fg = "#9a9fbf" },
-    NvimTreeOpenedFolderName = { fg = "#00cecb" },
-    NvimTreeIndentMarker = { fg = "#8A91A5" },
-    NvimTreeGitDirty = { fg = "#F49E4C" },
-    NvimTreeGitNew = { fg = "#23D18C" },
-    NvimTreeGitDeleted = { fg = "#E84855" },
-    NvimTreeWinSeparator = { fg = "#101019", bg = "NONE" },
-    NvimTreeCursorLine = { bg = "#22252f" },
-
-    -- Add TreesitterContext highlight setting for background transparency
+    -- TreesitterContext highlight setting for background transparency
     TreesitterContext = { bg = "NONE" },
 
-    -- Neo-Tree specific colors (custom dark background)
-    NeoTreeNormal = { fg = "#bccae4", bg = "#191A26" },
-    NeoTreeNormalNC = { fg = "#bccae4", bg = "#191A26" },
-    NeoTreeEndOfBuffer = { bg = "#191A26" },
-    NeoTreeFileName = { fg = "#D8DEE9" },
-    NeoTreeWinSeparator = { fg = "#101019", bg = "#191A26" },
-    NeoTreeCursorLine = { bg = "#252932" },
-    NeoTreeDirectoryName = { fg = "#00cecb" }, -- Restored to original cyan color
-    NeoTreeDirectoryIcon = { fg = "#00cecb" }, -- Restored to original cyan color
+    -- Snacks Explorer colors
+    SnacksPickerDir = { fg = "#cad3f5" },
+    SnacksPickerFile = { fg = "#cad3f5" },
+    SnacksPickerPathHidden = { fg = "#6e738d" },
+    SnacksPickerPathIgnored = { fg = "#6e738d" },
+    Directory = { fg = "#cad3f5" },
 
     -- Telescope specific colors (ensure transparency)
     TelescopeBorder = { fg = "#00cecb", bg = "NONE" },
@@ -148,7 +128,9 @@ local function apply_flate_arc_italic()
     TelescopePromptNormal = { fg = "#ffffff", bg = "NONE" },
     TelescopePromptCounter = { fg = "#ffffff" },
     TelescopeSelectionCaret = { fg = "#00cecb" },
-    TelescopeSelection = { fg = "#e9dbdb", bg = "#22252f" },
+    TelescopeSelection = { fg = "#ffffff", bg = "#3c4048", bold = true },
+    TelescopeMultiSelection = { fg = "#00cecb", bg = "#2c2f39" },
+    TelescopeMatching = { fg = "#f5a97f", bold = true },
     TelescopeNormal = { bg = "NONE" },
     TelescopeResultsNormal = { bg = "NONE" },
     TelescopePreviewNormal = { bg = "NONE" },
@@ -160,7 +142,7 @@ local function apply_flate_arc_italic()
     ["@lsp.type.attributeBracket.rust"] = { fg = "#ffffff" },
     ["@module.go"] = { fg = "#ffffff" },
     ["@lsp.type.namespace.go"] = { fg = "#ffffff" },
-    
+
     ["@variable.builtin"] = { fg = "#F0AA85" },
     ["@variable.parameter"] = { fg = "#ffffff" },
     ["@type.builtin"] = { fg = "#CC7832" },
@@ -170,8 +152,6 @@ local function apply_flate_arc_italic()
     ["@lsp.type.parameter.go"] = { fg = "#ffffff" },
     ["@constant"] = { fg = "#F0AA85" },
     ["@constant.builtin"] = { fg = "#F0AA85" },
-    
-    ["@field"] = { fg = "#00cecb", italic = true },
   }
 
   -- Apply all defined theme highlights
