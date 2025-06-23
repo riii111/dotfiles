@@ -1,5 +1,8 @@
 {
     "diagnostics.disable": [
         "redefined-local"
+    ],
+    "diagnostics.globals": [
+        "vim"
     ]
 }
