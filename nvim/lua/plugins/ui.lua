@@ -307,6 +307,13 @@ return {
         nearest_float_when = "always",
         float_shadow_blend = 0,
         virt_priority = 100,
+        override_lens = function(render, posList, nearest, idx, relIdx)
+          -- Only show lens for normal mode search, not cmdline
+          if vim.fn.mode() == 'c' then
+            return
+          end
+          render.setVirt(0, -1, idx - 1, render.getLineContent())
+        end,
       })
 
       local kopts = { noremap = true, silent = true }

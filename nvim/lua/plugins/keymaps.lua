@@ -17,7 +17,7 @@ local function setup_keymaps()
       ["<D-F>"] = {
         function()
           require("telescope").extensions.live_grep_args.live_grep_args({
-            default_text = '-g "!node_modules/**" -g "!.git/**" -g "!target/**" -g "!dist/**" -g "!build/**" ',
+            default_text = '-g "!**/{node_modules,docs,.git,target,dist,build}/**" ',
           })
         end,
         desc = "Live Grep with Args"
