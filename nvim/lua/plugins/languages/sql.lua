@@ -1,11 +1,4 @@
 return {
-  -- SQL LSP support
-  {
-    "sqls-server/sqls",
-    build = "go install github.com/sqls-server/sqls@latest",
-    ft = { "sql", "mysql", "plsql" },
-  },
-
   -- Database interaction
   {
     "tpope/vim-dadbod",

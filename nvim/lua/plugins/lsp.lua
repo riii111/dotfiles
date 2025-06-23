@@ -50,13 +50,13 @@ return {
         },
       })
       
-      -- Setup gopls using new Neovim 0.11 API (no more deprecation warning)
-      vim.lsp.config('gopls', {
+      -- Setup gopls
+      lspconfig.gopls.setup({
+        on_attach = on_attach,
+        capabilities = capabilities,
         cmd = { 'gopls' },
         filetypes = { 'go', 'gomod', 'gowork', 'gotmpl' },
-        root_markers = { 'go.work', 'go.mod', '.git' },
-        capabilities = capabilities,
-        on_attach = on_attach,
+        root_dir = lspconfig.util.root_pattern('.golangci.yml', 'go.work', '.git'),
         settings = {
           gopls = {
             hints = {
@@ -76,8 +76,6 @@ return {
           },
         },
       })
-      
-      vim.lsp.enable('gopls')
 
     end,
   },
@@ -110,7 +108,18 @@ return {
       null_ls.setup({
         sources = {
           null_ls.builtins.formatting.stylua,
-          null_ls.builtins.diagnostics.golangci_lint,
+          null_ls.builtins.diagnostics.golangci_lint.with({
+            cwd = function(params)
+              return require("lspconfig.util").root_pattern("go.mod")(params.bufname)
+            end,
+            extra_args = function(params)
+              local root = require("lspconfig.util").root_pattern(".golangci.yml", ".git")(params.bufname)
+              if root then
+                return { "--config", root .. "/.golangci.yml" }
+              end
+              return {}
+            end,
+          }),
         },
       })
     end,

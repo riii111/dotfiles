@@ -34,6 +34,9 @@ return {
         -- Other tools
         "tree-sitter-cli",
       },
+      -- Auto update tools
+      auto_update = true,
+      run_on_start = true,
       -- Disable automatic integration that causes conflicts
       integrations = {
         ["mason-lspconfig"] = false,

@@ -3,8 +3,9 @@ return {
   {
     "nvim-treesitter/nvim-treesitter",
     build = ":TSUpdate",
-    event = { "BufReadPost", "BufNewFile" },
+    event = { "BufReadPre", "BufNewFile" },
     opts = {
+      sync_install = false,
       ensure_installed = {
         "bash",
         "c",
@@ -173,7 +174,7 @@ return {
             file = true,
             folder = true,
             hidden = true,
-            git = true,
+            git = true, -- Set to false if performance issues in large repos
           },
           file = {
             default = "󰈔",

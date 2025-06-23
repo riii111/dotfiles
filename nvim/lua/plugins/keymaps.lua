@@ -1,20 +1,5 @@
-local function setup_unified_keymaps()
-  local function setup_cmd_meta_alias()
-    if vim.env.TMUX then
-      vim.keymap.set("n", "<M-F>", function() require("telescope").extensions.live_grep_args.live_grep_args() end, { desc = "Live Grep with Args" })
-      vim.keymap.set("n", "<M-f>", function() require("telescope.builtin").current_buffer_fuzzy_find() end, { desc = "Find in current buffer" })
-      vim.keymap.set("n", "<M-p>", function() require("telescope.builtin").find_files() end, { desc = "Find files" })
-      vim.keymap.set("n", "<M-S-v>", function() vim.cmd("MarkviewOpen") end, { desc = "Markdown preview" })
-      vim.keymap.set("n", "<M-/>", function() require("Comment.api").toggle.linewise.current() end, { desc = "Toggle comment" })
-      vim.keymap.set("v", "<M-/>", "<ESC><CMD>require('Comment.api').toggle.linewise(vim.fn.visualmode())<CR>", { desc = "Toggle comment" })
-      vim.keymap.set("v", "<M-c>", '"+y', { desc = "Copy to system clipboard" })
-    end
-  end
 
-  setup_cmd_meta_alias()
-end
-
-local function setup_astrocore_keymaps()
+local function setup_keymaps()
   local mappings = {
     n = {
       -- Window splits
@@ -77,6 +62,12 @@ local function setup_astrocore_keymaps()
         end,
         desc = "Toggle comment"
       },
+      ["<M-/>"] = {
+        function()
+          require("Comment.api").toggle.linewise.current()
+        end,
+        desc = "Toggle comment (tmux)"
+      },
 
       ["<C-S-@>"] = { ":ToggleTerm<CR>", desc = "Toggle terminal" },
       ["<C-@>"] = { ":ToggleTerm<CR>", desc = "Toggle terminal (tmux compatible)" },
@@ -132,7 +123,12 @@ local function setup_astrocore_keymaps()
         "<ESC><CMD>require('Comment.api').toggle.linewise(vim.fn.visualmode())<CR>",
         desc = "Toggle comment"
       },
+      ["<M-/>"] = {
+        "<ESC><CMD>require('Comment.api').toggle.linewise(vim.fn.visualmode())<CR>",
+        desc = "Toggle comment (tmux)"
+      },
       ["<D-c>"] = { '"+y', desc = "Copy to system clipboard" },
+      ["<M-c>"] = { '"+y', desc = "Copy to system clipboard (tmux)" },
 
       -- Indentation
       ["<Tab>"] = { ">gv", desc = "Indent selection" },
@@ -179,9 +175,35 @@ return {
       vim.o.timeoutlen = 300
     end,
     config = function()
-      require("which-key").setup({})
-      setup_astrocore_keymaps()
-      setup_unified_keymaps()
+      local wk = require("which-key")
+      wk.setup({})
+      
+      -- Register key groups
+      wk.add({
+        { "<leader>e", group = "+explorer" },
+        { "<leader>t", group = "+tabs/terminal" },
+        { "<leader>w", group = "+window/buffer" },
+        { "<leader>o", group = "+switch" },
+        { "<C-g>", group = "+grep/search" },
+        { "<C-p>", group = "+files" },
+        { "<C-S-f>", group = "+search" },
+        { "<C-S-b>", group = "+buffer search" },
+        { "<D-f>", group = "+find" },
+        { "<D-F>", group = "+grep" },
+        { "<D-p>", group = "+files" },
+        { "<D-S-v>", group = "+preview" },
+        { "<D-M-Right>", group = "+buffer navigation" },
+        { "<D-M-Left>", group = "+buffer navigation" },
+        { "<M-f>", group = "+find" },
+        { "<M-F>", group = "+grep" },
+        { "<M-p>", group = "+files" },
+        { "<M-c>", group = "+clipboard" },
+        { "<M-/>", group = "+comment" },
+        { "<M-S-v>", group = "+preview" },
+        { "<M-CR>", group = "+code action" },
+      })
+      
+      setup_keymaps()
     end,
   },
 }
