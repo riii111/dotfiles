@@ -148,7 +148,17 @@ local function setup_keymaps()
         desc = "Switch between explorer and buffer"
       },
       
-      -- Meta key aliases for tmux explorer
+      -- Meta key aliases for tmux (all Cmd keys)
+      ["<M-Down>"] = { ":split<CR>", desc = "Split window below (tmux)" },
+      ["<M-Right>"] = { ":vsplit<CR>", desc = "Split window right (tmux)" },
+      ["<M-M-Right>"] = { ":bnext<CR>", desc = "Next buffer (tmux)" },
+      ["<M-M-Left>"] = { ":bprevious<CR>", desc = "Previous buffer (tmux)" },
+      ["<M-S-v>"] = {
+        function()
+          vim.cmd("MarkviewOpen")
+        end,
+        desc = "Markdown preview (tmux)"
+      },
       ["<M-e>"] = {
         function()
           Snacks.explorer()

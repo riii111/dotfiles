@@ -308,11 +308,31 @@ return {
         float_shadow_blend = 0,
         virt_priority = 100,
         override_lens = function(render, posList, nearest, idx, relIdx)
-          -- Only show lens for normal mode search, not cmdline
-          if vim.fn.mode() == 'c' then
-            return
+          local sfw = vim.v.searchforward == 1
+          local indicator, text, chunks
+          local absRelIdx = math.abs(relIdx)
+
+          if absRelIdx > 1 then
+            indicator = ('%d%s'):format(absRelIdx, sfw ~= (relIdx > 1) and '▲' or '▼')
+          elseif absRelIdx == 1 then
+            indicator = sfw ~= (relIdx == 1) and '▲' or '▼'
+          else
+            indicator = ''
           end
-          render.setVirt(0, -1, idx - 1, render.getLineContent())
+
+          local lnum, col = unpack(posList[idx])
+          if nearest then
+            local cnt = #posList
+            text = indicator ~= '' and
+                ('[%s %d/%d]'):format(indicator, idx, cnt) or
+                ('[%d/%d]'):format(idx, cnt)
+            chunks = {{' '}, {text, 'HlSearchLensNear'}}
+          else
+            text = ('[%s %d]'):format(indicator, idx)
+            chunks = {{' '}, {text, 'HlSearchLens'}}
+          end
+
+          render.setVirt(0, lnum - 1, col - 1, chunks, nearest)
         end,
       })
 
