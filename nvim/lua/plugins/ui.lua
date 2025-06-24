@@ -221,7 +221,6 @@ return {
         close_on_exit = true,
         shell = vim.o.shell,
         auto_scroll = true,
-        size = 15,
         highlights = {
           Normal = { guibg = "NONE" },
           NormalFloat = { guibg = "NONE" },

@@ -41,23 +41,23 @@ return {
     end,
     config = function()
       local lsp_actions = require("utils.lsp-actions")
-      
+
       vim.api.nvim_create_autocmd("FileType", {
         pattern = "rust",
         callback = function()
           local opts = { buffer = true, silent = true }
-          
+
           vim.keymap.set("n", "<M-CR>", lsp_actions.language_specific_code_action, opts)
           vim.keymap.set("n", "<D-S-r>", lsp_actions.rust_refactor_menu, opts)
           
           vim.keymap.set("n", "<leader>rr", function()
             vim.cmd("RustLsp runnables")
           end, { desc = "Rust runnables", buffer = true })
-          
+
           vim.keymap.set("n", "<leader>rt", function()
             vim.cmd("RustLsp testables")
           end, { desc = "Rust testables", buffer = true })
-          
+
           vim.keymap.set("n", "<leader>rd", function()
             vim.cmd("RustLsp debuggables")
           end, { desc = "Rust debuggables", buffer = true })
