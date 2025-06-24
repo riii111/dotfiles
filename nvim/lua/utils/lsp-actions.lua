@@ -22,7 +22,7 @@ function M.rust_quick_actions()
     if not choice then return end
 
     local cmd = choice:match("^(RustLsp [^-]+)")
-    vim.cmd(cmd:gsub("RustLsp ", "RustLsp "))
+    vim.cmd(cmd)
   end)
 end
 
@@ -112,7 +112,7 @@ function M.rust_refactor_menu()
     if choice:match("^Rename") then
       vim.lsp.buf.rename()
     else
-      vim.cmd(cmd:gsub("RustLsp ", "RustLsp "))
+      vim.cmd(cmd)
     end
   end)
 end

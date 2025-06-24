@@ -14,14 +14,14 @@ return {
         textobjects = true,
         lsp_cfg = false,
       })
-      
+
       local lsp_actions = require("utils.lsp-actions")
-      
+
       vim.api.nvim_create_autocmd("FileType", {
         pattern = "go",
         callback = function()
           local opts = { buffer = true, silent = true }
-          
+
           vim.keymap.set("n", "<M-CR>", lsp_actions.language_specific_code_action, opts)
           vim.keymap.set("n", "<D-S-r>", lsp_actions.go_refactor_menu, opts)
           vim.keymap.set("n", "<M-S-r>", lsp_actions.go_refactor_menu, opts)
@@ -57,7 +57,7 @@ return {
           build_flags = "",
         },
       })
-      
+
       -- Key mappings for Go debugging
       vim.api.nvim_create_autocmd("FileType", {
         pattern = "go",
@@ -66,11 +66,11 @@ return {
           vim.keymap.set("n", "<F5>", function()
             require("dap-go").debug_test()
           end, vim.tbl_extend("force", opts, { desc = "Debug Go test" }))
-          
+
           vim.keymap.set("n", "<leader>dt", function()
             require("dap-go").debug_test()
           end, vim.tbl_extend("force", opts, { desc = "Debug Go test" }))
-          
+
           vim.keymap.set("n", "<leader>dl", function()
             require("dap-go").debug_last_test()
           end, vim.tbl_extend("force", opts, { desc = "Debug last Go test" }))
