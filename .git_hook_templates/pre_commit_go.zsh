@@ -36,8 +36,8 @@ if echo "$staged_files" | grep -qE "\.go$"; then
   fi
 
   if [[ -n "$go_mod_dir" ]]; then
-    echo "🔧 Running golangci-lint --fix from $go_mod_dir"
-    _format_and_notify "cd \"$go_mod_dir\" && golangci-lint run --fix >/dev/null" "✅ Go format successful" "❌ golangci-lint error"
+    echo "🔧 Running golangci-lint --fix and fmt from $go_mod_dir"
+    _format_and_notify "cd \"$go_mod_dir\" && golangci-lint run --fix >/dev/null && golangci-lint fmt >/dev/null" "✅ Go lint and format successful" "❌ golangci-lint error"
 
     # フォーマット済みファイルを再ステージ
     go_files=$(echo "$staged_files" | grep "\.go$")
