@@ -7,11 +7,19 @@ return {
     },
     config = function()
       local lspconfig = require("lspconfig")
-      
+
       -- LSP settings
+---@diagnostic disable-next-line: unused-local
       local on_attach = function(client, bufnr)
         local opts = { buffer = bufnr, silent = true }
-        
+        vim.diagnostic.config({
+          virtual_text = true,
+          signs = true,
+          underline = true,
+          update_in_insert = false,
+          severity_sort = true,
+        })
+
         -- Key mappings
         vim.keymap.set("n", "gD", vim.lsp.buf.declaration, opts)
         vim.keymap.set("n", "gd", vim.lsp.buf.definition, opts)
@@ -49,7 +57,7 @@ return {
           },
         },
       })
-      
+
       -- Setup gopls
       lspconfig.gopls.setup({
         on_attach = on_attach,
@@ -196,9 +204,9 @@ return {
     config = function()
       local dap = require("dap")
       local dapui = require("dapui")
-      
+
       dapui.setup()
-      
+
       dap.listeners.after.event_initialized["dapui_config"] = function()
         dapui.open()
       end
