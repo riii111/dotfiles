@@ -7,6 +7,7 @@ return {
       -- Configure rustaceanvim before loading
       vim.g.rustaceanvim = {
         server = {
+          load_vscode_settings = false,
           default_settings = {
             ["rust-analyzer"] = {
               cargo = {
