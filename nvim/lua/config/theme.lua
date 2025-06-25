@@ -112,10 +112,7 @@ local function apply_flate_arc_italic()
     -- TreesitterContext highlight setting for background transparency
     TreesitterContext = { bg = "NONE" },
 
-    -- Snacks Explorer colors
-    SnacksPickerDir = { fg = "#cad3f5" },
-    SnacksPickerPathHidden = { fg = "#6e738d" },
-    SnacksPickerPathIgnored = { fg = "#6e738d" },
+    -- Directory colors (for various file explorers including Oil.nvim)
     Directory = { fg = "#cad3f5" },
 
     -- Telescope specific colors (ensure transparency)
