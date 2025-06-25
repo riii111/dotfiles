@@ -13,5 +13,5 @@ vim.g.maplocalleader = "\\"
 -- Load configuration
 require("config.options")
 require("config.lazy")
-require("config.theme")
 require("config.devicons")
+require("config.theme")

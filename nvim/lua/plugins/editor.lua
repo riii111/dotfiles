@@ -174,10 +174,7 @@ return {
             file = true,
             folder = true,
             hidden = true,
-            git = true, -- Set to false if performance issues in large repos
-          },
-          file = {
-            default = "󰈔",
+            git = true,
           },
           folder = {
             default = "󰉋",
