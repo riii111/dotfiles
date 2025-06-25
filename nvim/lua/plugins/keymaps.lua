@@ -112,40 +112,26 @@ local function setup_keymaps()
         desc = "Markdown preview"
       },
 
-      -- Snacks explorer navigation
-      ["<Leader>o"] = {
-        function()
-          if vim.bo.filetype == "snacks_explorer" then
-            vim.cmd("wincmd p")
-          else
-            vim.cmd("wincmd w")
-          end
-        end,
-        desc = "Switch between explorer and buffer"
-      },
+      -- Oil.nvim file explorer
       ["<Leader>e"] = {
         function()
-          Snacks.explorer()
+          require("oil").toggle_float()
         end,
-        desc = "Toggle explorer visibility"
+        desc = "Toggle Oil file explorer (float)"
+      },
+      ["<Leader>E"] = {
+        function()
+          require("oil").open_float(vim.fn.getcwd())
+        end,
+        desc = "Open Oil in current working directory"
       },
       
-      -- Cmd key aliases for explorer
+      -- Cmd key aliases for oil
       ["<D-e>"] = {
         function()
-          Snacks.explorer()
+          require("oil").toggle_float()
         end,
-        desc = "Toggle explorer visibility"
-      },
-      ["<D-o>"] = {
-        function()
-          if vim.bo.filetype == "snacks_explorer" then
-            vim.cmd("wincmd p")
-          else
-            vim.cmd("wincmd w")
-          end
-        end,
-        desc = "Switch between explorer and buffer"
+        desc = "Toggle Oil file explorer (float)"
       },
       
       -- Meta key aliases for tmux (all Cmd keys)
@@ -161,19 +147,9 @@ local function setup_keymaps()
       },
       ["<M-e>"] = {
         function()
-          Snacks.explorer()
+          require("oil").toggle_float()
         end,
-        desc = "Toggle explorer visibility (tmux)"
-      },
-      ["<M-o>"] = {
-        function()
-          if vim.bo.filetype == "snacks_explorer" then
-            vim.cmd("wincmd p")
-          else
-            vim.cmd("wincmd w")
-          end
-        end,
-        desc = "Switch between explorer and buffer (tmux)"
+        desc = "Toggle Oil file explorer (float) (tmux)"
       },
 
       ["<M-CR>"] = {
@@ -246,10 +222,10 @@ return {
       
       -- Register key groups
       wk.add({
-        { "<leader>e", group = "+explorer" },
+        { "<leader>e", group = "+oil file explorer" },
+        { "<leader>E", group = "+oil file explorer" },
         { "<leader>t", group = "+tabs/terminal" },
         { "<leader>w", group = "+window/buffer" },
-        { "<leader>o", group = "+switch" },
         { "<C-g>", group = "+grep/search" },
         { "<C-p>", group = "+files" },
         { "<C-S-f>", group = "+search" },
@@ -257,19 +233,25 @@ return {
         { "<D-f>", group = "+find" },
         { "<D-F>", group = "+grep" },
         { "<D-p>", group = "+files" },
+        { "<D-e>", group = "+oil file explorer" },
         { "<D-S-v>", group = "+preview" },
         { "<D-M-Right>", group = "+buffer navigation" },
         { "<D-M-Left>", group = "+buffer navigation" },
         { "<M-f>", group = "+find" },
         { "<M-F>", group = "+grep" },
         { "<M-p>", group = "+files" },
+        { "<M-e>", group = "+oil file explorer" },
         { "<M-c>", group = "+clipboard" },
         { "<M-/>", group = "+comment" },
         { "<M-S-v>", group = "+preview" },
         { "<M-CR>", group = "+code action" },
+        { "-", group = "+oil parent directory" },
       })
       
       setup_keymaps()
+      
+      -- Global Oil.nvim keymaps
+      vim.keymap.set("n", "-", "<CMD>Oil<CR>", { desc = "Open parent directory in Oil" })
     end,
   },
 }
