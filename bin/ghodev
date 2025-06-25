@@ -1,0 +1,31 @@
+#!/bin/bash
+
+echo "Starting Ghostty development environment..."
+
+osascript -e 'tell application "Ghostty" to activate'
+sleep 0.3
+
+# Split pane to the right
+osascript -e 'tell application "System Events" to keystroke "d" using command down'
+sleep 0.5
+
+# Right pane: switch to English and start claude --resume
+osascript -e 'tell application "System Events" to key code 102'
+sleep 0.2
+osascript -e 'tell application "System Events" to keystroke "claude"'
+osascript -e 'tell application "System Events" to key code 49'  # Space key
+osascript -e 'tell application "System Events" to keystroke "--resume"'
+osascript -e 'tell application "System Events" to key code 36'
+sleep 0.3
+
+# Move to left pane
+osascript -e 'tell application "System Events" to keystroke "[" using command down'
+sleep 0.2
+
+# Left pane: switch to English and start nvim
+osascript -e 'tell application "System Events" to key code 102'
+sleep 0.1
+osascript -e 'tell application "System Events" to keystroke "nvim"'
+osascript -e 'tell application "System Events" to key code 36'
+
+echo "Development environment ready!"
