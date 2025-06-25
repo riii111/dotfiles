@@ -25,6 +25,7 @@ vim.opt.swapfile = false
 vim.opt.backup = false
 vim.opt.writebackup = false
 
+-- Auto commands for file change detection
 vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter", "CursorHold", "CursorHoldI" }, {
   pattern = "*",
   callback = function()
@@ -42,11 +43,12 @@ vim.api.nvim_create_autocmd({ "FileChangedShellPost" }, {
     -- Trigger LSP diagnostics refresh
     vim.schedule(function()
       -- Request fresh diagnostics from LSP servers
-      for _, client in pairs(vim.lsp.get_active_clients()) do
+      for _, client in pairs(vim.lsp.get_clients()) do
         if client.server_capabilities.documentFormattingProvider then
           vim.lsp.buf.format({ async = true })
         end
       end
+      -- Clear and refresh diagnostics
       vim.diagnostic.reset()
       vim.diagnostic.show()
     end)
@@ -54,7 +56,23 @@ vim.api.nvim_create_autocmd({ "FileChangedShellPost" }, {
 })
 
 -- Clipboard integration
-vim.opt.clipboard = "unnamedplus"
+-- Check if running inside tmux
+if vim.env.TMUX then
+  -- Use OSC 52 for clipboard operations in tmux
+  vim.g.clipboard = {
+    name = 'OSC 52',
+    copy = {
+      ['+'] = require('vim.ui.clipboard.osc52').copy('+'),
+      ['*'] = require('vim.ui.clipboard.osc52').copy('*'),
+    },
+    paste = {
+      ['+'] = require('vim.ui.clipboard.osc52').paste('+'),
+      ['*'] = require('vim.ui.clipboard.osc52').paste('*'),
+    },
+  }
+else
+  vim.opt.clipboard = "unnamedplus"
+end
 
 -- Disable netrw (for file explorer)
 vim.g.loaded_netrw = 1

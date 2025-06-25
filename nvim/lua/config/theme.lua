@@ -114,7 +114,6 @@ local function apply_flate_arc_italic()
 
     -- Snacks Explorer colors
     SnacksPickerDir = { fg = "#cad3f5" },
-    SnacksPickerFile = { fg = "#cad3f5" },
     SnacksPickerPathHidden = { fg = "#6e738d" },
     SnacksPickerPathIgnored = { fg = "#6e738d" },
     Directory = { fg = "#cad3f5" },
