@@ -123,10 +123,15 @@ return {
             end,
             extra_args = function(params)
               local root = require("lspconfig.util").root_pattern(".golangci.yml", ".git")(params.bufname)
+              local args = { "--out-format", "json" }
               if root then
-                return { "--config", root .. "/.golangci.yml" }
+                table.insert(args, "--config")
+                table.insert(args, root .. "/.golangci.yml")
               end
-              return {}
+              return args
+            end,
+            condition = function(utils)
+              return utils.root_has_file("go.mod") and utils.has_file(".golangci.yml")
             end,
           }),
         },
@@ -137,6 +142,7 @@ return {
   -- lspsaga for enhanced LSP UI
   {
     "nvimdev/lspsaga.nvim",
+    enabled = false,
     dependencies = {
       "nvim-treesitter/nvim-treesitter",
       "nvim-tree/nvim-web-devicons",

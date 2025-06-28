@@ -34,7 +34,7 @@ local function setup_keymaps()
         end,
         desc = "Find files"
       },
-      
+
       -- Meta key aliases for tmux (Cmd keys appear as Meta in tmux)
       ["<M-F>"] = {
         function()
@@ -113,7 +113,7 @@ local function setup_keymaps()
       },
 
       -- Oil.nvim file explorer
-      ["<Leader>e"] = {
+      ["<Leader>o"] = {
         function()
           require("oil").toggle_float()
         end,
@@ -125,7 +125,7 @@ local function setup_keymaps()
         end,
         desc = "Open Oil in current working directory"
       },
-      
+
       -- Cmd key aliases for oil
       ["<D-e>"] = {
         function()
@@ -133,7 +133,7 @@ local function setup_keymaps()
         end,
         desc = "Toggle Oil file explorer (float)"
       },
-      
+
       -- Meta key aliases for tmux (all Cmd keys)
       ["<M-Down>"] = { ":split<CR>", desc = "Split window below (tmux)" },
       ["<M-Right>"] = { ":vsplit<CR>", desc = "Split window right (tmux)" },
@@ -158,6 +158,18 @@ local function setup_keymaps()
         end,
         desc = "Code actions"
       },
+
+      -- Git conflict resolution with Diffview
+      ["<Leader>gd"] = { ":DiffviewOpen<CR>", desc = "Open diffview" },
+      ["<Leader>gc"] = { ":DiffviewClose<CR>", desc = "Close diffview" },
+      ["<Leader>gh"] = { ":DiffviewFileHistory<CR>", desc = "File history" },
+      ["<Leader>gf"] = { ":DiffviewToggleFiles<CR>", desc = "Toggle file panel" },
+      ["<Leader>df"] = { ":lua require('diffview.actions').focus_files()<CR>", desc = "Focus diffview files" },
+      ["<Leader>gm"] = { ":DiffviewOpen origin/main...HEAD<CR>", desc = "Compare with main" },
+
+      -- Quick replace shortcuts
+      ["<Leader>r"] = { ":%s/<C-r><C-w>//g<Left><Left>", desc = "Replace word under cursor" },
+      ["<Leader>R"] = { ":%s//g<Left><Left><Left>", desc = "Replace text (global)" },
     },
     v = {
       -- Commenting
@@ -175,6 +187,9 @@ local function setup_keymaps()
       -- Indentation
       ["<Tab>"] = { ">gv", desc = "Indent selection" },
       ["<S-Tab>"] = { "<gv", desc = "Unindent selection" },
+
+      -- Visual mode replace
+      ["<Leader>r"] = { ":s//g<Left><Left>", desc = "Replace in selection" },
     },
     i = {
       -- Buffer operations
@@ -219,13 +234,15 @@ return {
     config = function()
       local wk = require("which-key")
       wk.setup({})
-      
+
       -- Register key groups
       wk.add({
         { "<leader>e", group = "+oil file explorer" },
         { "<leader>E", group = "+oil file explorer" },
         { "<leader>t", group = "+tabs/terminal" },
         { "<leader>w", group = "+window/buffer" },
+        { "<leader>r", group = "+replace" },
+        { "<leader>R", group = "+replace global" },
         { "<C-g>", group = "+grep/search" },
         { "<C-p>", group = "+files" },
         { "<C-S-f>", group = "+search" },
@@ -245,11 +262,18 @@ return {
         { "<M-/>", group = "+comment" },
         { "<M-S-v>", group = "+preview" },
         { "<M-CR>", group = "+code action" },
+        { "<leader>g", group = "+git diffview" },
+        { "<leader>gd", group = "+diffview open" },
+        { "<leader>gc", group = "+diffview close" },
+        { "<leader>gh", group = "+file history" },
+        { "<leader>gf", group = "+toggle files" },
+        { "<leader>df", group = "+focus diffview files" },
+        { "<leader>gm", group = "+compare main" },
         { "-", group = "+oil parent directory" },
       })
-      
+
       setup_keymaps()
-      
+
       -- Global Oil.nvim keymaps
       vim.keymap.set("n", "-", "<CMD>Oil<CR>", { desc = "Open parent directory in Oil" })
     end,
