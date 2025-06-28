@@ -89,11 +89,11 @@ local function apply_flate_arc_italic()
     Ignore = { fg = "#9a9fbf" },
     Todo = { fg = "#111419", bg = "#cca700", bold = true },
 
-    -- Diffs
-    DiffAdd = { fg = "#23D18C" },
-    DiffChange = { fg = "#A29BFE" },
-    DiffDelete = { fg = "#E84855" },
-    DiffText = { fg = "#A29BFE" },
+    -- Diffs (with background colors for better visibility)
+    DiffAdd = { bg = "#1e3a2e" },
+    DiffChange = { bg = "#2d2a3e" },
+    DiffDelete = { bg = "#3e2929" },
+    DiffText = { bg = "#3e2a5e" },
 
     -- Indent guideline color adjustment (v3 compatible)
     IndentBlanklineChar = { fg = "#44475a" },
@@ -130,6 +130,16 @@ local function apply_flate_arc_italic()
     TelescopeNormal = { bg = "NONE" },
     TelescopeResultsNormal = { bg = "NONE" },
     TelescopePreviewNormal = { bg = "NONE" },
+
+    -- Diffview specific highlights
+    DiffviewDiffAdd = { bg = "#1e3a2e" },
+    DiffviewDiffChange = { bg = "#2d2a3e" },
+    DiffviewDiffDelete = { bg = "#3e2929" },
+    DiffviewDiffText = { bg = "#3e2a5e" },
+    DiffviewCursorLine = { bg = "#44475a" },
+    DiffviewStatusLine = { fg = "#e9dbdb", bg = "#22252f" },
+    DiffviewFilePanelTitle = { fg = "#00cecb", bold = true },
+    DiffviewFilePanelCounter = { fg = "#A29BFE" },
 
     -- Treesitter specific highlights
     ["@field"] = { fg = "#00cecb", italic = true },

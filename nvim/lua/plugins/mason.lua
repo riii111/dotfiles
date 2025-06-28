@@ -18,19 +18,19 @@ return {
         -- LSP servers
         "lua-language-server",
         "sqls",
-        
+
         -- Formatters
         "stylua",
         "goimports",
         "sql-formatter",
-        
+
         -- Linters
         "golangci-lint",
-        
+
         -- Debuggers  
         "debugpy",
         "delve",
-        
+
         -- Other tools
         "tree-sitter-cli",
       },
