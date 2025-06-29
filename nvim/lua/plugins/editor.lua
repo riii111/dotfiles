@@ -193,6 +193,7 @@ return {
     },
   },
 
+  -- Oil.nvim (file explorer that edits filesystem like a buffer)
   {
     "stevearc/oil.nvim",
     lazy = false,
@@ -209,11 +210,13 @@ return {
         -- "mtime",
       },
       
+      -- Buffer-local options for oil buffers
       buf_options = {
         buflisted = false,
         bufhidden = "hide",
       },
       
+      -- Window-local options for oil buffers
       win_options = {
         wrap = false,
         signcolumn = "no",
@@ -225,31 +228,44 @@ return {
         concealcursor = "nvic",
       },
       
+      -- Send deleted files to trash instead of permanently deleting
       delete_to_trash = true,
       
+      -- Skip confirmation popup for simple operations
       skip_confirm_for_simple_edits = false,
       
+      -- Prompt to save changes before selecting new file
       prompt_save_on_select_new_entry = true,
       
+      -- Oil will automatically delete hidden buffers after this delay
       cleanup_delay_ms = 2000,
       
       -- LSP file operations support
       lsp_file_methods = {
+        -- Enable LSP file operations
         enabled = true,
+        -- Time to wait for LSP file operations to complete
         timeout_ms = 1000,
+        -- Autosave buffers that are updated with LSP willRenameFiles
         autosave_changes = true,
       },
       
+      -- Set to false to disable default keymaps
       use_default_keymaps = true,
       
+      -- Configuration for file view
       view_options = {
+        -- Show hidden files and directories by default
         show_hidden = true,
+        -- This function defines what is considered a "hidden" file
         is_hidden_file = function(name, bufnr)
           return vim.startswith(name, ".")
         end,
+        -- This function defines what will never be shown, even when show_hidden is true
         is_always_hidden = function(name, bufnr)
           return false
         end,
+        -- Sort options
         natural_order = true,
         case_insensitive = false,
         sort = {
@@ -258,7 +274,9 @@ return {
         },
       },
       
+      -- Configuration for floating window
       float = {
+        -- Padding around the floating window
         padding = 2,
         max_width = 0.9,
         max_height = 0.9,
