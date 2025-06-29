@@ -1,21 +1,6 @@
--- Define colors and icons locally to avoid dependencies
-local colors = {
-    bg = "#24283b",
-    fg = "#c0caf5",
-    yellow = "#e0af68",
-    cyan = "#7dcfff",
-    green = "#9ece6a",
-    orange = "#ff9e64",
-    violet = "#9d7cd8",
-    magenta = "#bb9af7",
-    blue = "#7aa2f7",
-    red = "#f7768e",
-    git = {
-        add = "#9ece6a",
-        change = "#e0af68",
-        delete = "#f7768e",
-    },
-}
+-- Import unified color palette
+local colors = require("config.colors").lualine
+
 
 local icons = {
     git = "",
@@ -541,44 +526,44 @@ end
 
 local custom_theme = {
     normal = {
-        a = { fg = "#1a1e29", bg = "#7aa2f7", gui = "bold" },
-        b = { fg = "#e9dbdb", bg = "#22252f" },
-        c = { fg = "#e9dbdb", bg = "#16181f" },
-        x = { fg = "#e9dbdb", bg = "#16181f" },
-        y = { fg = "#e9dbdb", bg = "#22252f" },
-        z = { fg = "#1a1e29", bg = "#7aa2f7", gui = "bold" },
+        a = { fg = colors.normal_a, bg = colors.blue, gui = "bold" },
+        b = { fg = colors.normal_b, bg = colors.normal_bg_b },
+        c = { fg = colors.normal_c, bg = colors.normal_bg_c },
+        x = { fg = colors.normal_c, bg = colors.normal_bg_c },
+        y = { fg = colors.normal_b, bg = colors.normal_bg_b },
+        z = { fg = colors.normal_a, bg = colors.blue, gui = "bold" },
     },
     insert = {
-        a = { fg = "#1a1e29", bg = "#9ece6a", gui = "bold" },
-        b = { fg = "#e9dbdb", bg = "#22252f" },
-        c = { fg = "#e9dbdb", bg = "#16181f" },
-        x = { fg = "#e9dbdb", bg = "#16181f" },
-        y = { fg = "#e9dbdb", bg = "#22252f" },
-        z = { fg = "#1a1e29", bg = "#9ece6a", gui = "bold" },
+        a = { fg = colors.normal_a, bg = colors.green, gui = "bold" },
+        b = { fg = colors.normal_b, bg = colors.normal_bg_b },
+        c = { fg = colors.normal_c, bg = colors.normal_bg_c },
+        x = { fg = colors.normal_c, bg = colors.normal_bg_c },
+        y = { fg = colors.normal_b, bg = colors.normal_bg_b },
+        z = { fg = colors.normal_a, bg = colors.green, gui = "bold" },
     },
     visual = {
-        a = { fg = "#1a1e29", bg = "#bb9af7", gui = "bold" },
-        b = { fg = "#e9dbdb", bg = "#22252f" },
-        c = { fg = "#e9dbdb", bg = "#16181f" },
-        x = { fg = "#e9dbdb", bg = "#16181f" },
-        y = { fg = "#e9dbdb", bg = "#22252f" },
-        z = { fg = "#1a1e29", bg = "#bb9af7", gui = "bold" },
+        a = { fg = colors.normal_a, bg = colors.magenta, gui = "bold" },
+        b = { fg = colors.normal_b, bg = colors.normal_bg_b },
+        c = { fg = colors.normal_c, bg = colors.normal_bg_c },
+        x = { fg = colors.normal_c, bg = colors.normal_bg_c },
+        y = { fg = colors.normal_b, bg = colors.normal_bg_b },
+        z = { fg = colors.normal_a, bg = colors.magenta, gui = "bold" },
     },
     replace = {
-        a = { fg = "#ffffff", bg = "#f7768e", gui = "bold" },
-        b = { fg = "#e9dbdb", bg = "#22252f" },
-        c = { fg = "#e9dbdb", bg = "#16181f" },
-        x = { fg = "#e9dbdb", bg = "#16181f" },
-        y = { fg = "#e9dbdb", bg = "#22252f" },
-        z = { fg = "#ffffff", bg = "#f7768e", gui = "bold" },
+        a = { fg = colors.fg, bg = colors.red, gui = "bold" },
+        b = { fg = colors.normal_b, bg = colors.normal_bg_b },
+        c = { fg = colors.normal_c, bg = colors.normal_bg_c },
+        x = { fg = colors.normal_c, bg = colors.normal_bg_c },
+        y = { fg = colors.normal_b, bg = colors.normal_bg_b },
+        z = { fg = colors.fg, bg = colors.red, gui = "bold" },
     },
     command = {
-        a = { fg = "#1a1e29", bg = "#e0af68", gui = "bold" },
-        b = { fg = "#e9dbdb", bg = "#22252f" },
-        c = { fg = "#e9dbdb", bg = "#16181f" },
-        x = { fg = "#e9dbdb", bg = "#16181f" },
-        y = { fg = "#e9dbdb", bg = "#22252f" },
-        z = { fg = "#1a1e29", bg = "#e0af68", gui = "bold" },
+        a = { fg = colors.normal_a, bg = colors.yellow, gui = "bold" },
+        b = { fg = colors.normal_b, bg = colors.normal_bg_b },
+        c = { fg = colors.normal_c, bg = colors.normal_bg_c },
+        x = { fg = colors.normal_c, bg = colors.normal_bg_c },
+        y = { fg = colors.normal_b, bg = colors.normal_bg_b },
+        z = { fg = colors.normal_a, bg = colors.yellow, gui = "bold" },
     },
 }
 

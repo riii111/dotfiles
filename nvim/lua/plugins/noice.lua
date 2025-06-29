@@ -86,7 +86,7 @@ return {
     config = function(_, opts)
       -- Setup nvim-notify first
       require("notify").setup({
-        background_colour = "#1a1b26",
+        background_colour = require("config.colors").base.bg_medium,
         fps = 30,
         level = 2,
         minimum_width = 50,
