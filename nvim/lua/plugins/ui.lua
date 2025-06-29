@@ -92,18 +92,6 @@ return {
 		version = "*",
 		config = function()
 			require("bufferline").setup({
-				highlights = {
-					buffer = {
-						fg = "#abb2bf",
-					},
-					buffer_visible = {
-						fg = "#abb2bf",
-					},
-					buffer_selected = {
-						fg = "#abb2bf",
-						bold = true,
-					},
-				},
 				options = {
 					mode = "buffers",
 					separator_style = "slant",
@@ -113,7 +101,7 @@ return {
 					show_tab_indicators = true,
 					diagnostics = "nvim_lsp",
 					diagnostics_update_in_insert = false,
-					diagnostics_indicator = function(count, level, diagnostics_dict, context)
+					diagnostics_indicator = function(count, level)
 						local icon = "⚠"
 						if level:match("error") then
 							icon = "󰅙"
@@ -136,6 +124,7 @@ return {
 								name = "docs",
 								highlight = { fg = "#54B399" },
 								priority = 2,
+								auto_close = true,
 								matcher = function(buf)
 									return buf.name:match("%.md$")
 											or buf.name:match("README")
@@ -146,6 +135,7 @@ return {
 								name = "rs",
 								highlight = { fg = "#F74C00" },
 								priority = 3,
+								auto_close = true,
 								matcher = function(buf)
 									return buf.name:match("%.rs$")
 								end,
@@ -154,6 +144,7 @@ return {
 								name = "lua",
 								highlight = { fg = "#51A0CF" },
 								priority = 4,
+								auto_close = true,
 								matcher = function(buf)
 									return buf.name:match("%.lua$")
 								end,
@@ -162,8 +153,45 @@ return {
 								name = "go",
 								highlight = { fg = "#00ADD8" },
 								priority = 5,
+								auto_close = true,
 								matcher = function(buf)
 									return buf.name:match("%.go$")
+								end,
+							},
+							{
+								name = "tsx",
+								highlight = { fg = "#61DAFB" },
+								priority = 6,
+								auto_close = true,
+								matcher = function(buf)
+									return buf.name:match("%.tsx$")
+								end,
+							},
+							{
+								name = "ts",
+								highlight = { fg = "#3178C6" },
+								priority = 7,
+								auto_close = true,
+								matcher = function(buf)
+									return buf.name:match("%.ts$")
+								end,
+							},
+							{
+								name = "jsx",
+								highlight = { fg = "#61DAFB" },
+								priority = 8,
+								auto_close = true,
+								matcher = function(buf)
+									return buf.name:match("%.jsx$")
+								end,
+							},
+							{
+								name = "js",
+								highlight = { fg = "#F7DF1E" },
+								priority = 9,
+								auto_close = true,
+								matcher = function(buf)
+									return buf.name:match("%.js$")
 								end,
 							},
 						},
@@ -191,8 +219,8 @@ return {
 			require("incline").setup({
 				highlight = {
 					groups = {
-						InclineNormal = { guibg = "#1e222a", guifg = "#abb2bf" },
-						InclineNormalNC = { guifg = "#5c6370", guibg = "#1a1e26" },
+						InclineNormal = { guibg = "#22252f", guifg = "#abb2bf" },
+						InclineNormalNC = { guifg = "#5c6370", guibg = "#1e222a" },
 					},
 				},
 				window = { margin = { vertical = 0, horizontal = 1 } },
@@ -353,8 +381,6 @@ return {
 		opts = {},
 	},
 
-	-- Discord presence
-	"andweeb/presence.nvim",
 
 	-- Search highlighting
 	{
