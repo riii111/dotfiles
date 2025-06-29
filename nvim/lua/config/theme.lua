@@ -30,12 +30,12 @@ local function apply_flate_arc_italic()
     TabLineSel = { fg = "#e9dbdb", bg = "#2c2f39", bold = true },
 
     -- Buffer line colors (for plugins like bufferline.nvim)
-    BufferLineFill = { bg = "#08090D" },
-    BufferLineBackground = { fg = "#9a9fbf", bg = "#08090D" },
-    BufferLineBuffer = { fg = "#9a9fbf", bg = "#08090D" },
+    BufferLineFill = { bg = "NONE" },
+    BufferLineBackground = { fg = "#9a9fbf", bg = "#16181f" },
+    BufferLineBuffer = { fg = "#9a9fbf", bg = "#16181f" },
     BufferLineBufferSelected = { fg = "#e9dbdb", bg = "#2c2f39", bold = true },
-    BufferLineTab = { fg = "#9a9fbf", bg = "#08090D" },
-    BufferLineTabSelected = { fg = "#e9dbdb", bg = "#2c2f39", bold = true },
+    BufferLineTab = { fg = "#9a9fbf", bg = "#16181f" },
+    BufferLineTabSelected = { fg = "#e9dbdb", bg = "#192342", bold = true },
 
     -- Search & Visual
     Search = { fg = "#111419", bg = "#FFE066" },
@@ -177,4 +177,3 @@ vim.api.nvim_create_autocmd("ColorScheme", {
   end,
   group = vim.api.nvim_create_augroup("UserThemeApply", { clear = true }),
 })
-
