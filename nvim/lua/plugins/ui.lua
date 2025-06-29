@@ -114,7 +114,16 @@ return {
 					diagnostics = "nvim_lsp",
 					diagnostics_update_in_insert = false,
 					diagnostics_indicator = function(count, level, diagnostics_dict, context)
-						local icon = level:match("error") and "󰅙" or "⚠"
+						local icon = "⚠"
+						if level:match("error") then
+							icon = "󰅙"
+						elseif level:match("warn") then
+							icon = "⚠"
+						elseif level:match("info") then
+							icon = "󰋽"
+						elseif level:match("hint") then
+							icon = "󰌶"
+						end
 						return " " .. icon .. count
 					end,
 					sort_by = "insert_after_current",
