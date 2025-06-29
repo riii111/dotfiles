@@ -1,3 +1,5 @@
+local colors = require("config.colors")
+
 return {
 
 	-- Telescope fuzzy finder
@@ -122,7 +124,7 @@ return {
 						items = {
 							{
 								name = "docs",
-								highlight = { fg = "#54B399" },
+								highlight = { fg = colors.languages.docs },
 								priority = 2,
 								auto_close = true,
 								matcher = function(buf)
@@ -133,7 +135,7 @@ return {
 							},
 							{
 								name = "rs",
-								highlight = { fg = "#F74C00" },
+								highlight = { fg = colors.languages.rust },
 								priority = 3,
 								auto_close = true,
 								matcher = function(buf)
@@ -142,7 +144,7 @@ return {
 							},
 							{
 								name = "lua",
-								highlight = { fg = "#51A0CF" },
+								highlight = { fg = colors.languages.lua },
 								priority = 4,
 								auto_close = true,
 								matcher = function(buf)
@@ -151,7 +153,7 @@ return {
 							},
 							{
 								name = "go",
-								highlight = { fg = "#00ADD8" },
+								highlight = { fg = colors.languages.go },
 								priority = 5,
 								auto_close = true,
 								matcher = function(buf)
@@ -160,7 +162,7 @@ return {
 							},
 							{
 								name = "tsx",
-								highlight = { fg = "#61DAFB" },
+								highlight = { fg = colors.languages.tsx },
 								priority = 6,
 								auto_close = true,
 								matcher = function(buf)
@@ -169,7 +171,7 @@ return {
 							},
 							{
 								name = "ts",
-								highlight = { fg = "#3178C6" },
+								highlight = { fg = colors.languages.typescript },
 								priority = 7,
 								auto_close = true,
 								matcher = function(buf)
@@ -178,7 +180,7 @@ return {
 							},
 							{
 								name = "jsx",
-								highlight = { fg = "#61DAFB" },
+								highlight = { fg = colors.languages.tsx },
 								priority = 8,
 								auto_close = true,
 								matcher = function(buf)
@@ -187,13 +189,76 @@ return {
 							},
 							{
 								name = "js",
-								highlight = { fg = "#F7DF1E" },
+								highlight = { fg = colors.languages.javascript },
 								priority = 9,
 								auto_close = true,
 								matcher = function(buf)
 									return buf.name:match("%.js$")
 								end,
 							},
+						},
+					},
+					highlights = {
+						fill = {
+							bg = colors.bufferline.fill,
+						},
+						background = {
+							fg = colors.bufferline.fg,
+							bg = colors.bufferline.background,
+						},
+						buffer = {
+							fg = colors.bufferline.fg,
+							bg = colors.bufferline.background,
+						},
+						buffer_selected = {
+							fg = colors.bufferline.fg_selected,
+							bg = colors.bufferline.buffer_selected,
+							bold = true,
+						},
+						buffer_visible = {
+							fg = colors.bufferline.fg,
+							bg = colors.bufferline.background,
+						},
+						tab = {
+							fg = colors.bufferline.fg,
+							bg = colors.bufferline.background,
+						},
+						tab_selected = {
+							fg = colors.bufferline.fg_selected,
+							bg = colors.bufferline.tab_selected,
+							bold = true,
+						},
+						tab_close = {
+							fg = colors.bufferline.fg,
+							bg = colors.bufferline.background,
+						},
+						separator = {
+							fg = colors.bufferline.background,
+							bg = colors.bufferline.background,
+						},
+						separator_selected = {
+							fg = colors.bufferline.buffer_selected,
+							bg = colors.bufferline.buffer_selected,
+						},
+						separator_visible = {
+							fg = colors.bufferline.background,
+							bg = colors.bufferline.background,
+						},
+						indicator_selected = {
+							fg = colors.bufferline.buffer_selected,
+							bg = colors.bufferline.buffer_selected,
+						},
+						modified = {
+							fg = colors.semantic.warning,
+							bg = colors.bufferline.background,
+						},
+						modified_selected = {
+							fg = colors.semantic.warning,
+							bg = colors.bufferline.buffer_selected,
+						},
+						modified_visible = {
+							fg = colors.semantic.warning,
+							bg = colors.bufferline.background,
 						},
 					},
 					offsets = {
@@ -219,8 +284,8 @@ return {
 			require("incline").setup({
 				highlight = {
 					groups = {
-						InclineNormal = { guibg = "#22252f", guifg = "#abb2bf" },
-						InclineNormalNC = { guifg = "#5c6370", guibg = "#1e222a" },
+						InclineNormal = { guibg = colors.base.bg_light, guifg = colors.base.fg_alt },
+						InclineNormalNC = { guifg = colors.base.fg_muted, guibg = colors.base.bg_accent_alt },
 					},
 				},
 				window = { margin = { vertical = 0, horizontal = 1 } },
@@ -244,13 +309,13 @@ return {
 						-- Show only parent directory and filename
 						if #parts > 1 then
 							local parent = parts[#parts - 1]
-							table.insert(segments, { parent, guifg = "#5c6370" })
-							table.insert(segments, { " > ", guifg = "#5c6370" })
+							table.insert(segments, { parent, guifg = colors.base.fg_muted })
+							table.insert(segments, { " > ", guifg = colors.base.fg_muted })
 						end
 					end
 
 					-- File icon and name
-					table.insert(segments, { (icon and icon .. " " or ""), guifg = color or "#ffffff" })
+					table.insert(segments, { (icon and icon .. " " or ""), guifg = color or colors.base.white })
 					table.insert(segments, { filename, gui = "bold" })
 
 					return segments
@@ -312,7 +377,7 @@ return {
 				highlights = {
 					Normal = { guibg = "NONE" },
 					NormalFloat = { guibg = "NONE" },
-					FloatBorder = { guifg = "#00cecb", guibg = "NONE" },
+					FloatBorder = { guifg = colors.base.accent, guibg = colors.base.bg },
 				},
 			}
 		end,
