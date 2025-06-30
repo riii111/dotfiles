@@ -1,5 +1,4 @@
 return {
-  -- Database interaction
   {
     "tpope/vim-dadbod",
     dependencies = {

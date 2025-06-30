@@ -17,6 +17,7 @@ return {
       ensure_installed = {
         -- LSP servers
         "lua-language-server",
+        "typescript-language-server",
         "sqls",
 
         -- Formatters
