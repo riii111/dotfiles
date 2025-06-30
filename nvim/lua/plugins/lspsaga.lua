@@ -128,6 +128,6 @@ return {
       -- Enhanced Rename 
       vim.keymap.set("n", "<leader>rn", "<cmd>Lspsaga rename<CR>", vim.tbl_extend("force", opts, { desc = "LSP Saga Rename" }))
     end,
-    event = "LspAttach",
+    event = "VeryLazy",
   },
 }
