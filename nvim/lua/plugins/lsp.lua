@@ -2,10 +2,15 @@ return {
   -- LSP Configuration
   {
     "neovim/nvim-lspconfig",
+    event = { "BufReadPre", "BufNewFile" },  -- ファイルを開く前にロード
     dependencies = {
       "williamboman/mason.nvim",
     },
     config = function()
+      -- Ensure Go environment variables are set for gopls
+      vim.env.GOROOT = vim.env.GOROOT or "/opt/homebrew/Cellar/go/1.24.2/libexec"
+      vim.env.GOPATH = vim.env.GOPATH or vim.fn.expand("$HOME/go")
+      
       local lspconfig = require("lspconfig")
 
       -- LSP settings
@@ -20,18 +25,8 @@ return {
           severity_sort = true,
         })
 
-        -- Key mappings
-        vim.keymap.set("n", "gD", vim.lsp.buf.declaration, opts)
-        vim.keymap.set("n", "gd", vim.lsp.buf.definition, opts)
-        vim.keymap.set("n", "K", vim.lsp.buf.hover, opts)
-        vim.keymap.set("n", "gi", vim.lsp.buf.implementation, opts)
-        vim.keymap.set("n", "<C-k>", vim.lsp.buf.signature_help, opts)
-        vim.keymap.set("n", "<space>rn", vim.lsp.buf.rename, opts)
-        vim.keymap.set("n", "<space>ca", vim.lsp.buf.code_action, opts)
-        vim.keymap.set("n", "gr", vim.lsp.buf.references, opts)
-        vim.keymap.set("n", "<space>f", function()
-          vim.lsp.buf.format { async = true }
-        end, opts)
+        -- Configure LSP behavior (diagnostics, etc.) but let lspsaga.nvim handle keymaps
+        -- All keymaps are handled by lspsaga.nvim on LspAttach
       end
 
       local capabilities = vim.lsp.protocol.make_client_capabilities()
@@ -62,9 +57,12 @@ return {
       lspconfig.gopls.setup({
         on_attach = on_attach,
         capabilities = capabilities,
-        cmd = { 'gopls' },
+        cmd = { vim.fn.expand("$HOME/go/bin/gopls") },  -- 明示的なパス
         filetypes = { 'go', 'gomod', 'gowork', 'gotmpl' },
-        root_dir = lspconfig.util.root_pattern('.golangci.yml', 'go.work', '.git'),
+        root_dir = function(fname)
+          return lspconfig.util.root_pattern("go.mod", "go.work")(fname)
+              or lspconfig.util.find_git_ancestor(fname)
+        end,
         settings = {
           gopls = {
             hints = {
@@ -86,6 +84,51 @@ return {
         },
       })
 
+      -- Setup TypeScript Language Server
+      lspconfig.ts_ls.setup({
+        on_attach = on_attach,
+        capabilities = capabilities,
+        filetypes = { "typescript", "typescriptreact", "typescript.tsx", "javascript", "javascriptreact" },
+        root_dir = lspconfig.util.root_pattern("package.json", "tsconfig.json", "jsconfig.json", ".git"),
+        settings = {
+          typescript = {
+            inlayHints = {
+              includeInlayParameterNameHints = 'none',
+              includeInlayParameterNameHintsWhenArgumentMatchesName = false,
+              includeInlayFunctionParameterTypeHints = false,
+              includeInlayVariableTypeHints = false,
+              includeInlayVariableTypeHintsWhenTypeMatchesName = false,
+              includeInlayPropertyDeclarationTypeHints = false,
+              includeInlayFunctionLikeReturnTypeHints = false,
+              includeInlayEnumMemberValueHints = false,
+            },
+            suggest = {
+              includeCompletionsForModuleExports = true,
+            },
+            format = {
+              enable = false,  -- Biomeでフォーマットするため無効化
+            },
+          },
+          javascript = {
+            inlayHints = {
+              includeInlayParameterNameHints = 'none',
+              includeInlayParameterNameHintsWhenArgumentMatchesName = false,
+              includeInlayFunctionParameterTypeHints = false,
+              includeInlayVariableTypeHints = false,
+              includeInlayVariableTypeHintsWhenTypeMatchesName = false,
+              includeInlayPropertyDeclarationTypeHints = false,
+              includeInlayFunctionLikeReturnTypeHints = false,
+              includeInlayEnumMemberValueHints = false,
+            },
+            suggest = {
+              includeCompletionsForModuleExports = true,
+            },
+            format = {
+              enable = false,  -- Biomeでフォーマットするため無効化
+            },
+          },
+        },
+      })
 
     end,
   },
