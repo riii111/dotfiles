@@ -100,8 +100,18 @@ return {
       local function setup_lsp_keymaps()
         local clients = vim.lsp.get_clients({ bufnr = 0 })
         if #clients > 0 then
+          -- Core navigation keymaps
+          vim.keymap.set("n", "gd", "<cmd>Lspsaga goto_definition<CR>", vim.tbl_extend("force", opts, { desc = "Go to Definition", buffer = true }))
           vim.keymap.set("n", "gp", "<cmd>Lspsaga peek_definition<CR>", vim.tbl_extend("force", opts, { desc = "Peek Definition", buffer = true }))
           vim.keymap.set("n", "gt", "<cmd>Lspsaga peek_type_definition<CR>", vim.tbl_extend("force", opts, { desc = "Peek Type Definition", buffer = true }))
+          vim.keymap.set("n", "gD", vim.lsp.buf.declaration, vim.tbl_extend("force", opts, { desc = "Go to Declaration", buffer = true }))
+          vim.keymap.set("n", "gi", vim.lsp.buf.implementation, vim.tbl_extend("force", opts, { desc = "Go to Implementation", buffer = true }))
+          vim.keymap.set("n", "gr", vim.lsp.buf.references, vim.tbl_extend("force", opts, { desc = "Find References", buffer = true }))
+          
+          -- Additional LSP keymaps
+          vim.keymap.set("n", "<C-k>", vim.lsp.buf.signature_help, vim.tbl_extend("force", opts, { desc = "Signature Help", buffer = true }))
+          vim.keymap.set("n", "<space>ca", "<cmd>Lspsaga code_action<CR>", vim.tbl_extend("force", opts, { desc = "Code Action", buffer = true }))
+          vim.keymap.set("n", "<space>f", function() vim.lsp.buf.format { async = true } end, vim.tbl_extend("force", opts, { desc = "Format", buffer = true }))
         end
       end
       
@@ -127,7 +137,8 @@ return {
       
       -- Enhanced Rename 
       vim.keymap.set("n", "<leader>rn", "<cmd>Lspsaga rename<CR>", vim.tbl_extend("force", opts, { desc = "LSP Saga Rename" }))
+      
     end,
-    event = "VeryLazy",
+    event = { "BufReadPre", "BufNewFile" },  -- LSP より前に必ずロード
   },
 }
