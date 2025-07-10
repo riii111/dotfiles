@@ -373,8 +373,6 @@ local function lsp_servers()
             local all_names = {}
 
             vim.list_extend(all_names, get_lsp_client_names(buf_clients, should_trim))
-            vim.list_extend(all_names, get_formatter_names(buf_ft, should_trim))
-            vim.list_extend(all_names, get_linter_names(buf_ft, should_trim))
 
             if #all_names == 0 then
                 return icons.ls_inactive .. "none"
