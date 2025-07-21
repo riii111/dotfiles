@@ -29,94 +29,9 @@
 
 - 常に謝罪するのではなく、許可を求めることを心がけてください。
 
-## 1. Context Filters and Noise Reduction
-
-### context-filters
-
-exclude:
-
-- '^\\s*:[^ ]+:\\s*$'           # Emoji-only lines
-- '^LGTM!?$'                    # +1/LGTM comments  
-- '^\\s*\\+1\\s*$'              # +1 reactions
-- '^Reviewed-by:'               # GitHub PR review metadata
-- '^Co-authored-by:'            # GitHub co-author attribution
-- '^Signed-off-by:'             # Git commit signatures
-- '^<details>'                  # GitHub collapsible sections start
-- '^</details>'                 # GitHub collapsible sections end
-- 'node_modules/'               # Node.js dependencies
-- '\\.log$'                     # Log files
-- '/target/'                    # Rust build artifacts
-- '/vendor/'                    # Go vendor directory
-- '\\.git/'                     # Git internal files
-- '/dist/'                      # Build distribution files
-- '/build/'                     # Build output directories
-- '\\.min\\.(js|css)$'          # Minified assets
-- 'coverage/'                   # Test coverage reports
-- '\\.generated\\.'             # Generated files
-
-### prompts
-
-- When running `rg`, always pass `--no-heading --color=never --json --trim --max-columns=120`.
-
-- When you need to **search for files**, use **`fd`** instead of `find`.
-- Always pass:
-
-```bash
-fd --hidden --exclude .git --exclude node_modules --color=never --print0
-```
-
-- When you want to **peek at a file’s contents**, use **`bat`** instead of `cat`.
-
-```bash
-bat --plain --paging=never --color=never
-```
-
-- For **directory listings**, call **`eza`** (modern `ls`) instead of `ls`.
-
-```bash
-eza -1 --color=never --group-directories-first
-```
-
-- **Rule:** never execute `grep`, `find`, `cat`, or ordinary `ls`.  
-- Rewrite them to **`rg` / `fd` / `bat` / `eza`** with the option sets above before running.
-
-
-- When using GitHub CLI commands, prefer JSON output to avoid noise:
-  - Use `gh pr view --json title,body` instead of plain text output
-  - Use `gh issue view --json title,body` for issue details
-  - This eliminates emoji reactions and formatting artifacts from the output
-
-### language-specific-filter
-
-rust:
-  exclude:
-    - 'target/debug/'
-    - 'target/release/'  
-    - 'Cargo.lock'        # Note: For application binaries, Cargo.lock should be committed per Rust guidelines. Exclude only for large diff analysis.
-
-go:
-  exclude:
-    - 'vendor/'
-    - 'go.sum'            # Note: Contains dependency hashes, may be needed for security reviews. Skip only during large diff analysis.
-javascript:
-  exclude:
-    - 'node_modules/'
-    - 'package-lock.json'
-    - '\\.d\\.ts$'        # Type definition files
-    - 'dist/'
-    - 'build/'
-
-### prompts
-
-This project uses ripgrep (rg) for searching with optimized settings configured in ~/.ripgreprc.
-The configuration automatically:
-- Outputs in JSON format for better parsing
-- Limits output to manage context window
-- Excludes common build artifacts and dependencies
-- Uses custom ignore patterns from ~/.rgignore
+## 1. GitHub CLI Usage
 
 When using GitHub CLI commands, prefer JSON output to avoid noise:
-
 - Use `gh pr view --json title,body` instead of plain text output
 - Use `gh issue view --json title,body` for issue details
 - This eliminates emoji reactions and formatting artifacts from the output
@@ -193,4 +108,9 @@ test: add tests for Result type error cases
 docs: add best practices for error handling
 ```
 
+## 3. Additional Notes
 
+The following files in the folder are all gitignore targets and should not be committed.
+/Users/a81803/GitHub/1_side_job/nodecross/nodex-platform/backend/.idea
+
+When committing, Pre-Commit is executed, so it takes a little time, but this is because cargo clippy and build checks are being executed, so please do not disable it.
