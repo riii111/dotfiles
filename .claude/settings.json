@@ -1,5 +1,45 @@
 // All comments must be deleted.
 {
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash(grep*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'ℹ️ Use rg instead of grep!' && echo 'Example: rg --no-heading --color=never --json --trim --max-columns=120 <pattern>' && exit 2"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash(find*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'ℹ️ Use fd instead of find!' && echo 'Example: fd --hidden --exclude .git --exclude node_modules --color=never --print0 <pattern>' && exit 2"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash(cat*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'ℹ️ Use bat instead of cat!' && echo 'Example: bat --plain --paging=never --color=never <file>' && exit 2"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash(ls*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'ℹ️ Use eza instead of ls!' && echo 'Example: eza -1 --color=never --group-directories-first' && exit 2"
+          }
+        ]
+      }
+    ]
+  },
   "permissions": {
     "allow": [
       "Read(~/.zshrc)",                    // Check shell settings for command behavior issues
@@ -71,7 +111,8 @@
       // legacy tools
       "Bash(grep:*)",
       "Bash(find:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(cat:*)"
     ]
   },
   "env": {
