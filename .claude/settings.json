@@ -3,11 +3,11 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash(grep*)",
+        "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "read input; if echo \"$input\" | grep -q '\"command\":\"ls'; then echo 'Use eza instead of ls!' >&2; echo 'Example: eza -1 --color=never --group-directories-first' >&2; exit 2; elif echo \"$input\" | grep -q '\"command\":\"find'; then echo 'Use fd instead of find!' >&2; echo 'Example: fd --hidden --exclude .git --exclude node_modules --color=never --print0 <pattern>' >&2; exit 2; elif echo \"$input\" | grep -q '\"command\":\"grep'; then echo 'Use rg instead of grep!' >&2; echo 'Example: rg --no-heading --color=never --json --trim --max-columns=120 <pattern>' >&2; exit 2; elif echo \"$input\" | grep -q '\"command\":\"cat'; then echo 'Use bat instead of cat!' >&2; echo 'Example: bat --plain --paging=never --color=never <file>' >&2; exit 2; fi"
+            "command": "read input; if echo \"$input\" | grep -q '\"command\":\"ls'; then echo '{\"decision\": \"block\", \"reason\": \"Use eza instead of ls! Example: eza -1 --color=never --group-directories-first\"}'; elif echo \"$input\" | grep -q '\"command\":\"find'; then echo '{\"decision\": \"block\", \"reason\": \"Use fd instead of find! Example: fd --hidden --exclude .git --exclude node_modules --color=never --print0 <pattern>\"}'; elif echo \"$input\" | grep -q '\"command\":\"grep'; then echo '{\"decision\": \"block\", \"reason\": \"Use rg instead of grep! Example: rg --no-heading --color=never --json --trim --max-columns=120 <pattern>\"}'; elif echo \"$input\" | grep -q '\"command\":\"cat'; then echo '{\"decision\": \"block\", \"reason\": \"Use bat instead of cat! Example: bat --plain --paging=never --color=never <file>\"}'; fi"
           }
         ]
       }
