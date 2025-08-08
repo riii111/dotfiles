@@ -9,7 +9,7 @@ return {
     },
     config = function()
       -- Ensure Go environment variables are set for gopls
-      vim.env.GOROOT = vim.env.GOROOT or "/opt/homebrew/Cellar/go/1.24.2/libexec"
+      vim.env.GOROOT = vim.env.GOROOT or vim.fn.system("go env GOROOT"):gsub("\n", "")
       vim.env.GOPATH = vim.env.GOPATH or vim.fn.expand("$HOME/go")
 
       local lspconfig = require("lspconfig")
