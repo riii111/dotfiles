@@ -3,38 +3,11 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash(grep*)",
+        "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "echo 'ℹ️ Use rg instead of grep!' && echo 'Example: rg --no-heading --color=never --json --trim --max-columns=120 <pattern>' && exit 2"
-          }
-        ]
-      },
-      {
-        "matcher": "Bash(find*)",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "echo 'ℹ️ Use fd instead of find!' && echo 'Example: fd --hidden --exclude .git --exclude node_modules --color=never --print0 <pattern>' && exit 2"
-          }
-        ]
-      },
-      {
-        "matcher": "Bash(cat*)",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "echo 'ℹ️ Use bat instead of cat!' && echo 'Example: bat --plain --paging=never --color=never <file>' && exit 2"
-          }
-        ]
-      },
-      {
-        "matcher": "Bash(ls*)",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "echo 'ℹ️ Use eza instead of ls!' && echo 'Example: eza -1 --color=never --group-directories-first' && exit 2"
+            "command": "read input; if echo \"$input\" | grep -q '\"command\":\"ls'; then echo '{\"decision\": \"block\", \"reason\": \"Use eza instead of ls! Example: eza -1 --color=never --group-directories-first\"}'; elif echo \"$input\" | grep -q '\"command\":\"find'; then echo '{\"decision\": \"block\", \"reason\": \"Use fd instead of find! Example: fd --hidden --exclude .git --exclude node_modules --color=never --print0 <pattern>\"}'; elif echo \"$input\" | grep -q '\"command\":\"grep'; then echo '{\"decision\": \"block\", \"reason\": \"Use rg instead of grep! Example: rg --no-heading --color=never --json --trim --max-columns=120 <pattern>\"}'; elif echo \"$input\" | grep -q '\"command\":\"cat'; then echo '{\"decision\": \"block\", \"reason\": \"Use bat instead of cat! Example: bat --plain --paging=never --color=never <file>\"}'; fi"
           }
         ]
       }
@@ -93,26 +66,17 @@
       
       // Basic file operations
       "Bash(head:*)",
-      "Bash(tail:*)" 
+      "Bash(tail:*)"
     ],
     "deny": [
       "Read(*.env)",
       "Read(.aws/**)",
       "Read(.ssh/**)",
-      "Read(~/.config/**)",
       "Edit(.env*)",
       "Edit(*.env)",
       "Edit(.aws/**)",
       "Edit(.ssh/**)",
-      "Edit(~/.config/**)",
-      "Bash(sudo:*)",
-      "WebFetch(*)",
-
-      // legacy tools
-      "Bash(grep:*)",
-      "Bash(find:*)",
-      "Bash(ls:*)",
-      "Bash(cat:*)"
+      "Bash(sudo:*)"
     ]
   },
   "env": {
