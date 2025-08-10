@@ -2,10 +2,11 @@ return {
   -- LSP Configuration
   {
     "neovim/nvim-lspconfig",
-    event = { "BufReadPre", "BufNewFile" },  -- ファイルを開く前にロード
+    event = { "BufReadPre", "BufNewFile" },
     dependencies = {
       "williamboman/mason.nvim",
     },
+    priority = 50,
     config = function()
       -- Ensure Go environment variables are set for gopls
       vim.env.GOROOT = vim.env.GOROOT or "/opt/homebrew/Cellar/go/1.24.2/libexec"
@@ -128,6 +129,59 @@ return {
             },
           },
         },
+      })
+
+      -- Setup basedpyright for Python using Neovim 0.11 API
+      local function find_basedpyright_cmd()
+        local mason_bin = vim.fn.stdpath("data") .. "/mason/bin/"
+        local candidates = {
+          "basedpyright-langserver",
+          "basedpyright",
+          "pyright-langserver",
+        }
+        for _, exe in ipairs(candidates) do
+          local mason_path = mason_bin .. exe
+          if vim.fn.executable(mason_path) == 1 then
+            return mason_path
+          end
+          if vim.fn.executable(exe) == 1 then
+            return exe
+          end
+        end
+        return "basedpyright-langserver"
+      end
+
+      vim.lsp.config("basedpyright", {
+        name = "basedpyright",
+        cmd = { find_basedpyright_cmd(), "--stdio" },
+        filetypes = { "python" },
+        on_attach = on_attach,
+        capabilities = capabilities,
+        settings = {
+          basedpyright = {
+            disableOrganizeImports = true,
+          },
+        },
+      })
+
+      vim.lsp.enable("basedpyright")
+
+      -- Safety net: ensure client starts on FileType event in case autostart fails
+      vim.api.nvim_create_autocmd("FileType", {
+        pattern = "python",
+        callback = function(args)
+          local bufnr = args.buf
+          local attached = false
+          for _, client in pairs(vim.lsp.get_clients({ bufnr = bufnr })) do
+            if client.name == "basedpyright" then
+              attached = true
+              break
+            end
+          end
+          if not attached then
+            vim.lsp.enable("basedpyright")
+          end
+        end,
       })
 
     end,

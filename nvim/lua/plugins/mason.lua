@@ -4,7 +4,9 @@ return {
     "williamboman/mason.nvim",
     priority = 100,
     config = function()
-      require("mason").setup()
+      require("mason").setup({
+        PATH = "append", -- ensure mason bins are appended to $PATH
+      })
     end,
   },
 
@@ -18,15 +20,18 @@ return {
         -- LSP servers
         "lua-language-server",
         "typescript-language-server", -- ts_ls用
+        "basedpyright",
         "sqls",
 
         -- Formatters
         "stylua",
         "goimports",
         "sql-formatter",
+        "ruff",
 
         -- Linters
         "golangci-lint",
+        "ruff",
 
         -- Debuggers  
         "debugpy",
