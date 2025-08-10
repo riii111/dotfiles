@@ -110,7 +110,4 @@ docs: add best practices for error handling
 
 ## 3. Additional Notes
 
-The following files in the folder are all gitignore targets and should not be committed.
-/Users/a81803/GitHub/1_side_job/nodecross/nodex-platform/backend/.idea
-
 When committing, Pre-Commit is executed, so it takes a little time, but this is because cargo clippy and build checks are being executed, so please do not disable it.
