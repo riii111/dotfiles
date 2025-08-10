@@ -3,15 +3,16 @@ return {
   {
     "neovim/nvim-lspconfig",
     event = { "BufReadPre", "BufNewFile" },
+    cond = not vim.g.vscode,
     dependencies = {
       "williamboman/mason.nvim",
     },
     priority = 50,
     config = function()
       -- Ensure Go environment variables are set for gopls
-      vim.env.GOROOT = vim.env.GOROOT or "/opt/homebrew/Cellar/go/1.24.2/libexec"
+      vim.env.GOROOT = vim.env.GOROOT or vim.fn.system("go env GOROOT"):gsub("\n", "")
       vim.env.GOPATH = vim.env.GOPATH or vim.fn.expand("$HOME/go")
-      
+
       local lspconfig = require("lspconfig")
 
       -- LSP settings
@@ -191,6 +192,7 @@ return {
   {
     "saghen/blink.cmp",
     lazy = false,
+    cond = not vim.g.vscode,
     dependencies = "rafamadriz/friendly-snippets",
     version = "v0.*",
     opts = {
@@ -209,6 +211,7 @@ return {
   -- Formatting and linting
   {
     "nvimtools/none-ls.nvim",
+    cond = not vim.g.vscode,
     dependencies = { "nvim-lua/plenary.nvim" },
     config = function()
       local null_ls = require("null-ls")
@@ -241,6 +244,7 @@ return {
   -- DAP (Debug Adapter Protocol)
   {
     "mfussenegger/nvim-dap",
+    cond = not vim.g.vscode,
     dependencies = {
       "rcarriga/nvim-dap-ui",
       "nvim-neotest/nvim-nio",
@@ -267,6 +271,7 @@ return {
   {
     "Wansmer/symbol-usage.nvim",
     event = "LspAttach",
+    cond = not vim.g.vscode,
     config = function()
       require("symbol-usage").setup({
         kinds = {
