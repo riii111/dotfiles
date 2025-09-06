@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ========== 1) .dbx.tomlまたは環境変数でDSNを解決 ==========
+DSN="${1:-${DB_URL:-}}"
+
+if [[ -z "${DSN}" && -f ".dbx.toml" ]]; then
+  # default名
+  prof="$(yq -p=toml -oy '.default // "default"' .dbx.toml)"
+  # -p <profile> 指定で上書き
+  while getopts "p:" opt; do
+    case $opt in
+      p) prof="$OPTARG" ;;
+    esac
+  done
+  shift $((OPTIND-1))
+  DSN="$(yq -p=toml -oy ".profiles.\"${prof}\".dsn // \"\"" .dbx.toml)"
+fi
+
+[[ -z "${DSN}" ]] && { echo "DSNが見つかりません（dbx <dsn> / DB_URL / .dbx.toml を用意してね）"; exit 1; }
+
+# ========== 2) 履歴・UI ==========
+proj_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+proj_name="$(basename "$proj_root")"
+cache_dir="${HOME}/.cache/dbx/${proj_name}"
+mkdir -p "${cache_dir}"
+export PAGER=pspg  # pspgで表を見やすく
+
+scheme="${DSN%%:*}"
+case "$scheme" in
+  postgres|postgresql)
+    # pgcliの設定/履歴をプロジェクト別に
+    pgcli_rc="${cache_dir}/pgcli.conf"
+    if [[ ! -f "${pgcli_rc}" ]]; then
+      cat > "${pgcli_rc}" <<'EOF'
+[main]
+pager = pspg
+history_file = __HISTFILE__
+timing = True
+EOF
+      sed -i '' "s|__HISTFILE__|${cache_dir}/pgcli.history|g" "${pgcli_rc}"
+    fi
+    exec pgcli --pgclirc "${pgcli_rc}" "${DSN}"
+    ;;
+  mysql|mariadb)
+    export MYCLI_HISTFILE="${cache_dir}/mycli.history"
+    mycli_rc="${cache_dir}/myclirc"
+    [[ -f "${mycli_rc}" ]] || printf "[main]\npager = pspg\n" > "${mycli_rc}"
+    exec mycli --myclirc "${mycli_rc}" "${DSN}"
+    ;;
+  *)
+    echo "サポート外のスキームです: ${scheme}（postgres/mysql を想定）"; exit 2;;
+esac
+
+# プロジェクト配下にDSNを保持した.dbx.tomlを保存(以下は例)
+# default = "app_ro"
+#
+# [profiles.app_ro]
+# dsn = "postgres://app_ro:app_ro@127.0.0.1:5432/app?sslmode=disable"
+#
+# [profiles.app_rw]
+# dsn = "postgres://app:app@127.0.0.1:5432/app?sslmode=disable"
+#
+# [profiles.analytics]
+# dsn = "mysql://ana:ana@127.0.0.1:3306/analytics"
+
