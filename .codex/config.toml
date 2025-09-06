@@ -1,3 +1,8 @@
+model_reasoning_effort = "high"
+
+[tools]
+web_search = true
+
 [mcp_servers.serena]
 command = "uvx"
 args = ["--from", "git+https://github.com/oraios/serena", "serena", "start-mcp-server", "--context", "ide-assistant"]
@@ -5,3 +10,17 @@ args = ["--from", "git+https://github.com/oraios/serena", "serena", "start-mcp-s
 [mcp_servers.context7]
 command = "npx"
 args = ["-y", "@upstash/context7-mcp"]
+
+[mcp_servers.aws-documentation]
+command = "uvx"
+args = ["awslabs.aws-documentation-mcp-server@latest"]
+env = { FASTMCP_LOG_LEVEL = "ERROR", AWS_DOCUMENTATION_PARTITION = "aws" }
+
+[mcp_servers.aws-knowledge]
+command = "uvx"
+args = ["mcp-proxy", "--transport", "streamablehttp", "https://knowledge-mcp.global.api.aws"]
+
+[mcp_servers.aws-pricing]
+command = "uvx"
+args = ["awslabs.aws-pricing-mcp-server@latest"]
+env = { FASTMCP_LOG_LEVEL = "ERROR", AWS_PROFILE = "!!YOUR-AWS-PROFILE!!" }
