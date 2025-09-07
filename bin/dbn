@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# 1) まず環境変数
-DSN="${DB_URL:-}"
+# ========== 1) .dbx.tomlでDSNを解決 ==========
+[[ ! -f ".dbx.toml" ]] && { echo ".dbx.tomlが見つかりません"; exit 1; }
 
-# 2) プロファイル指定（任意）
-prof=""
+# default名
+prof="$(yq -p=toml -oy '.default // "default"' .dbx.toml)"
+
+# -p <profile> 指定で上書き
 while getopts "p:" opt; do
   case $opt in
     p) prof="$OPTARG" ;;
@@ -12,19 +14,10 @@ while getopts "p:" opt; do
 done
 shift $((OPTIND-1))
 
-# 3) 設定ファイル
-cfg=""
-[[ -f ".dbx.toml" ]] && cfg=".dbx.toml"
+DSN="$(yq -p=toml -oy ".profiles.\"${prof}\".dsn // \"\"" .dbx.toml)"
+[[ -z "${DSN}" ]] && { echo "DSNが見つかりません（.dbx.tomlのprofiles.${prof}.dsnを確認してね）"; exit 1; }
 
-if [[ -z "$DSN" && -n "$cfg" ]]; then
-  # defaultプロファイル名
-  defp="$(yq -p=toml -oy '.default // "default"' "$cfg" 2>/dev/null || true)"
-  [[ -z "$prof" ]] && prof="$defp"
-  DSN="$(yq -p=toml -oy ".profiles.\"${prof}\".dsn // \"\"" "$cfg" 2>/dev/null || true)"
-fi
-
-[[ -z "$DSN" ]] && { echo "DSN が見つかりません（DB_URL か .dbn.toml/.dbx.toml を用意してね）"; exit 1; }
-
+# ========== 2) テーブル一覧 ==========
 scheme="${DSN%%:*}"
 if [[ "$scheme" =~ ^postgres ]]; then
   # --- Postgres ---
@@ -73,38 +66,45 @@ PAGER=cat psql "$DBN_DSN" -X -q -P pager=off -P linestyle=unicode -P border=2 -c
 ' --bind 'enter:execute(echo "SELECT * FROM {} LIMIT 50;" | pbcopy)+abort'
 elif [[ "$scheme" == "mysql" || "$scheme" == "mariadb" ]]; then
   # --- MySQL/MariaDB ---
-  list_sql="SELECT TABLE_SCHEMA||'.'||TABLE_NAME
+  # DSN 解析（mysql://user:pass@host:port/db）
+  _rest="${DSN#mysql://}"
+  _userpass="${_rest%%@*}"; _hostdb="${_rest#*@}"
+  _user="${_userpass%%:*}"; _pass="${_userpass#*:}"
+  _hostport="${_hostdb%%/*}"; _db="${_hostdb#*/}"
+  _host="${_hostport%%:*}"; _port="${_hostport##*:}"
+  [[ "$_host" == "$_port" ]] && _port="3306"
+  [[ "$_host" == "localhost" ]] && _host="127.0.0.1"
+
+  list_sql="SELECT CONCAT(DATABASE(),'.',TABLE_NAME)
 FROM INFORMATION_SCHEMA.TABLES
-WHERE TABLE_TYPE='BASE TABLE' AND TABLE_SCHEMA NOT IN ('information_schema','mysql','performance_schema','sys')
+WHERE TABLE_TYPE='BASE TABLE' AND TABLE_SCHEMA = DATABASE()
 ORDER BY 1;"
-  # columns
-  # outbound: KEY_COLUMN_USAGE + REFERENTIAL_CONSTRAINTS で辿る
   preview_sql="
 -- columns
 SELECT COLUMN_NAME AS col, COLUMN_TYPE AS type, IS_NULLABLE AS nulls
 FROM INFORMATION_SCHEMA.COLUMNS
-WHERE TABLE_SCHEMA = SUBSTRING_INDEX('\$TABLE','.',1) AND TABLE_NAME = SUBSTRING_INDEX('\$TABLE','.',-1)
+WHERE TABLE_SCHEMA = '\$SCH' AND TABLE_NAME = '\$TBL'
 ORDER BY ORDINAL_POSITION;
 -- outbound FKs
 SELECT kcu.TABLE_NAME AS from_tbl, kcu.COLUMN_NAME AS from_col,
        kcu.REFERENCED_TABLE_NAME AS to_tbl, kcu.REFERENCED_COLUMN_NAME AS to_col
 FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
-WHERE kcu.TABLE_SCHEMA = SUBSTRING_INDEX('\$TABLE','.',1)
-  AND kcu.TABLE_NAME   = SUBSTRING_INDEX('\$TABLE','.',-1)
+WHERE kcu.TABLE_SCHEMA = '\$SCH'
+  AND kcu.TABLE_NAME   = '\$TBL'
   AND kcu.REFERENCED_TABLE_NAME IS NOT NULL
 ORDER BY 1,2;
 -- inbound FKs
-SELECT kcu.TABLE_NAME AS to_tbl, kcu.COLUMN_NAME AS to_col,
+SELECT kcu2.TABLE_NAME AS to_tbl, kcu2.COLUMN_NAME AS to_col,
        kcu2.TABLE_NAME AS from_tbl, kcu2.COLUMN_NAME AS from_col
 FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu2
-WHERE kcu2.REFERENCED_TABLE_SCHEMA = SUBSTRING_INDEX('\$TABLE','.',1)
-  AND kcu2.REFERENCED_TABLE_NAME   = SUBSTRING_INDEX('\$TABLE','.',-1)
+WHERE kcu2.REFERENCED_TABLE_SCHEMA = '\$SCH'
+  AND kcu2.REFERENCED_TABLE_NAME   = '\$TBL'
 ORDER BY 1,2;"
-  tables="$(mysql --batch --skip-column-names --raw "$DSN" -e "$list_sql")"
+  tables="$(MYSQL_PWD="$_pass" mysql --protocol=TCP --batch --skip-column-names --raw -h "$_host" -P "$_port" -u "$_user" -D "$_db" -e "$list_sql")"
   printf "%s\n" "$tables" | fzf --prompt='table> ' --preview="
-TABLE={}; mysql --table \"$DSN\" -e \"SET @TABLE='{}'; ${preview_sql}\"
+TABLE={}; SCH=\${TABLE%%.*}; TBL=\${TABLE#*.};
+MYSQL_PWD=\"$_pass\" mysql --protocol=TCP --table -h \"$_host\" -P \"$_port\" -u \"$_user\" -D \"$_db\" -e \"${preview_sql}\"
 " --bind 'enter:execute(echo "SELECT * FROM {} LIMIT 50;" | pbcopy)+abort'
 else
   echo "対応していないスキームです: $scheme"; exit 1
 fi
-
