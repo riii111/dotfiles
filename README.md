@@ -1,8 +1,20 @@
 # dotfiles
-<img width="1510" alt="Screenshot 2025-06-29 at 12 16 07" src="https://github.com/user-attachments/assets/3ca9929f-36d0-4a5d-baaf-b388ac2f6a01" />
-
-
-<img width="1511" alt="image" src="https://github.com/user-attachments/assets/73ec718d-8b91-466c-95b1-15971962d70c" />
+## 1. nvim
+<img width="1507" height="945" alt="image" src="https://github.com/user-attachments/assets/25cbf831-64df-40a5-9e22-4a5935ff1780" />
 
 IntelliJ-like shortcuts available
-<img width="1509" alt="image" src="https://github.com/user-attachments/assets/843f143c-ab40-46dc-87ad-8d0676068243" />
+<img width="1050" height="332" alt="image" src="https://github.com/user-attachments/assets/d904544c-0d7c-469f-8357-941f5824c78f" />
+
+## 2. dbn/dbx
+DB Client
+<img width="1507" height="948" alt="image" src="https://github.com/user-attachments/assets/e69b298b-e0bb-4d87-a9da-fe0e1641af37" />
+
+### prepare
+
+Place directly under the project. example↓
+```toml
+default = "app_ro"
+
+[profiles.app_ro]
+dsn = "postgres://app:app@localhost:15432/app?sslmode=disable"
+```
