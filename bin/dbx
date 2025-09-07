@@ -1,23 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# ========== 1) .dbx.tomlでDSNを解決 ==========
+[[ ! -f ".dbx.toml" ]] && { echo ".dbx.tomlが見つかりません"; exit 1; }
 
-# ========== 1) .dbx.tomlまたは環境変数でDSNを解決 ==========
-DSN="${1:-${DB_URL:-}}"
+# default名
+prof="$(yq -p=toml -oy '.default // "default"' .dbx.toml)"
 
-if [[ -z "${DSN}" && -f ".dbx.toml" ]]; then
-  # default名
-  prof="$(yq -p=toml -oy '.default // "default"' .dbx.toml)"
-  # -p <profile> 指定で上書き
-  while getopts "p:" opt; do
-    case $opt in
-      p) prof="$OPTARG" ;;
-    esac
-  done
-  shift $((OPTIND-1))
-  DSN="$(yq -p=toml -oy ".profiles.\"${prof}\".dsn // \"\"" .dbx.toml)"
-fi
+# -p <profile> 指定で上書き
+while getopts "p:" opt; do
+  case $opt in
+    p) prof="$OPTARG" ;;
+  esac
+done
+shift $((OPTIND-1))
 
-[[ -z "${DSN}" ]] && { echo "DSNが見つかりません（dbx <dsn> / DB_URL / .dbx.toml を用意してね）"; exit 1; }
+DSN="$(yq -p=toml -oy ".profiles.\"${prof}\".dsn // \"\"" .dbx.toml)"
+[[ -z "${DSN}" ]] && { echo "DSNが見つかりません（.dbx.tomlのprofiles.${prof}.dsnを確認してね）"; exit 1; }
 
 # ========== 2) 履歴・UI ==========
 proj_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
@@ -25,6 +23,7 @@ proj_name="$(basename "$proj_root")"
 cache_dir="${HOME}/.cache/dbx/${proj_name}"
 mkdir -p "${cache_dir}"
 export PAGER=pspg  # pspgで表を見やすく
+export PSPG="-s 0 --less-status-bar -X"
 
 scheme="${DSN%%:*}"
 case "$scheme" in
@@ -52,7 +51,10 @@ EOF
     echo "サポート外のスキームです: ${scheme}（postgres/mysql を想定）"; exit 2;;
 esac
 
-# プロジェクト配下にDSNを保持した.dbx.tomlを保存(以下は例)
+# --準備--
+# 1. 以下をインストール
+# brew install pgcli mycli pspg fzf fd bat jq yq
+# 2. プロジェクト配下にDSNを保持した.dbx.tomlを保存(以下は例)
 # default = "app_ro"
 #
 # [profiles.app_ro]
@@ -63,4 +65,3 @@ esac
 #
 # [profiles.analytics]
 # dsn = "mysql://ana:ana@127.0.0.1:3306/analytics"
-
