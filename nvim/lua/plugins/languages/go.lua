@@ -12,7 +12,7 @@ return {
         fillstruct = "gopls",
         dap_debug = false,
         textobjects = true,
-        lsp_cfg = false,
+        lsp_cfg = true,
       })
 
       local lsp_actions = require("utils.lsp-actions")

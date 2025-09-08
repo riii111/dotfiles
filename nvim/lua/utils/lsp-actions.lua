@@ -14,10 +14,22 @@ end
 local function execute_menu_choice(choice, cmd_patterns)
   if not choice then return end
 
-  for pattern, handler in pairs(cmd_patterns) do
-    if choice:match(pattern) then
-      handler(choice)
-      return
+  if #cmd_patterns > 0 then
+    for _, pattern_handler in ipairs(cmd_patterns) do
+      local pattern = pattern_handler[1]
+      local handler = pattern_handler[2]
+      if choice:match(pattern) then
+        handler(choice)
+        return
+      end
+    end
+  else
+    -- Fallback to pairs for backward compatibility
+    for pattern, handler in pairs(cmd_patterns) do
+      if choice:match(pattern) then
+        handler(choice)
+        return
+      end
     end
   end
 end
@@ -86,7 +98,7 @@ function M.language_specific_code_action()
   end
 
   if valid_actions and #valid_actions > 0 then
-    if #valid_actions == 1 then
+    if #valid_actions == 1 and filetype ~= "python" then
       vim.lsp.buf.code_action({ apply = true })
     else
       vim.lsp.buf.code_action()
@@ -96,6 +108,14 @@ function M.language_specific_code_action()
       M.rust_quick_actions()
     elseif filetype == "go" then
       M.go_quick_actions()
+    elseif filetype == "c" or filetype == "cpp" or filetype == "objc" or filetype == "objcpp" then
+      if M.cpp_quick_actions then
+        M.cpp_quick_actions()
+      else
+        vim.lsp.buf.code_action()
+      end
+    elseif filetype == "python" then
+      M.python_quick_actions()
     else
       local generic_options = {
         "Rename - Rename symbol",
@@ -106,15 +126,15 @@ function M.language_specific_code_action()
         prompt = "Select Action:",
       }, function(choice)
         execute_menu_choice(choice, {
-          ["^Rename"] = function() vim.lsp.buf.rename() end,
-          ["."] = function()
+          {"^Rename", function() vim.lsp.buf.rename() end},
+          {".", function()
             local has_lspsaga = pcall(require, "lspsaga")
             if has_lspsaga then
               vim.cmd("Lspsaga code_action")
             else
               vim.lsp.buf.code_action()
             end
-          end
+          end}
         })
       end)
     end
@@ -138,8 +158,8 @@ function M.rust_refactor_menu()
     prompt = "Select Refactoring:",
   }, function(choice)
     execute_menu_choice(choice, {
-      ["^Rename"] = function() vim.lsp.buf.rename() end,
-      ["^(RustLsp [^-]+)"] = function(c) vim.cmd(c:match("^(RustLsp [^-]+)")) end
+      {"^Rename", function() vim.lsp.buf.rename() end},
+      {"^(RustLsp [^-]+)", function(c) vim.cmd(c:match("^(RustLsp [^-]+)")) end}
     })
   end)
 end
@@ -163,15 +183,164 @@ function M.go_refactor_menu()
     layout = "cursor",
   }, function(choice)
     execute_menu_choice(choice, {
-      ["^GoAddTag"] = function(c)
+      {"^Rename", function() vim.lsp.buf.rename() end},
+      {"^GoAddTag", function(c)
         local tag = c:match("(%w+)$")
         vim.cmd("GoAddTag " .. tag)
+      end},
+      {"^(%S+)", function(c) vim.cmd(c:match("^(%S+)")) end}
+    })
+  end)
+end
+
+function M.python_quick_actions()
+  local options = {
+    "Organize Imports - Sort and clean imports",
+    "Add Type Annotation - Add type hints",
+    "Run File - Execute current Python file",
+    "Run Tests - Execute pytest",
+    "Toggle Docstring - Add/update docstring",
+    "Black Format - Format with Black",
+  }
+
+  vim.ui.select(options, {
+    prompt = "Python Quick Fix:",
+  }, function(choice)
+    execute_menu_choice(choice, {
+      ["^Organize Imports"] = function() 
+        vim.lsp.buf.code_action({
+          context = { only = { "source.organizeImports" } },
+          apply = true,
+        })
       end,
-      ["^Rename"] = function() vim.lsp.buf.rename() end,
-      ["^(%S+)"] = function(c) vim.cmd(c:match("^(%S+)")) end
+      ["^Add Type"] = function()
+        vim.lsp.buf.code_action({
+          context = { only = { "quickfix", "refactor.rewrite" } },
+          apply = false,
+        })
+      end,
+      ["^Run File"] = function()
+        local file = vim.fn.expand("%:p")
+        vim.cmd("split | terminal python " .. file)
+      end,
+      ["^Run Tests"] = function()
+        vim.cmd("split | terminal python -m pytest")
+      end,
+      ["^Toggle Docstring"] = function()
+        -- LSPのdocstring生成機能を呼び出し
+        vim.lsp.buf.code_action({
+          context = { only = { "refactor.rewrite" } },
+          apply = false,
+        })
+      end,
+      ["^Black Format"] = function()
+        vim.lsp.buf.format({ name = "null-ls" })
+      end
+    })
+  end)
+end
+
+function M.python_refactor_menu()
+  local options = {
+    "Organize Imports - Sort and optimize imports",
+    "Extract Method - Extract selected code to method",
+    "Extract Variable - Extract expression to variable",
+    "Inline Variable - Inline variable usage",
+    "Add Type Annotations - Add type hints to function",
+    "Generate Docstring - Add documentation",
+    "Convert to f-string - Modernize string formatting", 
+    "Rename - Rename symbol",
+  }
+
+  vim.ui.select(options, {
+    prompt = "Select Refactoring:",
+    layout = "cursor",
+  }, function(choice)
+    execute_menu_choice(choice, {
+      {"^Rename", function() vim.lsp.buf.rename() end},
+      {"^Organize Imports", function()
+        vim.lsp.buf.code_action({
+          context = { only = { "source.organizeImports" } },
+          apply = true,
+        })
+      end},
+      {"^Extract", function()
+        vim.lsp.buf.code_action({
+          context = { only = { "refactor.extract" } },
+          apply = false,
+        })
+      end},
+      {"^Inline", function()
+        vim.lsp.buf.code_action({
+          context = { only = { "refactor.inline" } },
+          apply = false,
+        })
+      end},
+      {"^Add Type", function()
+        vim.lsp.buf.code_action({
+          context = { only = { "quickfix", "refactor.rewrite" } },
+          apply = false,
+        })
+      end},
+      {"^Generate", function()
+        vim.lsp.buf.code_action({
+          context = { only = { "refactor.rewrite" } },
+          apply = false,
+        })
+      end},
+      {"^Convert", function()
+        vim.lsp.buf.code_action({
+          context = { only = { "quickfix", "refactor.rewrite" } },
+          apply = false,
+        })
+      end}
+    })
+  end)
+end
+
+function M.cpp_quick_actions()
+  local options = {
+    "Code Action - Show available actions",
+    "Rename - Symbol rename",
+    "Extract Function - Refactor extract",
+    "Extract Variable - Refactor extract",
+    "Inline - Refactor inline",
+  }
+  vim.ui.select(options, { prompt = "C/C++ Quick Fix:" }, function(choice)
+    execute_menu_choice(choice, {
+      {"^Rename", function() vim.lsp.buf.rename() end},
+      {"^Extract Function", function()
+        vim.lsp.buf.code_action({ context = { only = { "refactor.extract" } } })
+      end},
+      {"^Extract Variable", function()
+        vim.lsp.buf.code_action({ context = { only = { "refactor.extract" } } })
+      end},
+      {"^Inline", function()
+        vim.lsp.buf.code_action({ context = { only = { "refactor.inline" } } })
+      end},
+      {"^Code Action", function() vim.lsp.buf.code_action() end},
+    })
+  end)
+end
+
+function M.cpp_refactor_menu()
+  local options = {
+    "Rename",
+    "Extract Function",
+    "Extract Variable",
+    "Inline",
+  }
+  vim.ui.select(options, { prompt = "Select Refactoring:" }, function(choice)
+    execute_menu_choice(choice, {
+      {"^Rename", function() vim.lsp.buf.rename() end},
+      {"^Extract", function()
+        vim.lsp.buf.code_action({ context = { only = { "refactor.extract" } } })
+      end},
+      {"^Inline", function()
+        vim.lsp.buf.code_action({ context = { only = { "refactor.inline" } } })
+      end},
     })
   end)
 end
 
 return M
-
