@@ -39,6 +39,7 @@ return {
 						"--column",
 						"--smart-case",
 						"--trim",
+						"--hidden",
 					},
 					prompt_prefix = "󰼛 ",
 					selection_caret = "󰅂 ",
@@ -163,6 +164,24 @@ return {
 								auto_close = true,
 								matcher = function(buf)
 									return buf.name:match("%.go$")
+								end,
+							},
+							{
+								name = "c",
+								highlight = { fg = colors.languages.c },
+								priority = 5,
+								auto_close = true,
+								matcher = function(buf)
+									return buf.name:match("%.c$")
+								end,
+							},
+							{
+								name = "cpp",
+								highlight = { fg = colors.languages.cpp },
+								priority = 6,
+								auto_close = true,
+								matcher = function(buf)
+									return buf.name:match("%.cpp$")
 								end,
 							},
 							{

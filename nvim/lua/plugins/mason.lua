@@ -28,6 +28,10 @@ return {
         "goimports",
         "sql-formatter",
         "ruff",
+        -- C/C++
+        "clangd",
+        "codelldb",
+        "clang-format",
 
         -- Linters
         "golangci-lint",
