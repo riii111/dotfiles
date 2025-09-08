@@ -38,15 +38,19 @@ M.semantic = {
   success = "#9ece6a",
 }
 
--- Language Specific Colors
+-- Language Specific Colors(GitHub Linguist colors)
 M.languages = {
-  rust = "#F74C00",
-  go = "#00ADD8",
-  lua = "#51A0CF",
-  typescript = "#3178C6",
-  javascript = "#F7DF1E",
-  jsx = "#61DAFB",
-  tsx = "#61DAFB",
+  c = "#555555",
+  cpp = "#F34B7D",
+  rust = "#DEA584",
+  go = "#00ADDB",
+  -- Lua: GitHub color (#000080) is too dark on our dark UI; brighten for legibility
+  lua = "#3D59FF",
+  typescript = "#2B7489",
+  javascript = "#F1E05A",
+  -- Map JSX/TSX to their parent language colors
+  jsx = "#F1E05A",
+  tsx = "#2B7489",
   docs = "#54B399",
 }
 
