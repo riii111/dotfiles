@@ -18,3 +18,8 @@ default = "app_ro"
 [profiles.app_ro]
 dsn = "postgres://app:app@localhost:15432/app?sslmode=disable"
 ```
+
+and add the line `.zshrc`:
+```bash
+export PATH="$HOME/bin:$PATH"
+```
