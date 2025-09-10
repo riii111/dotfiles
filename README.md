@@ -2,7 +2,7 @@
 ## 1. nvim
 <img width="1511" height="942" alt="image" src="https://github.com/user-attachments/assets/6cf9e4a2-8d24-4547-81f4-d30bff35185a" />
 
-IntelliJ-like shortcuts available
+### IntelliJ-like shortcuts available
 <img width="1013" height="196" alt="image" src="https://github.com/user-attachments/assets/da51445c-1d46-4980-a469-fc094a2ba3f8" />
 
 ## 2. dbn/dbx（DB Client）
