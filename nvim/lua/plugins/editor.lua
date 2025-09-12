@@ -100,8 +100,20 @@ return {
   -- Comment
   {
     "numToStr/Comment.nvim",
-    opts = {},
+    dependencies = { "JoosepAlviste/nvim-ts-context-commentstring" },
+    opts = function()
+      local ok, ts_integ = pcall(require, "ts_context_commentstring.integrations.comment_nvim")
+      return {
+        pre_hook = ok and ts_integ.create_pre_hook() or nil,
+      }
+    end,
     lazy = false,
+  },
+
+  -- Context-aware commentstring (JSX/TSX 等)
+  {
+    "JoosepAlviste/nvim-ts-context-commentstring",
+    opts = { enable_autocmd = false },
   },
 
   -- Which-key (for key mappings help)
