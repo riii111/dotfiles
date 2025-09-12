@@ -1,9 +1,9 @@
 # dotfiles
 ## 1. nvim
-<img width="1507" height="945" alt="image" src="https://github.com/user-attachments/assets/25cbf831-64df-40a5-9e22-4a5935ff1780" />
+<img width="1511" height="942" alt="image" src="https://github.com/user-attachments/assets/6cf9e4a2-8d24-4547-81f4-d30bff35185a" />
 
-IntelliJ-like shortcuts available
-<img width="1050" height="332" alt="image" src="https://github.com/user-attachments/assets/d904544c-0d7c-469f-8357-941f5824c78f" />
+### IntelliJ-like shortcuts available
+<img width="1013" height="196" alt="image" src="https://github.com/user-attachments/assets/da51445c-1d46-4980-a469-fc094a2ba3f8" />
 
 ## 2. dbn/dbx（DB Client）
 Access the database with just one command
@@ -17,4 +17,9 @@ default = "app_ro"
 
 [profiles.app_ro]
 dsn = "postgres://app:app@localhost:15432/app?sslmode=disable"
+```
+
+and add the line `.zshrc`:
+```bash
+export PATH="$HOME/bin:$PATH"
 ```
