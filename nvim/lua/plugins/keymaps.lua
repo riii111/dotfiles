@@ -90,6 +90,12 @@ local function setup_keymaps()
         end,
         desc = "Toggle comment (tmux)"
       },
+      ["<D-k>c"] = {
+        function()
+          require("Comment.api").toggle.linewise.current()
+        end,
+        desc = "Add line comment (chord)"
+      },
 
       ["<C-S-@>"] = { ":ToggleTerm<CR>", desc = "Toggle terminal" },
       ["<C-@>"] = { ":ToggleTerm<CR>", desc = "Toggle terminal (tmux compatible)" },
@@ -135,8 +141,6 @@ local function setup_keymaps()
       },
 
       -- Meta key aliases for tmux (all Cmd keys)
-      ["<M-Down>"] = { ":split<CR>", desc = "Split window below (tmux)" },
-      ["<M-Right>"] = { ":vsplit<CR>", desc = "Split window right (tmux)" },
       ["<M-M-Right>"] = { ":bnext<CR>", desc = "Next buffer (tmux)" },
       ["<M-M-Left>"] = { ":bprevious<CR>", desc = "Previous buffer (tmux)" },
       ["<M-S-v>"] = {
@@ -171,15 +175,28 @@ local function setup_keymaps()
       ["<Leader>r"] = { ":%s/<C-r><C-w>//g<Left><Left>", desc = "Replace word under cursor" },
       ["<Leader>R"] = { ":%s//g<Left><Left><Left>", desc = "Replace text (global)" },
     },
-    v = {
-      -- Commenting
+    x = {
+      -- Commenting (use operator 'gc' directly for reliability)
       ["<D-/>"] = {
-        "<ESC><CMD>require('Comment.api').toggle.linewise(vim.fn.visualmode())<CR>",
+        function()
+          local keys = vim.api.nvim_replace_termcodes('gc', true, false, true)
+          vim.api.nvim_feedkeys(keys, 'x', false)
+        end,
         desc = "Toggle comment"
       },
       ["<M-/>"] = {
-        "<ESC><CMD>require('Comment.api').toggle.linewise(vim.fn.visualmode())<CR>",
+        function()
+          local keys = vim.api.nvim_replace_termcodes('gc', true, false, true)
+          vim.api.nvim_feedkeys(keys, 'x', false)
+        end,
         desc = "Toggle comment (tmux)"
+      },
+      ["<D-k>c"] = {
+        function()
+          local keys = vim.api.nvim_replace_termcodes('gc', true, false, true)
+          vim.api.nvim_feedkeys(keys, 'x', false)
+        end,
+        desc = "Add line comment (selection, chord)"
       },
       ["<D-c>"] = { '"+y', desc = "Copy to system clipboard" },
       ["<M-c>"] = { '"+y', desc = "Copy to system clipboard (tmux)" },
