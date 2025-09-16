@@ -203,6 +203,11 @@ return {
             if cmp.is_visible() then
               return cmp.accept()
             end
+            local has_autopairs, autopairs = pcall(require, "nvim-autopairs")
+            if has_autopairs then
+              vim.api.nvim_feedkeys(autopairs.autopairs_cr(), "n", true)
+              return true
+            end
             vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, false, true), "n", false)
             return true
           end,
