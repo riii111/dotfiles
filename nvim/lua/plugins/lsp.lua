@@ -198,7 +198,15 @@ return {
     opts = {
       keymap = {
         preset = "default",
-        ["<CR>"] = { "accept" },
+        ["<CR>"] = {
+          function(cmp)
+            if cmp.is_visible() then
+              return cmp.accept()
+            end
+            vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, false, true), "n", false)
+            return true
+          end,
+        },
       },
       appearance = {
         use_nvim_cmp_as_default = true,
