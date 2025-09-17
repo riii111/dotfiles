@@ -205,12 +205,16 @@ return {
             end
             local has_autopairs, autopairs = pcall(require, "nvim-autopairs")
             if has_autopairs then
-              vim.api.nvim_feedkeys(autopairs.autopairs_cr(), "n", true)
-              return true
+              local default_cr = vim.api.nvim_replace_termcodes("<CR>", true, false, true)
+              local autopairs_cr = autopairs.autopairs_cr()
+              if autopairs_cr ~= default_cr then
+                vim.api.nvim_feedkeys(autopairs_cr, "n", true)
+                return true
+              end
             end
-            vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, false, true), "n", false)
-            return true
+            return false
           end,
+          "fallback",
         },
       },
       appearance = {
