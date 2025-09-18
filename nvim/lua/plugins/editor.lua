@@ -140,7 +140,6 @@ return {
     opts = {},
   },
 
-
   -- Better escape
   {
     "max397574/better-escape.nvim",
