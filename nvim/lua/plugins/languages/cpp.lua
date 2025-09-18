@@ -71,19 +71,13 @@ return {
     ft = { "c", "cpp", "objc", "objcpp" },
     dependencies = { "neovim/nvim-lspconfig" },
     config = function()
-      local ok_lsp, lspconfig = pcall(require, "lspconfig")
-      if not ok_lsp then return end
-
-      local util = lspconfig.util
-      local root = util.root_pattern("compile_commands.json", "compile_flags.txt", ".git")
-
-      lspconfig.clangd.setup({
+      vim.lsp.config('clangd', {
         cmd = { "clangd", "--background-index", "--clang-tidy" },
-        root_dir = function(fname)
-          return root(fname) or util.find_git_ancestor(fname)
-        end,
+        root_markers = { "compile_commands.json", "compile_flags.txt", ".git" },
         init_options = { clangdFileStatus = true },
       })
+
+      vim.lsp.enable('clangd')
 
       pcall(function()
         require("clangd_extensions").setup({})

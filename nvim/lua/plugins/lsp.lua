@@ -11,9 +11,7 @@ return {
     config = function()
       -- Ensure Go environment variables are set for gopls
       vim.env.GOROOT = vim.env.GOROOT or vim.fn.system("go env GOROOT"):gsub("\n", "")
-      vim.env.GOPATH = vim.env.GOPATH or vim.fn.expand("$HOME/go")
-
-      local lspconfig = require("lspconfig")
+      vim.env.GOPATH = vim.env.GOPATH or vim.fn.system("go env GOPATH"):gsub("\n", "")
 
       -- LSP settings
 ---@diagnostic disable-next-line: unused-local
@@ -34,7 +32,7 @@ return {
       local capabilities = vim.lsp.protocol.make_client_capabilities()
 
       -- Setup LSP servers directly
-      lspconfig.lua_ls.setup({
+      vim.lsp.config('lua_ls', {
         on_attach = on_attach,
         capabilities = capabilities,
         settings = {
@@ -55,16 +53,15 @@ return {
         },
       })
 
+      vim.lsp.enable('lua_ls')
+
       -- Setup gopls
-      lspconfig.gopls.setup({
+      vim.lsp.config('gopls', {
         on_attach = on_attach,
         capabilities = capabilities,
-        cmd = { vim.fn.expand("$HOME/go/bin/gopls") },  -- 明示的なパス
+        cmd = { "gopls" },  -- PATH経由で検索
         filetypes = { 'go', 'gomod', 'gowork', 'gotmpl' },
-        root_dir = function(fname)
-          return lspconfig.util.root_pattern("go.mod", "go.work")(fname)
-              or lspconfig.util.find_git_ancestor(fname)
-        end,
+        root_markers = { "go.mod", "go.work", ".git" },
         settings = {
           gopls = {
             hints = {
@@ -86,12 +83,14 @@ return {
         },
       })
 
+      vim.lsp.enable('gopls')
+
       -- Setup TypeScript Language Server
-      lspconfig.ts_ls.setup({
+      vim.lsp.config('ts_ls', {
         on_attach = on_attach,
         capabilities = capabilities,
         filetypes = { "typescript", "typescriptreact", "typescript.tsx", "javascript", "javascriptreact" },
-        root_dir = lspconfig.util.root_pattern("package.json", "tsconfig.json", "jsconfig.json", ".git"),
+        root_markers = { "package.json", "tsconfig.json", "jsconfig.json", ".git" },
         settings = {
           typescript = {
             inlayHints = {
@@ -131,6 +130,8 @@ return {
           },
         },
       })
+
+      vim.lsp.enable('ts_ls')
 
       -- Setup basedpyright for Python using Neovim 0.11 API
       local function find_basedpyright_cmd()
@@ -240,12 +241,16 @@ return {
           null_ls.builtins.formatting.stylua,
           null_ls.builtins.diagnostics.golangci_lint.with({
             cwd = function(params)
-              return require("lspconfig.util").root_pattern("go.mod")(params.bufname)
+              local found = vim.fs.find("go.mod", { upward = true, path = params.bufname })
+              return found[1] and vim.fs.dirname(found[1]) or nil
             end,
             extra_args = function(params)
-              local root = require("lspconfig.util").root_pattern(".golangci.yml", ".git")(params.bufname)
+              local golangci_file = vim.fs.find(".golangci.yml", { upward = true, path = params.bufname })
+              local root = golangci_file[1] and vim.fs.dirname(golangci_file[1])
+                or vim.fs.find(".git", { upward = true, path = params.bufname, type = "directory" })[1] and vim.fs.dirname(vim.fs.find(".git", { upward = true, path = params.bufname, type = "directory" })[1])
+
               local args = { "--out-format", "json" }
-              if root then
+              if root and golangci_file[1] then
                 table.insert(args, "--config")
                 table.insert(args, root .. "/.golangci.yml")
               end
