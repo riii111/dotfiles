@@ -36,7 +36,10 @@ return {
         "rust",
       },
       highlight = { enable = true },
-      indent = { enable = true },
+      indent = {
+        enable = true,
+        disable = { "rust" },  -- cannot correctly handle Rust macro calls
+      },
     },
     config = function(_, opts)
       require("nvim-treesitter.configs").setup(opts)
