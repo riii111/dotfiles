@@ -38,7 +38,7 @@ return {
       highlight = { enable = true },
       indent = {
         enable = true,
-        disable = { "rust" },
+        disable = { "rust" },  -- cannot correctly handle Rust macro calls
       },
     },
     config = function(_, opts)
