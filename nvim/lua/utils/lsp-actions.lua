@@ -43,7 +43,7 @@ end
 
 function M.rust_quick_actions()
   local options = {
-    "RustLsp codeAction - Code actions",
+    "Code Action - Show available actions",
     "RustLsp explainError - Explain error",
     "RustLsp renderDiagnostic - Show diagnostic",
     "RustLsp relatedDiagnostics - Related diagnostics",
@@ -54,13 +54,22 @@ function M.rust_quick_actions()
     prompt = "Rust Quick Fix:",
   }, function(choice)
     execute_menu_choice(choice, {
-      ["^(RustLsp [^-]+)"] = function(c) vim.cmd(c:match("^(RustLsp [^-]+)")) end
+      {"^Code Action", function()
+        local has_lspsaga = pcall(require, "lspsaga")
+        if has_lspsaga then
+          vim.cmd("Lspsaga code_action")
+        else
+          vim.lsp.buf.code_action()
+        end
+      end},
+      {"^(RustLsp [^-]+)", function(c) vim.cmd(c:match("^(RustLsp [^-]+)")) end}
     })
   end)
 end
 
 function M.go_quick_actions()
   local go_actions = {
+    "Code Action - Show available actions",
     "GoIfErr - Add error handling",
     "GoFillStruct - Fill struct",
     "GoImpl - Implement interface",
@@ -71,7 +80,15 @@ function M.go_quick_actions()
     layout = "cursor",
   }, function(choice)
     execute_menu_choice(choice, {
-      ["^(%S+)"] = function(c) vim.cmd(c:match("^(%S+)")) end
+      {"^Code Action", function()
+        local has_lspsaga = pcall(require, "lspsaga")
+        if has_lspsaga then
+          vim.cmd("Lspsaga code_action")
+        else
+          vim.lsp.buf.code_action()
+        end
+      end},
+      {"^(%S+)", function(c) vim.cmd(c:match("^(%S+)")) end}
     })
   end)
 end
@@ -116,6 +133,8 @@ function M.language_specific_code_action()
       end
     elseif filetype == "python" then
       M.python_quick_actions()
+    elseif filetype == "typescript" or filetype == "typescriptreact" or filetype == "javascript" or filetype == "javascriptreact" then
+      M.typescript_quick_actions()
     else
       local generic_options = {
         "Rename - Rename symbol",
@@ -195,6 +214,7 @@ end
 
 function M.python_quick_actions()
   local options = {
+    "Code Action - Show available actions",
     "Organize Imports - Sort and clean imports",
     "Add Type Annotation - Add type hints",
     "Run File - Execute current Python file",
@@ -207,35 +227,42 @@ function M.python_quick_actions()
     prompt = "Python Quick Fix:",
   }, function(choice)
     execute_menu_choice(choice, {
-      ["^Organize Imports"] = function() 
+      {"^Code Action", function()
+        local has_lspsaga = pcall(require, "lspsaga")
+        if has_lspsaga then
+          vim.cmd("Lspsaga code_action")
+        else
+          vim.lsp.buf.code_action()
+        end
+      end},
+      {"^Organize Imports", function()
         vim.lsp.buf.code_action({
           context = { only = { "source.organizeImports" } },
           apply = true,
         })
-      end,
-      ["^Add Type"] = function()
+      end},
+      {"^Add Type", function()
         vim.lsp.buf.code_action({
           context = { only = { "quickfix", "refactor.rewrite" } },
           apply = false,
         })
-      end,
-      ["^Run File"] = function()
+      end},
+      {"^Run File", function()
         local file = vim.fn.expand("%:p")
         vim.cmd("split | terminal python " .. file)
-      end,
-      ["^Run Tests"] = function()
+      end},
+      {"^Run Tests", function()
         vim.cmd("split | terminal python -m pytest")
-      end,
-      ["^Toggle Docstring"] = function()
-        -- LSPのdocstring生成機能を呼び出し
+      end},
+      {"^Toggle Docstring", function()
         vim.lsp.buf.code_action({
           context = { only = { "refactor.rewrite" } },
           apply = false,
         })
-      end,
-      ["^Black Format"] = function()
+      end},
+      {"^Black Format", function()
         vim.lsp.buf.format({ name = "null-ls" })
-      end
+      end}
     })
   end)
 end
@@ -308,6 +335,14 @@ function M.cpp_quick_actions()
   }
   vim.ui.select(options, { prompt = "C/C++ Quick Fix:" }, function(choice)
     execute_menu_choice(choice, {
+      {"^Code Action", function()
+        local has_lspsaga = pcall(require, "lspsaga")
+        if has_lspsaga then
+          vim.cmd("Lspsaga code_action")
+        else
+          vim.lsp.buf.code_action()
+        end
+      end},
       {"^Rename", function() vim.lsp.buf.rename() end},
       {"^Extract Function", function()
         vim.lsp.buf.code_action({ context = { only = { "refactor.extract" } } })
@@ -318,7 +353,6 @@ function M.cpp_quick_actions()
       {"^Inline", function()
         vim.lsp.buf.code_action({ context = { only = { "refactor.inline" } } })
       end},
-      {"^Code Action", function() vim.lsp.buf.code_action() end},
     })
   end)
 end
@@ -339,6 +373,83 @@ function M.cpp_refactor_menu()
       {"^Inline", function()
         vim.lsp.buf.code_action({ context = { only = { "refactor.inline" } } })
       end},
+    })
+  end)
+end
+
+function M.typescript_quick_actions()
+  local options = {
+    "Code Action - Show available actions",
+    "Organize Imports - Sort and clean imports",
+    "Add Missing Imports - Auto-import missing symbols",
+    "Remove Unused Imports - Clean up imports",
+  }
+
+  vim.ui.select(options, {
+    prompt = "TypeScript/JavaScript Quick Fix:",
+  }, function(choice)
+    execute_menu_choice(choice, {
+      {"^Code Action", function()
+        local has_lspsaga = pcall(require, "lspsaga")
+        if has_lspsaga then
+          vim.cmd("Lspsaga code_action")
+        else
+          vim.lsp.buf.code_action()
+        end
+      end},
+      {"^Organize Imports", function()
+        vim.lsp.buf.code_action({
+          context = { only = { "source.organizeImports" } },
+          apply = true,
+        })
+      end},
+      {"^Add Missing", function()
+        vim.lsp.buf.code_action({
+          context = { only = { "source.addMissingImports" } },
+          apply = true,
+        })
+      end},
+      {"^Remove Unused", function()
+        vim.lsp.buf.code_action({
+          context = { only = { "source.removeUnused" } },
+          apply = true,
+        })
+      end}
+    })
+  end)
+end
+
+function M.typescript_refactor_menu()
+  local options = {
+    "Rename - Rename symbol",
+    "Extract Function - Extract to function",
+    "Extract Variable - Extract to variable",
+    "Organize Imports - Sort imports",
+  }
+
+  vim.ui.select(options, {
+    prompt = "Select Refactoring:",
+  }, function(choice)
+    execute_menu_choice(choice, {
+      {"^Rename", function() vim.lsp.buf.rename() end},
+      {"^Extract Function", function()
+        vim.lsp.buf.code_action({
+          context = { only = { "refactor.extract.function" } },
+          apply = false,
+        })
+      end},
+      {"^Extract Variable", function()
+        vim.lsp.buf.code_action({
+          context = { only = { "refactor.extract.constant" } },
+          apply = false,
+        })
+      end},
+      {"^Organize", function()
+        vim.lsp.buf.code_action({
+          context = { only = { "source.organizeImports" } },
+          apply = true,
+        })
+      end}
     })
   end)
 end

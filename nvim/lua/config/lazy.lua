@@ -11,6 +11,7 @@ require("lazy").setup({
   },
   install = { colorscheme = { "habamax" } },
   checker = { enabled = true },
+  rocks = { enabled = false },
   performance = {
     rtp = {
       disabled_plugins = {
