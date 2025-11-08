@@ -36,7 +36,7 @@ return {
           border_follow = true,
           keys = {
             exec_action = "o",
-            quit = "q",
+            quit = { "q", "<ESC>" },
             toggle_or_jump = "<CR>",
             quit_in_show = { "q", "<ESC>" },
           },
@@ -50,8 +50,8 @@ return {
             vsplit = "<C-c>v",
             split = "<C-c>s",
             tabe = "<C-c>t",
-            quit = "q",
-            close = "<ESC>",
+            quit = { "q", "<ESC>" },
+            close = { "q", "<ESC>" },
           },
         },
         code_action = {
@@ -59,7 +59,7 @@ return {
           show_server_name = false,
           extend_gitsigns = true,
           keys = {
-            quit = "q",
+            quit = { "q", "<ESC>" },
             exec = "<CR>",
           },
         },
@@ -76,7 +76,7 @@ return {
           project_max_width = 0.5,
           project_max_height = 0.5,
           keys = {
-            quit = "<C-c>",
+            quit = { "<C-c>", "<ESC>" },
             exec = "<CR>",
             select = "x",
           },

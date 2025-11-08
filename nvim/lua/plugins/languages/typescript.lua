@@ -67,6 +67,20 @@ return {
           })
         end,
       })
+
+      -- キーマップ設定
+      local lsp_actions = require("utils.lsp-actions")
+
+      vim.api.nvim_create_autocmd("FileType", {
+        pattern = { "javascript", "javascriptreact", "typescript", "typescriptreact" },
+        callback = function()
+          local opts = { buffer = true, silent = true }
+
+          vim.keymap.set("n", "<M-CR>", lsp_actions.language_specific_code_action, opts)
+          vim.keymap.set("n", "<D-S-r>", lsp_actions.typescript_refactor_menu, opts)
+          vim.keymap.set("n", "<M-S-r>", lsp_actions.typescript_refactor_menu, opts)
+        end,
+      })
     end,
   },
 }
