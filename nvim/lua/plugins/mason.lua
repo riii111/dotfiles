@@ -22,6 +22,7 @@ return {
         "typescript-language-server", -- ts_ls用
         "basedpyright",
         "sqls",
+        "terraform-ls",
 
         -- Formatters
         "stylua",
@@ -36,6 +37,7 @@ return {
         -- Linters
         "golangci-lint",
         "ruff",
+        "tflint",
 
         -- Debuggers  
         "debugpy",

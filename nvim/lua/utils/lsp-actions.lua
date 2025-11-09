@@ -135,6 +135,8 @@ function M.language_specific_code_action()
       M.python_quick_actions()
     elseif filetype == "typescript" or filetype == "typescriptreact" or filetype == "javascript" or filetype == "javascriptreact" then
       M.typescript_quick_actions()
+    elseif filetype == "terraform" or filetype == "hcl" or filetype == "terraform-vars" then
+      M.terraform_quick_actions()
     else
       local generic_options = {
         "Rename - Rename symbol",
@@ -448,6 +450,74 @@ function M.typescript_refactor_menu()
         vim.lsp.buf.code_action({
           context = { only = { "source.organizeImports" } },
           apply = true,
+        })
+      end}
+    })
+  end)
+end
+
+function M.terraform_quick_actions()
+  local options = {
+    "Code Action - Show available actions",
+    "Format Document - Run terraform fmt",
+    "Validate - Validate Terraform configuration",
+    "Rename - Rename resource/variable",
+  }
+
+  vim.ui.select(options, {
+    prompt = "Terraform Quick Fix:",
+  }, function(choice)
+    execute_menu_choice(choice, {
+      {"^Code Action", function()
+        local has_lspsaga = pcall(require, "lspsaga")
+        if has_lspsaga then
+          vim.cmd("Lspsaga code_action")
+        else
+          vim.lsp.buf.code_action()
+        end
+      end},
+      {"^Format Document", function()
+        vim.lsp.buf.format({
+          filter = function(client)
+            return client.name == "null-ls" or client.name == "terraform_ls"
+          end,
+          timeout_ms = 5000,
+        })
+      end},
+      {"^Validate", function()
+        vim.cmd("split | terminal terraform validate")
+      end},
+      {"^Rename", function()
+        vim.lsp.buf.rename()
+      end}
+    })
+  end)
+end
+
+function M.terraform_refactor_menu()
+  local options = {
+    "Rename - Rename resource/variable/module",
+    "Format Document - Run terraform fmt",
+    "Code Action - Show available refactorings",
+  }
+
+  vim.ui.select(options, {
+    prompt = "Select Refactoring:",
+  }, function(choice)
+    execute_menu_choice(choice, {
+      {"^Rename", function() vim.lsp.buf.rename() end},
+      {"^Format Document", function()
+        vim.lsp.buf.format({
+          filter = function(client)
+            return client.name == "null-ls" or client.name == "terraform_ls"
+          end,
+          timeout_ms = 5000,
+        })
+      end},
+      {"^Code Action", function()
+        vim.lsp.buf.code_action({
+          context = { only = { "refactor" } },
+          apply = false,
         })
       end}
     })
