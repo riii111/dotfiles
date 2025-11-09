@@ -15,20 +15,6 @@ return {
     end,
   },
 
-  -- Keymaps: integrate lsp-actions for C/C++
-  {
-    "neovim/nvim-lspconfig",
-    ft = { "c", "cpp", "objc", "objcpp" },
-    config = function()
-      local ok, lsp_actions = pcall(require, "utils.lsp-actions")
-      if not ok then return end
-      local opts = { buffer = true, silent = true }
-      vim.keymap.set("n", "<M-CR>", lsp_actions.language_specific_code_action, opts)
-      vim.keymap.set("n", "<D-S-r>", lsp_actions.cpp_refactor_menu or lsp_actions.language_specific_code_action, opts)
-      vim.keymap.set("n", "<M-S-r>", lsp_actions.cpp_refactor_menu or lsp_actions.language_specific_code_action, opts)
-    end,
-  },
-
   {
     "mfussenegger/nvim-dap",
     ft = { "c", "cpp", "objc", "objcpp" },
@@ -91,6 +77,20 @@ return {
           }),
         })
       end
+
+      -- Keymaps: integrate lsp-actions for C/C++
+      local lsp_actions = require("utils.lsp-actions")
+
+      vim.api.nvim_create_autocmd("FileType", {
+        pattern = { "c", "cpp", "objc", "objcpp" },
+        callback = function()
+          local opts = { buffer = true, silent = true }
+
+          vim.keymap.set("n", "<M-CR>", lsp_actions.language_specific_code_action, opts)
+          vim.keymap.set("n", "<D-S-r>", lsp_actions.cpp_refactor_menu, opts)
+          vim.keymap.set("n", "<M-S-r>", lsp_actions.cpp_refactor_menu, opts)
+        end,
+      })
     end,
   },
 }
