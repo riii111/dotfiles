@@ -58,54 +58,41 @@ When creating a commit, follow these steps:
    ```
 
 2. Analyze changes
-   - Identify files that have been changed or added
-   - Understand the nature of the changes (new features, bug fixes, refactoring, etc.)
-   - Evaluate the impact on the project
-   - Check for the presence of sensitive information
+   - Understand what was changed and why
+   - Check for sensitive information
 
 3. Create a commit message
-   - Focus on "why"
-   - Use clear and concise language
-   - Reflect the purpose of the changes accurately
-   - Avoid general expressions
+   - **Keep it simple**: Commit title should be self-explanatory and concise
+   - **Minimize body**: Avoid commit body if possible, or keep it to 1 line maximum
+   - **Right granularity**: Use appropriate commit size - not too large or too small
 
 4. Execute the commit
 
 - Follow <https://www.conventionalcommits.org/en/v1.0.0/>
 - Choose from the following types:
-  - `build`: Build
-  - `ci`: CI
-  - `chore`: Chore (things that don't need to be categorized)
-  - `docs`: Documentation
-  - `feat`: New feature
-  - `fix`: Bug fix
-  - `perf`: Performance
-  - `refactor`: Refactoring
-  - `revert`: Revert commit
-  - `style`: Code style
-  - `test`: Test
+  - `build`, `ci`, `chore`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`, `test`
 - Commit title should be in English
 
 ### Commit message examples
 
 ```bash
 # Add new feature
-feat: introduce error handling with Result type
+feat: add Result type for error handling
 
 # Improve existing feature
-update: improve cache performance
+perf: improve cache performance
 
 # Bug fix
-fix: fix expired token handling
+fix: handle expired token properly
 
 # Refactoring
-refactor: refactor to use Adapter pattern for external dependency abstraction
+refactor: use Adapter pattern for external dependencies
 
 # Add tests
-test: add tests for Result type error cases
+test: add Result type error test cases
 
 # Update documentation
-docs: add best practices for error handling
+docs: add error handling best practices
 ```
 
 ## 3. Additional Notes
