@@ -1,33 +1,23 @@
-// All comments must be deleted.
 {
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "read input; if echo \"$input\" | grep -q '\"command\":\"ls'; then echo '{\"decision\": \"block\", \"reason\": \"Use eza instead of ls! Example: eza -1 --color=never --group-directories-first\"}'; elif echo \"$input\" | grep -q '\"command\":\"find'; then echo '{\"decision\": \"block\", \"reason\": \"Use fd instead of find! Example: fd --hidden --exclude .git --exclude node_modules --color=never --print0 <pattern>\"}'; elif echo \"$input\" | grep -q '\"command\":\"grep'; then echo '{\"decision\": \"block\", \"reason\": \"Use rg instead of grep! Example: rg --no-heading --color=never --json --trim --max-columns=120 <pattern>\"}'; elif echo \"$input\" | grep -q '\"command\":\"cat'; then echo '{\"decision\": \"block\", \"reason\": \"Use bat instead of cat! Example: bat --plain --paging=never --color=never <file>\"}'; fi"
-          }
-        ]
-      }
-    ]
+  "env": {
+    "RIPGREP_CONFIG_PATH": "/Users/[[YOUR_USER_NAME]]/.ripgreprc",
+    "GIT_OPTIONAL_LOCKS": "0",
+    "DISABLE_TELEMETRY": "1",
+    "RUST_LOG": "info"
   },
+  "includeCoAuthoredBy": false,
   "permissions": {
     "allow": [
-      "Read(~/.zshrc)",                    // Check shell settings for command behavior issues
-      
-      // Rust
+      "Read(/Users/[[YOUR_USER_NAME]]/.zshrc)",
+      "Read(//Users/[[YOUR_USER_NAME]]/.config/nvim/**)",
+      "Write(//Users/[[YOUR_USER_NAME]]/.config/nvim/**)",
+      "Edit(//Users/[[YOUR_USER_NAME]]/.config/nvim/**)",
       "Bash(cargo build:*)",
       "Bash(cargo check:*)",
       "Bash(cargo clippy:*)",
       "Bash(cargo fmt:*)",
       "Bash(cargo audit:*)",
-      
-      // Go
       "Bash(make test-unit)",
-      "Bash(make test-e2e)",
-      "Bash(make test-all)",
       "Bash(go build:*)",
       "Bash(go mod:*)",
       "Bash(go vet:*)",
@@ -35,40 +25,28 @@
       "Bash(go test:*)",
       "Bash(golangci-lint:*)",
       "Bash(goimports:*)",
-
-      
-      // Node.js/Frontend
       "Bash(npm run:*)",
       "Bash(yarn:*)",
-      
-      // Git operations (push is excluded and requires user confirmation)
       "Bash(git status)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git pull:*)",
       "Bash(git log:*)",
       "Bash(git show:*)",
-      
-      // High-performance search and file operation tools (prioritized over legacy tools)
-      "Bash(rg:*)",                        // grep
-     "Bash(fd:*)",                         // find
-      "Bash(bat:*)",                       // cat
-      "Bash(eza:*)",                       // ls
-
-      // GitHub CLI
+      "Bash(rg:*)",
+      "Bash(fd:*)",
+      "Bash(bat:*)",
+      "Bash(eza:*)",
+      "Bash(ls:*)",
       "Bash(gh auth:*)",
       "Bash(gh pr view:*)",
       "Bash(gh pr list:*)",
-      "Bash(gh pr checkout:*)",            // Checkout PR locally → View diff with delta → Fix immediately
+      "Bash(gh pr checkout:*)",
       "Bash(gh issue view:*)",
       "Bash(gh issue list:*)",
       "Bash(gh repo view:*)",
-      
-      // Basic file operations
       "Bash(head:*)",
       "Bash(tail:*)",
-
-      // MCP
       "mcp__serena__list_dir",
       "mcp__serena__find_file",
       "mcp__serena__replace_regex",
@@ -109,32 +87,34 @@
       "mcp__playwright__pdf"
     ],
     "deny": [
-      "Read(*.env)",
       "Read(.aws/**)",
       "Read(.ssh/**)",
-      "Edit(.env*)",
-      "Edit(*.env)",
       "Edit(.aws/**)",
       "Edit(.ssh/**)",
       "Bash(sudo:*)"
     ]
   },
-   "enabledMcpjsonServers": [
+  "enabledMcpjsonServers": [
     "serena",
     "context7",
     "playwright"
   ],
-  "env": {
-    "RIPGREP_CONFIG_PATH": "$HOME/.ripgreprc",  // TODO: change full path
-    "GIT_OPTIONAL_LOCKS": "0", // Avoid unnecessary locks during diff viewing sessions to stabilize Git operations
-    "DISABLE_TELEMETRY": "1", // Flag to prevent external data transmission
-    "RUST_LOG": "info"
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "read input; if echo \"$input\" | grep -q '\"command\":\"find'; then echo '{\"decision\": \"block\", \"reason\": \"Use fd instead of find! Example: fd --hidden --exclude .git --exclude node_modules --color=never --print0 <pattern>\"}'; elif echo \"$input\" | grep -q '\"command\":\"grep'; then echo '{\"decision\": \"block\", \"reason\": \"Use rg instead of grep! Example: rg --no-heading --color=never --json --trim --max-columns=120 <pattern>\"}'; elif echo \"$input\" | grep -q '\"command\":\"cat'; then echo '{\"decision\": \"block\", \"reason\": \"Use bat instead of cat! Example: bat --plain --paging=never --color=never <file>\"}'; fi"
+          }
+        ]
+      }
+    ]
   },
-  "includeCoAuthoredBy": false,
   "statusLine": {
     "type": "command",
     "command": "ccusage statusline"
   },
-  "model": "opusplan"
+  "alwaysThinkingEnabled": false
 }
-
