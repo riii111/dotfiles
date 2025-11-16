@@ -10,6 +10,12 @@ return {
           load_vscode_settings = false,
           default_settings = {
             ["rust-analyzer"] = {
+              checkOnSave = {
+                command = "clippy",  -- ファイル保存時にclippyを自動実行
+                -- 重かったら以下に変更
+                -- command = "check",
+                -- allTargets = false, -- ビルドターゲットを制限するだけ
+              },
               cargo = {
                 extraEnv = {
                   CARGO_TARGET_DIR = ".nvim/target",
