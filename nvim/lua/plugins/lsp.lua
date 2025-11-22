@@ -27,6 +27,15 @@ return {
 
         -- Configure LSP behavior (diagnostics, etc.) but let lspsaga.nvim handle keymaps
         -- All keymaps are handled by lspsaga.nvim on LspAttach
+
+        if client.name == "kotlin_lsp" then
+          local ok_actions, lsp_actions = pcall(require, "utils.lsp-actions")
+          if ok_actions then
+            vim.keymap.set("n", "<M-CR>", lsp_actions.language_specific_code_action, opts)
+            vim.keymap.set("n", "<D-S-r>", lsp_actions.kotlin_refactor_menu, opts)
+            vim.keymap.set("n", "<M-S-r>", lsp_actions.kotlin_refactor_menu, opts)
+          end
+        end
       end
 
       local capabilities = vim.lsp.protocol.make_client_capabilities()
@@ -132,6 +141,36 @@ return {
       })
 
       vim.lsp.enable('ts_ls')
+
+      -- Kotlin LSP (JetBrains kotlin-lsp)
+      do
+        local util = require("lspconfig.util")
+        local jdk21 = vim.fn.systemlist("/usr/libexec/java_home -v 21")[1]
+        local java_home = (jdk21 and #jdk21 > 0) and jdk21 or vim.env.JAVA_HOME
+        local mason_bin = vim.fn.stdpath("data") .. "/mason/bin/kotlin-lsp"
+        local kotlin_cmd = vim.fn.executable(mason_bin) == 1 and { mason_bin, "--stdio" } or { "kotlin-lsp", "--stdio" }
+
+        vim.lsp.config("kotlin_lsp", {
+          cmd = kotlin_cmd,
+          cmd_env = {
+            JAVA_HOME = java_home,
+            JDK_HOME = java_home,
+            PATH = (java_home and (java_home .. "/bin:" .. vim.env.PATH)) or vim.env.PATH,
+          },
+          filetypes = { "kotlin" },
+          root_markers = { "settings.gradle.kts", "settings.gradle", "build.gradle.kts", "build.gradle", ".git" },
+          on_attach = on_attach,
+          capabilities = capabilities,
+        })
+
+        -- Ensure enable on filetype to avoid missed autostart
+        vim.api.nvim_create_autocmd("FileType", {
+          pattern = "kotlin",
+          callback = function()
+            vim.lsp.enable("kotlin_lsp")
+          end,
+        })
+      end
 
       -- Setup basedpyright for Python using Neovim 0.11 API
       local function find_basedpyright_cmd()
@@ -331,6 +370,4 @@ return {
       })
     end,
   },
-
-
 }

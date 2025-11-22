@@ -44,6 +44,7 @@ M.languages = {
   cpp = "#F34B7D",
   rust = "#DEA584",
   go = "#00ADDB",
+  kotlin = "#A97BFF",
   -- Lua: GitHub color (#000080) is too dark on our dark UI; brighten for legibility
   lua = "#3D59FF",
   typescript = "#2B7489",

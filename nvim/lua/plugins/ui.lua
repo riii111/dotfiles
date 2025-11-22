@@ -167,6 +167,15 @@ return {
 								end,
 							},
 							{
+								name = "kotlin",
+								highlight = { fg = colors.languages.kotlin },
+								priority = 5,
+								auto_close = true,
+								matcher = function(buf)
+									return buf.name:match("%.kt$") or buf.name:match("%.kts$")
+								end,
+							},
+							{
 								name = "c",
 								highlight = { fg = colors.languages.c },
 								priority = 5,
