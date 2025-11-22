@@ -23,12 +23,14 @@ return {
         "basedpyright",
         "sqls",
         "terraform-ls",
+        "kotlin-lsp",
 
         -- Formatters
         "stylua",
         "goimports",
         "sql-formatter",
         "ruff",
+        "ktlint",
         -- C/C++
         "clangd",
         "codelldb",
@@ -38,8 +40,9 @@ return {
         "golangci-lint",
         "ruff",
         "tflint",
+        "ktlint",
 
-        -- Debuggers  
+        -- Debuggers
         "debugpy",
         "delve",
 

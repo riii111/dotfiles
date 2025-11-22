@@ -137,6 +137,8 @@ function M.language_specific_code_action()
       M.typescript_quick_actions()
     elseif filetype == "terraform" or filetype == "hcl" or filetype == "terraform-vars" then
       M.terraform_quick_actions()
+    elseif filetype == "kotlin" then
+      M.kotlin_quick_actions()
     else
       local generic_options = {
         "Rename - Rename symbol",
@@ -518,6 +520,91 @@ function M.terraform_refactor_menu()
         vim.lsp.buf.code_action({
           context = { only = { "refactor" } },
           apply = false,
+        })
+      end}
+    })
+  end)
+end
+
+function M.kotlin_quick_actions()
+  local options = {
+    "Code Action - Show available actions",
+    "Organize Imports - Sort and clean imports",
+    "Format with ktlint - Format current file",
+    "Rename - Rename symbol",
+  }
+
+  vim.ui.select(options, {
+    prompt = "Kotlin Quick Fix:",
+  }, function(choice)
+    execute_menu_choice(choice, {
+      {"^Code Action", function()
+        local has_lspsaga = pcall(require, "lspsaga")
+        if has_lspsaga then
+          vim.cmd("Lspsaga code_action")
+        else
+          vim.lsp.buf.code_action()
+        end
+      end},
+      {"^Organize Imports", function()
+        vim.lsp.buf.code_action({
+          context = { only = { "source.organizeImports" } },
+          apply = true,
+        })
+      end},
+      {"^Format with ktlint", function()
+        vim.lsp.buf.format({
+          filter = function(client)
+            return client.name == "null-ls"
+          end,
+          timeout_ms = 5000,
+        })
+      end},
+      {"^Rename", function()
+        vim.lsp.buf.rename()
+      end}
+    })
+  end)
+end
+
+function M.kotlin_refactor_menu()
+  local options = {
+    "Rename - Rename symbol",
+    "Extract Function - Extract to function",
+    "Extract Variable - Extract to variable",
+    "Organize Imports - Sort imports",
+    "Format Document - Run ktlint format",
+  }
+
+  vim.ui.select(options, {
+    prompt = "Select Refactoring:",
+  }, function(choice)
+    execute_menu_choice(choice, {
+      {"^Rename", function() vim.lsp.buf.rename() end},
+      {"^Extract Function", function()
+        vim.lsp.buf.code_action({
+          context = { only = { "refactor.extract.function" } },
+          apply = false,
+        })
+      end},
+      {"^Extract Variable", function()
+        vim.lsp.buf.code_action({
+          context = { only = { "refactor.extract.constant" } },
+          apply = false,
+        })
+      end},
+      {"^Organize", function()
+        vim.lsp.buf.code_action({
+          context = { only = { "source.organizeImports" } },
+          apply = true,
+        })
+      end},
+      {"^Format Document", function()
+        vim.lsp.buf.format({
+          filter = function(client)
+            return client.name == "null-ls"
+          end,
+          timeout_ms = 5000,
         })
       end}
     })
