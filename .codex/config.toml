@@ -1,7 +1,8 @@
 model_reasoning_effort = "high"
 
-[tools]
-web_search = true
+[features]
+streamable_shell = true
+web_search_request = true
 
 [mcp_servers.serena]
 command = "uvx"
