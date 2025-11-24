@@ -2,190 +2,23 @@ return {
   -- LSP Configuration
   {
     "neovim/nvim-lspconfig",
-    event = { "BufReadPre", "BufNewFile" },
+    lazy = false,
     cond = not vim.g.vscode,
     dependencies = {
       "williamboman/mason.nvim",
     },
     priority = 50,
     config = function()
-      -- Ensure Go environment variables are set for gopls
       vim.env.GOROOT = vim.env.GOROOT or vim.fn.system("go env GOROOT"):gsub("\n", "")
       vim.env.GOPATH = vim.env.GOPATH or vim.fn.system("go env GOPATH"):gsub("\n", "")
 
-      -- LSP settings
----@diagnostic disable-next-line: unused-local
-      local on_attach = function(client, bufnr)
-        local opts = { buffer = bufnr, silent = true }
-        vim.diagnostic.config({
-          virtual_text = true,
-          signs = true,
-          underline = true,
-          update_in_insert = false,
-          severity_sort = true,
-        })
-
-        -- Configure LSP behavior (diagnostics, etc.) but let lspsaga.nvim handle keymaps
-        -- All keymaps are handled by lspsaga.nvim on LspAttach
-      end
-
-      local capabilities = vim.lsp.protocol.make_client_capabilities()
-
-      -- Setup LSP servers directly
-      vim.lsp.config('lua_ls', {
-        on_attach = on_attach,
-        capabilities = capabilities,
-        settings = {
-          Lua = {
-            runtime = {
-              version = "LuaJIT",
-            },
-            diagnostics = {
-              globals = { "vim" },
-            },
-            workspace = {
-              library = vim.api.nvim_get_runtime_file("", true),
-            },
-            telemetry = {
-              enable = false,
-            },
-          },
-        },
+      vim.diagnostic.config({
+        virtual_text = true,
+        signs = true,
+        underline = true,
+        update_in_insert = false,
+        severity_sort = true,
       })
-
-      vim.lsp.enable('lua_ls')
-
-      -- Setup gopls
-      vim.lsp.config('gopls', {
-        on_attach = on_attach,
-        capabilities = capabilities,
-        cmd = { "gopls" },  -- PATH経由で検索
-        filetypes = { 'go', 'gomod', 'gowork', 'gotmpl' },
-        root_markers = { "go.mod", "go.work", ".git" },
-        settings = {
-          gopls = {
-            hints = {
-              assignVariableTypes = false,
-              compositeLiteralFields = false,
-              compositeLiteralTypes = false,
-              constantValues = false,
-              functionTypeParameters = false,
-              parameterNames = false,
-              rangeVariableTypes = false,
-            },
-            analyses = {
-              unusedparams = false,
-              shadow = false,
-            },
-            staticcheck = false, -- Disable gopls built-in diagnostics to use golangci-lint via null-ls
-            buildFlags = { "-tags=unit,e2e" },
-          },
-        },
-      })
-
-      vim.lsp.enable('gopls')
-
-      -- Setup TypeScript Language Server
-      vim.lsp.config('ts_ls', {
-        on_attach = on_attach,
-        capabilities = capabilities,
-        filetypes = { "typescript", "typescriptreact", "typescript.tsx", "javascript", "javascriptreact" },
-        root_markers = { "package.json", "tsconfig.json", "jsconfig.json", ".git" },
-        settings = {
-          typescript = {
-            inlayHints = {
-              includeInlayParameterNameHints = 'none',
-              includeInlayParameterNameHintsWhenArgumentMatchesName = false,
-              includeInlayFunctionParameterTypeHints = false,
-              includeInlayVariableTypeHints = false,
-              includeInlayVariableTypeHintsWhenTypeMatchesName = false,
-              includeInlayPropertyDeclarationTypeHints = false,
-              includeInlayFunctionLikeReturnTypeHints = false,
-              includeInlayEnumMemberValueHints = false,
-            },
-            suggest = {
-              includeCompletionsForModuleExports = true,
-            },
-            format = {
-              enable = false,  -- Biomeでフォーマットするため無効化
-            },
-          },
-          javascript = {
-            inlayHints = {
-              includeInlayParameterNameHints = 'none',
-              includeInlayParameterNameHintsWhenArgumentMatchesName = false,
-              includeInlayFunctionParameterTypeHints = false,
-              includeInlayVariableTypeHints = false,
-              includeInlayVariableTypeHintsWhenTypeMatchesName = false,
-              includeInlayPropertyDeclarationTypeHints = false,
-              includeInlayFunctionLikeReturnTypeHints = false,
-              includeInlayEnumMemberValueHints = false,
-            },
-            suggest = {
-              includeCompletionsForModuleExports = true,
-            },
-            format = {
-              enable = false,  -- Biomeでフォーマットするため無効化
-            },
-          },
-        },
-      })
-
-      vim.lsp.enable('ts_ls')
-
-      -- Setup basedpyright for Python using Neovim 0.11 API
-      local function find_basedpyright_cmd()
-        local mason_bin = vim.fn.stdpath("data") .. "/mason/bin/"
-        local candidates = {
-          "basedpyright-langserver",
-          "basedpyright",
-          "pyright-langserver",
-        }
-        for _, exe in ipairs(candidates) do
-          local mason_path = mason_bin .. exe
-          if vim.fn.executable(mason_path) == 1 then
-            return mason_path
-          end
-          if vim.fn.executable(exe) == 1 then
-            return exe
-          end
-        end
-        return "basedpyright-langserver"
-      end
-
-      vim.lsp.config("basedpyright", {
-        name = "basedpyright",
-        cmd = { find_basedpyright_cmd(), "--stdio" },
-        filetypes = { "python" },
-        on_attach = on_attach,
-        capabilities = capabilities,
-        settings = {
-          basedpyright = {
-            disableOrganizeImports = true,
-          },
-        },
-      })
-
-      vim.lsp.enable("basedpyright")
-
-      -- Safety net: ensure client starts on FileType event in case autostart fails
-      vim.api.nvim_create_autocmd("FileType", {
-        pattern = "python",
-        callback = function(args)
-          local bufnr = args.buf
-          local attached = false
-          for _, client in pairs(vim.lsp.get_clients({ bufnr = bufnr })) do
-            if client.name == "basedpyright" then
-              attached = true
-              break
-            end
-          end
-          if not attached then
-            vim.lsp.enable("basedpyright")
-          end
-        end,
-      })
-
     end,
   },
 
