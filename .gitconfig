@@ -56,8 +56,8 @@
 # Git Aliases
 # ==========================================
 [alias]
-	# Interactive staging with fzf + delta preview
-	apf = "!git ls-files -m -o --exclude-standard | fzf -m --print0 --preview 'echo {} | xargs git diff --color=always | delta' | xargs -0 -o -t git add -p"
+	# Interactive staging with fzf + delta preview (supports new files)
+	apf = "!git ls-files -m -o --exclude-standard | fzf -m --print0 --preview 'if git ls-files --error-unmatch {} &>/dev/null; then git diff --color=always {} | delta; else bat --color=always --style=numbers {}; fi' | xargs -0 -o -t git add -p"
 
 	# Switch branch with fzf
 	swf = "!branch=$(git branch --all | grep -v '^\\*' | grep -v 'HEAD ->' | sed 's|^[[:space:]]*||' | sed 's|remotes/origin/||' | sort -u | fzf --preview 'git log --oneline --color=always {}') && [ -n \"$branch\" ] && git switch \"$branch\""
