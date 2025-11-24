@@ -84,7 +84,7 @@ alias mkd='mkdir -p'
 # Docker aliases
 alias dc='docker compose'
 alias dcu='docker compose up -d'
-alias dcub='docker compose up --build'
+alias dcub='docker compose up --build -d'
 alias dcd='docker compose down -v'
 alias dcr='docker compose restart'
 alias dps='docker ps'
