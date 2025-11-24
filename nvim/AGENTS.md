@@ -122,6 +122,7 @@ return {
 - clang‑tidy: let clangd handle it; do not add `null-ls` diagnostics.
 - Format conflicts: ensure only one of LSP or null‑ls formats for the filetype.
 - DAP not launching: verify adapter path under Mason and that the executable exists.
+- LSP not starting ("No active clients"): If you roll your own `vim.lsp.config/enable`, run config+enable *after* FileType. The safe path is to put config + `vim.lsp.enable` in `ftplugin/<lang>.lua`, or just use `lspconfig.setup` which already wires FileType autostart.
 
 ## Do & Don’t
 

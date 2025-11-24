@@ -1,5 +1,41 @@
 return {
   {
+    "neovim/nvim-lspconfig",
+    ft = "python",
+    config = function()
+      local function find_basedpyright_cmd()
+        local mason_bin = vim.fn.stdpath("data") .. "/mason/bin/"
+        local candidates = {
+          "basedpyright-langserver",
+          "basedpyright",
+          "pyright-langserver",
+        }
+        for _, exe in ipairs(candidates) do
+          local mason_path = mason_bin .. exe
+          if vim.fn.executable(mason_path) == 1 then
+            return mason_path
+          end
+          if vim.fn.executable(exe) == 1 then
+            return exe
+          end
+        end
+        return "basedpyright-langserver"
+      end
+
+      vim.lsp.config('basedpyright', {
+        cmd = { find_basedpyright_cmd(), "--stdio" },
+        root_markers = { "pyproject.toml", "setup.py", "requirements.txt", "Pipfile", ".git" },
+        settings = {
+          basedpyright = {
+            disableOrganizeImports = true,
+          },
+        },
+      })
+
+      vim.lsp.enable('basedpyright')
+    end,
+  },
+  {
     "mfussenegger/nvim-dap-python",
     dependencies = {
       "mfussenegger/nvim-dap",
