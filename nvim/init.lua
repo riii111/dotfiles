@@ -1,3 +1,6 @@
+-- Enable Lua module loader cache for faster startup
+vim.loader.enable()
+
 -- Bootstrap lazy.nvim
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
 if not (vim.uv or vim.loop).fs_stat(lazypath) then
@@ -12,6 +15,8 @@ vim.g.maplocalleader = "\\"
 
 -- Load configuration
 require("config.options")
+require("config.keymaps")
+require("config.autocmd")
 require("config.lazy")
 require("config.devicons")
 require("config.theme")

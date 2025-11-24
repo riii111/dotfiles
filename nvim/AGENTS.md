@@ -12,18 +12,24 @@
 ├── init.lua                   # bootstrap lazy.nvim, import specs
 └── lua
     ├── config                 # global options, theme, devicons, colors
+    │   ├── options.lua        # vim options, provider/plugin disabling
+    │   ├── keymaps.lua        # plugin-independent keymaps (smart editing, etc.)
+    │   ├── autocmd.lua        # autocommands (relative number toggle, etc.)
     │   ├── colors.lua
     │   ├── devicons.lua
     │   ├── lazy.lua
     │   └── theme.lua
     ├── plugins                # plugin specs (LSP core, UI, tooling)
+    │   ├── keymaps.lua        # plugin-dependent keymaps (Telescope, Oil, etc.)
     │   ├── lsp.lua            # lspconfig, none-ls, cmp, DAP, symbol-usage
+    │   ├── lspsaga.lua        # LSP-specific keymaps (gd, K, [d, etc.)
     │   ├── mason.lua          # mason + mason-tool-installer
     │   ├── ui.lua             # bufferline, incline, gitsigns, diffview, etc.
+    │   │                      # (includes plugin-specific keymaps: hlslens, mini.move)
     │   ├── lualine.lua
     │   ├── editor.lua         # treesitter, textobjects, autopairs, comment, etc.
     │   ├── noice.lua          # noice + notify
-    │   ├── lspsaga.lua
+    │   ├── dial.lua           # dial.nvim (increment/decrement)
     │   └── languages          # per-language modules (Treesitter, LSP, DAP, keymaps)
     │       ├── cpp.lua
     │       ├── go.lua
@@ -32,7 +38,7 @@
     │       ├── typescript.lua
     │       └── lua.lua
     └── utils
-        └── lsp-actions.lua    # IntelliJ‑like “smart action” menus and refactor helpers
+        └── lsp-actions.lua    # IntelliJ‑like "smart action" menus and refactor helpers
 ```
 
 ## Design Principles
@@ -40,7 +46,11 @@
 - Keep language logic in its own module under `plugins/languages` (cohesion, low coupling).
 - Use Mason for tool bootstrapping; avoid hard‑coded paths (resolve from `vim.fn.stdpath('data') .. '/mason'`).
 - Prefer LSP‑native features over duplicating via null‑ls (e.g., clang‑tidy via clangd, not null‑ls).
-- Minimal comments: document “why”, not “what”. Let naming/config tell the story.
+- Minimal comments: document "why", not "what". Let naming/config tell the story.
+- Keymap organization:
+  - Plugin-independent keymaps → `config/keymaps.lua` (e.g., smart 0, x without yank)
+  - Plugin-dependent keymaps → same file as plugin config or `plugins/keymaps.lua`
+  - LSP keymaps → `plugins/lspsaga.lua` (buffer-local, set on LspAttach)
 
 ## IntelliJ‑Like Quick Actions
 
@@ -137,6 +147,9 @@ return {
 - Rich Command UI: `folke/noice.nvim` + `rcarriga/nvim-notify`.
 - Project Navigation: `nvim-telescope/telescope.nvim` with `fzf-native` and `live-grep-args`.
 - Editor Ergonomics: Treesitter + textobjects, `windwp/nvim-autopairs`, `numToStr/Comment.nvim`, `folke/which-key.nvim`, `NMAC427/guess-indent.nvim`, `max397574/better-escape.nvim`, `mrjones2014/smart-splits.nvim`.
+- Smart Keymaps: Smart 0 (toggle ^ and 0), auto-indent on empty lines (i/A), delete without yank (x/X), visual mode improvements.
+- Smart Editing: `monaqa/dial.nvim` (increment dates, booleans, case conversion).
 - File Management: `stevearc/oil.nvim` (buffered file explorer), session management via `resession.nvim`.
 - UI Polish: `akinsho/bufferline.nvim` (language‑grouped labels), `b0o/incline.nvim`, `lukas-reineke/indent-blankline.nvim`, `lewis6991/gitsigns.nvim`, `sindrets/diffview.nvim`, `akinsho/toggleterm.nvim`, `kevinhwang91/nvim-hlslens`.
 - Debugging: `mfussenegger/nvim-dap` + `rcarriga/nvim-dap-ui`; language adapters configured per module (e.g., C/C++ with `codelldb`).
+- Performance: Lua module loader cache enabled, unused providers/plugins disabled for faster startup.
