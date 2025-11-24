@@ -60,7 +60,7 @@
 	apf = "!git ls-files -m -o --exclude-standard | fzf -m --print0 --preview 'echo {} | xargs git diff --color=always | delta' | xargs -0 -o -t git add -p"
 
 	# Switch branch with fzf
-	swf = "!git branch --all | grep -v '^\\*' | sed 's/remotes\\/origin\\///' | sort -u | fzf --preview 'git log --oneline --color=always {}' | xargs git switch"
+	swf = "!branch=$(git branch --all | grep -v '^\\*' | grep -v 'HEAD ->' | sed 's|^[[:space:]]*||' | sed 's|remotes/origin/||' | sort -u | fzf --preview 'git log --oneline --color=always {}') && [ -n \"$branch\" ] && git switch \"$branch\""
 
 	# Beautiful log with graph
 	logg = log --graph --all --format=format:'%C(bold blue)%h%C(reset) - %C(bold green)(%ar)%C(reset) %C(white)%s%C(reset) %C(dim white)- %an%C(reset)%C(auto)%d%C(reset)'
