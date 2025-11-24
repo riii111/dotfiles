@@ -1,0 +1,72 @@
+# ==========================================
+# Git Configuration Enhancements
+# ==========================================
+# NOTE: Add your personal [user] section separately!
+# This file contains only the enhancement settings.
+
+# ==========================================
+# Core Settings
+# ==========================================
+[core]
+	pager = delta
+
+# ==========================================
+# Delta Configuration (Beautiful Diffs)
+# ==========================================
+[interactive]
+	diffFilter = delta --color-only
+
+[delta]
+	navigate = true
+	side-by-side = true
+	line-numbers = true
+	syntax-theme = Nord
+	plus-style = syntax "#2a3a2a"
+	minus-style = syntax "#3a2a2a"
+
+# ==========================================
+# Merge & Rebase Settings
+# ==========================================
+[merge]
+	conflictstyle = zdiff3
+
+[rebase]
+	autoStash = true
+	autoSquash = true
+
+# ==========================================
+# Diff & Performance Optimization
+# ==========================================
+[diff]
+	algorithm = histogram
+	colorMoved = default
+
+[fetch]
+	writeCommitGraph = true
+	prune = true
+	pruneTags = true
+
+[pull]
+	rebase = false
+
+[push]
+	autoSetupRemote = true
+
+# ==========================================
+# Git Aliases
+# ==========================================
+[alias]
+	# Interactive staging with fzf + delta preview
+	apf = "!git ls-files -m -o --exclude-standard | fzf -m --print0 --preview 'echo {} | xargs git diff --color=always | delta' | xargs -0 -o -t git add -p"
+
+	# Switch branch with fzf
+	swf = "!git branch --all | grep -v '^\\*' | sed 's/remotes\\/origin\\///' | sort -u | fzf --preview 'git log --oneline --color=always {}' | xargs git switch"
+
+	# Beautiful log with graph
+	logg = log --graph --all --format=format:'%C(bold blue)%h%C(reset) - %C(bold green)(%ar)%C(reset) %C(white)%s%C(reset) %C(dim white)- %an%C(reset)%C(auto)%d%C(reset)'
+
+	# Fixup commit (step 1)
+	fixup = "!f() { git commit --fixup \"${1:-HEAD}\"; }; f"
+
+	# Squash fixup commits (step 2)
+	squash = "!git rebase -i --autosquash $(git merge-base HEAD $(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@'))"
