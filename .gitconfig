@@ -70,3 +70,6 @@
 
 	# Squash fixup commits (step 2)
 	squash = "!git rebase -i --autosquash $(git merge-base HEAD $(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@'))"
+
+	# Safe force push (use instead of --force)
+	pushf = push --force-with-lease
