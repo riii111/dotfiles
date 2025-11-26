@@ -1,5 +1,5 @@
 return {
-  -- LSP Configuration
+  -- LSP Configuration (base plugin, actual server configs in language modules)
   {
     "neovim/nvim-lspconfig",
     lazy = false,

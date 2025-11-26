@@ -13,7 +13,7 @@ return {
     end,
   },
 
-  -- Kotlin LSP configuration (JetBrains kotlin-lsp)
+  -- Kotlin LSP configuration (fwcd/kotlin-language-server)
   -- NOTE: Using a wrapper plugin instead of extending "neovim/nvim-lspconfig" directly
   --       because lazy.nvim may skip this config function when lspconfig is already loaded
   --       by plugins/lsp.lua. A separate plugin name ensures this config always runs.
@@ -23,14 +23,13 @@ return {
     ft = { "kotlin" },
     dependencies = { "neovim/nvim-lspconfig" },
     config = function()
-      -- Prefer Temurin JDK 21 for kotlin-lsp
-      local jdk21 = vim.fn.systemlist("/usr/libexec/java_home -v 21")[1]
-      local java_home = (jdk21 and #jdk21 > 0) and jdk21 or vim.env.JAVA_HOME
+      -- NOTE: fwcd は JDK 17 での安定性が高い。必要なら JAVA_HOME で指定してね。
+      local java_home = vim.env.JAVA_HOME
 
-      local mason_bin = vim.fn.stdpath("data") .. "/mason/bin/kotlin-lsp"
+      local mason_bin = vim.fn.stdpath("data") .. "/mason/bin/kotlin-language-server"
       local kotlin_cmd = vim.fn.executable(mason_bin) == 1
-        and { mason_bin, "--stdio" }
-        or { "kotlin-lsp", "--stdio" }
+        and { mason_bin }
+        or { "kotlin-language-server" }
 
       vim.lsp.config("kotlin_lsp", {
         cmd = kotlin_cmd,
