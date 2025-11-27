@@ -403,10 +403,20 @@ return {
 				terminal_mappings = true,
 				persist_size = true,
 				persist_mode = true,
-				direction = "horizontal",
+				direction = "float",
 				close_on_exit = true,
 				shell = vim.o.shell,
 				auto_scroll = true,
+				float_opts = {
+					border = "rounded",
+					width = function()
+						return math.floor(vim.o.columns * 0.9)
+					end,
+					height = function()
+						return math.floor(vim.o.lines * 0.6)
+					end,
+					winblend = 0,
+				},
 				highlights = {
 					Normal = { guibg = "NONE" },
 					NormalFloat = { guibg = "NONE" },
@@ -452,7 +462,7 @@ return {
 			-- Terminal mode mappings
 			function _G.set_terminal_keymaps()
 				local opts = { buffer = 0 }
-				vim.keymap.set("t", "<esc>", [[<C-\><C-n>]], opts)
+				vim.keymap.set("t", "<esc>", [[<Cmd>ToggleTerm<CR>]], opts)
 				vim.keymap.set("t", "<C-h>", [[<Cmd>wincmd h<CR>]], opts)
 				vim.keymap.set("t", "<C-j>", [[<Cmd>wincmd j<CR>]], opts)
 				vim.keymap.set("t", "<C-k>", [[<Cmd>wincmd k<CR>]], opts)
