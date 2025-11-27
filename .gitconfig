@@ -56,11 +56,8 @@
 # Git Aliases
 # ==========================================
 [alias]
-	# fzf diff viewer (like GitHub Desktop - shows all changes with preview)
-	df = "!git status -s -uall | fzf --preview 'file=$(echo {} | sed \"s/^...//\" | sed \"s/.* -> //\"); diff=$(git diff HEAD --color=always -- \"$file\" 2>/dev/null); if [ -n \"$diff\" ]; then echo \"$diff\" | delta; else diff=$(git diff --cached --color=always -- \"$file\" 2>/dev/null); if [ -n \"$diff\" ]; then echo \"$diff\" | delta; else bat --color=always \"$file\" 2>/dev/null; fi; fi'"
-
-	# Interactive staging with fzf + delta preview (supports new files)
-	apf = "!git ls-files -m -o --exclude-standard | fzf -m --print0 --preview 'if git ls-files --error-unmatch {} &>/dev/null; then git diff --color=always {} | delta; else bat --color=always --style=numbers {}; fi' | xargs -0 -o -t git add -p"
+	# fzf staging (like GitHub Desktop - multi-select with Tab, confirm with Enter)
+	stf = "!git status -s -uall | fzf -m --marker '✔ ' --color 'marker:green:bold' --bind 'ctrl-a:select-all,ctrl-d:deselect-all' --preview 'file=$(echo {} | sed \"s/^...//\" | sed \"s/.* -> //\"); diff=$(git diff HEAD --color=always -- \"$file\" 2>/dev/null); if [ -n \"$diff\" ]; then echo \"$diff\" | delta; else diff=$(git diff --cached --color=always -- \"$file\" 2>/dev/null); if [ -n \"$diff\" ]; then echo \"$diff\" | delta; else bat --color=always \"$file\" 2>/dev/null; fi; fi' | sed 's/^...//' | sed 's/.* -> //' | xargs -I {} git add '{}'"
 
 	# Switch branch with fzf
 	swf = "!branch=$(git branch --all | grep -v '^\\*' | grep -v 'HEAD ->' | sed 's|^[[:space:]]*||' | sed 's|remotes/origin/||' | sort -u | fzf --preview 'git log --oneline --color=always {}') && [ -n \"$branch\" ] && git switch \"$branch\""
