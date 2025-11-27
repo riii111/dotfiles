@@ -114,7 +114,7 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "ccusage statusline"
+    "command": "ccusage statusline --visual-burn-rate emoji"
   },
   "alwaysThinkingEnabled": false
 }
