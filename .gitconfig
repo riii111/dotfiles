@@ -56,6 +56,9 @@
 # Git Aliases
 # ==========================================
 [alias]
+	# fzf diff viewer (like GitHub Desktop - shows all changes with preview)
+	df = "!git status -s -uall | fzf --preview 'file=$(echo {} | sed \"s/^...//\" | sed \"s/.* -> //\"); diff=$(git diff HEAD --color=always -- \"$file\" 2>/dev/null); if [ -n \"$diff\" ]; then echo \"$diff\" | delta; else diff=$(git diff --cached --color=always -- \"$file\" 2>/dev/null); if [ -n \"$diff\" ]; then echo \"$diff\" | delta; else bat --color=always \"$file\" 2>/dev/null; fi; fi'"
+
 	# Interactive staging with fzf + delta preview (supports new files)
 	apf = "!git ls-files -m -o --exclude-standard | fzf -m --print0 --preview 'if git ls-files --error-unmatch {} &>/dev/null; then git diff --color=always {} | delta; else bat --color=always --style=numbers {}; fi' | xargs -0 -o -t git add -p"
 
@@ -73,3 +76,4 @@
 
 	# Safe force push (use instead of --force)
 	pushf = push --force-with-lease
+
