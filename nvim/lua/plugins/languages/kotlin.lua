@@ -13,23 +13,24 @@ return {
     end,
   },
 
-  -- Kotlin LSP configuration (fwcd/kotlin-language-server)
+  -- Kotlin LSP configuration (riii111/kotlin-language-server fork)
   -- NOTE: Using a wrapper plugin instead of extending "neovim/nvim-lspconfig" directly
   --       because lazy.nvim may skip this config function when lspconfig is already loaded
   --       by plugins/lsp.lua. A separate plugin name ensures this config always runs.
+  --
+  -- SETUP: Using forked kotlin-language-server with fixes for generated code (e.g., jOOQ) definition jump.
+  --        The fork is built locally and symlinked to ~/.local/bin/kotlin-language-server
+  --        See: https://github.com/riii111/kotlin-language-server
+  --        Build: cd <fork-repo> && ./gradlew :server:installDist
+  --        Symlink: ln -sf <fork-repo>/server/build/install/server/bin/kotlin-language-server ~/.local/bin/
   {
     name = "kotlin-lsp-setup",
     dir = vim.fn.stdpath("config"),
     ft = { "kotlin" },
     dependencies = { "neovim/nvim-lspconfig" },
     config = function()
-      -- NOTE: fwcd は JDK 17 での安定性が高い。必要なら JAVA_HOME で指定してね。
       local java_home = vim.env.JAVA_HOME
-
-      local mason_bin = vim.fn.stdpath("data") .. "/mason/bin/kotlin-language-server"
-      local kotlin_cmd = vim.fn.executable(mason_bin) == 1
-        and { mason_bin }
-        or { "kotlin-language-server" }
+      local kotlin_cmd = { "kotlin-language-server" } -- Uses ~/.local/bin symlink (fork) or falls back to PATH
 
       vim.lsp.config("kotlin_lsp", {
         cmd = kotlin_cmd,
