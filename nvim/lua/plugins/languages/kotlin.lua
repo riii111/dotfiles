@@ -47,6 +47,16 @@ return {
           "build.gradle",
           ".git",
         },
+        settings = {
+          kotlin = {
+            diagnostics = {
+              debounceTime = 400,
+            },
+            indexing = {
+              enabled = false,
+            },
+          },
+        },
       })
 
       vim.lsp.enable("kotlin_lsp")
