@@ -74,25 +74,14 @@ return {
           end,
         })
       end
-    end,
-  },
 
-  -- Formatting and linting with ktlint (autocmd only; sources are in plugins/lsp.lua)
-  {
-    "nvimtools/none-ls.nvim",
-    ft = { "kotlin" },
-    config = function()
-      vim.api.nvim_create_autocmd("BufWritePre", {
-        pattern = { "*.kt", "*.kts" },
-        callback = function()
-          vim.lsp.buf.format({
-            filter = function(client)
-              return client.name == "null-ls"
-            end,
-            timeout_ms = 5000,
-          })
-        end,
-      })
+      -- Register ktlint sources (once)
+      local null_ls_ok, null_ls = pcall(require, "null-ls")
+      if null_ls_ok and not vim.g._kotlin_null_ls_registered then
+        vim.g._kotlin_null_ls_registered = true
+        null_ls.register(null_ls.builtins.formatting.ktlint)
+        null_ls.register(null_ls.builtins.diagnostics.ktlint)
+      end
     end,
   },
 }

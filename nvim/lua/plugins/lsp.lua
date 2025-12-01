@@ -62,13 +62,14 @@ return {
     opts_extend = { "sources.default" }
   },
 
-  -- Formatting and linting
+  -- Formatting and linting (base setup only, language-specific sources registered via autocmd)
   {
     "nvimtools/none-ls.nvim",
-    cond = not vim.g.vscode,
+    lazy = false,
     dependencies = { "nvim-lua/plenary.nvim" },
     config = function()
       local null_ls = require("null-ls")
+
       null_ls.setup({
         sources = {
           null_ls.builtins.formatting.stylua,
@@ -92,13 +93,6 @@ return {
             condition = function(utils)
               return utils.root_has_file("go.mod") and utils.has_file(".golangci.yml")
             end,
-          }),
-          -- Kotlin ktlint
-          null_ls.builtins.formatting.ktlint.with({
-            filetypes = { "kotlin" },
-          }),
-          null_ls.builtins.diagnostics.ktlint.with({
-            filetypes = { "kotlin" },
           }),
         },
       })
