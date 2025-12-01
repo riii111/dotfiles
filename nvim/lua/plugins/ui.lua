@@ -485,7 +485,40 @@ return {
 	{
 		"OXY2DEV/markview.nvim",
 		event = { "BufReadPre *.md", "BufNewFile *.md" },
-		config = true,
+		config = function()
+			local ok, markview = pcall(require, "markview")
+			if not ok then
+				return
+			end
+
+			markview.setup({
+				preview = {
+					debounce = 60,
+				},
+			})
+
+			-- lightweight refresh after edits (debounced)
+			local timer
+			vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
+				pattern = "*.md",
+				callback = function()
+					if timer then
+						timer:stop()
+						timer:close()
+					end
+					timer = vim.loop.new_timer()
+					timer:start(120, 0, function()
+						pcall(vim.cmd, "silent! Markview render")
+						if timer then
+							timer:close()
+							timer = nil
+						end
+					end)
+				end,
+			})
+
+			vim.keymap.set("n", "<leader>mr", "<cmd>Markview render<cr>", { desc = "Markview refresh" })
+		end,
 		opts = {},
 	},
 
