@@ -23,3 +23,24 @@ vim.api.nvim_create_autocmd({ "BufLeave", "FocusLost", "InsertEnter", "CmdlineEn
     end
   end,
 })
+
+-- KotlinCompileDaemon has 2-hour idle timeout (not configurable: KT-50510)
+-- Kill daemons on exit to prevent memory bloat from zombie processes
+local daemon_cleanup = vim.api.nvim_create_augroup("daemon_cleanup", { clear = true })
+vim.api.nvim_create_autocmd("VimLeavePre", {
+  group = daemon_cleanup,
+  callback = function()
+    local had_kotlin = false
+    for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+      if vim.bo[buf].filetype == "kotlin" then
+        had_kotlin = true
+        break
+      end
+    end
+
+    if had_kotlin then
+      vim.fn.jobstart({ "pkill", "-f", "KotlinCompileDaemon" }, { detach = true })
+      vim.fn.jobstart({ "pkill", "-f", "GradleDaemon" }, { detach = true })
+    end
+  end,
+})
