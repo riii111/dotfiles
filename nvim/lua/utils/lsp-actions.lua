@@ -115,8 +115,11 @@ function M.language_specific_code_action()
   end
 
   if valid_actions and #valid_actions > 0 then
-    -- Always show menu, never auto-apply
-    vim.lsp.buf.code_action()
+    if #valid_actions == 1 and filetype ~= "python" then
+      vim.lsp.buf.code_action({ apply = true })
+    else
+      vim.lsp.buf.code_action()
+    end
   else
     if filetype == "rust" then
       M.rust_quick_actions()
