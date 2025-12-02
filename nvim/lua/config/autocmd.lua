@@ -24,6 +24,39 @@ vim.api.nvim_create_autocmd({ "BufLeave", "FocusLost", "InsertEnter", "CmdlineEn
   end,
 })
 
+-- Diagnostic display configuration (applied after all plugins load)
+local diagnostic_group = vim.api.nvim_create_augroup("diagnostic_config", { clear = true })
+vim.api.nvim_create_autocmd("VimEnter", {
+  group = diagnostic_group,
+  callback = function()
+    vim.diagnostic.config({
+      virtual_text = {
+        format = function(diagnostic)
+          local source = diagnostic.source or "unknown"
+          local message = diagnostic.message
+          if #message > 60 then
+            message = message:sub(1, 57) .. "..."
+          end
+          return string.format("[%s] %s", source, message)
+        end,
+      },
+      float = {
+        source = true,
+        border = "rounded",
+        format = function(diagnostic)
+          local source = diagnostic.source or "unknown"
+          local code = diagnostic.code and string.format(" (%s)", diagnostic.code) or ""
+          return string.format("[%s]%s %s", source, code, diagnostic.message)
+        end,
+      },
+      signs = true,
+      underline = true,
+      update_in_insert = false,
+      severity_sort = true,
+    })
+  end,
+})
+
 -- KotlinCompileDaemon has 2-hour idle timeout (not configurable: KT-50510)
 -- Kill daemons on exit to prevent memory bloat from zombie processes
 local daemon_cleanup = vim.api.nvim_create_augroup("daemon_cleanup", { clear = true })
