@@ -11,14 +11,6 @@ return {
     config = function()
       vim.env.GOROOT = vim.env.GOROOT or vim.fn.system("go env GOROOT"):gsub("\n", "")
       vim.env.GOPATH = vim.env.GOPATH or vim.fn.system("go env GOPATH"):gsub("\n", "")
-
-      vim.diagnostic.config({
-        virtual_text = true,
-        signs = true,
-        underline = true,
-        update_in_insert = false,
-        severity_sort = true,
-      })
     end,
   },
 
