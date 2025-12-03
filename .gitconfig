@@ -57,7 +57,7 @@
 # ==========================================
 [alias]
 	# fzf staging (like GitHub Desktop - multi-select with Tab, confirm with Enter)
-	stf = "!git status -s -uall | fzf -m --marker '✔ ' --color 'marker:green:bold' --bind 'ctrl-a:select-all,ctrl-d:deselect-all' --preview 'file=$(echo {} | sed \"s/^...//\" | sed \"s/.* -> //\"); diff=$(git diff HEAD --color=always -- \"$file\" 2>/dev/null); if [ -n \"$diff\" ]; then echo \"$diff\" | delta; else diff=$(git diff --cached --color=always -- \"$file\" 2>/dev/null); if [ -n \"$diff\" ]; then echo \"$diff\" | delta; else bat --color=always \"$file\" 2>/dev/null; fi; fi' | sed 's/^...//' | sed 's/.* -> //' | xargs -I {} git add '{}'"
+	stf = "!git status -s -uall | fzf -m --marker '✔ ' --color 'marker:green:bold' --bind 'ctrl-a:select-all,ctrl-d:deselect-all' --preview 'file=$(echo {} | sed \"s/^...//\" | sed \"s/.* -> //\"); diff=$(git diff HEAD --color=always -- \"$file\" 2>/dev/null); if [ -n \"$diff\" ]; then echo \"$diff\" | delta --no-gitconfig --line-numbers --syntax-theme=Nord; else diff=$(git diff --cached --color=always -- \"$file\" 2>/dev/null); if [ -n \"$diff\" ]; then echo \"$diff\" | delta --no-gitconfig --line-numbers --syntax-theme=Nord; else bat --color=always \"$file\" 2>/dev/null; fi; fi' | sed 's/^...//' | sed 's/.* -> //' | xargs -I {} git add '{}'"
 
 	# Switch branch with fzf
 	swf = "!branch=$(git branch --all | grep -v '^\\*' | grep -v 'HEAD ->' | sed 's|^[[:space:]]*||' | sed 's|remotes/origin/||' | sort -u | fzf --preview 'git log --oneline --color=always {}') && [ -n \"$branch\" ] && git switch \"$branch\""
