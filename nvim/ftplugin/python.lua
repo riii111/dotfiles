@@ -1,5 +1,5 @@
 vim.api.nvim_create_autocmd("BufWritePre", {
-  pattern = "*.py",
+  buffer = 0,
   callback = function()
     vim.lsp.buf.format({
       filter = function(client)
