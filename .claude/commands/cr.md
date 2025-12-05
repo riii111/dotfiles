@@ -35,6 +35,10 @@ cr --prompt-only [-t <TYPE>] [--base <BRANCH>]
 
 Use `timeout: 180000` as CodeRabbit may take 1-2 minutes to complete.
 
+## Output Interpretation
+
+- If the output shows `Review completed ✔` with no other feedback, it means **no issues were found**. This is a successful review with zero suggestions.
+
 ## Usage Examples
 
 - `/cr` - Reviews uncommitted changes (default)
