@@ -28,14 +28,12 @@ Parse the provided arguments `$ARGUMENTS`:
 
 ## Execution
 
-**IMPORTANT: You MUST run this command as a background task using `run_in_background: true`**
-
-Execute the CodeRabbit CLI command:
+Execute the CodeRabbit CLI command with a longer timeout (3 minutes):
 ```bash
 cr --prompt-only [-t <TYPE>] [--base <BRANCH>]
 ```
 
-After starting the background task, monitor it with `BashOutput` and report the results when complete.
+Use `timeout: 180000` as CodeRabbit may take 1-2 minutes to complete.
 
 ## Usage Examples
 
