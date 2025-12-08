@@ -107,7 +107,13 @@ local function setup_keymaps()
       -- Buffer operations
       ["<D-M-Right>"] = { ":bnext<CR>", desc = "Next buffer" },
       ["<D-M-Left>"] = { ":bprevious<CR>", desc = "Previous buffer" },
-      ["<Leader>t"] = { ":enew<CR>", desc = "New buffer" },
+      ["<Leader>n"] = {
+        function()
+          vim.cmd("enew")
+          vim.bo.filetype = "markdown"
+        end,
+        desc = "New markdown note"
+      },
       ["<Leader>w"] = { ":bdelete<CR>", desc = "Close buffer" },
 
       -- Markdown preview
@@ -256,7 +262,6 @@ return {
       wk.add({
         { "<leader>e", group = "+oil file explorer" },
         { "<leader>E", group = "+oil file explorer" },
-        { "<leader>t", group = "+tabs/terminal" },
         { "<leader>w", group = "+window/buffer" },
         { "<leader>r", group = "+replace" },
         { "<leader>R", group = "+replace global" },
