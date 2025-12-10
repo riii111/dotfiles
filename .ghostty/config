@@ -29,7 +29,7 @@ keybind = super+alt+up=unbind
 keybind = super+alt+j=unbind
 keybind = super+alt+k=unbind
 # Disable EOF signal (prevents accidental termination of ClaudeCode)
-keybind = ctrl+d=ignore
+keybind = ctrl+d=unbind
 
 # for tmux
 term = xterm-ghostty
