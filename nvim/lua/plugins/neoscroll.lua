@@ -31,5 +31,26 @@ return {
     for key, func in pairs(keymap) do
       vim.keymap.set(modes, key, func, { silent = true })
     end
+
+    local function move_and_center(cmd)
+      return function()
+        local ok, _ = pcall(vim.cmd, "normal! " .. cmd)
+        if ok then
+          neoscroll.zz({ half_win_duration = duration })
+        end
+      end
+    end
+
+    local search_mappings = {
+      ["n"] = move_and_center("n"),
+      ["N"] = move_and_center("N"),
+      ["*"] = move_and_center("*"),
+      ["#"] = move_and_center("#"),
+      ["%"] = move_and_center("%"),
+    }
+
+    for key, func in pairs(search_mappings) do
+      vim.keymap.set("n", key, func, { silent = true })
+    end
   end,
 }
