@@ -1,0 +1,36 @@
+theme = duckbones
+
+#font-family = UDEV Gothic
+font-family = DroidSansM Nerd Font Mono
+font-size = 14
+
+window-padding-x = 20
+window-padding-y = 5
+window-padding-balance = true
+window-theme = ghostty
+background-opacity = 0.85
+background-blur-radius = 20
+macos-titlebar-style = transparent
+macos-icon = holographic
+
+window-theme = dark
+
+# Global hotkeys
+keybind = "global:ctrl+cmd+g=toggle_quick_terminal"
+
+# for nvim / for Claude Code CLI
+keybind = super+right=unbind
+keybind = super+down=unbind
+keybind = super+alt+right=unbind
+keybind = super+alt+left=unbind
+keybind = super+shift+v=unbind
+keybind = super+alt+down=unbind
+keybind = super+alt+up=unbind
+keybind = super+alt+j=unbind
+keybind = super+alt+k=unbind
+# Disable EOF signal (prevents accidental termination of ClaudeCode)
+keybind = ctrl+d=ignore
+
+# for tmux
+term = xterm-ghostty
+keybind = shift+enter=text:\n
