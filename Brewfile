@@ -22,6 +22,7 @@ brew "golangci-lint"
 brew "httpd"
 brew "jq"
 brew "k6"
+brew "lazygit"
 brew "libpq", link: true
 brew "libslirp"
 brew "llvm"
