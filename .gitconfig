@@ -75,23 +75,26 @@
 	pushf = push --force-with-lease
 
 	# History fzf - GitHub Desktop History tab like experience
-	# - Shows "X commits ahead of origin" in header
+	# - ⬆ mark for unpushed commits
 	# - Preview shows changed files + diff
 	# - Enter to view full diff in less
 	hf = "!f() { \
-		git log --oneline --color=always \
-			--format='%C(auto)%h %C(blue)%ar %C(reset)%s %C(dim)- %an%C(reset)%C(auto)%d' \
+		unpushed=$(git log --format='%h' @{u}..HEAD 2>/dev/null); \
+		git log --color=always \
+			--format='%h %C(blue)%ar%C(reset) %s %C(dim)- %an%C(reset)%C(auto)%d' \
 			$(git rev-parse --abbrev-ref HEAD) \
+		| while IFS= read -r line; do \
+			short_hash=$(echo \"$line\" | rg -o '^[a-f0-9]+'); \
+			if echo \"$unpushed\" | rg -qF \"$short_hash\"; then \
+				printf '⬆ %s\\n' \"$line\"; \
+			else \
+				printf '  %s\\n' \"$line\"; \
+			fi; \
+		done \
 		| fzf --ansi --no-sort --reverse \
 			--header=\"$(git log --oneline @{u}..HEAD 2>/dev/null | wc -l | tr -d ' ') commits ahead of origin\" \
-			--preview 'git show --stat --color=always {1} && echo && git show {1} --color=always | delta --no-gitconfig --line-numbers --syntax-theme=Nord' \
+			--preview 'hash=$(echo {} | rg -o \"[a-f0-9]{7,}\" | head -1); git show --stat --color=always $hash && echo && git show $hash --color=always | delta --no-gitconfig --line-numbers --syntax-theme=Nord' \
 			--preview-window=right:60% \
-			--bind 'enter:execute(git show {1} --color=always | delta --no-gitconfig --line-numbers --syntax-theme=Nord | less -R)'; \
+			--bind 'enter:execute(hash=$(echo {} | rg -o \"[a-f0-9]{7,}\" | head -1); git show $hash --color=always | delta --no-gitconfig --line-numbers --syntax-theme=Nord | less -R)'; \
 	}; f"
-
-	# Unpushed commits (quick view)
-	unpushed = log @{u}..HEAD --oneline
-
-	# Show changed files in a commit
-	files = show --stat --format=''
 
