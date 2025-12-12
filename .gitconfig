@@ -74,3 +74,24 @@
 	# Safe force push (use instead of --force)
 	pushf = push --force-with-lease
 
+	# History fzf - GitHub Desktop History tab like experience
+	# - Shows "X commits ahead of origin" in header
+	# - Preview shows changed files + diff
+	# - Enter to view full diff in less
+	hf = "!f() { \
+		git log --oneline --color=always \
+			--format='%C(auto)%h %C(blue)%ar %C(reset)%s %C(dim)- %an%C(reset)%C(auto)%d' \
+			$(git rev-parse --abbrev-ref HEAD) \
+		| fzf --ansi --no-sort --reverse \
+			--header=\"$(git log --oneline @{u}..HEAD 2>/dev/null | wc -l | tr -d ' ') commits ahead of origin\" \
+			--preview 'git show --stat --color=always {1} && echo && git show {1} --color=always | delta --no-gitconfig --line-numbers --syntax-theme=Nord' \
+			--preview-window=right:60% \
+			--bind 'enter:execute(git show {1} --color=always | delta --no-gitconfig --line-numbers --syntax-theme=Nord | less -R)'; \
+	}; f"
+
+	# Unpushed commits (quick view)
+	unpushed = log @{u}..HEAD --oneline
+
+	# Show changed files in a commit
+	files = show --stat --format=''
+
