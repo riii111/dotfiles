@@ -1,0 +1,29 @@
+git:
+  pagers:
+    - colorArg: always
+      pager: delta --paging=never --side-by-side --line-numbers --syntax-theme=Nord --width=variable --navigate
+gui:
+  # Nord Theme
+  theme:
+    activeBorderColor:
+      - "#88C0D0"
+      - bold
+    inactiveBorderColor:
+      - "#4C566A"
+    searchingActiveBorderColor:
+      - "#EBCB8B"
+      - bold
+    optionsTextColor:
+      - "#D8DEE9"
+    selectedLineBgColor:
+      - "#3B4252"
+    inactiveViewSelectedLineBgColor:
+      - bold
+    cherryPickedCommitFgColor:
+      - "#B48EAD"
+    cherryPickedCommitBgColor:
+      - "#3B4252"
+    unstagedChangesColor:
+      - "#BF616A"
+    defaultFgColor:
+      - "#ECEFF4"
