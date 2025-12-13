@@ -20,7 +20,8 @@
 	navigate = true
 	side-by-side = true
 	line-numbers = true
-	syntax-theme = Nord
+	# Disable syntax highlighting to prevent color rendering issues in lazygit/tcell
+	syntax-theme = none
 	plus-style = syntax "#2a3a2a"
 	minus-style = syntax "#3a2a2a"
 
@@ -39,7 +40,9 @@
 # ==========================================
 [diff]
 	algorithm = histogram
-	colorMoved = default
+	# Disable colorMoved to prevent color conflicts with delta in lazygit/terminal
+	# (colorMoved colors override delta's plus-style/minus-style settings)
+	colorMoved = no
 
 [fetch]
 	writeCommitGraph = true

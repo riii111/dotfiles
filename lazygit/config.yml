@@ -1,8 +1,8 @@
 git:
   pagers:
     # | key to toggle between side-by-side and unified view
-    - pager: delta --no-gitconfig --paging=never --side-by-side --line-numbers --syntax-theme=Nord
-    - pager: delta --no-gitconfig --paging=never --line-numbers --syntax-theme=Nord
+    - pager: delta --no-gitconfig --paging=never --side-by-side --line-numbers --syntax-theme=none
+    - pager: delta --no-gitconfig --paging=never --line-numbers --syntax-theme=none
 gui:
   # Nord Theme
   theme:
