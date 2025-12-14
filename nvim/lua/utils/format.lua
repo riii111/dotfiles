@@ -29,6 +29,7 @@ function M.format(bufnr, opts)
   local save = opts.save ~= false
 
   bufnr = bufnr or vim.api.nvim_get_current_buf()
+  if not vim.api.nvim_buf_is_valid(bufnr) then return end
 
   -- Skip if triggered by auto-save
   if vim.b[bufnr].skip_next_format then
@@ -47,10 +48,12 @@ function M.format(bufnr, opts)
   local changedtick = vim.b[bufnr].changedtick
 
   vim.b[bufnr].async_format_running = true
+  vim.b[bufnr].format_request_id = (vim.b[bufnr].format_request_id or 0) + 1
+  local request_id = vim.b[bufnr].format_request_id
 
   -- Timeout fallback (10s)
   vim.defer_fn(function()
-    if vim.api.nvim_buf_is_valid(bufnr) and vim.b[bufnr].async_format_running then
+    if vim.api.nvim_buf_is_valid(bufnr) and vim.b[bufnr].format_request_id == request_id then
       vim.b[bufnr].async_format_running = false
     end
   end, 10000)
@@ -68,6 +71,7 @@ function M.format(bufnr, opts)
   client.request("textDocument/formatting", params, function(err, result)
     vim.schedule(function()
       if not vim.api.nvim_buf_is_valid(bufnr) then return end
+      if vim.b[bufnr].format_request_id ~= request_id then return end
       vim.b[bufnr].async_format_running = false
       if err or not result then return end
       if vim.b[bufnr].changedtick ~= changedtick then return end
