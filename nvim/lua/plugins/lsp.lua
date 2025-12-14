@@ -125,6 +125,7 @@ return {
     cond = not vim.g.vscode,
     config = function()
       require("symbol-usage").setup({
+        symbol_request_pos = 'start',
         kinds = {
           vim.lsp.protocol.SymbolKind.Function,
           vim.lsp.protocol.SymbolKind.Method,
