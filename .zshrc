@@ -1,8 +1,16 @@
 # ==========================================
+# XDG Base Directory
+# ==========================================
+export XDG_CONFIG_HOME="$HOME/.config"
+export XDG_DATA_HOME="$HOME/.local/share"
+export XDG_CACHE_HOME="$HOME/.cache"
+export XDG_STATE_HOME="$HOME/.local/state"
+
+# ==========================================
 # Zsh Startup Caching Mechanism
 # ==========================================
 # Cache slow initialization commands to improve startup speed
-ZSHRC_CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/zsh"
+ZSHRC_CACHE_DIR="$XDG_CACHE_HOME/zsh"
 ZSHRC_CACHE_FILE="$ZSHRC_CACHE_DIR/init-cache.zsh"
 ZSHRC_SOURCE="$HOME/.zshrc"
 
@@ -65,12 +73,6 @@ export GIT_EDITOR=nvim
 export VISUAL=nvim
 export MANPAGER='nvim +Man!'
 
-# XDG Base Directory
-export XDG_CONFIG_HOME="$HOME/.config"
-export XDG_DATA_HOME="$HOME/.local/share"
-export XDG_CACHE_HOME="$HOME/.cache"
-export XDG_STATE_HOME="$HOME/.local/state"
-
 # ==========================================
 # PATH Configuration
 # ==========================================
@@ -86,12 +88,6 @@ export PATH="$HOME/.cargo/bin:$PATH"
 
 # golang
 export GOTOOLCHAIN=auto
-
-# ==========================================
-# Completion
-# ==========================================
-fpath+=~/.zfunc
-autoload -Uz compinit && compinit -C  # -C: 補完の再計算を抑え、起動を速くする
 
 # ==========================================
 # Git hooks
@@ -122,6 +118,22 @@ function rust-test-all() {
 # Interactive Shell Only
 # ==========================================
 [[ -o interactive ]] || return
+
+# ==========================================
+# Completion
+# ==========================================
+# Homebrew の補完を有効化
+if command -v brew >/dev/null 2>&1; then
+  FPATH="$(brew --prefix)/share/zsh/site-functions:$FPATH"
+fi
+fpath+=~/.zfunc
+autoload -Uz compinit && compinit  # 現状はキャッシュ効果薄め。補完定義が増えたら-Cを検討
+
+# 補完の表示設定
+zstyle ':completion:*' menu select                    # メニュー選択を有効化
+zstyle ':completion:*' verbose yes                    # 詳細表示
+zstyle ':completion:*:descriptions' format '%F{yellow}%d%f'  # 説明を黄色で表示
+zstyle ':completion:*' matcher-list 'm:{[:lower:][:upper:]}={[:upper:][:lower:]}'  # 大文字小文字を無視
 
 # zsh-autosuggestions
 [[ -f /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh ]] && \
@@ -187,6 +199,7 @@ export FZF_DEFAULT_OPTS="
 "
 export FZF_DEFAULT_COMMAND='fd --type f --hidden --follow --exclude .git'
 export FZF_ALT_C_OPTS="--preview 'eza --tree --level=2 --icons --color=always {}'"
+export FZF_CTRL_R_OPTS="--preview 'echo {}' --preview-window=down:3:wrap"
 
 # fzf keybindings: Ctrl-R (history), Ctrl-O (cd)
 [[ -f /opt/homebrew/opt/fzf/shell/key-bindings.zsh ]] && \
