@@ -84,19 +84,6 @@ return {
       null_ls.register(terraform_fmt)
       null_ls.register(tflint_diagnostics)
 
-      -- Auto format on save
-      vim.api.nvim_create_autocmd("BufWritePre", {
-        pattern = { "*.tf", "*.hcl", "*.tfvars" },
-        callback = function()
-          vim.lsp.buf.format({
-            filter = function(client)
-              return client.name == "null-ls" or client.name == "terraform_ls"
-            end,
-            timeout_ms = 5000,
-          })
-        end,
-      })
-
       -- Keymaps: integrate lsp-actions for Terraform
       local lsp_actions = require("utils.lsp-actions")
 
