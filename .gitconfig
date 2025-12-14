@@ -101,3 +101,8 @@
 			--bind 'enter:execute(hash=$(echo {} | rg -o \"[a-f0-9]{7,}\" | head -1); git show $hash --color=always | delta --no-gitconfig --line-numbers --syntax-theme=Nord | less -R)'; \
 	}; f"
 
+# ==========================================
+# ghq Settings
+# ==========================================
+[ghq]
+	root = ~/ghq
