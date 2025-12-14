@@ -41,7 +41,7 @@ function M.async_format(bufnr)
       -- Skip if buffer changed during format
       if not vim.api.nvim_buf_is_valid(bufnr) or vim.b[bufnr].changedtick ~= changedtick then return end
 
-      vim.lsp.util.apply_text_edits(result, bufnr, client.offset_encoding)
+      vim.lsp.util.apply_text_edits(result, bufnr, client.offset_encoding or "utf-16")
       if vim.bo[bufnr].modified then
         vim.api.nvim_buf_call(bufnr, function() vim.cmd("silent! update") end)
       end
