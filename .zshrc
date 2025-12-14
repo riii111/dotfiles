@@ -38,9 +38,21 @@ fi
 source "$ZSHRC_CACHE_FILE"
 
 # ==========================================
+# Shell Options
+# ==========================================
+setopt IGNORE_EOF           # Ctrl+D でシェルを終了しない
+
+# コマンド履歴
+HISTSIZE=10000
+SAVEHIST=10000
+setopt HIST_IGNORE_SPACE    # スペース始まりは履歴に残さない
+setopt HIST_IGNORE_ALL_DUPS # 重複は最新のみ残す
+setopt HIST_REDUCE_BLANKS   # 余分な空白を削除
+
+# ==========================================
 # Prompt
 # ==========================================
-PS1="%1~ %# "
+export PS1="%1~ %# "
 
 # ==========================================
 # Environment Variables
@@ -56,6 +68,36 @@ export XDG_CONFIG_HOME="$HOME/.config"
 export XDG_DATA_HOME="$HOME/.local/share"
 export XDG_CACHE_HOME="$HOME/.cache"
 export XDG_STATE_HOME="$HOME/.local/state"
+
+# ==========================================
+# Repositories
+# ==========================================
+export GHQ_ROOT="$HOME/ghq"
+CDPATH=("$HOME/Github" "$GHQ_ROOT" ${CDPATH[@]})
+
+# ==========================================
+# Named directories
+# ==========================================
+hash_dir() {
+  local name="$1"
+  local path="$2"
+  [[ -n "$name" && -d "$path" ]] || return 0
+  hash -d "$name"="$path"
+}
+
+DOTFILES_DIR="${DOTFILES_DIR:-$HOME/GitHub/0_private/other-repo/dotfiles}"
+hash_dir dotfiles "$DOTFILES_DIR"
+hash_dir nv "$HOME/.config/nvim"
+
+# ghq jump (fzf)
+cghq() {
+  command -v ghq >/dev/null 2>&1 || { echo "ghq not found" >&2; return 1; }
+  command -v fzf >/dev/null 2>&1 || { echo "fzf not found" >&2; return 1; }
+
+  local dir
+  dir="$(ghq list -p | fzf --prompt='ghq> ')" || return 1
+  [[ -n "$dir" ]] && cd "$dir"
+}
 
 # ==========================================
 # Modern CLI Tools Aliases
@@ -83,6 +125,8 @@ alias mkd='mkdir -p'
 
 # Docker aliases
 alias dc='docker compose'
+alias dcb='docker compose build'
+alias dcbn='docker compose build --no-cache'
 alias dcu='docker compose up -d'
 alias dcub='docker compose up --build -d'
 alias dcd='docker compose down -v'
