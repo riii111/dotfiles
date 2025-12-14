@@ -59,22 +59,37 @@ vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter", "CursorHold", "CursorHo
   end,
 })
 
--- Auto-reload and re-lint when files change externally
+-- Notify LSP about buffer content change (used after external file changes)
+local function notify_lsp_buffer_changed(bufnr)
+  bufnr = bufnr or vim.api.nvim_get_current_buf()
+  local uri = vim.uri_from_bufnr(bufnr)
+  local filetype = vim.bo[bufnr].filetype
+
+  for _, client in pairs(vim.lsp.get_clients({ bufnr = bufnr })) do
+    -- Close and reopen to force full content sync
+    client.notify("textDocument/didClose", {
+      textDocument = { uri = uri }
+    })
+
+    local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+    client.notify("textDocument/didOpen", {
+      textDocument = {
+        uri = uri,
+        languageId = filetype,
+        version = (vim.lsp.util.buf_versions[bufnr] or 0) + 1,
+        text = table.concat(lines, "\n")
+      }
+    })
+  end
+end
+
+-- Auto-reload and notify LSP when files change externally
 vim.api.nvim_create_autocmd({ "FileChangedShellPost" }, {
   pattern = "*",
   callback = function()
     vim.notify("File changed on disk. Buffer reloaded!", vim.log.levels.INFO)
-    -- Trigger LSP diagnostics refresh
     vim.schedule(function()
-      -- Request fresh diagnostics from LSP servers
-      for _, client in pairs(vim.lsp.get_clients()) do
-        if client.server_capabilities.documentFormattingProvider then
-          vim.lsp.buf.format({ async = true })
-        end
-      end
-      -- Clear and refresh diagnostics
-      vim.diagnostic.reset()
-      vim.diagnostic.show()
+      notify_lsp_buffer_changed()
     end)
   end,
 })
