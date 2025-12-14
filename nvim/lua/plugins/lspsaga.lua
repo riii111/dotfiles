@@ -111,7 +111,7 @@ return {
           -- Additional LSP keymaps
           vim.keymap.set("n", "<C-k>", vim.lsp.buf.signature_help, vim.tbl_extend("force", opts, { desc = "Signature Help", buffer = true }))
           vim.keymap.set("n", "<space>ca", "<cmd>Lspsaga code_action<CR>", vim.tbl_extend("force", opts, { desc = "Code Action", buffer = true }))
-          vim.keymap.set("n", "<space>f", function() vim.lsp.buf.format { async = true } end, vim.tbl_extend("force", opts, { desc = "Format", buffer = true }))
+          vim.keymap.set("n", "<space>f", function() require("utils.format").format(nil, { save = false }) end, vim.tbl_extend("force", opts, { desc = "Format", buffer = true }))
         end
       end
       
