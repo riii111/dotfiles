@@ -43,12 +43,16 @@ function M.async_format(bufnr)
   local changedtick = vim.b[bufnr].changedtick
 
   vim.b[bufnr].async_format_running = true
-  client.request("textDocument/formatting", vim.lsp.util.make_formatting_params({}), function(err, result)
+  local params = vim.api.nvim_buf_call(bufnr, function()
+    return vim.lsp.util.make_formatting_params({})
+  end)
+
+  client.request("textDocument/formatting", params, function(err, result)
     vim.schedule(function()
+      if not vim.api.nvim_buf_is_valid(bufnr) then return end
       vim.b[bufnr].async_format_running = false
       if err or not result then return end
-      -- Skip if buffer changed during format
-      if not vim.api.nvim_buf_is_valid(bufnr) or vim.b[bufnr].changedtick ~= changedtick then return end
+      if vim.b[bufnr].changedtick ~= changedtick then return end
 
       vim.lsp.util.apply_text_edits(result, bufnr, client.offset_encoding or "utf-16")
       if vim.bo[bufnr].modified then
