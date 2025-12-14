@@ -17,20 +17,29 @@ M.config = {
   jsonc = "null-ls",
   rust = "rust-analyzer",
   go = "gopls",
+  terraform = "null-ls",
+  hcl = "null-ls",
+  ["terraform-vars"] = "null-ls",
 }
+
+local function find_client(bufnr, names)
+  if type(names) == "string" then names = { names } end
+  for _, name in ipairs(names) do
+    local clients = vim.lsp.get_clients({ bufnr = bufnr, name = name })
+    if #clients > 0 then return clients[1] end
+  end
+end
 
 function M.async_format(bufnr)
   bufnr = bufnr or vim.api.nvim_get_current_buf()
-  local formatter_name = M.config[vim.bo[bufnr].filetype]
-  if not formatter_name then return end
+  local formatter_names = M.config[vim.bo[bufnr].filetype]
+  if not formatter_names then return end
 
   -- Prevent re-entry loop
   if vim.b[bufnr].async_format_running then return end
 
-  local clients = vim.lsp.get_clients({ bufnr = bufnr, name = formatter_name })
-  if #clients == 0 then return end
-
-  local client = clients[1]
+  local client = find_client(bufnr, formatter_names)
+  if not client then return end
   local changedtick = vim.b[bufnr].changedtick
 
   vim.b[bufnr].async_format_running = true
