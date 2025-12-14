@@ -111,7 +111,7 @@ return {
           -- Additional LSP keymaps
           vim.keymap.set("n", "<C-k>", vim.lsp.buf.signature_help, vim.tbl_extend("force", opts, { desc = "Signature Help", buffer = true }))
           vim.keymap.set("n", "<space>ca", "<cmd>Lspsaga code_action<CR>", vim.tbl_extend("force", opts, { desc = "Code Action", buffer = true }))
-          vim.keymap.set("n", "<space>f", function() vim.lsp.buf.format { async = true } end, vim.tbl_extend("force", opts, { desc = "Format", buffer = true }))
+          vim.keymap.set("n", "<space>f", function() require("utils.format").format(nil, { save = false }) end, vim.tbl_extend("force", opts, { desc = "Format", buffer = true }))
         end
       end
       
@@ -135,9 +135,30 @@ return {
       vim.keymap.set("n", "<leader>ci", "<cmd>Lspsaga incoming_calls<CR>", vim.tbl_extend("force", opts, { desc = "Incoming Calls" }))
       vim.keymap.set("n", "<leader>co", "<cmd>Lspsaga outgoing_calls<CR>", vim.tbl_extend("force", opts, { desc = "Outgoing Calls" }))
       
-      -- Enhanced Rename 
+      -- Enhanced Rename
       vim.keymap.set("n", "<leader>rn", "<cmd>Lspsaga rename<CR>", vim.tbl_extend("force", opts, { desc = "LSP Saga Rename" }))
-      
+
+      -- LSP Restart (full restart of all clients attached to current buffer)
+      vim.keymap.set("n", "<leader>lr", function()
+        local bufnr = vim.api.nvim_get_current_buf()
+        local clients = vim.lsp.get_clients({ bufnr = bufnr })
+        if #clients == 0 then
+          vim.notify("No LSP clients attached", vim.log.levels.WARN)
+          return
+        end
+
+        local client_names = {}
+        for _, client in ipairs(clients) do
+          table.insert(client_names, client.name)
+          client.stop()
+        end
+
+        vim.defer_fn(function()
+          vim.cmd("edit")
+          vim.notify("LSP restarted: " .. table.concat(client_names, ", "), vim.log.levels.INFO)
+        end, 500)
+      end, vim.tbl_extend("force", opts, { desc = "LSP Restart" }))
+
     end,
     event = { "BufReadPre", "BufNewFile" },  -- LSP より前に必ずロード
   },

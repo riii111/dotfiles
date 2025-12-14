@@ -57,6 +57,18 @@ vim.api.nvim_create_autocmd("VimEnter", {
   end,
 })
 
+-- Async format on save (non-blocking)
+local format_ok, format = pcall(require, "utils.format")
+if format_ok then
+  local format_group = vim.api.nvim_create_augroup("async_format_on_save", { clear = true })
+  vim.api.nvim_create_autocmd("BufWritePost", {
+    group = format_group,
+    callback = function(args)
+      format.async_format(args.buf)
+    end,
+  })
+end
+
 -- KotlinCompileDaemon has 2-hour idle timeout (not configurable: KT-50510)
 -- Kill daemons on exit to prevent memory bloat from zombie processes
 local daemon_cleanup = vim.api.nvim_create_augroup("daemon_cleanup", { clear = true })
