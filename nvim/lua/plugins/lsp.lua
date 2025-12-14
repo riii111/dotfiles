@@ -135,17 +135,16 @@ return {
           vim.lsp.protocol.SymbolKind.Constructor,
           vim.lsp.protocol.SymbolKind.Enum,
         },
+        references = {
+          include_declaration = false,
+        },
         text_format = function(symbol)
           local res = {}
-          local round_start = {"", ""}
-          local round_end = {"", ""}
-
           if symbol.references then
             local usage = symbol.references <= 1 and "usage" or "usages"
             local num = symbol.references == 0 and "no" or symbol.references
-            table.insert(res, round_start[1] .. num .. " " .. usage .. round_end[1])
+            table.insert(res, num .. " " .. usage)
           end
-
           return table.concat(res, " ")
         end,
         vt_position = "end_of_line",
