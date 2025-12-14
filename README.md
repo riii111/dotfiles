@@ -34,14 +34,10 @@ This Neovim setup aims to feel “IDE-like” while keeping the editor fast and 
 - Custom look & feel: a highlight-based theme (not just a stock colorscheme) is applied consistently and re-applied on colorscheme changes.
 - UI polish: language-colored buffer grouping, fuzzy finder UX, inline file context, git UI, and terminal integrations are tuned as a cohesive set rather than piecemeal defaults.
 
-See: `nvim/lua/utils/lsp-actions.lua`, `nvim/lua/plugins/languages/`, `nvim/lua/plugins/neoscroll.lua`, `nvim/lua/config/theme.lua`, `nvim/lua/plugins/ui.lua`
-
 ### Kotlin: tuned for generated code navigation
 
 Kotlin is set up with a forked `kotlin-language-server` workflow to improve definition jumps in generated code bases.
 This is a deliberate trade-off for Kotlin-heavy projects.
-
-See: `nvim/lua/plugins/languages/kotlin.lua`
 
 ### DB tools: `dbx` and `dbn`
 
@@ -52,14 +48,10 @@ Two small scripts optimize day-to-day DB work:
 
 They support Postgres and MySQL/MariaDB.
 
-See: `bin/dbx`, `bin/dbn`
-
 ### One-command dev environment
 
 - `ghodev`: starts Ghostty, splits panes, and launches “editor + AI CLI” automatically
 - `tmux-dev`: creates (or attaches to) a project-scoped tmux session with an editor and AI CLI pane
-
-See: `bin/ghodev`, `bin/tmux-dev`
 
 ### Zsh: fast startup
 
@@ -71,26 +63,18 @@ Zsh is configured as a small “dev UX layer”:
 - Interactive UX: tuned `fd`/`fzf` navigation with previews, plus completions and autosuggestions
 - Dev helpers: shortcuts for common workflows (Rust tests, Docker, Git hooks)
 
-See: `.zshrc`
-
 ### Git UX: readable diffs and interactive helpers
 
 - `delta` is used for clean, readable diffs (also tuned to work well with lazygit/tcell rendering)
 - fzf-powered aliases provide a GUI-like staging and history browsing flow
 
-See: `.gitconfig`, `lazygit/config.yml`
-
 ### Git hook templates
 
 There is a helper to install per-repo pre-commit hooks from templates (language-specific formatting/linting, with macOS notifications).
 
-See: `.git-hooks.zsh`, `.git_hook_templates/`
-
 ### Search tuned for AI tools
 
 Ripgrep defaults are tuned for AI-assisted code browsing (JSON output, size limits, ignore defaults).
-
-See: `.ripgreprc`, `.rgignore`
 
 ### AI tooling (Claude Code / Codex CLI)
 
@@ -104,15 +88,11 @@ This repo also includes configuration for AI coding tools, with an emphasis on r
 - Uses an explicit allow/deny permission policy with “ask” gates for destructive operations.
 - Custom status line integrates CLI usage telemetry (via `ccusage`) for day-to-day runs.
 
-See: `.claude/settings.json`, `.claude/commands/`
-
 #### Codex CLI
 
 - Enables higher-reasoning mode and streamable shell UX.
 - Prewires MCP servers for code navigation and documentation lookup (e.g. Context7, and AWS documentation tooling).
 - Web-search request is enabled to support “latest” lookups when needed.
-
-See: `.codex/config.toml`, `.codex/AGENTS.md`
 
 ## Setup (minimal)
 
