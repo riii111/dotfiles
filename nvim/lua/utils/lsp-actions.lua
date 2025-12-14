@@ -265,7 +265,7 @@ function M.python_quick_actions()
         })
       end},
       {"^Black Format", function()
-        vim.lsp.buf.format({ name = "null-ls" })
+        require("utils.format").format(nil, { save = false })
       end}
     })
   end)
@@ -479,12 +479,7 @@ function M.terraform_quick_actions()
         end
       end},
       {"^Format Document", function()
-        vim.lsp.buf.format({
-          filter = function(client)
-            return client.name == "null-ls" or client.name == "terraform_ls"
-          end,
-          timeout_ms = 5000,
-        })
+        require("utils.format").format(nil, { save = false })
       end},
       {"^Validate", function()
         vim.cmd("split | terminal terraform validate")
@@ -509,12 +504,7 @@ function M.terraform_refactor_menu()
     execute_menu_choice(choice, {
       {"^Rename", function() vim.lsp.buf.rename() end},
       {"^Format Document", function()
-        vim.lsp.buf.format({
-          filter = function(client)
-            return client.name == "null-ls" or client.name == "terraform_ls"
-          end,
-          timeout_ms = 5000,
-        })
+        require("utils.format").format(nil, { save = false })
       end},
       {"^Code Action", function()
         vim.lsp.buf.code_action({
@@ -553,12 +543,7 @@ function M.kotlin_quick_actions()
         })
       end},
       {"^Format with ktlint", function()
-        vim.lsp.buf.format({
-          filter = function(client)
-            return client.name == "null-ls"
-          end,
-          timeout_ms = 5000,
-        })
+        require("utils.format").format(nil, { save = false })
       end},
       {"^Rename", function()
         vim.lsp.buf.rename()
@@ -600,12 +585,7 @@ function M.kotlin_refactor_menu()
         })
       end},
       {"^Format Document", function()
-        vim.lsp.buf.format({
-          filter = function(client)
-            return client.name == "null-ls"
-          end,
-          timeout_ms = 5000,
-        })
+        require("utils.format").format(nil, { save = false })
       end}
     })
   end)

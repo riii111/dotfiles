@@ -62,19 +62,6 @@ return {
         })
       end
 
-      -- Format on save with null-ls
-      vim.api.nvim_create_autocmd("BufWritePre", {
-        pattern = { "*.js", "*.jsx", "*.ts", "*.tsx", "*.json", "*.jsonc" },
-        callback = function()
-          vim.lsp.buf.format({
-            filter = function(client)
-              return client.name == "null-ls"
-            end,
-            timeout_ms = 5000,
-          })
-        end,
-      })
-
       -- Register biome sources (once, if project uses biome)
       local null_ls_ok, null_ls = pcall(require, "null-ls")
       if null_ls_ok and not vim.g._typescript_null_ls_registered then
