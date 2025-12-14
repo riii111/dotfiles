@@ -29,6 +29,13 @@ function M.format(bufnr, opts)
   local save = opts.save ~= false
 
   bufnr = bufnr or vim.api.nvim_get_current_buf()
+
+  -- Skip if triggered by auto-save
+  if vim.b[bufnr].skip_next_format then
+    vim.b[bufnr].skip_next_format = nil
+    return
+  end
+
   local formatter_name = M.config[vim.bo[bufnr].filetype]
   if not formatter_name then return end
 
@@ -40,6 +47,13 @@ function M.format(bufnr, opts)
   local changedtick = vim.b[bufnr].changedtick
 
   vim.b[bufnr].async_format_running = true
+
+  -- Timeout fallback (10s)
+  vim.defer_fn(function()
+    if vim.api.nvim_buf_is_valid(bufnr) and vim.b[bufnr].async_format_running then
+      vim.b[bufnr].async_format_running = false
+    end
+  end, 10000)
 
   local ok, params = pcall(function()
     return vim.api.nvim_buf_call(bufnr, function()
@@ -60,6 +74,7 @@ function M.format(bufnr, opts)
 
       vim.lsp.util.apply_text_edits(result, bufnr, client.offset_encoding or "utf-16")
       if save and vim.bo[bufnr].modified then
+        vim.b[bufnr].skip_next_format = true
         vim.api.nvim_buf_call(bufnr, function() vim.cmd("silent! update") end)
       end
     end)
