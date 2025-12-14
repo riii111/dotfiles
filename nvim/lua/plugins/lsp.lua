@@ -129,17 +129,11 @@ return {
         kinds = {
           vim.lsp.protocol.SymbolKind.Function,
           vim.lsp.protocol.SymbolKind.Method,
-          vim.lsp.protocol.SymbolKind.Variable,
           vim.lsp.protocol.SymbolKind.Class,
           vim.lsp.protocol.SymbolKind.Interface,
-          vim.lsp.protocol.SymbolKind.Module,
-          vim.lsp.protocol.SymbolKind.Property,
           vim.lsp.protocol.SymbolKind.Struct,
-          vim.lsp.protocol.SymbolKind.Constant,
           vim.lsp.protocol.SymbolKind.Constructor,
           vim.lsp.protocol.SymbolKind.Enum,
-          vim.lsp.protocol.SymbolKind.EnumMember,
-          vim.lsp.protocol.SymbolKind.TypeParameter,
         },
         text_format = function(symbol)
           local res = {}
