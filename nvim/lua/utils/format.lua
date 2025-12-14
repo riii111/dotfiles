@@ -22,12 +22,16 @@ M.config = {
   ["terraform-vars"] = "null-ls",
 }
 
-function M.async_format(bufnr)
+-- opts.save: true → auto-save after format (default for on-save)
+--            false → no save (for manual format)
+function M.format(bufnr, opts)
+  opts = opts or {}
+  local save = opts.save ~= false
+
   bufnr = bufnr or vim.api.nvim_get_current_buf()
   local formatter_name = M.config[vim.bo[bufnr].filetype]
   if not formatter_name then return end
 
-  -- Prevent re-entry loop
   if vim.b[bufnr].async_format_running then return end
 
   local clients = vim.lsp.get_clients({ bufnr = bufnr, name = formatter_name })
@@ -36,9 +40,16 @@ function M.async_format(bufnr)
   local changedtick = vim.b[bufnr].changedtick
 
   vim.b[bufnr].async_format_running = true
-  local params = vim.api.nvim_buf_call(bufnr, function()
-    return vim.lsp.util.make_formatting_params({})
+
+  local ok, params = pcall(function()
+    return vim.api.nvim_buf_call(bufnr, function()
+      return vim.lsp.util.make_formatting_params({})
+    end)
   end)
+  if not ok then
+    vim.b[bufnr].async_format_running = false
+    return
+  end
 
   client.request("textDocument/formatting", params, function(err, result)
     vim.schedule(function()
@@ -48,11 +59,15 @@ function M.async_format(bufnr)
       if vim.b[bufnr].changedtick ~= changedtick then return end
 
       vim.lsp.util.apply_text_edits(result, bufnr, client.offset_encoding or "utf-16")
-      if vim.bo[bufnr].modified then
+      if save and vim.bo[bufnr].modified then
         vim.api.nvim_buf_call(bufnr, function() vim.cmd("silent! update") end)
       end
     end)
   end, bufnr)
+end
+
+function M.async_format(bufnr)
+  M.format(bufnr, { save = true })
 end
 
 return M
