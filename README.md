@@ -61,20 +61,15 @@ See: `bin/dbx`, `bin/dbn`
 
 See: `bin/ghodev`, `bin/tmux-dev`
 
-### Faster Zsh startup (caching slow init)
+### Zsh: fast startup
 
-Zsh is configured as a small “dev UX layer” rather than just a prompt:
+Zsh is configured as a small “dev UX layer”:
 
-- Startup caching: generates a cache file under the XDG cache dir and only re-runs slow init when `.zshrc` changes (e.g. resolving some Homebrew paths and language toolchain paths)
-- XDG-oriented paths: keeps caches/state under `~/.cache`, `~/.local/share`, etc.
+- Startup caching: generates an init cache under the XDG cache dir and only re-runs slow init when `.zshrc` changes
+- XDG + PATH discipline: keeps caches/state organized and avoids PATH duplication
 - Editor-first: shells, git, and man pages are centered around Neovim
-- PATH discipline: de-duplicates entries and keeps PATH layering intentional
-- Shell safety/consistency: avoids accidental exits and keeps history behavior predictable
-- Interactive-only split: heavyweight UX setup runs only in interactive shells
-- Fuzzy navigation: `fd`/`fzf` defaults are tuned for interactive file, directory, and repo navigation (with previews)
-- Dev helpers: lightweight helpers for Rust test runs, Docker shortcuts, and Git hooks
-- Modern CLI defaults: uses modern replacements (`bat`, `eza`, etc.) for day-to-day ergonomics
-- Completions & suggestions: enables completions and autosuggestions for interactive work
+- Interactive UX: tuned `fd`/`fzf` navigation with previews, plus completions and autosuggestions
+- Dev helpers: shortcuts for common workflows (Rust tests, Docker, Git hooks)
 
 See: `.zshrc`
 
