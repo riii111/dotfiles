@@ -1,1 +1,1 @@
-AGENTS.md を参照しプロジェクト内容を理解すること
+AGENTS.md

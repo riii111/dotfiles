@@ -1,6 +1,9 @@
 -- Delete without yanking
 vim.keymap.set({ "n", "v" }, "x", '"_x', { desc = "Delete character without yanking" })
 vim.keymap.set({ "n", "v" }, "X", '"_d$', { desc = "Delete to end of line without yanking" })
+vim.keymap.set({ "n", "v" }, "d", '"_d', { desc = "Delete without yanking" })
+vim.keymap.set("n", "D", '"_D', { desc = "Delete to end of line without yanking" })
+vim.keymap.set("n", "dd", '"_dd', { desc = "Delete line without yanking" })
 
 -- Smart 0: toggle between ^ and 0
 vim.keymap.set("n", "0", function()
