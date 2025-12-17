@@ -119,17 +119,6 @@ return {
 		opts = { enable_autocmd = false },
 	},
 
-	-- Which-key (for key mappings help)
-	{
-		"folke/which-key.nvim",
-		event = "VeryLazy",
-		init = function()
-			vim.o.timeout = true
-			vim.o.timeoutlen = 300
-		end,
-		opts = {},
-	},
-
 	-- Todo comments
 	{
 		"folke/todo-comments.nvim",
