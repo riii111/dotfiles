@@ -119,9 +119,9 @@ local function setup_keymaps()
       -- Markdown preview
       ["<D-S-v>"] = {
         function()
-          vim.cmd("MarkviewOpen")
+          vim.cmd("RenderMarkdown toggle")
         end,
-        desc = "Markdown preview"
+        desc = "Markdown preview toggle"
       },
 
       -- Oil.nvim file explorer
@@ -151,9 +151,9 @@ local function setup_keymaps()
       ["<M-M-Left>"] = { ":bprevious<CR>", desc = "Previous buffer (tmux)" },
       ["<M-S-v>"] = {
         function()
-          vim.cmd("MarkviewOpen")
+          vim.cmd("RenderMarkdown toggle")
         end,
-        desc = "Markdown preview (tmux)"
+        desc = "Markdown preview toggle (tmux)"
       },
       ["<M-e>"] = {
         function()
