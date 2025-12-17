@@ -1,5 +1,6 @@
 -- Lazy-loaded module cache (populated on first use)
 local _cache = {}
+local _file_icon_color_cache = nil
 
 local function get_devicons()
 	if _cache.devicons == nil then
@@ -171,7 +172,11 @@ local function file_icon()
 	return {
 		function()
 			local fi = get_file_icon()
-			vim.api.nvim_command("hi! LualineFileIconColor guifg=" .. get_file_icon_color() .. " guibg=" .. colors.bg)
+			local new_color = get_file_icon_color()
+			if _file_icon_color_cache ~= new_color then
+				vim.api.nvim_command("hi! LualineFileIconColor guifg=" .. new_color .. " guibg=" .. colors.bg)
+				_file_icon_color_cache = new_color
+			end
 			local fname = vim.fn.expand("%:p")
 			if string.find(fname, "term://") ~= nil then
 				return icons.term

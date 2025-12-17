@@ -35,4 +35,11 @@ return {
     end,
     cmd = { "DBUI", "DBUIToggle", "DBUIAddConnection", "DBUIFindBuffer" },
   },
+  {
+    "neovim/nvim-lspconfig",
+    ft = { "sql", "mysql", "plsql" },
+    config = function()
+      require("lspconfig").sqls.setup({})
+    end,
+  },
 }
