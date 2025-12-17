@@ -3,7 +3,6 @@ return {
     "tpope/vim-dadbod",
     dependencies = {
       "kristijanhusak/vim-dadbod-ui",
-      "kristijanhusak/vim-dadbod-completion",
     },
     config = function()
       -- Database UI configuration
@@ -12,9 +11,6 @@ return {
       vim.g.db_ui_force_echo_messages = 1
       vim.g.db_ui_win_position = "left"
       vim.g.db_ui_winwidth = 30
-
-      -- Database completion configuration
-      vim.g.db_completion_enabled = 1
 
       -- Key mappings for SQL development
       vim.api.nvim_create_autocmd("FileType", {
@@ -34,19 +30,6 @@ return {
           vim.keymap.set("n", "<leader>dbf", "<cmd>DBUIFindBuffer<cr>", vim.tbl_extend("force", opts, { desc = "Find DB buffer" }))
           vim.keymap.set("n", "<leader>dbr", "<cmd>DBUIRenameBuffer<cr>", vim.tbl_extend("force", opts, { desc = "Rename DB buffer" }))
           vim.keymap.set("n", "<leader>dbl", "<cmd>DBUILastQueryInfo<cr>", vim.tbl_extend("force", opts, { desc = "Last query info" }))
-        end,
-      })
-
-      -- Auto-complete setup for SQL
-      vim.api.nvim_create_autocmd("FileType", {
-        pattern = { "sql", "mysql", "plsql" },
-        callback = function()
-          require("cmp").setup.buffer({
-            sources = {
-              { name = "vim-dadbod-completion" },
-              { name = "buffer" },
-            },
-          })
         end,
       })
     end,
