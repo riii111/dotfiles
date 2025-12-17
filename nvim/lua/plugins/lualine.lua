@@ -109,47 +109,6 @@ end
 -- LSP-related functions
 -- ============================================================================
 
-local function list_nls_providers(filetype)
-    if not has_nls or not has_null_sources then
-        return {}
-    end
-    local available_sources = null_sources.get_available(filetype)
-    local registered = {}
-    for _, source in ipairs(available_sources) do
-        for method in pairs(source.methods) do
-            registered[method] = registered[method] or {}
-            table.insert(registered[method], source.name)
-        end
-    end
-    return registered
-end
-
-local function list_registered_formatters(filetype)
-    if not has_nls then
-        return {}
-    end
-    local registered_providers = list_nls_providers(filetype)
-    return registered_providers[nls.methods.FORMATTING] or {}
-end
-
-local function list_registered_linters(filetype)
-    if not has_nls then
-        return {}
-    end
-    local registered_providers = list_nls_providers(filetype)
-    local providers_for_methods = vim.iter(vim.tbl_map(function(m)
-            return registered_providers[m] or {}
-        end, {
-            nls.methods.DIAGNOSTICS,
-            nls.methods.DIAGNOSTICS_ON_OPEN,
-            nls.methods.DIAGNOSTICS_ON_SAVE,
-        }))
-        :flatten()
-        :totable()
-
-    return providers_for_methods
-end
-
 local function lsp_server_icon(name, icon)
     local buf_clients = vim.lsp.get_clients({ bufnr = vim.api.nvim_get_current_buf() })
     if next(buf_clients) == nil then
@@ -340,24 +299,6 @@ local function get_lsp_client_names(buf_clients, should_trim)
         end
     end
     return client_names
-end
-
-local function get_formatter_names(filetype, should_trim)
-    local formatter_names = {}
-    for _, fmt in pairs(list_registered_formatters(filetype)) do
-        local formatted_name = format_client_name(fmt, should_trim)
-        table.insert(formatter_names, formatted_name)
-    end
-    return formatter_names
-end
-
-local function get_linter_names(filetype, should_trim)
-    local linter_names = {}
-    for _, lnt in pairs(list_registered_linters(filetype)) do
-        local formatted_name = format_client_name(lnt, should_trim)
-        table.insert(linter_names, formatted_name)
-    end
-    return linter_names
 end
 
 local function lsp_servers()
