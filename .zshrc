@@ -86,6 +86,10 @@ export PATH="$HOME/.local/bin:$PATH"
 # rust
 export PATH="$HOME/.cargo/bin:$PATH"
 
+# bun
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
+
 # golang
 export GOTOOLCHAIN=auto
 
@@ -123,11 +127,12 @@ function rust-test-all() {
 # Completion
 # ==========================================
 # Homebrew の補完を有効化
-if command -v brew >/dev/null 2>&1; then
-  FPATH="$(brew --prefix)/share/zsh/site-functions:$FPATH"
-fi
+FPATH="/opt/homebrew/share/zsh/site-functions:$FPATH"
 fpath+=~/.zfunc
-autoload -Uz compinit && compinit  # 現状はキャッシュ効果薄め。補完定義が増えたら-Cを検討
+autoload -Uz compinit && compinit  # 現状ではキャッシュ効果薄いので、-Cは利用しない
+
+# bun completions
+[[ -s "$HOME/.bun/_bun" ]] && source "$HOME/.bun/_bun"       # compinit の後に読み込むことで二重初期化を防ぐ
 
 # 補完の表示設定
 zstyle ':completion:*' menu select                    # メニュー選択を有効化
