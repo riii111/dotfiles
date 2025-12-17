@@ -1,5 +1,44 @@
--- Import unified color palette
-local colors = require("config.colors").lualine
+-- Lazy-loaded module cache (populated on first use)
+local _cache = {}
+
+local function get_devicons()
+	if _cache.devicons == nil then
+		local ok, mod = pcall(require, "nvim-web-devicons")
+		_cache.devicons = ok and mod or false
+	end
+	return _cache.devicons
+end
+
+local function get_lazy_status()
+	if _cache.lazy_status == nil then
+		local ok, mod = pcall(require, "lazy.status")
+		_cache.lazy_status = ok and mod or false
+	end
+	return _cache.lazy_status
+end
+
+local function get_treesitter_parsers()
+	if _cache.ts_parsers == nil then
+		local ok, mod = pcall(require, "nvim-treesitter.parsers")
+		_cache.ts_parsers = ok and mod or false
+	end
+	return _cache.ts_parsers
+end
+
+local function get_dap()
+	if _cache.dap == nil then
+		local ok, mod = pcall(require, "dap")
+		_cache.dap = ok and mod or false
+	end
+	return _cache.dap
+end
+
+local function get_colors()
+	if _cache.colors == nil then
+		_cache.colors = require("config.colors").lualine
+	end
+	return _cache.colors
+end
 
 local icons = {
 	git = "",
@@ -31,12 +70,6 @@ local lazy_icons = {
 		removed = " ",
 	},
 }
-
--- Module caching for performance
-local has_devicons, devicons = pcall(require, "nvim-web-devicons")
-local has_lazy, lazy = pcall(require, "lazy.status")
-local has_treesitter, ts_parsers = pcall(require, "nvim-treesitter.parsers")
-local has_dap, dap = pcall(require, "dap")
 
 local window_numbers = {
 	"󰼏 ",
@@ -77,8 +110,8 @@ local function get_file_info()
 end
 
 local function get_file_icon()
-	if not has_devicons then
-		print("No icon plugin found. Please install 'kyazdani42/nvim-web-devicons'")
+	local devicons = get_devicons()
+	if not devicons then
 		return ""
 	end
 	local f_name, f_extension = get_file_info()
@@ -91,15 +124,14 @@ end
 
 local function get_file_icon_color()
 	local f_name, f_ext = get_file_info()
-	if has_devicons then
+	local devicons = get_devicons()
+	if devicons then
 		local icon, iconhl = devicons.get_icon(f_name, f_ext)
 		if icon ~= nil then
 			return vim.fn.synIDattr(vim.fn.hlID(iconhl), "fg")
 		end
 	end
-
-	-- Return a default color if no icon color is found
-	return colors.fg
+	return get_colors().fg
 end
 
 -- ============================================================================
@@ -124,6 +156,7 @@ end
 -- ============================================================================
 
 local function git()
+	local colors = get_colors()
 	return {
 		"b:gitsigns_head",
 		icon = " " .. icons.git,
@@ -134,6 +167,7 @@ local function git()
 end
 
 local function file_icon()
+	local colors = get_colors()
 	return {
 		function()
 			local fi = get_file_icon()
@@ -157,6 +191,7 @@ local function file_icon()
 end
 
 local function file_name()
+	local colors = get_colors()
 	return {
 		function()
 			local show_name = vim.fn.expand("%:t")
@@ -173,6 +208,7 @@ local function file_name()
 end
 
 local function diff()
+	local colors = get_colors()
 	return {
 		"diff",
 		symbols = {
@@ -199,21 +235,25 @@ local function diff()
 end
 
 local function lazy_status()
+	local colors = get_colors()
 	return {
 		function()
-			if has_lazy and lazy.updates then
+			local lazy = get_lazy_status()
+			if lazy and lazy.updates then
 				return lazy.updates()
 			end
 			return ""
 		end,
 		cond = function()
-			return has_lazy and lazy.has_updates and lazy.has_updates()
+			local lazy = get_lazy_status()
+			return lazy and lazy.has_updates and lazy.has_updates()
 		end,
 		color = { fg = colors.orange, bg = colors.bg },
 	}
 end
 
 local function circle_icon(direction)
+	local colors = get_colors()
 	return {
 		function()
 			if direction == "left" then
@@ -228,9 +268,11 @@ local function circle_icon(direction)
 end
 
 local function treesitter()
+	local colors = get_colors()
 	return {
 		function()
-			if has_treesitter then
+			local ts_parsers = get_treesitter_parsers()
+			if ts_parsers then
 				local buf = vim.api.nvim_get_current_buf()
 				local lang = ts_parsers.get_buf_lang(buf)
 				if lang then
@@ -246,6 +288,7 @@ local function treesitter()
 end
 
 local function file_size()
+	local colors = get_colors()
 	return {
 		function()
 			local file = vim.fn.expand("%:p")
@@ -264,13 +307,13 @@ local function file_size()
 			end
 			return string.format("%.1f%s", size, sufixes[i])
 		end,
-
 		color = { fg = colors.fg, bg = colors.bg },
 		cond = conditions.buffer_not_empty,
 	}
 end
 
 local function file_format()
+	local colors = get_colors()
 	return {
 		"fileformat",
 		fmt = string.upper,
@@ -299,6 +342,7 @@ local function get_lsp_client_names(buf_clients, should_trim)
 end
 
 local function lsp_servers()
+	local colors = get_colors()
 	return {
 		function()
 			local buf_clients = vim.lsp.get_clients({ bufnr = vim.api.nvim_get_current_buf() })
@@ -323,6 +367,7 @@ local function lsp_servers()
 end
 
 local function location()
+	local colors = get_colors()
 	return {
 		"location",
 		padding = 0,
@@ -331,6 +376,7 @@ local function location()
 end
 
 local function file_position()
+	local colors = get_colors()
 	return {
 		function()
 			local current_line = vim.fn.line(".")
@@ -346,6 +392,7 @@ local function file_position()
 end
 
 local function file_read_only()
+	local colors = get_colors()
 	return {
 		function()
 			if not vim.bo.readonly or not vim.bo.modifiable then
@@ -358,6 +405,7 @@ local function file_read_only()
 end
 
 local function diagnostic_ok()
+	local colors = get_colors()
 	return {
 		function()
 			local diagnostics_list = vim.diagnostic.get(0)
@@ -373,6 +421,7 @@ local function diagnostic_ok()
 end
 
 local function diagnostics()
+	local colors = get_colors()
 	return {
 		"diagnostics",
 		sources = { "nvim_diagnostic" },
@@ -397,9 +446,11 @@ local function diagnostics()
 end
 
 local function dap_status()
+	local colors = get_colors()
 	return {
 		function()
-			if has_dap and dap.status then
+			local dap = get_dap()
+			if dap and dap.status then
 				local status = dap.status()
 				if status ~= "" then
 					return icons.debug .. status
@@ -408,13 +459,15 @@ local function dap_status()
 			return ""
 		end,
 		cond = function()
-			return has_dap and dap.status and dap.status() ~= ""
+			local dap = get_dap()
+			return dap and dap.status and dap.status() ~= ""
 		end,
 		color = { fg = colors.red, bg = colors.bg },
 	}
 end
 
 local function space()
+	local colors = get_colors()
 	return {
 		function()
 			return " "
@@ -426,6 +479,7 @@ local function space()
 end
 
 local function null_ls()
+	local colors = get_colors()
 	return {
 		function()
 			return lsp_server_icon("null-ls", icons.code_lens_action)
@@ -437,6 +491,7 @@ local function null_ls()
 end
 
 local function grammar_lsp(server_name)
+	local colors = get_colors()
 	return {
 		function()
 			return lsp_server_icon(server_name, icons.typos)
@@ -459,48 +514,51 @@ end
 -- Theme definition
 -- ============================================================================
 
-local custom_theme = {
-	normal = {
-		a = { fg = colors.normal_a, bg = colors.blue, gui = "bold" },
-		b = { fg = colors.normal_b, bg = colors.normal_bg_b },
-		c = { fg = colors.normal_c, bg = colors.normal_bg_c },
-		x = { fg = colors.normal_c, bg = colors.normal_bg_c },
-		y = { fg = colors.normal_b, bg = colors.normal_bg_b },
-		z = { fg = colors.normal_a, bg = colors.blue, gui = "bold" },
-	},
-	insert = {
-		a = { fg = colors.normal_a, bg = colors.green, gui = "bold" },
-		b = { fg = colors.normal_b, bg = colors.normal_bg_b },
-		c = { fg = colors.normal_c, bg = colors.normal_bg_c },
-		x = { fg = colors.normal_c, bg = colors.normal_bg_c },
-		y = { fg = colors.normal_b, bg = colors.normal_bg_b },
-		z = { fg = colors.normal_a, bg = colors.green, gui = "bold" },
-	},
-	visual = {
-		a = { fg = colors.normal_a, bg = colors.magenta, gui = "bold" },
-		b = { fg = colors.normal_b, bg = colors.normal_bg_b },
-		c = { fg = colors.normal_c, bg = colors.normal_bg_c },
-		x = { fg = colors.normal_c, bg = colors.normal_bg_c },
-		y = { fg = colors.normal_b, bg = colors.normal_bg_b },
-		z = { fg = colors.normal_a, bg = colors.magenta, gui = "bold" },
-	},
-	replace = {
-		a = { fg = colors.fg, bg = colors.red, gui = "bold" },
-		b = { fg = colors.normal_b, bg = colors.normal_bg_b },
-		c = { fg = colors.normal_c, bg = colors.normal_bg_c },
-		x = { fg = colors.normal_c, bg = colors.normal_bg_c },
-		y = { fg = colors.normal_b, bg = colors.normal_bg_b },
-		z = { fg = colors.fg, bg = colors.red, gui = "bold" },
-	},
-	command = {
-		a = { fg = colors.normal_a, bg = colors.yellow, gui = "bold" },
-		b = { fg = colors.normal_b, bg = colors.normal_bg_b },
-		c = { fg = colors.normal_c, bg = colors.normal_bg_c },
-		x = { fg = colors.normal_c, bg = colors.normal_bg_c },
-		y = { fg = colors.normal_b, bg = colors.normal_bg_b },
-		z = { fg = colors.normal_a, bg = colors.yellow, gui = "bold" },
-	},
-}
+local function get_custom_theme()
+	local colors = get_colors()
+	return {
+		normal = {
+			a = { fg = colors.normal_a, bg = colors.blue, gui = "bold" },
+			b = { fg = colors.normal_b, bg = colors.normal_bg_b },
+			c = { fg = colors.normal_c, bg = colors.normal_bg_c },
+			x = { fg = colors.normal_c, bg = colors.normal_bg_c },
+			y = { fg = colors.normal_b, bg = colors.normal_bg_b },
+			z = { fg = colors.normal_a, bg = colors.blue, gui = "bold" },
+		},
+		insert = {
+			a = { fg = colors.normal_a, bg = colors.green, gui = "bold" },
+			b = { fg = colors.normal_b, bg = colors.normal_bg_b },
+			c = { fg = colors.normal_c, bg = colors.normal_bg_c },
+			x = { fg = colors.normal_c, bg = colors.normal_bg_c },
+			y = { fg = colors.normal_b, bg = colors.normal_bg_b },
+			z = { fg = colors.normal_a, bg = colors.green, gui = "bold" },
+		},
+		visual = {
+			a = { fg = colors.normal_a, bg = colors.magenta, gui = "bold" },
+			b = { fg = colors.normal_b, bg = colors.normal_bg_b },
+			c = { fg = colors.normal_c, bg = colors.normal_bg_c },
+			x = { fg = colors.normal_c, bg = colors.normal_bg_c },
+			y = { fg = colors.normal_b, bg = colors.normal_bg_b },
+			z = { fg = colors.normal_a, bg = colors.magenta, gui = "bold" },
+		},
+		replace = {
+			a = { fg = colors.fg, bg = colors.red, gui = "bold" },
+			b = { fg = colors.normal_b, bg = colors.normal_bg_b },
+			c = { fg = colors.normal_c, bg = colors.normal_bg_c },
+			x = { fg = colors.normal_c, bg = colors.normal_bg_c },
+			y = { fg = colors.normal_b, bg = colors.normal_bg_b },
+			z = { fg = colors.fg, bg = colors.red, gui = "bold" },
+		},
+		command = {
+			a = { fg = colors.normal_a, bg = colors.yellow, gui = "bold" },
+			b = { fg = colors.normal_b, bg = colors.normal_bg_b },
+			c = { fg = colors.normal_c, bg = colors.normal_bg_c },
+			x = { fg = colors.normal_c, bg = colors.normal_bg_c },
+			y = { fg = colors.normal_b, bg = colors.normal_bg_b },
+			z = { fg = colors.normal_a, bg = colors.yellow, gui = "bold" },
+		},
+	}
+end
 
 -- ============================================================================
 -- Plugin configuration
@@ -508,55 +566,57 @@ local custom_theme = {
 
 return {
 	"nvim-lualine/lualine.nvim",
-	opts = {
-		options = {
-			theme = custom_theme,
-			globalstatus = true,
-			component_separators = { left = "", right = "" },
-			section_separators = { left = "", right = "" },
-			always_divide_middle = true,
-		},
-		sections = {
-			lualine_a = {
-				{
-					"mode",
-					fmt = function(str)
-						return str
-					end,
+	config = function()
+		require("lualine").setup({
+			options = {
+				theme = get_custom_theme(),
+				globalstatus = true,
+				component_separators = { left = "", right = "" },
+				section_separators = { left = "", right = "" },
+				always_divide_middle = true,
+			},
+			sections = {
+				lualine_a = {
+					{
+						"mode",
+						fmt = function(str)
+							return str
+						end,
+					},
+				},
+				lualine_b = {
+					git(),
+				},
+				lualine_c = {
+					file_icon(),
+					file_name(),
+					diff(),
+					lazy_status(),
+					circle_icon("right"),
+				},
+				lualine_x = {
+					circle_icon("left"),
+				},
+				lualine_y = {
+					diagnostic_ok(),
+					diagnostics(),
+					space(),
+					dap_status(),
+					treesitter(),
+					typos_lsp(),
+					harper_ls(),
+					null_ls(),
+					lsp_servers(),
+				},
+				lualine_z = {
+					space(),
+					location(),
+					file_size(),
+					file_read_only(),
+					file_format(),
+					file_position(),
 				},
 			},
-			lualine_b = {
-				git(),
-			},
-			lualine_c = {
-				file_icon(),
-				file_name(),
-				diff(),
-				lazy_status(),
-				circle_icon("right"),
-			},
-			lualine_x = {
-				circle_icon("left"),
-			},
-			lualine_y = {
-				diagnostic_ok(),
-				diagnostics(),
-				space(),
-				dap_status(),
-				treesitter(),
-				typos_lsp(),
-				harper_ls(),
-				null_ls(),
-				lsp_servers(),
-			},
-			lualine_z = {
-				space(),
-				location(),
-				file_size(),
-				file_read_only(),
-				file_format(),
-				file_position(),
-			},
-		},
-	},
+		})
+	end,
 }
