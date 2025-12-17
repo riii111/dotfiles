@@ -149,21 +149,9 @@ return {
 		enabled = false,
 	},
 
-	-- Session management
-	{
-		"stevearc/resession.nvim",
-		opts = {},
-	},
-
 	-- Guess indent
 	{
 		"NMAC427/guess-indent.nvim",
-		opts = {},
-	},
-
-	-- Window picker
-	{
-		"s1n7ax/nvim-window-picker",
 		opts = {},
 	},
 

@@ -149,7 +149,7 @@ return {
 - Editor Ergonomics: Treesitter + textobjects, `windwp/nvim-autopairs`, `numToStr/Comment.nvim`, `folke/which-key.nvim`, `NMAC427/guess-indent.nvim`, `max397574/better-escape.nvim`, `mrjones2014/smart-splits.nvim`.
 - Smart Keymaps: Smart 0 (toggle ^ and 0), auto-indent on empty lines (i/A), delete without yank (x/X), visual mode improvements.
 - Smart Editing: `monaqa/dial.nvim` (increment dates, booleans, case conversion).
-- File Management: `stevearc/oil.nvim` (buffered file explorer), session management via `resession.nvim`.
+- File Management: `stevearc/oil.nvim` (buffered file explorer).
 - UI Polish: `akinsho/bufferline.nvim` (language‑grouped labels), `b0o/incline.nvim`, `lukas-reineke/indent-blankline.nvim`, `lewis6991/gitsigns.nvim`, `sindrets/diffview.nvim`, `akinsho/toggleterm.nvim`, `kevinhwang91/nvim-hlslens`.
 - Debugging: `mfussenegger/nvim-dap` + `rcarriga/nvim-dap-ui`; language adapters configured per module (e.g., C/C++ with `codelldb`).
 - Performance: Lua module loader cache enabled, unused providers/plugins disabled for faster startup.

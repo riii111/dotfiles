@@ -1,3 +1,12 @@
+-- Highlight yanked text (replaces vim-highlightedyank plugin)
+local yank_group = vim.api.nvim_create_augroup("highlight_yank", { clear = true })
+vim.api.nvim_create_autocmd("TextYankPost", {
+  group = yank_group,
+  callback = function()
+    vim.highlight.on_yank({ higroup = "IncSearch", timeout = 200 })
+  end,
+})
+
 -- Auto-toggle relative line numbers based on mode
 local augroup = vim.api.nvim_create_augroup("numbertoggle", { clear = true })
 
