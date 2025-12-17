@@ -222,9 +222,10 @@ bindkey '^O' fzf-cd-widget   # Ctrl-O でディレクトリ移動
 # ==========================================
 export GHQ_ROOT="$HOME/ghq"
 
-# ghq × fzf: リポジトリへジャンプ
+# ghq × fzf: リポジトリへジャンプ (Ctrl-G)
 cghq() {
   local repo
   repo="$(ghq list | fzf --preview 'eza --tree --level=3 --icons --color=always $(ghq root)/{}')" || return
   cd "$(ghq root)/$repo"
 }
+bindkey -s '^G' 'cghq\n'

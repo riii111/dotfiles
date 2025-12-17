@@ -11,7 +11,7 @@ Dev environment for macOS.
 - Deferred `compinit` after prompt display
 - Cache regeneration only on config change
 - Modern CLI: bat, eza, fd, fzf
-- fzf integration: Ctrl-R history, Ctrl-O cd, `cghq` repo jump
+- fzf integration: Ctrl-R history, Ctrl-O cd, Ctrl-G repo jump
 
 ```
 zsh -i -c exit:  98.5ms → 9.5ms  (-90%)
