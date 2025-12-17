@@ -474,13 +474,6 @@ return {
 		end,
 	},
 
-
-	-- Glance preview
-	{
-		"dnlhc/glance.nvim",
-		opts = {},
-	},
-
 	-- Markdown rendering
 	{
 		"MeanderingProgrammer/render-markdown.nvim",
