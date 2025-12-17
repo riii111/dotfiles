@@ -111,6 +111,7 @@ local function setup_keymaps()
         function()
           vim.cmd("enew")
           vim.bo.filetype = "markdown"
+          vim.cmd("doautocmd FileType markdown")
         end,
         desc = "New markdown note"
       },
