@@ -13,6 +13,9 @@ return {
         dap_debug = false,
         textobjects = true,
         lsp_cfg = true,
+        lsp_inlay_hints = {
+          enable = false,
+        },
       })
 
       local lsp_actions = require("utils.lsp-actions")
