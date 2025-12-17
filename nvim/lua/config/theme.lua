@@ -135,6 +135,10 @@ local function apply_flate_arc_italic()
     DiffviewFilePanelTitle = { fg = colors.diffview.file_panel_title, bold = true },
     DiffviewFilePanelCounter = { fg = colors.diffview.file_panel_counter },
 
+    -- Render Markdown code block (darker background)
+    RenderMarkdownCode = { bg = colors.base.bg_dark },
+    RenderMarkdownCodeInline = { bg = colors.base.bg_dark },
+
     -- Treesitter specific highlights
     ["@field"] = { fg = colors.base.accent, italic = true },
     ["@variable.member.go"] = { fg = colors.syntax.constant, italic = true }, -- Struct exported member
