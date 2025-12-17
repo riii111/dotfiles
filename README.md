@@ -50,6 +50,7 @@ dsn = "postgres://user:pass@127.0.0.1:5432/app?sslmode=disable"
 ### lazygit
 
 Delta for modern diffs. `|` key toggles split/unified view.
+<img width="720" alt="dbn / dbx" src="https://github.com/user-attachments/assets/de6196b9-89a1-458c-b46a-0c869e1c091f" />
 
 ### AI tooling
 
