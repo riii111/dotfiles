@@ -35,11 +35,21 @@ return {
     end,
     cmd = { "DBUI", "DBUIToggle", "DBUIAddConnection", "DBUIFindBuffer" },
   },
+  -- SQL LSP configuration
+  -- NOTE: Using a wrapper plugin instead of extending "neovim/nvim-lspconfig" directly
+  --       because lazy.nvim may skip this config function when lspconfig is already loaded.
   {
-    "neovim/nvim-lspconfig",
+    name = "sql-lsp-setup",
+    dir = vim.fn.stdpath("config"),
     ft = { "sql", "mysql", "plsql" },
+    dependencies = { "neovim/nvim-lspconfig" },
     config = function()
-      require("lspconfig").sqls.setup({})
+      vim.lsp.config("sqls", {
+        cmd = { "sqls" },
+        filetypes = { "sql", "mysql", "plsql" },
+        root_markers = { ".git", ".sqls.yaml" },
+      })
+      vim.lsp.enable("sqls")
     end,
   },
 }
