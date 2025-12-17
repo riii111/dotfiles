@@ -124,15 +124,21 @@ function rust-test-all() {
 [[ -o interactive ]] || return
 
 # ==========================================
-# Completion
+# Completion (deferred)
 # ==========================================
 # Homebrew の補完を有効化
 FPATH="/opt/homebrew/share/zsh/site-functions:$FPATH"
 fpath+=~/.zfunc
-autoload -Uz compinit && compinit  # 現状ではキャッシュ効果薄いので、-Cは利用しない
+autoload -Uz compinit
 
-# bun completions
-[[ -s "$HOME/.bun/_bun" ]] && source "$HOME/.bun/_bun"       # compinit の後に読み込むことで二重初期化を防ぐ
+# プロンプト表示後に compinit を遅延実行
+_deferred_compinit() {
+  unfunction _deferred_compinit
+  compinit  # -C は使わない（補完定義が少ないためキャッシュ効果が薄い）
+  [[ -s "$HOME/.bun/_bun" ]] && source "$HOME/.bun/_bun"
+}
+zmodload zsh/sched
+sched +0 _deferred_compinit
 
 # 補完の表示設定
 zstyle ':completion:*' menu select                    # メニュー選択を有効化
