@@ -4,15 +4,15 @@
 
 ### Neovim UI
 
-<img width="1511" height="942" alt="Neovim UI" src="https://github.com/user-attachments/assets/6cf9e4a2-8d24-4547-81f4-d30bff35185a" />
+<img width="720" alt="Neovim UI" src="https://github.com/user-attachments/assets/6cf9e4a2-8d24-4547-81f4-d30bff35185a" />
 
 ### IntelliJ-like actions (Quick Fix / Refactor flow)
 
-<img width="1013" height="196" alt="IntelliJ-like actions" src="https://github.com/user-attachments/assets/da51445c-1d46-4980-a469-fc094a2ba3f8" />
+<img width="600" alt="IntelliJ-like actions" src="https://github.com/user-attachments/assets/da51445c-1d46-4980-a469-fc094a2ba3f8" />
 
 ### dbn / dbx (DB Client)
 
-<img width="1507" height="948" alt="dbn / dbx" src="https://github.com/user-attachments/assets/e69b298b-e0bb-4d87-a9da-fe0e1641af37" />
+<img width="720" alt="dbn / dbx" src="https://github.com/user-attachments/assets/e69b298b-e0bb-4d87-a9da-fe0e1641af37" />
 
 ## Overview
 
