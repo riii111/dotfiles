@@ -92,7 +92,6 @@ return {
 		end,
 	},
 
-
 	-- Bufferline (crisidev style)
 	{
 		"akinsho/bufferline.nvim",
@@ -102,7 +101,8 @@ return {
 			require("bufferline").setup({
 				options = {
 					mode = "buffers",
-					separator_style = "slant",
+					separator_style = { "", "" },
+					indicator = { style = "none" },
 					always_show_bufferline = true,
 					show_buffer_close_icons = false,
 					show_close_icon = false,
@@ -135,8 +135,8 @@ return {
 								auto_close = true,
 								matcher = function(buf)
 									return buf.name:match("%.md$")
-											or buf.name:match("README")
-											or buf.name:match("%.rst$")
+										or buf.name:match("README")
+										or buf.name:match("%.rst$")
 								end,
 							},
 							{
@@ -231,69 +231,6 @@ return {
 							},
 						},
 					},
-					highlights = {
-						fill = {
-							bg = colors.bufferline.fill,
-						},
-						background = {
-							fg = colors.bufferline.fg,
-							bg = colors.bufferline.background,
-						},
-						buffer = {
-							fg = colors.bufferline.fg,
-							bg = colors.bufferline.background,
-						},
-						buffer_selected = {
-							fg = colors.bufferline.fg_selected,
-							bg = colors.bufferline.buffer_selected,
-							bold = true,
-						},
-						buffer_visible = {
-							fg = colors.bufferline.fg,
-							bg = colors.bufferline.background,
-						},
-						tab = {
-							fg = colors.bufferline.fg,
-							bg = colors.bufferline.background,
-						},
-						tab_selected = {
-							fg = colors.bufferline.fg_selected,
-							bg = colors.bufferline.tab_selected,
-							bold = true,
-						},
-						tab_close = {
-							fg = colors.bufferline.fg,
-							bg = colors.bufferline.background,
-						},
-						separator = {
-							fg = colors.bufferline.background,
-							bg = colors.bufferline.background,
-						},
-						separator_selected = {
-							fg = colors.bufferline.buffer_selected,
-							bg = colors.bufferline.buffer_selected,
-						},
-						separator_visible = {
-							fg = colors.bufferline.background,
-							bg = colors.bufferline.background,
-						},
-						indicator_selected = {
-							fg = colors.bufferline.buffer_selected,
-							bg = colors.bufferline.buffer_selected,
-						},
-						modified = {
-							fg = colors.semantic.warning,
-							bg = colors.bufferline.background,
-						},
-						modified_selected = {
-							fg = colors.semantic.warning,
-							bg = colors.bufferline.buffer_selected,
-						},
-						modified_visible = {
-							fg = colors.semantic.warning,
-							bg = colors.bufferline.background,
-						},
-					},
 					offsets = {
 						{
 							filetype = "neo-tree",
@@ -302,6 +239,26 @@ return {
 							text_align = "left",
 						},
 					},
+				},
+				highlights = {
+					fill = { bg = "NONE" },
+					background = { fg = colors.base.fg_alt, bg = "NONE" },
+					buffer = { fg = colors.base.fg_alt, bg = "NONE" },
+					buffer_selected = { fg = colors.base.fg, bg = "NONE", bold = true },
+					buffer_visible = { fg = colors.base.fg_alt, bg = "NONE" },
+					tab = { fg = colors.base.fg_alt, bg = "NONE" },
+					tab_selected = { fg = colors.base.fg, bg = "NONE", bold = true },
+					tab_close = { fg = colors.base.fg_alt, bg = "NONE" },
+					separator = { fg = "NONE", bg = "NONE" },
+					separator_selected = { fg = "NONE", bg = "NONE" },
+					separator_visible = { fg = "NONE", bg = "NONE" },
+					indicator_selected = { fg = "NONE", bg = "NONE" },
+					indicator_visible = { fg = "NONE", bg = "NONE" },
+					modified = { fg = colors.semantic.warning, bg = "NONE" },
+					modified_selected = { fg = colors.semantic.warning, bg = "NONE" },
+					modified_visible = { fg = colors.semantic.warning, bg = "NONE" },
+					group_label = { fg = colors.base.fg_dark, bg = "NONE", bold = true },
+					group_separator = { fg = "NONE", bg = "NONE" },
 				},
 			})
 		end,
@@ -317,8 +274,8 @@ return {
 			require("incline").setup({
 				highlight = {
 					groups = {
-						InclineNormal = { guibg = colors.base.bg_light, guifg = colors.base.fg_alt },
-						InclineNormalNC = { guifg = colors.base.fg_muted, guibg = colors.base.bg_accent_alt },
+						InclineNormal = { guibg = colors.base.bg_medium, guifg = colors.base.fg_alt },
+						InclineNormalNC = { guifg = colors.base.fg_muted, guibg = colors.base.bg_dark },
 					},
 				},
 				window = { margin = { vertical = 0, horizontal = 1 } },
@@ -515,7 +472,7 @@ return {
 					if nearest then
 						local cnt = #posList
 						text = indicator ~= "" and ("[%s %d/%d]"):format(indicator, idx, cnt)
-								or ("[%d/%d]"):format(idx, cnt)
+							or ("[%d/%d]"):format(idx, cnt)
 						chunks = { { " " }, { text, "HlSearchLensNear" } }
 					else
 						text = ("[%s %d]"):format(indicator, idx)
@@ -556,18 +513,18 @@ return {
 		event = "VeryLazy",
 		config = function()
 			require("mini.move").setup()
-            vim.keymap.set("v", "<M-Down>", function()
-                require("mini.move").move_selection("down")
-            end)
-            vim.keymap.set("v", "<M-Up>", function()
-                require("mini.move").move_selection("up")
-            end)
-            vim.keymap.set("n", "<M-Down>", function()
-                require("mini.move").move_line("down")
-            end)
-            vim.keymap.set("n", "<M-Up>", function()
-                require("mini.move").move_line("up")
-            end)
+			vim.keymap.set("v", "<M-Down>", function()
+				require("mini.move").move_selection("down")
+			end)
+			vim.keymap.set("v", "<M-Up>", function()
+				require("mini.move").move_selection("up")
+			end)
+			vim.keymap.set("n", "<M-Down>", function()
+				require("mini.move").move_line("down")
+			end)
+			vim.keymap.set("n", "<M-Up>", function()
+				require("mini.move").move_line("up")
+			end)
 		end,
 	},
 
