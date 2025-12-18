@@ -213,7 +213,7 @@ return {
 							},
 							{
 								name = "jsx",
-								highlight = { fg = colors.languages.tsx },
+								highlight = { fg = colors.languages.jsx },
 								priority = 8,
 								auto_close = true,
 								matcher = function(buf)
@@ -249,9 +249,6 @@ return {
 					tab = { fg = colors.base.fg_alt, bg = "NONE" },
 					tab_selected = { fg = colors.base.fg, bg = "NONE", bold = true },
 					tab_close = { fg = colors.base.fg_alt, bg = "NONE" },
-					separator = { fg = "NONE", bg = "NONE" },
-					separator_selected = { fg = "NONE", bg = "NONE" },
-					separator_visible = { fg = "NONE", bg = "NONE" },
 					indicator_selected = { fg = "NONE", bg = "NONE" },
 					indicator_visible = { fg = "NONE", bg = "NONE" },
 					modified = { fg = colors.semantic.warning, bg = "NONE" },

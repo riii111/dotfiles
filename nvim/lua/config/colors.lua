@@ -154,17 +154,6 @@ M.devicons = {
   overlay0 = "#6e738d",
 }
 
--- BufferLine specific
-M.bufferline = {
-  fill = "NONE",
-  background = M.base.bg_dark,
-  buffer_selected = M.base.bg_accent,
-  tab_selected = M.base.accent_alt,
-  -- 前景色の設定も追加
-  fg = M.base.fg_alt,
-  fg_selected = M.base.fg,
-}
-
 -- Terminal Colors
 M.terminal = {
   normal = "NONE",
