@@ -2,7 +2,7 @@
 
 Dev environment for macOS.
 
-<img width="720" alt="Neovim UI" src="https://github.com/user-attachments/assets/6cf9e4a2-8d24-4547-81f4-d30bff35185a" />
+<img width="720" alt="Neovim UI" src="https://github.com/user-attachments/assets/a934cf86-5acf-45af-a861-8f1582108655" />
 
 ## Features
 
