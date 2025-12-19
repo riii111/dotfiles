@@ -64,9 +64,9 @@ local diagnostics_icons = {
 
 local lazy_icons = {
 	git = {
-		added = " ",
-		modified = " ",
-		removed = " ",
+		added = "+",
+		modified = "~",
+		removed = "-",
 	},
 }
 
@@ -208,7 +208,6 @@ local function file_name()
 		padding = { left = 1, right = 1 },
 		color = { fg = colors.fg, gui = "bold", bg = colors.section_c_bg },
 		cond = conditions.buffer_not_empty,
-		separator = { right = "" },
 	}
 end
 
@@ -222,9 +221,9 @@ local function diff()
 			removed = lazy_icons.git.removed,
 		},
 		diff_color = {
-			added = { fg = colors.git.add },
-			modified = { fg = colors.git.change },
-			removed = { fg = colors.git.delete },
+			added = { fg = colors.git.add, bg = colors.section_c_bg },
+			modified = { fg = colors.git.change, bg = colors.section_c_bg },
+			removed = { fg = colors.git.delete, bg = colors.section_c_bg },
 		},
 		source = function()
 			local gitsigns = vim.b.gitsigns_status_dict
@@ -236,6 +235,7 @@ local function diff()
 				}
 			end
 		end,
+		color = { bg = colors.section_c_bg },
 	}
 end
 
@@ -253,7 +253,7 @@ local function lazy_status()
 			local lazy = get_lazy_status()
 			return lazy and lazy.has_updates and lazy.has_updates()
 		end,
-		color = { fg = colors.orange },
+		color = { fg = colors.orange, bg = colors.section_c_bg },
 	}
 end
 
@@ -266,6 +266,18 @@ local function section_separator_left()
 		end,
 		padding = { left = 0, right = 0 },
 		color = { fg = colors.section_y_bg },
+	}
+end
+
+-- Right arrow separator for C section end
+local function section_separator_right()
+	local colors = get_colors()
+	return {
+		function()
+			return ""
+		end,
+		padding = { left = 0, right = 0 },
+		color = { fg = colors.section_c_bg },
 	}
 end
 
@@ -285,7 +297,7 @@ local function treesitter()
 		end,
 		padding = 0,
 		color = { fg = colors.green },
-		cond = conditions.hide_in_width,
+		cond = conditions.hide_small,
 	}
 end
 
@@ -487,7 +499,7 @@ local function null_ls()
 		end,
 		padding = 0,
 		color = { fg = colors.blue },
-		cond = conditions.hide_in_width,
+		cond = conditions.hide_small,
 	}
 end
 
@@ -499,7 +511,7 @@ local function grammar_lsp(server_name)
 		end,
 		padding = 0,
 		color = { fg = colors.yellow },
-		cond = conditions.hide_in_width,
+		cond = conditions.hide_small,
 	}
 end
 
@@ -594,6 +606,7 @@ return {
 					file_name(),
 					diff(),
 					lazy_status(),
+					section_separator_right(),
 				},
 				lualine_x = {
 					section_separator_left(),
@@ -610,11 +623,7 @@ return {
 					lsp_servers(),
 				},
 				lualine_z = {
-					space(),
 					location(),
-					file_size(),
-					file_read_only(),
-					file_format(),
 					file_position(),
 				},
 			},
