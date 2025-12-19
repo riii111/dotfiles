@@ -150,10 +150,6 @@ M.lualine = {
   section_c_bg = "#2d3149",     -- file info section (dark blue)
   section_y_bg = "#3b4261",     -- right info section (same as normal_bg_b)
   section_z_bg = "#24283b",     -- right end section (same as bg)
-
-  -- Legacy aliases (for compatibility)
-  bubble_branch = "#4a3f5c",
-  bubble_file = "#2d3149",
 }
 
 -- DevIcons Colors
