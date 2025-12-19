@@ -378,19 +378,14 @@ local function location()
 	}
 end
 
-local function file_position()
+local function current_time()
 	local colors = get_colors()
 	return {
 		function()
-			local current_line = vim.fn.line(".")
-			local total_lines = vim.fn.line("$")
-			local chars = { "__", "▁▁", "▂▂", "▃▃", "▄▄", "▅▅", "▆▆", "▇▇", "██" }
-			local line_ratio = current_line / total_lines
-			local index = math.ceil(line_ratio * #chars)
-			return chars[index]
+			return os.date("%H:%M")
 		end,
-		padding = 0,
-		color = { fg = colors.yellow },
+		icon = "󰥔",
+		color = { fg = colors.cyan },
 		separator = { right = "" },
 	}
 end
@@ -613,7 +608,7 @@ return {
 				},
 				lualine_z = {
 					location(),
-					file_position(),
+					current_time(),
 				},
 			},
 		})
