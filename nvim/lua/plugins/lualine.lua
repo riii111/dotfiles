@@ -268,6 +268,17 @@ local function section_separator_left()
 	}
 end
 
+-- Right arrow separator for C section end
+local function section_separator_right()
+	local colors = get_colors()
+	return {
+		function()
+			return ""
+		end,
+		padding = { left = 0, right = 0 },
+		color = { fg = colors.section_c_bg },
+	}
+end
 
 local function treesitter()
 	local colors = get_colors()
@@ -578,6 +589,7 @@ return {
 					file_name(),
 					diff(),
 					lazy_status(),
+					section_separator_right(),
 				},
 				lualine_x = {
 					section_separator_left(),
