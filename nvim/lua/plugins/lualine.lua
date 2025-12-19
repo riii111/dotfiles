@@ -176,8 +176,7 @@ local function file_icon()
 				vim.api.nvim_set_hl(0, "LualineFileIconColor", { fg = new_color, bg = colors.section_c_bg })
 				_file_icon_color_cache = new_color
 			end
-			local fname = vim.fn.expand("%:p")
-			if string.find(fname, "term://") ~= nil then
+			if vim.bo.buftype == "terminal" then
 				return icons.term
 			end
 			local winnr = vim.api.nvim_win_get_number(vim.api.nvim_get_current_win())
@@ -269,17 +268,6 @@ local function section_separator_left()
 	}
 end
 
--- Right arrow separator for C section end
-local function section_separator_right()
-	local colors = get_colors()
-	return {
-		function()
-			return ""
-		end,
-		padding = { left = 0, right = 0 },
-		color = { fg = colors.section_c_bg },
-	}
-end
 
 local function treesitter()
 	local colors = get_colors()
@@ -590,7 +578,6 @@ return {
 					file_name(),
 					diff(),
 					lazy_status(),
-					section_separator_right(),
 				},
 				lualine_x = {
 					section_separator_left(),
