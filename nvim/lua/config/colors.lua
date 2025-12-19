@@ -117,12 +117,19 @@ M.lualine = {
   fg = "#c0caf5",
   yellow = "#e0af68",
   cyan = "#7dcfff",
-  green = "#9ece6a",
+  green = "#73daca",
   orange = "#ff9e64",
   violet = "#9d7cd8",
-  magenta = "#bb9af7",
+  magenta = "#a9a1e1",
   blue = "#7aa2f7",
   red = "#f7768e",
+
+  -- Mode colors (refreshed)
+  mode_normal = "#7aa2f7",   -- calm blue
+  mode_insert = "#73daca",   -- teal green
+  mode_visual = "#c678dd",   -- purple
+  mode_replace = "#f7768e",  -- coral red
+  mode_command = "#e0af68",  -- warm yellow
 
   -- Git colors
   git = {
@@ -135,8 +142,18 @@ M.lualine = {
   normal_a = "#1a1e29",
   normal_b = "#e9dbdb",
   normal_c = "#e9dbdb",
-  normal_bg_b = "#22252f",
+  normal_bg_b = "#3b4261",
   normal_bg_c = "#16181f",
+
+  -- Section background colors (for statusline layout)
+  section_b_bg = "#4a3f5c",     -- branch section (muted purple)
+  section_c_bg = "#2d3149",     -- file info section (dark blue)
+  section_y_bg = "#3b4261",     -- right info section (same as normal_bg_b)
+  section_z_bg = "#24283b",     -- right end section (same as bg)
+
+  -- Legacy aliases (for compatibility)
+  bubble_branch = "#4a3f5c",
+  bubble_file = "#2d3149",
 }
 
 -- DevIcons Colors

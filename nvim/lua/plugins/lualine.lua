@@ -160,10 +160,11 @@ local function git()
 	local colors = get_colors()
 	return {
 		"b:gitsigns_head",
-		icon = " " .. icons.git,
+		icon = icons.git,
 		cond = conditions.check_git_workspace,
-		color = { fg = colors.blue, bg = colors.bg },
-		padding = 0,
+		color = { fg = colors.magenta, bg = colors.bubble_branch },
+		padding = { left = 2, right = 2 },
+		separator = { right = "" },
 	}
 end
 
@@ -174,7 +175,7 @@ local function file_icon()
 			local fi = get_file_icon()
 			local new_color = get_file_icon_color()
 			if _file_icon_color_cache ~= new_color then
-				vim.api.nvim_command("hi! LualineFileIconColor guifg=" .. new_color .. " guibg=" .. colors.bg)
+				vim.api.nvim_command("hi! LualineFileIconColor guifg=" .. new_color .. " guibg=" .. colors.bubble_file)
 				_file_icon_color_cache = new_color
 			end
 			local fname = vim.fn.expand("%:p")
@@ -188,7 +189,7 @@ local function file_icon()
 			local win = window_numbers[winnr]
 			return win .. " " .. fi
 		end,
-		padding = { left = 2, right = 0 },
+		padding = { left = 1, right = 0 },
 		cond = conditions.buffer_not_empty,
 		color = "LualineFileIconColor",
 		gui = "bold",
@@ -207,8 +208,9 @@ local function file_name()
 			return show_name .. modified
 		end,
 		padding = { left = 1, right = 1 },
-		color = { fg = colors.fg, gui = "bold", bg = colors.bg },
+		color = { fg = colors.fg, gui = "bold", bg = colors.bubble_file },
 		cond = conditions.buffer_not_empty,
+		separator = { right = "" },
 	}
 end
 
@@ -222,9 +224,9 @@ local function diff()
 			removed = lazy_icons.git.removed,
 		},
 		diff_color = {
-			added = { fg = colors.git.add, bg = colors.bg },
-			modified = { fg = colors.git.change, bg = colors.bg },
-			removed = { fg = colors.git.delete, bg = colors.bg },
+			added = { fg = colors.git.add },
+			modified = { fg = colors.git.change },
+			removed = { fg = colors.git.delete },
 		},
 		source = function()
 			local gitsigns = vim.b.gitsigns_status_dict
@@ -253,23 +255,29 @@ local function lazy_status()
 			local lazy = get_lazy_status()
 			return lazy and lazy.has_updates and lazy.has_updates()
 		end,
-		color = { fg = colors.orange, bg = colors.bg },
+		color = { fg = colors.orange },
 	}
 end
 
 local function circle_icon(direction)
 	local colors = get_colors()
-	return {
-		function()
-			if direction == "left" then
-				return icons.circle_left
-			else
+	if direction == "left" then
+		return {
+			function()
+				return ""
+			end,
+			padding = { left = 0, right = 0 },
+			color = { fg = colors.normal_bg_b },
+		}
+	else
+		return {
+			function()
 				return icons.circle_right
-			end
-		end,
-		padding = { left = 0, right = 0 },
-		color = { fg = colors.bg },
-	}
+			end,
+			padding = { left = 0, right = 0 },
+			color = { fg = colors.bubble_file },
+		}
+	end
 end
 
 local function treesitter()
@@ -287,7 +295,7 @@ local function treesitter()
 			return ""
 		end,
 		padding = 0,
-		color = { fg = colors.green, bg = colors.bg },
+		color = { fg = colors.green },
 		cond = conditions.hide_in_width,
 	}
 end
@@ -312,7 +320,7 @@ local function file_size()
 			end
 			return string.format("%.1f%s", size, sufixes[i])
 		end,
-		color = { fg = colors.fg, bg = colors.bg },
+		color = { fg = colors.fg },
 		cond = conditions.buffer_not_empty,
 	}
 end
@@ -323,7 +331,7 @@ local function file_format()
 		"fileformat",
 		fmt = string.upper,
 		icons_enabled = true,
-		color = { fg = colors.green, gui = "bold", bg = colors.bg },
+		color = { fg = colors.green, gui = "bold" },
 		cond = conditions.hide_in_width,
 	}
 end
@@ -366,7 +374,7 @@ local function lsp_servers()
 				return icons.ls_active .. table.concat(all_names, " ")
 			end
 		end,
-		color = { fg = colors.fg, bg = colors.bg },
+		color = { fg = colors.fg },
 		cond = conditions.hide_in_width,
 	}
 end
@@ -376,7 +384,7 @@ local function location()
 	return {
 		"location",
 		padding = 0,
-		color = { fg = colors.orange, bg = colors.bg },
+		color = { fg = colors.orange },
 	}
 end
 
@@ -392,7 +400,8 @@ local function file_position()
 			return chars[index]
 		end,
 		padding = 0,
-		color = { fg = colors.yellow, bg = colors.bg },
+		color = { fg = colors.yellow },
+		separator = { right = "" },
 	}
 end
 
@@ -405,7 +414,7 @@ local function file_read_only()
 			end
 			return string.gsub(icons.lock, "%s+", "")
 		end,
-		color = { fg = colors.red, bg = colors.bg },
+		color = { fg = colors.red },
 	}
 end
 
@@ -421,7 +430,8 @@ local function diagnostic_ok()
 			end
 		end,
 		cond = conditions.hide_in_width,
-		color = { fg = colors.green, bg = colors.bg },
+		color = { fg = colors.green },
+		left_padding = 2,
 	}
 end
 
@@ -437,12 +447,11 @@ local function diagnostics()
 			hint = diagnostics_icons.Hint,
 		},
 		diagnostics_color = {
-			error = { fg = colors.red, bg = colors.bg },
-			warn = { fg = colors.yellow, bg = colors.bg },
-			info = { fg = colors.blue, bg = colors.bg },
-			hint = { fg = colors.cyan, bg = colors.bg },
+			error = { fg = colors.red },
+			warn = { fg = colors.yellow },
+			info = { fg = colors.blue },
+			hint = { fg = colors.cyan },
 		},
-		color = { bg = colors.bg },
 		cond = function()
 			local diagnostics_list = vim.diagnostic.get(0)
 			return #diagnostics_list > 0 and conditions.hide_in_width()
@@ -467,18 +476,16 @@ local function dap_status()
 			local dap = get_dap()
 			return dap and dap.status and dap.status() ~= ""
 		end,
-		color = { fg = colors.red, bg = colors.bg },
+		color = { fg = colors.red },
 	}
 end
 
 local function space()
-	local colors = get_colors()
 	return {
 		function()
 			return " "
 		end,
 		padding = 0,
-		color = { fg = colors.blue, bg = colors.bg },
 		cond = conditions.hide_in_width,
 	}
 end
@@ -490,7 +497,7 @@ local function null_ls()
 			return lsp_server_icon("null-ls", icons.code_lens_action)
 		end,
 		padding = 0,
-		color = { fg = colors.blue, bg = colors.bg },
+		color = { fg = colors.blue },
 		cond = conditions.hide_in_width,
 	}
 end
@@ -502,7 +509,7 @@ local function grammar_lsp(server_name)
 			return lsp_server_icon(server_name, icons.typos)
 		end,
 		padding = 0,
-		color = { fg = colors.yellow, bg = colors.bg },
+		color = { fg = colors.yellow },
 		cond = conditions.hide_in_width,
 	}
 end
@@ -523,44 +530,44 @@ local function get_custom_theme()
 	local colors = get_colors()
 	return {
 		normal = {
-			a = { fg = colors.normal_a, bg = colors.blue, gui = "bold" },
+			a = { fg = colors.normal_a, bg = colors.mode_normal, gui = "bold" },
 			b = { fg = colors.normal_b, bg = colors.normal_bg_b },
-			c = { fg = colors.normal_c, bg = colors.normal_bg_c },
-			x = { fg = colors.normal_c, bg = colors.normal_bg_c },
+			c = { fg = colors.normal_c },
+			x = { fg = colors.normal_c },
 			y = { fg = colors.normal_b, bg = colors.normal_bg_b },
-			z = { fg = colors.normal_a, bg = colors.blue, gui = "bold" },
+			z = { fg = colors.normal_b, bg = colors.normal_bg_b },
 		},
 		insert = {
-			a = { fg = colors.normal_a, bg = colors.green, gui = "bold" },
+			a = { fg = colors.normal_a, bg = colors.mode_insert, gui = "bold" },
 			b = { fg = colors.normal_b, bg = colors.normal_bg_b },
-			c = { fg = colors.normal_c, bg = colors.normal_bg_c },
-			x = { fg = colors.normal_c, bg = colors.normal_bg_c },
+			c = { fg = colors.normal_c },
+			x = { fg = colors.normal_c },
 			y = { fg = colors.normal_b, bg = colors.normal_bg_b },
-			z = { fg = colors.normal_a, bg = colors.green, gui = "bold" },
+			z = { fg = colors.normal_b, bg = colors.normal_bg_b },
 		},
 		visual = {
-			a = { fg = colors.normal_a, bg = colors.magenta, gui = "bold" },
+			a = { fg = colors.normal_a, bg = colors.mode_visual, gui = "bold" },
 			b = { fg = colors.normal_b, bg = colors.normal_bg_b },
-			c = { fg = colors.normal_c, bg = colors.normal_bg_c },
-			x = { fg = colors.normal_c, bg = colors.normal_bg_c },
+			c = { fg = colors.normal_c },
+			x = { fg = colors.normal_c },
 			y = { fg = colors.normal_b, bg = colors.normal_bg_b },
-			z = { fg = colors.normal_a, bg = colors.magenta, gui = "bold" },
+			z = { fg = colors.normal_b, bg = colors.normal_bg_b },
 		},
 		replace = {
-			a = { fg = colors.fg, bg = colors.red, gui = "bold" },
+			a = { fg = colors.fg, bg = colors.mode_replace, gui = "bold" },
 			b = { fg = colors.normal_b, bg = colors.normal_bg_b },
-			c = { fg = colors.normal_c, bg = colors.normal_bg_c },
-			x = { fg = colors.normal_c, bg = colors.normal_bg_c },
+			c = { fg = colors.normal_c },
+			x = { fg = colors.normal_c },
 			y = { fg = colors.normal_b, bg = colors.normal_bg_b },
-			z = { fg = colors.fg, bg = colors.red, gui = "bold" },
+			z = { fg = colors.normal_b, bg = colors.normal_bg_b },
 		},
 		command = {
-			a = { fg = colors.normal_a, bg = colors.yellow, gui = "bold" },
+			a = { fg = colors.normal_a, bg = colors.mode_command, gui = "bold" },
 			b = { fg = colors.normal_b, bg = colors.normal_bg_b },
-			c = { fg = colors.normal_c, bg = colors.normal_bg_c },
-			x = { fg = colors.normal_c, bg = colors.normal_bg_c },
+			c = { fg = colors.normal_c },
+			x = { fg = colors.normal_c },
 			y = { fg = colors.normal_b, bg = colors.normal_bg_b },
-			z = { fg = colors.normal_a, bg = colors.yellow, gui = "bold" },
+			z = { fg = colors.normal_b, bg = colors.normal_bg_b },
 		},
 	}
 end
@@ -587,6 +594,7 @@ return {
 						fmt = function(str)
 							return str
 						end,
+						separator = { left = "", right = "" },
 					},
 				},
 				lualine_b = {
