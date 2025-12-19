@@ -337,19 +337,11 @@ local function file_format()
 	}
 end
 
-local function format_client_name(name, should_trim)
-	if should_trim then
-		return string.sub(name, 1, 4)
-	end
-	return name
-end
-
-local function get_lsp_client_names(buf_clients, should_trim)
+local function get_lsp_client_names(buf_clients)
 	local client_names = {}
 	for _, client in pairs(buf_clients) do
 		if not (client.name == "null-ls" or client.name == "typos_lsp" or client.name == "harper_ls") then
-			local formatted_name = format_client_name(client.name, should_trim)
-			table.insert(client_names, formatted_name)
+			table.insert(client_names, client.name)
 		end
 	end
 	return client_names
@@ -364,10 +356,7 @@ local function lsp_servers()
 				return icons.ls_inactive .. "none"
 			end
 
-			local should_trim = vim.fn.winwidth(0) < 100
-			local all_names = {}
-
-			vim.list_extend(all_names, get_lsp_client_names(buf_clients, should_trim))
+			local all_names = get_lsp_client_names(buf_clients)
 
 			if #all_names == 0 then
 				return icons.ls_inactive .. "none"
