@@ -145,11 +145,10 @@ M.lualine = {
   normal_bg_b = "#3b4261",
   normal_bg_c = "#16181f",
 
-  -- Section background colors (for statusline layout)
-  section_b_bg = "#4a3f5c",     -- branch section (muted purple)
-  section_c_bg = "#2d3149",     -- file info section (dark blue)
-  section_y_bg = "#3b4261",     -- right info section (same as normal_bg_b)
-  section_z_bg = "#24283b",     -- right end section (same as bg)
+  section_b_bg = "#363147",     -- branch
+  section_c_bg = "#2d3149",     -- file
+  section_y_bg = "#3b4261",     -- right info
+  section_z_bg = "#24283b",     -- right end
 }
 
 -- DevIcons Colors
