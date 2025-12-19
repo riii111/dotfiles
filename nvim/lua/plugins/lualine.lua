@@ -553,6 +553,14 @@ local function get_custom_theme()
 			y = { fg = colors.normal_b, bg = colors.normal_bg_b },
 			z = { fg = colors.normal_b, bg = colors.normal_bg_b },
 		},
+		terminal = {
+			a = { fg = colors.normal_a, bg = colors.mode_insert, gui = "bold" },
+			b = { fg = colors.normal_b, bg = colors.normal_bg_b },
+			c = { fg = colors.normal_c },
+			x = { fg = colors.normal_c },
+			y = { fg = colors.normal_b, bg = colors.normal_bg_b },
+			z = { fg = colors.normal_b, bg = colors.normal_bg_b },
+		},
 	}
 end
 
