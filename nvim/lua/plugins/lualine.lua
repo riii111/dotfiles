@@ -173,7 +173,7 @@ local function file_icon()
 			local fi = get_file_icon()
 			local new_color = get_file_icon_color()
 			if _file_icon_color_cache ~= new_color then
-				vim.api.nvim_command("hi! LualineFileIconColor guifg=" .. new_color .. " guibg=" .. colors.section_c_bg)
+				vim.api.nvim_set_hl(0, "LualineFileIconColor", { fg = new_color, bg = colors.section_c_bg })
 				_file_icon_color_cache = new_color
 			end
 			local fname = vim.fn.expand("%:p")
@@ -257,26 +257,16 @@ local function lazy_status()
 	}
 end
 
--- Section edge separators: left arrow for Y section start, right arrow for C section end
-local function section_separator(direction)
+-- Left arrow separator for Y section start
+local function section_separator_left()
 	local colors = get_colors()
-	if direction == "left" then
-		return {
-			function()
-				return ""
-			end,
-			padding = { left = 0, right = 0 },
-			color = { fg = colors.normal_bg_b },
-		}
-	else
-		return {
-			function()
-				return ""
-			end,
-			padding = { left = 0, right = 0 },
-			color = { fg = colors.section_c_bg },
-		}
-	end
+	return {
+		function()
+			return ""
+		end,
+		padding = { left = 0, right = 0 },
+		color = { fg = colors.section_y_bg },
+	}
 end
 
 local function treesitter()
@@ -606,7 +596,7 @@ return {
 					lazy_status(),
 				},
 				lualine_x = {
-					section_separator("left"),
+					section_separator_left(),
 				},
 				lualine_y = {
 					diagnostic_ok(),
