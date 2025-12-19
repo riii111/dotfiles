@@ -46,8 +46,6 @@ local icons = {
 	question = "",
 	term = "",
 	floppy = "󰄳",
-	circle_left = "",
-	circle_right = "",
 	treesitter = "",
 	ls_inactive = "󰒲 ",
 	ls_active = " ",
@@ -162,7 +160,7 @@ local function git()
 		"b:gitsigns_head",
 		icon = icons.git,
 		cond = conditions.check_git_workspace,
-		color = { fg = colors.magenta, bg = colors.bubble_branch },
+		color = { fg = colors.magenta, bg = colors.section_b_bg },
 		padding = { left = 2, right = 2 },
 		separator = { right = "" },
 	}
@@ -175,7 +173,7 @@ local function file_icon()
 			local fi = get_file_icon()
 			local new_color = get_file_icon_color()
 			if _file_icon_color_cache ~= new_color then
-				vim.api.nvim_command("hi! LualineFileIconColor guifg=" .. new_color .. " guibg=" .. colors.bubble_file)
+				vim.api.nvim_command("hi! LualineFileIconColor guifg=" .. new_color .. " guibg=" .. colors.section_c_bg)
 				_file_icon_color_cache = new_color
 			end
 			local fname = vim.fn.expand("%:p")
@@ -208,7 +206,7 @@ local function file_name()
 			return show_name .. modified
 		end,
 		padding = { left = 1, right = 1 },
-		color = { fg = colors.fg, gui = "bold", bg = colors.bubble_file },
+		color = { fg = colors.fg, gui = "bold", bg = colors.section_c_bg },
 		cond = conditions.buffer_not_empty,
 		separator = { right = "" },
 	}
@@ -259,7 +257,8 @@ local function lazy_status()
 	}
 end
 
-local function circle_icon(direction)
+-- Section edge separators: left arrow for Y section start, right arrow for C section end
+local function section_separator(direction)
 	local colors = get_colors()
 	if direction == "left" then
 		return {
@@ -272,10 +271,10 @@ local function circle_icon(direction)
 	else
 		return {
 			function()
-				return icons.circle_right
+				return ""
 			end,
 			padding = { left = 0, right = 0 },
-			color = { fg = colors.bubble_file },
+			color = { fg = colors.section_c_bg },
 		}
 	end
 end
@@ -431,7 +430,7 @@ local function diagnostic_ok()
 		end,
 		cond = conditions.hide_in_width,
 		color = { fg = colors.green },
-		left_padding = 2,
+		padding = { left = 2, right = 0 },
 	}
 end
 
@@ -605,10 +604,9 @@ return {
 					file_name(),
 					diff(),
 					lazy_status(),
-					circle_icon("right"),
 				},
 				lualine_x = {
-					circle_icon("left"),
+					section_separator("left"),
 				},
 				lualine_y = {
 					diagnostic_ok(),
