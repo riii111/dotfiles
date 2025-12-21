@@ -60,6 +60,41 @@ setopt HIST_IGNORE_ALL_DUPS # 重複は最新のみ残す
 setopt HIST_REDUCE_BLANKS   # 余分な空白を削除
 
 # ==========================================
+# Vim Key Bindings
+# ==========================================
+bindkey -v   # Vi mode を有効化
+
+KEYTIMEOUT=10   # 0.1s
+
+function zle-keymap-select {
+  if [[ $KEYMAP == vicmd ]]; then
+    # Normal mode: Block cursor
+    echo -ne '\e[2 q'
+  else
+    # Insert mode: Beam cursor
+    echo -ne '\e[6 q'
+  fi
+}
+zle -N zle-keymap-select
+
+# Zsh 起動時に Insert mode のカーソル（Beam）を設定
+function zle-line-init {
+  echo -ne '\e[6 q'
+}
+zle -N zle-line-init
+
+# Vim style incremental search
+bindkey '^R' history-incremental-search-backward
+bindkey '^S' history-incremental-search-forward
+
+function vi-yank-clipboard {
+  zle vi-yank
+  echo -n "$CUTBUFFER" | pbcopy
+}
+zle -N vi-yank-clipboard
+bindkey -M vicmd 'y' vi-yank-clipboard
+
+# ==========================================
 # Prompt
 # ==========================================
 export PS1="%1~ %# "
