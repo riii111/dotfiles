@@ -159,14 +159,13 @@ function rust-test-all() {
 [[ -o interactive ]] || return
 
 # ==========================================
-# Completion (deferred)
+# Completion 
 # ==========================================
 # Homebrew の補完を有効化
 FPATH="/opt/homebrew/share/zsh/site-functions:$FPATH"
 fpath+=~/.zfunc
 autoload -Uz compinit
 
-# プロンプト表示後に compinit を遅延実行
 _deferred_compinit() {
   unfunction _deferred_compinit
   compinit  # -C は使わない（補完定義が少ないためキャッシュ効果が薄い）
@@ -207,11 +206,9 @@ alias o='open'
 export LG_CONFIG_FILE="$HOME/.config/lazygit/config.yml"
 alias lg='lazygit'
 
-# Directory operations
 alias mkdir='mkdir -p'
 alias mkd='mkdir -p'
 
-# Docker aliases
 alias dc='docker compose'
 alias dcb='docker compose build'
 alias dcbn='docker compose build --no-cache'
@@ -248,9 +245,10 @@ export FZF_ALT_C_OPTS="--preview 'eza --tree --level=2 --icons --color=always {}
 export FZF_CTRL_R_OPTS="--preview 'echo {}' --preview-window=down:3:wrap"
 
 # fzf keybindings: Ctrl-R (history), Ctrl-O (cd)
-[[ -f /opt/homebrew/opt/fzf/shell/key-bindings.zsh ]] && \
-  source /opt/homebrew/opt/fzf/shell/key-bindings.zsh
+source /opt/homebrew/opt/fzf/shell/key-bindings.zsh
+bindkey -r '^T'              # Ctrl-T 無効化（Rectangle と衝突）
 bindkey '^O' fzf-cd-widget   # Ctrl-O でディレクトリ移動
+bindkey -M vicmd '^O' fzf-cd-widget
 
 # ==========================================
 # ghq
