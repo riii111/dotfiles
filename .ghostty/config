@@ -30,7 +30,10 @@ keybind = super+alt+j=unbind
 keybind = super+alt+k=unbind
 # Disable EOF signal (prevents accidental termination of ClaudeCode)
 keybind = ctrl+d=unbind
+# [alt+T] = thinking mode
+macos-option-as-alt = true
 
 # for tmux
 term = xterm-ghostty
-keybind = shift+enter=text:\n
+keybind = shift+enter=text:\x1b\r
+
