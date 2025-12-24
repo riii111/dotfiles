@@ -30,8 +30,11 @@ keybind = super+alt+j=unbind
 keybind = super+alt+k=unbind
 # Disable EOF signal (prevents accidental termination of ClaudeCode)
 keybind = ctrl+d=unbind
-# [alt+T] = thinking mode
+# Claude Code shortcuts (Alt+T=thinking, Alt+P=model switch)
 macos-option-as-alt = true
+# JIS keyboard: Option+¥ produces | and \ (broken by macos-option-as-alt)
+keybind = alt+¥=text:|
+keybind = alt+shift+|=text:\u{005c}
 
 # for tmux
 term = xterm-ghostty
