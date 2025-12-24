@@ -194,7 +194,7 @@ SQL
 	  export DBN_PG_SCHEMA_SQL="$schema_sql"
 	  export DBN_PG_COPY_INDEXES_SQL="SELECT coalesce(string_agg(indexdef, chr(10)||chr(10) ORDER BY indexname), '') FROM pg_catalog.pg_indexes WHERE schemaname = '__SCH__' AND tablename = '__TBL__';"
 	
-	  header=$'ctrl-s:Schema  ctrl-d:Records  enter:Copy SELECT  ctrl-y:Copy Indexes'
+		  header=$'ctrl-d:Toggle  enter:Copy SELECT  ctrl-y:Copy Indexes'
 	  preview_cmd=$(cat <<'SH'
 	TABLE={}
 	SCH="${TABLE%%.*}"
@@ -212,8 +212,7 @@ SH
 )
 	
 	  printf "%s\n" "$tables" | fzf --prompt='table> ' --header="$header" --preview-window='right:75%,nowrap' --preview="$preview_cmd" \
-	    --bind "ctrl-s:execute-silent(printf schema > \"$DBN_MODE_FILE\")+refresh-preview" \
-	    --bind "ctrl-d:execute-silent(printf records > \"$DBN_MODE_FILE\")+refresh-preview" \
+		    --bind "ctrl-d:execute-silent(if [ ! -f $DBN_MODE_FILE ] || grep -q '^schema$' $DBN_MODE_FILE 2>/dev/null; then printf records > $DBN_MODE_FILE; else printf schema > $DBN_MODE_FILE; fi)+refresh-preview" \
 	    --bind "enter:execute-silent(TABLE={}; SCH=\${TABLE%%.*}; TBL=\${TABLE#*.}; printf 'SELECT * FROM \"%s\".\"%s\" LIMIT 50;\\n' \"\$SCH\" \"\$TBL\" | pbcopy)+abort" \
 	    --bind "ctrl-y:execute-silent(TABLE={}; SCH=\${TABLE%%.*}; TBL=\${TABLE#*.}; SQL=\"\$DBN_PG_COPY_INDEXES_SQL\"; SQL=\${SQL//__SCH__/\$SCH}; SQL=\${SQL//__TBL__/\$TBL}; psql \"\$DBN_DSN\" -X -At -c \"\$SQL\" | pbcopy)"
 
@@ -337,7 +336,7 @@ JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS rc2
 	  export DBN_MODE_FILE="$mode_file"
 	
 	  export DBN_MY_SCHEMA_SQL="$schema_sql"
-	  header=$'ctrl-s:Schema  ctrl-d:Records  enter:Copy SELECT  ctrl-y:Copy DDL'
+		  header=$'ctrl-d:Toggle  enter:Copy SELECT  ctrl-y:Copy DDL'
 	  printf "%s\n" "$tables" | fzf --prompt='table> ' --header="$header" --preview-window='right:75%,nowrap' --preview="
 	TABLE={}; SCH=\${TABLE%%.*}; TBL=\${TABLE#*.};
 	MODE=\$(cat \"\$DBN_MODE_FILE\" 2>/dev/null || echo schema)
@@ -350,8 +349,7 @@ JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS rc2
 	fi
 	MYSQL_PWD=\"$_pass\" mysql --protocol=TCP --table -h \"$_host\" -P \"$_port\" -u \"$_user\" -D \"$_db\" -e \"\$SQL\"
 	" \
-	    --bind "ctrl-s:execute-silent(printf schema > \"$DBN_MODE_FILE\")+refresh-preview" \
-	    --bind "ctrl-d:execute-silent(printf records > \"$DBN_MODE_FILE\")+refresh-preview" \
+		    --bind "ctrl-d:execute-silent(if [ ! -f $DBN_MODE_FILE ] || grep -q '^schema$' $DBN_MODE_FILE 2>/dev/null; then printf records > $DBN_MODE_FILE; else printf schema > $DBN_MODE_FILE; fi)+refresh-preview" \
 	    --bind "enter:execute-silent(TABLE={}; SCH=\${TABLE%%.*}; TBL=\${TABLE#*.}; printf 'SELECT * FROM \\`%s\\`.\\`%s\\` LIMIT 50;\\n' \"\$SCH\" \"\$TBL\" | pbcopy)+abort" \
 	    --bind "ctrl-y:execute-silent(TABLE={}; SCH=\${TABLE%%.*}; TBL=\${TABLE#*.}; MYSQL_PWD=\"$_pass\" mysql --protocol=TCP --batch --skip-column-names --raw -h \"$_host\" -P \"$_port\" -u \"$_user\" -D \"$_db\" -e \"SHOW CREATE TABLE \\`$TBL\\`;\" | cut -f2- | pbcopy)"
 
