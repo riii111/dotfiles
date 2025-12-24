@@ -41,15 +41,57 @@ return {
       end
     end
 
+    local function search_and_center(cmd)
+      return function()
+        vim.cmd("normal! " .. cmd)
+        local ok, hlslens = pcall(require, "hlslens")
+        if ok then
+          hlslens.start()
+        end
+        neoscroll.zz({ half_win_duration = duration })
+      end
+    end
+
+    local function search_count_and_center(cmd)
+      return function()
+        vim.cmd("execute('normal! ' . v:count1 . '" .. cmd .. "')")
+        local ok, hlslens = pcall(require, "hlslens")
+        if ok then
+          hlslens.start()
+        end
+        neoscroll.zz({ half_win_duration = duration })
+      end
+    end
+
+    -- Search and navigation with centering
     local search_mappings = {
-      ["n"] = move_and_center("n"),
-      ["N"] = move_and_center("N"),
-      ["*"] = move_and_center("*"),
-      ["#"] = move_and_center("#"),
+      ["n"] = search_count_and_center("n"),
+      ["N"] = search_count_and_center("N"),
+      ["*"] = search_and_center("*"),
+      ["#"] = search_and_center("#"),
+      ["g*"] = search_and_center("g*"),
+      ["g#"] = search_and_center("g#"),
       ["%"] = move_and_center("%"),
     }
 
     for key, func in pairs(search_mappings) do
+      vim.keymap.set("n", key, func, { silent = true })
+    end
+
+    -- Jump commands with centering
+    local jump_mappings = {
+      ["gg"] = function()
+        vim.cmd("execute('normal! ' . v:count1 . 'gg')")
+        neoscroll.zz({ half_win_duration = duration })
+      end,
+      ["G"] = move_and_center("G"),
+      ["{"] = move_and_center("{"),
+      ["}"] = move_and_center("}"),
+      ["<C-o>"] = move_and_center("<C-o>"),
+      ["<C-i>"] = move_and_center("<C-i>"),
+    }
+
+    for key, func in pairs(jump_mappings) do
       vim.keymap.set("n", key, func, { silent = true })
     end
   end,
