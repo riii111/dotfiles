@@ -26,30 +26,47 @@ SELECT table_schema||'.'||table_name
 FROM information_schema.tables
 WHERE table_type='BASE TABLE' AND table_schema NOT IN ('pg_catalog','information_schema')
 ORDER BY 1;"
-  preview_sql='
--- columns
-SELECT column_name AS col, data_type AS type, is_nullable AS nulls
-FROM information_schema.columns
-WHERE table_schema = '\''__SCH__'\'' AND table_name = '\''__TBL__'\''
-ORDER BY ordinal_position;
--- outbound FKs
-SELECT tc.table_name AS from_tbl, kcu.column_name AS from_col,
-       ccu.table_name AS to_tbl, ccu.column_name AS to_col
-FROM information_schema.table_constraints tc
-JOIN information_schema.key_column_usage kcu
-  ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = '\''__SCH__'\'' AND tc.table_name = '\''__TBL__'\''
-JOIN information_schema.constraint_column_usage ccu
-  ON ccu.constraint_name = tc.constraint_name AND ccu.table_schema = '\''__SCH__'\'' AND ccu.table_name = '\''__TBL__'\'';
--- inbound FKs
-SELECT tc.table_name AS to_tbl, kcu.column_name AS to_col,
-       ccu.table_name AS from_tbl, ccu.column_name AS from_col
-FROM information_schema.table_constraints tc
-JOIN information_schema.key_column_usage kcu
-  ON tc.constraint_name = kcu.constraint_name
-JOIN information_schema.constraint_column_usage ccu
-  ON ccu.constraint_name = tc.constraint_name
-WHERE ccu.table_schema = '\''__SCH__'\'' AND ccu.table_name = '\''__TBL__'\''
-ORDER BY 1,2;'
+	  preview_sql='
+	-- columns
+	SELECT a.attname AS col,
+	       pg_catalog.format_type(a.atttypid, a.atttypmod) AS type,
+	       CASE WHEN a.attnotnull THEN '\''NO'\'' ELSE '\''YES'\'' END AS nulls
+	FROM pg_catalog.pg_attribute a
+	JOIN pg_catalog.pg_class c ON c.oid = a.attrelid
+	JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+	WHERE n.nspname = '\''__SCH__'\''
+	  AND c.relname = '\''__TBL__'\''
+	  AND a.attnum > 0
+	  AND NOT a.attisdropped
+	ORDER BY a.attnum;
+	-- outbound FKs
+	SELECT tc.table_name AS from_tbl, kcu.column_name AS from_col,
+	       ccu.table_name AS to_tbl, ccu.column_name AS to_col
+	FROM information_schema.table_constraints tc
+	JOIN information_schema.key_column_usage kcu
+	  ON tc.constraint_schema = kcu.constraint_schema
+	 AND tc.constraint_name = kcu.constraint_name
+	JOIN information_schema.constraint_column_usage ccu
+	  ON ccu.constraint_schema = tc.constraint_schema
+	 AND ccu.constraint_name = tc.constraint_name
+	WHERE tc.constraint_type = '\''FOREIGN KEY'\''
+	  AND tc.table_schema = '\''__SCH__'\''
+	  AND tc.table_name = '\''__TBL__'\''
+	ORDER BY 1, kcu.ordinal_position;
+	-- inbound FKs
+	SELECT tc.table_name AS to_tbl, kcu.column_name AS to_col,
+	       ccu.table_name AS from_tbl, ccu.column_name AS from_col
+	FROM information_schema.table_constraints tc
+	JOIN information_schema.key_column_usage kcu
+	  ON tc.constraint_schema = kcu.constraint_schema
+	 AND tc.constraint_name = kcu.constraint_name
+	JOIN information_schema.constraint_column_usage ccu
+	  ON ccu.constraint_schema = tc.constraint_schema
+	 AND ccu.constraint_name = tc.constraint_name
+	WHERE tc.constraint_type = '\''FOREIGN KEY'\''
+	  AND ccu.table_schema = '\''__SCH__'\''
+	  AND ccu.table_name = '\''__TBL__'\''
+	ORDER BY 1, kcu.ordinal_position;'
   tables="$(psql "$DSN" -X -At -F $'\t' -c "$list_sql")"
   export DBN_DSN="$DSN"
   printf "%s\n" "$tables" | fzf --prompt='table> ' --preview='
