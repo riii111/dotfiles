@@ -12,7 +12,7 @@ while getopts "p:" opt; do
     p) prof="$OPTARG" ;;
   esac
 done
-shift $((OPTIND-1))
+shift $((OPTIND - 1))
 
 DSN="$(yq -p=toml -oy ".profiles.\"${prof}\".dsn // \"\"" .dbx.toml)"
 [[ -z "${DSN}" ]] && { echo "DSNが見つかりません（.dbx.tomlのprofiles.${prof}.dsnを確認してね）"; exit 1; }
@@ -26,61 +26,197 @@ SELECT table_schema||'.'||table_name
 FROM information_schema.tables
 WHERE table_type='BASE TABLE' AND table_schema NOT IN ('pg_catalog','information_schema')
 ORDER BY 1;"
-	  preview_sql='
-	-- columns
-	SELECT a.attname AS col,
-	       pg_catalog.format_type(a.atttypid, a.atttypmod) AS type,
-	       CASE WHEN a.attnotnull THEN '\''NO'\'' ELSE '\''YES'\'' END AS nulls
-	FROM pg_catalog.pg_attribute a
-	JOIN pg_catalog.pg_class c ON c.oid = a.attrelid
-	JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-	WHERE n.nspname = '\''__SCH__'\''
-	  AND c.relname = '\''__TBL__'\''
-	  AND a.attnum > 0
-	  AND NOT a.attisdropped
-	ORDER BY a.attnum;
-	-- outbound FKs
-	SELECT tc.table_name AS from_tbl, kcu.column_name AS from_col,
-	       ccu.table_name AS to_tbl, ccu.column_name AS to_col
-	FROM information_schema.table_constraints tc
-	JOIN information_schema.key_column_usage kcu
-	  ON tc.constraint_schema = kcu.constraint_schema
-	 AND tc.constraint_name = kcu.constraint_name
-	JOIN information_schema.constraint_column_usage ccu
-	  ON ccu.constraint_schema = tc.constraint_schema
-	 AND ccu.constraint_name = tc.constraint_name
-	WHERE tc.constraint_type = '\''FOREIGN KEY'\''
-	  AND tc.table_schema = '\''__SCH__'\''
-	  AND tc.table_name = '\''__TBL__'\''
-	ORDER BY 1, kcu.ordinal_position;
-	-- inbound FKs
-	SELECT tc.table_name AS to_tbl, kcu.column_name AS to_col,
-	       ccu.table_name AS from_tbl, ccu.column_name AS from_col
-	FROM information_schema.table_constraints tc
-	JOIN information_schema.key_column_usage kcu
-	  ON tc.constraint_schema = kcu.constraint_schema
-	 AND tc.constraint_name = kcu.constraint_name
-	JOIN information_schema.constraint_column_usage ccu
-	  ON ccu.constraint_schema = tc.constraint_schema
-	 AND ccu.constraint_name = tc.constraint_name
-	WHERE tc.constraint_type = '\''FOREIGN KEY'\''
-	  AND ccu.table_schema = '\''__SCH__'\''
-	  AND ccu.table_name = '\''__TBL__'\''
-	ORDER BY 1, kcu.ordinal_position;'
-  tables="$(psql "$DSN" -X -At -F $'\t' -c "$list_sql")"
-  export DBN_DSN="$DSN"
-  printf "%s\n" "$tables" | fzf --prompt='table> ' --preview='
-TABLE={}
-SCH="${TABLE%%.*}"
-TBL="${TABLE#*.}"
-SQL=$(cat <<'"'"'EOS'"'"'
-'"$preview_sql"'
-EOS
+
+  schema_sql=$(cat <<'SQL'
+-- columns
+SELECT a.attname AS col,
+       pg_catalog.format_type(a.atttypid, a.atttypmod) AS type,
+       CASE WHEN a.attnotnull THEN 'NO' ELSE 'YES' END AS nulls,
+       concat_ws(
+         chr(32),
+         CASE
+           WHEN EXISTS (
+             SELECT 1
+             FROM pg_catalog.pg_index i
+             WHERE i.indrelid = c.oid
+               AND i.indisprimary
+               AND a.attnum = ANY (i.indkey::int2[])
+           ) THEN 'PK'
+         END,
+         CASE
+           WHEN EXISTS (
+             SELECT 1
+             FROM pg_catalog.pg_index i
+             WHERE i.indrelid = c.oid
+               AND i.indisunique
+               AND NOT i.indisprimary
+               AND a.attnum = ANY (i.indkey::int2[])
+           ) THEN 'UNIQUE'
+         END,
+         CASE
+           WHEN a.attidentity = 'a' THEN 'IDENTITY ALWAYS'
+           WHEN a.attidentity = 'd' THEN 'IDENTITY'
+         END,
+         CASE WHEN a.attgenerated = 's' THEN 'GENERATED' END,
+         CASE
+           WHEN ad.adbin IS NOT NULL THEN
+             'DEFAULT=' || pg_catalog.pg_get_expr(ad.adbin, ad.adrelid)
+         END,
+         CASE
+           WHEN col_description(a.attrelid, a.attnum) IS NOT NULL THEN
+             'COMMENT=' || quote_literal(
+               CASE
+                 WHEN length(col_description(a.attrelid, a.attnum)) > 60 THEN
+                   left(
+                     translate(col_description(a.attrelid, a.attnum), chr(10) || chr(13) || chr(9), '   '),
+                     60
+                   ) || '…'
+                 ELSE
+                   translate(col_description(a.attrelid, a.attnum), chr(10) || chr(13) || chr(9), '   ')
+               END
+             )
+         END
+       ) AS meta
+FROM pg_catalog.pg_attribute a
+JOIN pg_catalog.pg_class c ON c.oid = a.attrelid
+JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+LEFT JOIN pg_catalog.pg_attrdef ad ON ad.adrelid = a.attrelid AND ad.adnum = a.attnum
+WHERE n.nspname = '__SCH__'
+  AND c.relname = '__TBL__'
+  AND a.attnum > 0
+  AND NOT a.attisdropped
+ORDER BY a.attnum;
+
+-- indexes (summary)
+SELECT ic.relname AS name,
+       CASE WHEN i.indisunique THEN 'YES' ELSE 'NO' END AS unique,
+       am.amname AS method,
+       string_agg(pg_catalog.pg_get_indexdef(i.indexrelid, k + 1, true), ', ' ORDER BY k)
+         FILTER (WHERE k < i.indnkeyatts) AS keys,
+       string_agg(pg_catalog.pg_get_indexdef(i.indexrelid, k + 1, true), ', ' ORDER BY k)
+         FILTER (WHERE k >= i.indnkeyatts) AS include,
+       pg_catalog.pg_get_expr(i.indpred, i.indrelid) AS "where"
+FROM pg_catalog.pg_index i
+JOIN pg_catalog.pg_class ic ON ic.oid = i.indexrelid
+JOIN pg_catalog.pg_class tc ON tc.oid = i.indrelid
+JOIN pg_catalog.pg_namespace n ON n.oid = tc.relnamespace
+JOIN pg_catalog.pg_am am ON am.oid = ic.relam
+JOIN generate_series(0, i.indnatts - 1) k ON true
+WHERE n.nspname = '__SCH__'
+  AND tc.relname = '__TBL__'
+GROUP BY ic.relname, i.indisprimary, i.indisunique, am.amname, i.indpred, i.indrelid, i.indnkeyatts
+ORDER BY i.indisprimary DESC, ic.relname;
+
+-- outbound FKs
+SELECT tc.constraint_name AS fk,
+       (kcu.column_name || ' -> ' || ccu.table_name || '.' || ccu.column_name) AS rel,
+       ('U:' ||
+         CASE rc.update_rule
+           WHEN 'CASCADE' THEN 'C'
+           WHEN 'RESTRICT' THEN 'R'
+           WHEN 'NO ACTION' THEN 'NA'
+           WHEN 'SET NULL' THEN 'SN'
+           WHEN 'SET DEFAULT' THEN 'SD'
+           ELSE rc.update_rule
+         END ||
+         ' D:' ||
+         CASE rc.delete_rule
+           WHEN 'CASCADE' THEN 'C'
+           WHEN 'RESTRICT' THEN 'R'
+           WHEN 'NO ACTION' THEN 'NA'
+           WHEN 'SET NULL' THEN 'SN'
+           WHEN 'SET DEFAULT' THEN 'SD'
+           ELSE rc.delete_rule
+         END
+       ) AS rules
+FROM information_schema.table_constraints tc
+JOIN information_schema.key_column_usage kcu
+  ON tc.constraint_schema = kcu.constraint_schema
+ AND tc.constraint_name = kcu.constraint_name
+JOIN information_schema.constraint_column_usage ccu
+  ON ccu.constraint_schema = tc.constraint_schema
+ AND ccu.constraint_name = tc.constraint_name
+JOIN information_schema.referential_constraints rc
+  ON rc.constraint_schema = tc.constraint_schema
+ AND rc.constraint_name = tc.constraint_name
+WHERE tc.constraint_type = 'FOREIGN KEY'
+  AND tc.table_schema = '__SCH__'
+  AND tc.table_name = '__TBL__'
+ORDER BY 1, kcu.ordinal_position;
+
+-- inbound FKs
+SELECT tc.constraint_name AS fk,
+       (tc.table_name || '.' || kcu.column_name || ' -> ' || ccu.column_name) AS rel,
+       ('U:' ||
+         CASE rc.update_rule
+           WHEN 'CASCADE' THEN 'C'
+           WHEN 'RESTRICT' THEN 'R'
+           WHEN 'NO ACTION' THEN 'NA'
+           WHEN 'SET NULL' THEN 'SN'
+           WHEN 'SET DEFAULT' THEN 'SD'
+           ELSE rc.update_rule
+         END ||
+         ' D:' ||
+         CASE rc.delete_rule
+           WHEN 'CASCADE' THEN 'C'
+           WHEN 'RESTRICT' THEN 'R'
+           WHEN 'NO ACTION' THEN 'NA'
+           WHEN 'SET NULL' THEN 'SN'
+           WHEN 'SET DEFAULT' THEN 'SD'
+           ELSE rc.delete_rule
+         END
+       ) AS rules
+FROM information_schema.table_constraints tc
+JOIN information_schema.key_column_usage kcu
+  ON tc.constraint_schema = kcu.constraint_schema
+ AND tc.constraint_name = kcu.constraint_name
+JOIN information_schema.constraint_column_usage ccu
+  ON ccu.constraint_schema = tc.constraint_schema
+ AND ccu.constraint_name = tc.constraint_name
+JOIN information_schema.referential_constraints rc
+  ON rc.constraint_schema = tc.constraint_schema
+ AND rc.constraint_name = tc.constraint_name
+WHERE tc.constraint_type = 'FOREIGN KEY'
+  AND ccu.table_schema = '__SCH__'
+  AND ccu.table_name = '__TBL__'
+ORDER BY 1, kcu.ordinal_position;
+SQL
 )
-SQL=${SQL//__SCH__/$SCH}
-SQL=${SQL//__TBL__/$TBL}
-PAGER=cat psql "$DBN_DSN" -X -q -P pager=off -P linestyle=unicode -P border=2 -c "$SQL"
-' --bind 'enter:execute(echo "SELECT * FROM {} LIMIT 50;" | pbcopy)+abort'
+
+	  tables="$(psql "$DSN" -X -At -F $'\t' -c "$list_sql")"
+	  export DBN_DSN="$DSN"
+	
+	  mode_file="$(mktemp -t dbn_mode.XXXXXX)"
+	  trap 'rm -f "$mode_file"' EXIT
+	  printf "schema" > "$mode_file"
+	  export DBN_MODE_FILE="$mode_file"
+	
+	  export DBN_PG_SCHEMA_SQL="$schema_sql"
+	  export DBN_PG_COPY_INDEXES_SQL="SELECT coalesce(string_agg(indexdef, chr(10)||chr(10) ORDER BY indexname), '') FROM pg_catalog.pg_indexes WHERE schemaname = '__SCH__' AND tablename = '__TBL__';"
+	
+	  header=$'ctrl-s:Schema  ctrl-d:Records  enter:Copy SELECT  ctrl-y:Copy Indexes'
+	  preview_cmd=$(cat <<'SH'
+	TABLE={}
+	SCH="${TABLE%%.*}"
+	TBL="${TABLE#*.}"
+	MODE="$(cat "$DBN_MODE_FILE" 2>/dev/null || echo schema)"
+	if [ "$MODE" = "records" ]; then
+	  SQL=$(printf 'SELECT * FROM "%s"."%s" LIMIT 50;' "$SCH" "$TBL")
+	else
+	  SQL="$DBN_PG_SCHEMA_SQL"
+	  SQL=${SQL//__SCH__/$SCH}
+	  SQL=${SQL//__TBL__/$TBL}
+	fi
+	PAGER=cat psql "$DBN_DSN" -X -q -P pager=off -P linestyle=unicode -P border=2 -c "$SQL"
+SH
+)
+	
+	  printf "%s\n" "$tables" | fzf --prompt='table> ' --header="$header" --preview-window='right:75%,nowrap' --preview="$preview_cmd" \
+	    --bind "ctrl-s:execute-silent(printf schema > \"$DBN_MODE_FILE\")+refresh-preview" \
+	    --bind "ctrl-d:execute-silent(printf records > \"$DBN_MODE_FILE\")+refresh-preview" \
+	    --bind "enter:execute-silent(TABLE={}; SCH=\${TABLE%%.*}; TBL=\${TABLE#*.}; printf 'SELECT * FROM \"%s\".\"%s\" LIMIT 50;\\n' \"\$SCH\" \"\$TBL\" | pbcopy)+abort" \
+	    --bind "ctrl-y:execute-silent(TABLE={}; SCH=\${TABLE%%.*}; TBL=\${TABLE#*.}; SQL=\"\$DBN_PG_COPY_INDEXES_SQL\"; SQL=\${SQL//__SCH__/\$SCH}; SQL=\${SQL//__TBL__/\$TBL}; psql \"\$DBN_DSN\" -X -At -c \"\$SQL\" | pbcopy)"
+
 elif [[ "$scheme" == "mysql" || "$scheme" == "mariadb" ]]; then
   # --- MySQL/MariaDB ---
   # DSN 解析（mysql://user:pass@host:port/db）
@@ -96,32 +232,129 @@ elif [[ "$scheme" == "mysql" || "$scheme" == "mariadb" ]]; then
 FROM INFORMATION_SCHEMA.TABLES
 WHERE TABLE_TYPE='BASE TABLE' AND TABLE_SCHEMA = DATABASE()
 ORDER BY 1;"
-  preview_sql="
--- columns
-SELECT COLUMN_NAME AS col, COLUMN_TYPE AS type, IS_NULLABLE AS nulls
-FROM INFORMATION_SCHEMA.COLUMNS
-WHERE TABLE_SCHEMA = '\$SCH' AND TABLE_NAME = '\$TBL'
-ORDER BY ORDINAL_POSITION;
+
+	  schema_sql=$(cat <<'SQL'
+	-- columns
+	SELECT COLUMN_NAME AS col,
+       COLUMN_TYPE AS type,
+       IS_NULLABLE AS nulls,
+       NULLIF(CONCAT_WS(' ',
+         CASE WHEN COLUMN_KEY = 'PRI' THEN 'PK' END,
+         CASE WHEN COLUMN_KEY = 'UNI' THEN 'UNIQUE' END,
+         CASE WHEN EXTRA <> '' THEN EXTRA END,
+         CASE WHEN COLUMN_DEFAULT IS NOT NULL THEN CONCAT('DEFAULT=', QUOTE(COLUMN_DEFAULT)) END,
+         CASE
+           WHEN COLUMN_COMMENT <> '' THEN CONCAT(
+             'COMMENT=',
+             QUOTE(CASE WHEN CHAR_LENGTH(COLUMN_COMMENT) > 60 THEN CONCAT(LEFT(COLUMN_COMMENT, 60), '…') ELSE COLUMN_COMMENT END)
+           )
+         END
+       ), '') AS meta
+	FROM INFORMATION_SCHEMA.COLUMNS
+	WHERE TABLE_SCHEMA = '__SCH__' AND TABLE_NAME = '__TBL__'
+	ORDER BY ORDINAL_POSITION;
+
+-- indexes
+SELECT INDEX_NAME AS name,
+       GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX SEPARATOR ',') AS cols,
+       CASE WHEN NON_UNIQUE = 0 THEN 'YES' ELSE 'NO' END AS unique,
+       INDEX_TYPE AS type
+	FROM INFORMATION_SCHEMA.STATISTICS
+	WHERE TABLE_SCHEMA = '__SCH__' AND TABLE_NAME = '__TBL__'
+	GROUP BY INDEX_NAME, NON_UNIQUE, INDEX_TYPE
+	ORDER BY (INDEX_NAME = 'PRIMARY') DESC, INDEX_NAME;
+
 -- outbound FKs
-SELECT kcu.TABLE_NAME AS from_tbl, kcu.COLUMN_NAME AS from_col,
-       kcu.REFERENCED_TABLE_NAME AS to_tbl, kcu.REFERENCED_COLUMN_NAME AS to_col
+SELECT kcu.CONSTRAINT_NAME AS fk,
+       CONCAT(kcu.COLUMN_NAME, ' -> ', kcu.REFERENCED_TABLE_NAME, '.', kcu.REFERENCED_COLUMN_NAME) AS rel,
+       CONCAT(
+         'U:',
+         CASE rc.UPDATE_RULE
+           WHEN 'CASCADE' THEN 'C'
+           WHEN 'RESTRICT' THEN 'R'
+           WHEN 'NO ACTION' THEN 'NA'
+           WHEN 'SET NULL' THEN 'SN'
+           WHEN 'SET DEFAULT' THEN 'SD'
+           ELSE rc.UPDATE_RULE
+         END,
+         ' D:',
+         CASE rc.DELETE_RULE
+           WHEN 'CASCADE' THEN 'C'
+           WHEN 'RESTRICT' THEN 'R'
+           WHEN 'NO ACTION' THEN 'NA'
+           WHEN 'SET NULL' THEN 'SN'
+           WHEN 'SET DEFAULT' THEN 'SD'
+           ELSE rc.DELETE_RULE
+         END
+       ) AS rules
 FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
-WHERE kcu.TABLE_SCHEMA = '\$SCH'
-  AND kcu.TABLE_NAME   = '\$TBL'
-  AND kcu.REFERENCED_TABLE_NAME IS NOT NULL
-ORDER BY 1,2;
+JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS rc
+  ON rc.CONSTRAINT_SCHEMA = kcu.CONSTRAINT_SCHEMA
+ AND rc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME
+	WHERE kcu.TABLE_SCHEMA = '__SCH__'
+	  AND kcu.TABLE_NAME = '__TBL__'
+	  AND kcu.REFERENCED_TABLE_NAME IS NOT NULL
+ORDER BY 1, kcu.ORDINAL_POSITION;
+
 -- inbound FKs
-SELECT kcu2.TABLE_NAME AS to_tbl, kcu2.COLUMN_NAME AS to_col,
-       kcu2.TABLE_NAME AS from_tbl, kcu2.COLUMN_NAME AS from_col
+SELECT kcu2.CONSTRAINT_NAME AS fk,
+       CONCAT(kcu2.TABLE_NAME, '.', kcu2.COLUMN_NAME, ' -> ', kcu2.REFERENCED_COLUMN_NAME) AS rel,
+       CONCAT(
+         'U:',
+         CASE rc2.UPDATE_RULE
+           WHEN 'CASCADE' THEN 'C'
+           WHEN 'RESTRICT' THEN 'R'
+           WHEN 'NO ACTION' THEN 'NA'
+           WHEN 'SET NULL' THEN 'SN'
+           WHEN 'SET DEFAULT' THEN 'SD'
+           ELSE rc2.UPDATE_RULE
+         END,
+         ' D:',
+         CASE rc2.DELETE_RULE
+           WHEN 'CASCADE' THEN 'C'
+           WHEN 'RESTRICT' THEN 'R'
+           WHEN 'NO ACTION' THEN 'NA'
+           WHEN 'SET NULL' THEN 'SN'
+           WHEN 'SET DEFAULT' THEN 'SD'
+           ELSE rc2.DELETE_RULE
+         END
+       ) AS rules
 FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu2
-WHERE kcu2.REFERENCED_TABLE_SCHEMA = '\$SCH'
-  AND kcu2.REFERENCED_TABLE_NAME   = '\$TBL'
-ORDER BY 1,2;"
+JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS rc2
+  ON rc2.CONSTRAINT_SCHEMA = kcu2.CONSTRAINT_SCHEMA
+ AND rc2.CONSTRAINT_NAME = kcu2.CONSTRAINT_NAME
+		WHERE kcu2.REFERENCED_TABLE_SCHEMA = '__SCH__'
+		  AND kcu2.REFERENCED_TABLE_NAME = '__TBL__'
+	ORDER BY 1, kcu2.ORDINAL_POSITION;
+	SQL
+	)
+
   tables="$(MYSQL_PWD="$_pass" mysql --protocol=TCP --batch --skip-column-names --raw -h "$_host" -P "$_port" -u "$_user" -D "$_db" -e "$list_sql")"
-  printf "%s\n" "$tables" | fzf --prompt='table> ' --preview="
-TABLE={}; SCH=\${TABLE%%.*}; TBL=\${TABLE#*.};
-MYSQL_PWD=\"$_pass\" mysql --protocol=TCP --table -h \"$_host\" -P \"$_port\" -u \"$_user\" -D \"$_db\" -e \"${preview_sql}\"
-" --bind 'enter:execute(echo "SELECT * FROM {} LIMIT 50;" | pbcopy)+abort'
+
+	  mode_file="$(mktemp -t dbn_mode.XXXXXX)"
+	  trap 'rm -f "$mode_file"' EXIT
+	  printf "schema" > "$mode_file"
+	  export DBN_MODE_FILE="$mode_file"
+	
+	  export DBN_MY_SCHEMA_SQL="$schema_sql"
+	  header=$'ctrl-s:Schema  ctrl-d:Records  enter:Copy SELECT  ctrl-y:Copy DDL'
+	  printf "%s\n" "$tables" | fzf --prompt='table> ' --header="$header" --preview-window='right:75%,nowrap' --preview="
+	TABLE={}; SCH=\${TABLE%%.*}; TBL=\${TABLE#*.};
+	MODE=\$(cat \"\$DBN_MODE_FILE\" 2>/dev/null || echo schema)
+	if [ \"\$MODE\" = \"records\" ]; then
+	  SQL=\$(printf 'SELECT * FROM \\\\`%s\\\\`.\\\\`%s\\\\` LIMIT 50;' \"\$SCH\" \"\$TBL\")
+	else
+	  SQL=\"\$DBN_MY_SCHEMA_SQL\"
+	  SQL=\${SQL//__SCH__/\$SCH}
+	  SQL=\${SQL//__TBL__/\$TBL}
+	fi
+	MYSQL_PWD=\"$_pass\" mysql --protocol=TCP --table -h \"$_host\" -P \"$_port\" -u \"$_user\" -D \"$_db\" -e \"\$SQL\"
+	" \
+	    --bind "ctrl-s:execute-silent(printf schema > \"$DBN_MODE_FILE\")+refresh-preview" \
+	    --bind "ctrl-d:execute-silent(printf records > \"$DBN_MODE_FILE\")+refresh-preview" \
+	    --bind "enter:execute-silent(TABLE={}; SCH=\${TABLE%%.*}; TBL=\${TABLE#*.}; printf 'SELECT * FROM \\`%s\\`.\\`%s\\` LIMIT 50;\\n' \"\$SCH\" \"\$TBL\" | pbcopy)+abort" \
+	    --bind "ctrl-y:execute-silent(TABLE={}; SCH=\${TABLE%%.*}; TBL=\${TABLE#*.}; MYSQL_PWD=\"$_pass\" mysql --protocol=TCP --batch --skip-column-names --raw -h \"$_host\" -P \"$_port\" -u \"$_user\" -D \"$_db\" -e \"SHOW CREATE TABLE \\`$TBL\\`;\" | cut -f2- | pbcopy)"
+
 else
   echo "対応していないスキームです: $scheme"; exit 1
 fi
