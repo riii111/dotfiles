@@ -77,6 +77,31 @@ local function setup_keymaps()
         desc = "Find in buffer (universal)"
       },
 
+      -- Keymaps
+      ["<Leader>?"] = {
+        function()
+          vim.ui.select(
+            { "all", "normal", "insert", "visual", "visual block", "terminal" },
+            { prompt = "Keymap mode:" },
+            function(choice)
+              if choice then
+                local mode_map = {
+                  all = nil,
+                  normal = "n",
+                  insert = "i",
+                  visual = "v",
+                  ["visual block"] = "x",
+                  terminal = "t",
+                }
+                local modes = mode_map[choice] and { mode_map[choice] } or nil
+                require("telescope.builtin").keymaps({ modes = modes })
+              end
+            end
+          )
+        end,
+        desc = "Keymaps (select mode)"
+      },
+
       -- Commenting
       ["<D-/>"] = {
         function()
@@ -261,6 +286,7 @@ return {
 
       -- Register key groups
       wk.add({
+        { "<leader>?", desc = "+keymaps" },
         { "<leader>e", group = "+oil file explorer" },
         { "<leader>E", group = "+oil file explorer" },
         { "<leader>w", group = "+window/buffer" },
