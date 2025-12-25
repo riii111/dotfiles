@@ -3,7 +3,7 @@ return {
 	event = "VeryLazy",
 	config = function()
 		local neoscroll = require("neoscroll")
-		local duration = 125
+		local duration = 100
 
 		neoscroll.setup({
 			hide_cursor = true,
@@ -102,8 +102,8 @@ return {
 		-- Helper for distance-based duration (longer distance = longer duration, with bounds)
 		local function calc_duration(lines)
 			local abs_lines = math.abs(lines)
-			-- Base: 80ms for short jumps, scale up to 180ms for very long jumps
-			return math.max(80, math.min(180, 80 + abs_lines * 0.3))
+			-- Scale duration based on jump distance
+			return math.max(25, math.min(70, 25 + abs_lines * 0.1))
 		end
 
 		-- Jump commands with centering
