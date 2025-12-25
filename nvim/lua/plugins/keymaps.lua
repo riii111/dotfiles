@@ -5,7 +5,6 @@ local function setup_keymaps()
       -- Window splits
       ["<D-Down>"] = { ":split<CR>", desc = "Split window below" },
       ["<D-Right>"] = { ":vsplit<CR>", desc = "Split window right" },
-      ["<C-d>"] = { "x", desc = "Forward delete character" },
 
       ["<C-g>"] = {
         function()
