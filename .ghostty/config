@@ -28,8 +28,6 @@ keybind = super+alt+down=unbind
 keybind = super+alt+up=unbind
 keybind = super+alt+j=unbind
 keybind = super+alt+k=unbind
-# Disable EOF signal (prevents accidental termination of ClaudeCode)
-keybind = ctrl+d=unbind
 # Claude Code shortcuts (Alt+T=thinking, Alt+P=model switch)
 macos-option-as-alt = true
 # JIS keyboard: Option+¥ produces | and \ (broken by macos-option-as-alt)
