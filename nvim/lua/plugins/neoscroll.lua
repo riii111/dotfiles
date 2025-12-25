@@ -3,15 +3,20 @@ return {
 	event = "VeryLazy",
 	config = function()
 		local neoscroll = require("neoscroll")
+		local duration = 125
+
 		neoscroll.setup({
 			hide_cursor = true,
 			stop_eof = false,
 			respect_scrolloff = false,
 			cursor_scrolls_alone = true,
 			easing = "circular",
+			post_hook = function(info)
+				if info == "center" then
+					neoscroll.zz({ half_win_duration = duration })
+				end
+			end,
 		})
-
-		local duration = 125
 
 		local keymap = {
 			["<C-b>"] = function()
@@ -94,11 +99,23 @@ return {
 			vim.keymap.set("n", key, func, { silent = true })
 		end
 
+		-- Helper for distance-based duration (longer distance = longer duration, with bounds)
+		local function calc_duration(lines)
+			local abs_lines = math.abs(lines)
+			-- Base: 80ms for short jumps, scale up to 180ms for very long jumps
+			return math.max(80, math.min(180, 80 + abs_lines * 0.3))
+		end
+
 		-- Jump commands with centering
 		local jump_mappings = {
 			["gg"] = function()
-				vim.cmd("execute('normal! ' . v:count1 . 'gg')")
-				neoscroll.zz({ half_win_duration = duration })
+				local target = vim.v.count1
+				local current = vim.fn.line(".")
+				local delta = target - current
+				if delta == 0 then
+					return
+				end
+				neoscroll.scroll(delta, { duration = calc_duration(delta), info = "center" })
 			end,
 			["G"] = move_and_center("G"),
 			["{"] = move_and_center("{"),
