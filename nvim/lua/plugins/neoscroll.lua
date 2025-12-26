@@ -11,11 +11,6 @@ return {
 			respect_scrolloff = false,
 			cursor_scrolls_alone = true,
 			easing = "circular",
-			post_hook = function(info)
-				if info == "center" then
-					neoscroll.zz({ half_win_duration = duration })
-				end
-			end,
 		})
 
 		local keymap = {
@@ -99,23 +94,11 @@ return {
 			vim.keymap.set("n", key, func, { silent = true })
 		end
 
-		-- Helper for distance-based duration (longer distance = longer duration, with bounds)
-		local function calc_duration(lines)
-			local abs_lines = math.abs(lines)
-			-- Scale duration based on jump distance
-			return math.max(25, math.min(70, 25 + abs_lines * 0.1))
-		end
-
 		-- Jump commands with centering
 		local jump_mappings = {
 			["gg"] = function()
-				local target = vim.v.count1
-				local current = vim.fn.line(".")
-				local delta = target - current
-				if delta == 0 then
-					return
-				end
-				neoscroll.scroll(delta, { duration = calc_duration(delta), info = "center" })
+				vim.cmd("execute('normal! ' . v:count1 . 'gg')")
+				neoscroll.zz({ half_win_duration = duration })
 			end,
 			["G"] = move_and_center("G"),
 			["{"] = move_and_center("{"),
