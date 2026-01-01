@@ -262,3 +262,9 @@ cghq() {
   cd "$(ghq root)/$repo"
 }
 bindkey -s '^G' 'cghq\n'
+
+# git switch branch with fzf (Ctrl-B)
+git-switch-fzf() {
+  git swf
+}
+bindkey -s '^B' 'git-switch-fzf\n'
