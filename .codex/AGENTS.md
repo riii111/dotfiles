@@ -26,7 +26,7 @@
 
 ## Keywords (Shortcuts)
 
-- **skim**  → [EFFORT: light] + [FORMAT]. No implementation/editing/command execution (answers only).
+- **skim**  → [EFFORT: light] + [FORMAT]. No implementation/editing/command execution (answers only). default mode.
 - **focus** → [EFFORT: medium] + [FORMAT]. No implementation/editing/command execution (answers only).
 - **dive**  → [EFFORT: deep] + [FORMAT]. No implementation/editing/command execution (answers only).
 - **diff!** → Show "unapplied diff only" once. Summarize "purpose/scope/rollback" in one line each before diff. No actual file editing.
@@ -36,7 +36,7 @@
 
 [EFFORT: light]
 
-- Quick decision based on known design patterns. No alternatives. Output limited to 100 lines.
+- Quick decision based on known design patterns. No alternatives. Output limited to 100 lines. default mode.
 
 [EFFORT: medium]
 
@@ -48,6 +48,7 @@
 
 ## FORMAT (Visibility Standards)
 
+- NEVER include file paths or line numbers in responses. Do NOT use citation format like 【F:path†Lxx】. Only provide paths when user explicitly asks "where is this file?" or similar.
 - Section headings must use H2 (`##`) with one blank line before and after.
 - Bullet points limited to one level.
 - Code blocks must use language-specific fenced blocks and be limited to 60 lines each.
@@ -56,30 +57,25 @@
 ## File Reading Policy for Summaries/Research (Light)
 
 - Initial assessment based on appearance only: `README*`, `AGENTS.md`, `.kiro/`, `CLAUDE.md`, `go.mod` / `package.json` / `Cargo.toml`, and root directory structure.
-- Automatic "full file scanning" is prohibited. If needed, present a **list of candidate files** (max 10) and wait for user selection.
 - For large files, prioritize reading the beginning and end sections.
-
-## PR-DIGEST (Understand PR Before Acting)
-
-- When PR is mentioned or differences are visible, **do not modify immediately**.
-- Summarize the following within 60 seconds/100 lines:
-  1) Purpose (1 line)  2) Change scope (Top 10 filenames, root relative)  3) Exclusions  4) Risks/rollback  5) Basic test points (3 items)
-- For change scope assessment, assume `git diff <BASE>..HEAD --name-only` when possible. Default `<BASE>` is `develop`; if different, **briefly confirm** (e.g., "Is BASE main?").
-- After summary, ask "May I proceed with modifications?" in one line. Show unapplied diff once only when `diff!` signal is given.
 
 ## Long-Duration/Heavy Operation Confirmation
 
 - For processes taking over 2 minutes, full scans, or network-heavy searches, **confirm before starting**. Include lighter alternative procedures when possible.
 
+## When selecting tools in Shell, use the following defaults
+
+- File search: fd.
+- Full-text search: rg.
+- Interactive match selection: fzf.
+- JSON: jq; YAML/XML: yq.
+- Minimize output from all tools; format with --json | jq as needed before returning to the model.
+
 ## COMMENT HYGIENE
 
-- **Prohibited**: Verbatim explanations of what code does ("What" explanations). Rephrasing obvious operations, noise, redundant expressions.
-- **Allowed**: Design reasons and background (**Why**/Rationale), specifications/constraints/side effects, security/performance notes, required documentation for public APIs, `TODO:` (short-term technical debt).
-- **Naming First**: Address readability through **naming, decomposition, and abstraction** rather than falling back to comments. When tempted to write verbose comments, first propose identifier/function extraction.
-- **Self-Check** (apply to all code before submission):
-  1) Is this comment about **Why**? (If Yes, keep. If No, remove/improve naming)
-  2) Is the comment merely rephrasing the code?
-  3) Can naming and decomposition make the code self-documenting without comments?
+- **Prohibited**: Code behavior explanations, obvious processing rephrasing
+- **Permitted**: Design rationale, constraints, side effects, security/performance considerations, public API documentation, `TODO`
+- **Prioritize Naming**: Ensure readability through proper naming and modularity before relying on comments
 
 ### Examples (BAD→GOOD)
 
@@ -102,3 +98,4 @@ counter++
 - When asked for a project summary, first analyze the overall code design and system overview. Do not read all files.
 - Users often ask for code investigation or simple questions about the code, not just implementation requests. Therefore, do not implement unless explicitly asked.
 - Always answer in Japanese.
+
