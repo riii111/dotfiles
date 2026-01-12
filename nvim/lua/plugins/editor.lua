@@ -2,6 +2,7 @@ return {
 	-- Treesitter
 	{
 		"nvim-treesitter/nvim-treesitter",
+		branch = "master",
 		build = ":TSUpdate",
 		event = { "BufReadPre", "BufNewFile" },
 		opts = {
