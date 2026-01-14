@@ -1,18 +1,4 @@
 return {
-  -- Treesitter support for Kotlin
-  {
-    "nvim-treesitter/nvim-treesitter",
-    opts = function(_, opts)
-      opts = opts or {}
-      local ensure = opts.ensure_installed or {}
-      if not vim.tbl_contains(ensure, "kotlin") then
-        table.insert(ensure, "kotlin")
-      end
-      opts.ensure_installed = ensure
-      return opts
-    end,
-  },
-
   -- Kotlin LSP configuration (riii111/kotlin-language-server fork)
   -- NOTE: Using a wrapper plugin instead of extending "neovim/nvim-lspconfig" directly
   --       because lazy.nvim may skip this config function when lspconfig is already loaded
@@ -25,41 +11,48 @@ return {
   --        Symlink: ln -sf <fork-repo>/server/build/install/server/bin/kotlin-language-server ~/.local/bin/
   {
     name = "kotlin-lsp-setup",
-    dir = vim.fn.stdpath("config"),
-    ft = { "kotlin" },
+    dir = vim.fn.stdpath("config") .. "/lua/plugins/languages",
+    lazy = false,
     dependencies = { "neovim/nvim-lspconfig" },
     config = function()
       local java_home = vim.env.JAVA_HOME
-      local kotlin_cmd = { "kotlin-language-server" } -- Uses ~/.local/bin symlink (fork) or falls back to PATH
 
-      vim.lsp.config("kotlin_lsp", {
-        cmd = kotlin_cmd,
+      vim.lsp.config("kotlin_language_server", {
+        cmd = { vim.fn.expand("~/ghq/github.com/riii111/kotlin-language-server/server/build/install/server/bin/kotlin-language-server") },
         cmd_env = {
           JAVA_HOME = java_home,
           JDK_HOME = java_home,
           PATH = (java_home and (java_home .. "/bin:" .. vim.env.PATH)) or vim.env.PATH,
         },
         filetypes = { "kotlin" },
-        root_markers = {
-          "settings.gradle.kts",
-          "settings.gradle",
-          "build.gradle.kts",
-          "build.gradle",
-          ".git",
+        root_dir = function(bufnr, on_dir)
+          local fname = vim.api.nvim_buf_get_name(bufnr)
+          -- Multi-module projects need settings.gradle.kts as root to resolve cross-module dependencies
+          local root = vim.fs.root(fname, { "settings.gradle.kts", "settings.gradle" })
+            or vim.fs.root(fname, { "build.gradle.kts", "build.gradle" })
+          if root then
+            on_dir(root)
+          end
+        end,
+        init_options = {
+          storagePath = vim.fn.stdpath("cache") .. "/kotlin-language-server",
         },
         settings = {
           kotlin = {
-            diagnostics = {
-              debounceTime = 400,
-            },
+            compiler = { jvm = { target = "17" } },
             indexing = {
-              enabled = false,
+              enabled = true,
+              batchSize = 50, -- Process 50 packages per batch (reduces memory pressure)
+            },
+            externalSources = {
+              autoConvertToKotlin = false,
+              useKlsScheme = true,
             },
           },
         },
       })
 
-      vim.lsp.enable("kotlin_lsp")
+      vim.lsp.enable("kotlin_language_server")
 
       -- Keymaps (IntelliJ-like actions)
       local ok, lsp_actions = pcall(require, "utils.lsp-actions")
