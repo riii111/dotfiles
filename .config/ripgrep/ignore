@@ -1,9 +1,21 @@
 # Global ripgrep ignore file
-# This file should be placed at ~/.rgignore
+# Symlinked to ~/.config/ripgrep/ignore
 
 # Git directories (more reliable than glob patterns)
 /.git/
 **/.git/
+
+# Common build/dependency directories
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+build/
+**/build/
+target/
+**/target/
+vendor/
+**/vendor/
 
 # Lock files (context-sensitive exclusion)
 # *.lock          # uncomment to ignore lock files when trimming context
