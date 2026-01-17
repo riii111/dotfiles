@@ -44,14 +44,20 @@ return {
 					},
 					mappings = {
 						i = {
-							-- Send results to quickfix list
 							["<M-q>"] = function(prompt_bufnr)
 								require("telescope.actions").send_to_qflist(prompt_bufnr)
 								require("telescope.actions").open_qflist(prompt_bufnr)
 							end,
-							-- Input history navigation
 							["<C-Up>"] = require("telescope.actions").cycle_history_prev,
 							["<C-Down>"] = require("telescope.actions").cycle_history_next,
+							-- Esc in insert mode → switch to normal mode (not close)
+							["<Esc>"] = function()
+								vim.cmd("stopinsert")
+							end,
+						},
+						n = {
+							-- Esc in normal mode → close
+							["<Esc>"] = require("telescope.actions").close,
 						},
 					},
 					prompt_prefix = "󰼛 ",
@@ -88,17 +94,15 @@ return {
 								["<C-r>"] = require("telescope-live-grep-args.actions").quote_prompt({
 									postfix = " --no-fixed-strings ",
 								}),
-								-- Save input and select
 								["<CR>"] = function(prompt_bufnr)
 									local action_state = require("telescope.actions.state")
 									_G.last_grep_input = action_state.get_current_line()
 									require("telescope.actions").select_default(prompt_bufnr)
 								end,
-								-- Save input and close
-								["<Esc>"] = function(prompt_bufnr)
+								["<Esc>"] = function()
 									local action_state = require("telescope.actions.state")
 									_G.last_grep_input = action_state.get_current_line()
-									require("telescope.actions").close(prompt_bufnr)
+									vim.cmd("stopinsert")
 								end,
 								-- Option+I: Insert include glob pattern
 								["<M-i>"] = function()
@@ -137,6 +141,13 @@ return {
 											false
 										)
 									end, 10)
+								end,
+							},
+							n = {
+								["<Esc>"] = function(prompt_bufnr)
+									local action_state = require("telescope.actions.state")
+									_G.last_grep_input = action_state.get_current_line()
+									require("telescope.actions").close(prompt_bufnr)
 								end,
 							},
 						},
