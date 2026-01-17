@@ -1,3 +1,7 @@
+local function get_visual_selection()
+  vim.cmd('normal! "ay')
+  return vim.fn.getreg('a'):gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
+end
 
 local function setup_keymaps()
   local mappings = {
@@ -260,6 +264,26 @@ local function setup_keymaps()
       ["<C-S-@>"] = { "<C-\\><C-n>:ToggleTerm<CR>", desc = "Toggle terminal from terminal" },
       ["<C-S-2>"] = { "<C-\\><C-n>:ToggleTerm<CR>", desc = "Toggle terminal from terminal (tmux)" },
       ["<F12>"] = { "<C-\\><C-n>:ToggleTerm<CR>", desc = "Toggle terminal from terminal (fallback)" },
+    },
+    v = {
+      ["<D-F>"] = {
+        function()
+          local selection = get_visual_selection()
+          require("telescope").extensions.live_grep_args.live_grep_args({
+            default_text = selection,
+          })
+        end,
+        desc = "Live Grep with selection"
+      },
+      ["<M-F>"] = {
+        function()
+          local selection = get_visual_selection()
+          require("telescope").extensions.live_grep_args.live_grep_args({
+            default_text = selection,
+          })
+        end,
+        desc = "Live Grep with selection (tmux)"
+      },
     },
   }
 
