@@ -93,6 +93,9 @@ export PATH="$BUN_INSTALL/bin:$PATH"
 # golang
 export GOTOOLCHAIN=auto
 
+# asdf
+. $(brew --prefix asdf)/libexec/asdf.sh
+
 # ==========================================
 # Git hooks
 # ==========================================
