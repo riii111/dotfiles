@@ -48,15 +48,13 @@ return {
 								require("telescope.actions").send_to_qflist(prompt_bufnr)
 								require("telescope.actions").open_qflist(prompt_bufnr)
 							end,
-							["<C-Up>"] = require("telescope.actions").cycle_history_prev,
-							["<C-Down>"] = require("telescope.actions").cycle_history_next,
-							-- Esc in insert mode → switch to normal mode (not close)
+							["<C-k>"] = require("telescope.actions").cycle_history_prev,
+							["<C-j>"] = require("telescope.actions").cycle_history_next,
 							["<Esc>"] = function()
 								vim.cmd("stopinsert")
 							end,
 						},
 						n = {
-							-- Esc in normal mode → close
 							["<Esc>"] = require("telescope.actions").close,
 						},
 					},
@@ -87,10 +85,9 @@ return {
 					},
 					live_grep_args = {
 						auto_quoting = true,
-						prompt_title = "Live Grep [⌥I:in ⌥E:ex ⌥Q:qf ^↑↓:hist]",
+						prompt_title = "Live Grep [⌥I:in ⌥E:ex ⌥W:word ⌥Q:qf ^jk:hist]",
 						mappings = {
 							i = {
-								["<C-k>"] = require("telescope-live-grep-args.actions").quote_prompt(),
 								["<C-r>"] = require("telescope-live-grep-args.actions").quote_prompt({
 									postfix = " --no-fixed-strings ",
 								}),
@@ -104,7 +101,9 @@ return {
 									_G.last_grep_input = action_state.get_current_line()
 									vim.cmd("stopinsert")
 								end,
-								-- Option+I: Insert include glob pattern
+								["<M-w>"] = require("telescope-live-grep-args.actions").quote_prompt({
+									postfix = " -w ",
+								}),
 								["<M-i>"] = function()
 									local action_state = require("telescope.actions.state")
 									local picker = action_state.get_current_picker(vim.api.nvim_get_current_buf())
