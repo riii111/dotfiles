@@ -140,6 +140,9 @@ local function apply_flate_arc_italic()
 		RenderMarkdownCodeInline = { bg = colors.base.bg_dark },
 
 		-- Treesitter specific highlights
+		-- Raw/multiline strings (Go raw, Rust raw, JS/TS template, Kotlin multiline)
+		["@string.special"] = { fg = colors.syntax.string_raw },
+
 		["@field"] = { fg = colors.base.accent, italic = true },
 		["@variable.member.go"] = { fg = colors.syntax.constant, italic = true }, -- Struct exported member
 		["@module.rust"] = { fg = colors.base.white },

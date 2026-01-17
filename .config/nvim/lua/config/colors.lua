@@ -60,6 +60,7 @@ M.syntax = {
   comment = "#6272A4",
   constant = "#F0AA85",
   string = "#CDC8DB",
+  string_raw = "#8EC8C8",
   character = "#F0AA85",
   number = "#F0AA85",
   boolean = "#F0AA85",
