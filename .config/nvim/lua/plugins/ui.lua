@@ -40,6 +40,7 @@ return {
 						"--smart-case",
 						"--trim",
 						"--hidden",
+						"--fixed-strings",
 					},
 					prompt_prefix = "󰼛 ",
 					selection_caret = "󰅂 ",
@@ -68,16 +69,51 @@ return {
 					},
 					live_grep_args = {
 						auto_quoting = true,
-						default_text = "--fixed-strings ",
+						prompt_title = "Live Grep [⌥I:include ⌥E:exclude]",
 						mappings = {
 							i = {
 								["<C-k>"] = require("telescope-live-grep-args.actions").quote_prompt(),
-								["<C-i>"] = require("telescope-live-grep-args.actions").quote_prompt({
-									postfix = " --iglob ",
-								}),
 								["<C-r>"] = require("telescope-live-grep-args.actions").quote_prompt({
 									postfix = " --no-fixed-strings ",
 								}),
+								-- Option+I: Insert include glob pattern
+								["<M-i>"] = function()
+									local action_state = require("telescope.actions.state")
+									local picker = action_state.get_current_picker(vim.api.nvim_get_current_buf())
+									local current = action_state.get_current_line()
+									picker:set_prompt('-g "/**" ' .. current)
+									vim.defer_fn(function()
+										vim.api.nvim_feedkeys(
+											vim.api.nvim_replace_termcodes(
+												"<Home><Right><Right><Right><Right>",
+												true,
+												false,
+												true
+											),
+											"n",
+											false
+										)
+									end, 10)
+								end,
+								-- Option+E: Insert exclude glob pattern
+								["<M-e>"] = function()
+									local action_state = require("telescope.actions.state")
+									local picker = action_state.get_current_picker(vim.api.nvim_get_current_buf())
+									local current = action_state.get_current_line()
+									picker:set_prompt('-g "!/**" ' .. current)
+									vim.defer_fn(function()
+										vim.api.nvim_feedkeys(
+											vim.api.nvim_replace_termcodes(
+												"<Home><Right><Right><Right><Right><Right>",
+												true,
+												false,
+												true
+											),
+											"n",
+											false
+										)
+									end, 10)
+								end,
 							},
 						},
 					},

@@ -15,9 +15,7 @@ local function setup_keymaps()
 
       ["<D-F>"] = {
         function()
-          require("telescope").extensions.live_grep_args.live_grep_args({
-            default_text = '-g "!**/{node_modules,docs,.git,target,dist,build}/**" ',
-          })
+          require("telescope").extensions.live_grep_args.live_grep_args()
         end,
         desc = "Live Grep with Args"
       },
@@ -37,9 +35,7 @@ local function setup_keymaps()
       -- Meta key aliases for tmux (Cmd keys appear as Meta in tmux)
       ["<M-F>"] = {
         function()
-          require("telescope").extensions.live_grep_args.live_grep_args({
-            default_text = '-g "!**/{node_modules,docs,.git,target,dist,build}/**" ',
-          })
+          require("telescope").extensions.live_grep_args.live_grep_args()
         end,
         desc = "Live Grep with Args (tmux)"
       },
@@ -324,6 +320,11 @@ return {
 
       -- Global Oil.nvim keymaps
       vim.keymap.set("n", "-", "<CMD>Oil<CR>", { desc = "Open parent directory in Oil" })
+
+      -- Short command aliases for tmux popup compatibility
+      vim.api.nvim_create_user_command('BF', function()
+        require('telescope.builtin').current_buffer_fuzzy_find()
+      end, { desc = 'Buffer Find (fuzzy)' })
     end,
   },
 }
