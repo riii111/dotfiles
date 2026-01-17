@@ -48,16 +48,16 @@ source "$ZSHRC_CACHE_FILE"
 # ==========================================
 # Shell Options
 # ==========================================
-setopt IGNORE_EOF           # Ctrl+D でシェルを終了しない
+setopt IGNORE_EOF
 
-# コマンド履歴
+# History
 HISTSIZE=10000
 SAVEHIST=10000
-setopt EXTENDED_HISTORY     # 実行時刻も記録
-setopt INC_APPEND_HISTORY   # 実行ごとに即保存
-setopt HIST_IGNORE_SPACE    # スペース始まりは履歴に残さない
-setopt HIST_IGNORE_ALL_DUPS # 重複は最新のみ残す
-setopt HIST_REDUCE_BLANKS   # 余分な空白を削除
+setopt EXTENDED_HISTORY
+setopt INC_APPEND_HISTORY
+setopt HIST_IGNORE_SPACE
+setopt HIST_IGNORE_ALL_DUPS
+setopt HIST_REDUCE_BLANKS
 
 # ==========================================
 # Prompt
@@ -76,7 +76,7 @@ export MANPAGER='nvim +Man!'
 # ==========================================
 # PATH Configuration
 # ==========================================
-typeset -U path PATH  # PATH の重複を自動排除
+typeset -U path PATH
 
 export PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
 export PATH=/opt/homebrew/bin:$PATH
@@ -127,30 +127,32 @@ function rust-test-all() {
 [[ -o interactive ]] || return
 
 # ==========================================
-# Completion 
+# Completion
 # ==========================================
-# Homebrew の補完を有効化
-FPATH="/opt/homebrew/share/zsh/site-functions:$FPATH"
-fpath+=~/.zfunc
-autoload -Uz compinit
+if [[ -o zle ]]; then
+  # Homebrew completions
+  FPATH="/opt/homebrew/share/zsh/site-functions:$FPATH"
+  fpath+=~/.zfunc
+  autoload -Uz compinit
 
-_deferred_compinit() {
-  unfunction _deferred_compinit
-  compinit  # -C は使わない（補完定義が少ないためキャッシュ効果が薄い）
-  [[ -s "$HOME/.bun/_bun" ]] && source "$HOME/.bun/_bun"
-}
-zmodload zsh/sched
-sched +0 _deferred_compinit
+  _deferred_compinit() {
+    unfunction _deferred_compinit
+    compinit  # no -C: cache benefit is minimal with few completions
+    [[ -s "$HOME/.bun/_bun" ]] && source "$HOME/.bun/_bun"
+  }
+  zmodload zsh/sched
+  sched +0 _deferred_compinit
 
-# 補完の表示設定
-zstyle ':completion:*' menu select                    # メニュー選択を有効化
-zstyle ':completion:*' verbose yes                    # 詳細表示
-zstyle ':completion:*:descriptions' format '%F{yellow}%d%f'  # 説明を黄色で表示
-zstyle ':completion:*' matcher-list 'm:{[:lower:][:upper:]}={[:upper:][:lower:]}'  # 大文字小文字を無視
+  # Completion styles
+  zstyle ':completion:*' menu select
+  zstyle ':completion:*' verbose yes
+  zstyle ':completion:*:descriptions' format '%F{yellow}%d%f'
+  zstyle ':completion:*' matcher-list 'm:{[:lower:][:upper:]}={[:upper:][:lower:]}'
 
-# zsh-autosuggestions
-[[ -f /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh ]] && \
-  source /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh
+  # zsh-autosuggestions
+  [[ -f /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh ]] && \
+    source /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh
+fi
 
 # ==========================================
 # Modern CLI Tools Aliases
@@ -213,25 +215,28 @@ export FZF_ALT_C_OPTS="--preview 'eza --tree --level=2 --icons --color=always {}
 export FZF_CTRL_R_OPTS="--preview 'echo {}' --preview-window=down:3:wrap"
 
 # fzf keybindings: Ctrl-R (history), Ctrl-O (cd)
-source /opt/homebrew/opt/fzf/shell/key-bindings.zsh
-bindkey -r '^T'              # Ctrl-T 無効化（Rectangle と衝突）
-bindkey '^O' fzf-cd-widget   # Ctrl-O でディレクトリ移動
+if [[ -o zle ]]; then
+  source /opt/homebrew/opt/fzf/shell/key-bindings.zsh
+  bindkey -r '^T'              # disable Ctrl-T (conflicts with Rectangle)
+  bindkey '^O' fzf-cd-widget
+  bindkey -M vicmd '^O' fzf-cd-widget
+fi
 
 # ==========================================
 # ghq
 # ==========================================
 export GHQ_ROOT="$HOME/ghq"
 
-# ghq × fzf: リポジトリへジャンプ (Ctrl-G)
+# ghq × fzf: jump to repository (Ctrl-G)
 cghq() {
   local repo
   repo="$(ghq list | fzf --preview 'eza --tree --level=3 --icons --color=always $(ghq root)/{}')" || return
   cd "$(ghq root)/$repo"
 }
-bindkey -s '^G' 'cghq\n'
+[[ -o zle ]] && bindkey -s '^G' 'cghq\n'
 
 # git switch branch with fzf (Ctrl-B)
 git-switch-fzf() {
   git swf
 }
-bindkey -s '^B' 'git-switch-fzf\n'
+[[ -o zle ]] && bindkey -s '^B' 'git-switch-fzf\n'
