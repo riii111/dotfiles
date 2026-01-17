@@ -13,9 +13,19 @@ local function setup_keymaps()
         desc = "Search text in project",
       },
 
+      -- Resume last telescope search
+      ["<M-g>"] = {
+        function()
+          require("telescope.builtin").resume()
+        end,
+        desc = "Resume last search",
+      },
+
       ["<D-F>"] = {
         function()
-          require("telescope").extensions.live_grep_args.live_grep_args()
+          require("telescope").extensions.live_grep_args.live_grep_args({
+            default_text = _G.last_grep_input or "",
+          })
         end,
         desc = "Live Grep with Args"
       },
@@ -35,7 +45,9 @@ local function setup_keymaps()
       -- Meta key aliases for tmux (Cmd keys appear as Meta in tmux)
       ["<M-F>"] = {
         function()
-          require("telescope").extensions.live_grep_args.live_grep_args()
+          require("telescope").extensions.live_grep_args.live_grep_args({
+            default_text = _G.last_grep_input or "",
+          })
         end,
         desc = "Live Grep with Args (tmux)"
       },

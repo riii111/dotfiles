@@ -42,6 +42,18 @@ return {
 						"--hidden",
 						"--fixed-strings",
 					},
+					mappings = {
+						i = {
+							-- Send results to quickfix list
+							["<M-q>"] = function(prompt_bufnr)
+								require("telescope.actions").send_to_qflist(prompt_bufnr)
+								require("telescope.actions").open_qflist(prompt_bufnr)
+							end,
+							-- Input history navigation
+							["<C-Up>"] = require("telescope.actions").cycle_history_prev,
+							["<C-Down>"] = require("telescope.actions").cycle_history_next,
+						},
+					},
 					prompt_prefix = "󰼛 ",
 					selection_caret = "󰅂 ",
 					layout_config = {
@@ -69,19 +81,31 @@ return {
 					},
 					live_grep_args = {
 						auto_quoting = true,
-						prompt_title = "Live Grep [⌥I:include ⌥E:exclude]",
+						prompt_title = "Live Grep [⌥I:in ⌥E:ex ⌥Q:qf ^↑↓:hist]",
 						mappings = {
 							i = {
 								["<C-k>"] = require("telescope-live-grep-args.actions").quote_prompt(),
 								["<C-r>"] = require("telescope-live-grep-args.actions").quote_prompt({
 									postfix = " --no-fixed-strings ",
 								}),
+								-- Save input and select
+								["<CR>"] = function(prompt_bufnr)
+									local action_state = require("telescope.actions.state")
+									_G.last_grep_input = action_state.get_current_line()
+									require("telescope.actions").select_default(prompt_bufnr)
+								end,
+								-- Save input and close
+								["<Esc>"] = function(prompt_bufnr)
+									local action_state = require("telescope.actions.state")
+									_G.last_grep_input = action_state.get_current_line()
+									require("telescope.actions").close(prompt_bufnr)
+								end,
 								-- Option+I: Insert include glob pattern
 								["<M-i>"] = function()
 									local action_state = require("telescope.actions.state")
 									local picker = action_state.get_current_picker(vim.api.nvim_get_current_buf())
 									local current = action_state.get_current_line()
-									picker:set_prompt('-g "/**" ' .. current)
+									picker:set_prompt('-g "**" ' .. current)
 									vim.defer_fn(function()
 										vim.api.nvim_feedkeys(
 											vim.api.nvim_replace_termcodes(
@@ -100,7 +124,7 @@ return {
 									local action_state = require("telescope.actions.state")
 									local picker = action_state.get_current_picker(vim.api.nvim_get_current_buf())
 									local current = action_state.get_current_line()
-									picker:set_prompt('-g "!/**" ' .. current)
+									picker:set_prompt('-g "!**" ' .. current)
 									vim.defer_fn(function()
 										vim.api.nvim_feedkeys(
 											vim.api.nvim_replace_termcodes(
