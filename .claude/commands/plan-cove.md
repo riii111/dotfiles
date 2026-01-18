@@ -79,27 +79,14 @@ Hard rule:
 - How we detect it:
 - Rollback / kill-switch:
 
-## Phases (commit at end of each phase)
-> RULE: **Commit at the end of EACH phase (title only, no body).**
+## Phases (add as many as needed)
+> RULE: **Commit at the end of EACH phase** (title only, no body).
 
 ### Phase 1 — <title>
-- Tasks:
-  - [ ] ...
-- Done when:
-- Commit title: `phase1: <short>`
+...
 
-### Phase 2 — <title>
-- Tasks:
-  - [ ] ...
-- Done when:
-- Commit title: `phase2: <short>`
-
-### Phase 3 — <title>
-- Tasks:
-  - [ ] ...
-- Done when:
-- Commit title: `phase3: <short>`
-```
+### Phase N — <title> (repeat)
+...
 
 ---
 
