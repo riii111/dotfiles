@@ -23,18 +23,17 @@ A fast CoVe-style loop:
 ---
 
 # Step 0 — Pre-flight
-- repo root: !`pwd`
-- working tree clean? !`git status --porcelain`
-- If not clean: STOP and ask the user what to do.
+1. Run `pwd` to confirm repo root
+2. Run `git status --porcelain` to check if working tree is clean
+3. If not clean: STOP and ask the user what to do
 
 ---
 
 # Step 1 — Branch
-- If `branch=<name>` is provided, use it.
-- Else: derive a short branch name and ask the user to confirm.
+- If `branch=<name>` is provided, use it
+- Else: derive a short branch name and ask the user to confirm
 
-Command:
-- !`git checkout -b "<BRANCH_NAME>"`
+Run: `git checkout -b "<BRANCH_NAME>"`
 
 ---
 
@@ -52,11 +51,11 @@ Hard rule:
 ---
 
 # Step 3 — Write a plan file
-- !`mkdir -p .claude/plans`
-- !`date +%Y%m%d`
+1. Run `mkdir -p .claude/plans`
+2. Get today's date with `date +%Y%m%d` for the filename
+3. Create `.claude/plans/<YYYYMMDD>-<short-name>.md` using the Write tool with this template:
 
-Write it:
-- !`tee .claude/plans/<PLAN_FILE>.md >/dev/null << 'EOF'
+```markdown
 # Plan: <Short Title>
 
 ## Goal
@@ -100,7 +99,7 @@ Write it:
   - [ ] ...
 - Done when:
 - Commit title: `phase3: <short>`
-EOF`
+```
 
 ---
 
