@@ -223,15 +223,18 @@ if [[ -o zle ]]; then
 fi
 
 # ==========================================
-# ghq
+# ghq + gwq
 # ==========================================
 export GHQ_ROOT="$HOME/ghq"
 
-# ghq × fzf: jump to repository (Ctrl-G)
+# ghq × gwq × fzf: jump to repository or worktree (Ctrl-G)
 cghq() {
-  local repo
-  repo="$(ghq list | fzf --preview 'eza --tree --level=3 --icons --color=always $(ghq root)/{}')" || return
-  cd "$(ghq root)/$repo"
+  local target
+  target="$({
+    ghq list
+    gwq list -g --json 2>/dev/null | jq -r '.[].path' | sed "s|$HOME/ghq/||"
+  } | sort -u | fzf --preview 'eza --tree --level=2 --icons --color=always ~/ghq/{}')" || return
+  cd "$HOME/ghq/$target"
 }
 [[ -o zle ]] && bindkey -s '^G' 'cghq\n'
 
