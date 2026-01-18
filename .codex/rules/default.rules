@@ -1,0 +1,158 @@
+# =============================================================================
+# Codex Execpolicy Rules
+# Converted from ~/.claude/settings.json
+# Format: Starlark (prefix_rule function)
+# Decision priority: forbidden > prompt > allow
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# ALLOW: Safe read-only and build commands
+# -----------------------------------------------------------------------------
+
+# --- Cargo (Rust) ---
+prefix_rule(pattern=["cargo", "build"], decision="allow", justification="Rust build")
+prefix_rule(pattern=["cargo", "check"], decision="allow", justification="Rust type check")
+prefix_rule(pattern=["cargo", "clippy"], decision="allow", justification="Rust linter")
+prefix_rule(pattern=["cargo", "fmt"], decision="allow", justification="Rust formatter")
+prefix_rule(pattern=["cargo", "audit"], decision="allow", justification="Rust security audit")
+prefix_rule(pattern=["cargo", "test"], decision="allow", justification="Rust tests")
+prefix_rule(pattern=["cargo", "run"], decision="allow", justification="Run Rust binary")
+
+# --- Go ---
+prefix_rule(pattern=["go", "build"], decision="allow", justification="Go build")
+prefix_rule(pattern=["go", "mod"], decision="allow", justification="Go modules")
+prefix_rule(pattern=["go", "vet"], decision="allow", justification="Go vet")
+prefix_rule(pattern=["go", "fmt"], decision="allow", justification="Go formatter")
+prefix_rule(pattern=["go", "test"], decision="allow", justification="Go tests")
+prefix_rule(pattern=["golangci-lint"], decision="allow", justification="Go linter")
+prefix_rule(pattern=["goimports"], decision="allow", justification="Go imports formatter")
+
+# --- Node.js ---
+prefix_rule(pattern=["npm", "run"], decision="allow", justification="npm scripts")
+prefix_rule(pattern=["npm", "test"], decision="allow", justification="npm test")
+prefix_rule(pattern=["npm", "install"], decision="allow", justification="npm install")
+prefix_rule(pattern=["yarn"], decision="allow", justification="Yarn package manager")
+prefix_rule(pattern=["pnpm"], decision="allow", justification="pnpm package manager")
+prefix_rule(pattern=["bun"], decision="allow", justification="Bun runtime")
+
+# --- Make ---
+prefix_rule(pattern=["make", "test-unit"], decision="allow", justification="Unit tests")
+prefix_rule(pattern=["make", "test"], decision="allow", justification="Make test")
+prefix_rule(pattern=["make", "build"], decision="allow", justification="Make build")
+prefix_rule(pattern=["make", "lint"], decision="allow", justification="Make lint")
+prefix_rule(pattern=["make", "fmt"], decision="allow", justification="Make format")
+
+# --- Git (read-only) ---
+prefix_rule(pattern=["git", "status"], decision="allow", justification="Show working tree status")
+prefix_rule(pattern=["git", "diff"], decision="allow", justification="Show changes")
+prefix_rule(pattern=["git", "log"], decision="allow", justification="Show commit history")
+prefix_rule(pattern=["git", "show"], decision="allow", justification="Show commit details")
+prefix_rule(pattern=["git", "blame"], decision="allow", justification="Show file annotations")
+prefix_rule(pattern=["git", "branch"], decision="allow", justification="List/manage branches")
+prefix_rule(pattern=["git", "tag"], decision="allow", justification="List/manage tags")
+prefix_rule(pattern=["git", "remote"], decision="allow", justification="Manage remotes")
+prefix_rule(pattern=["git", "fetch"], decision="allow", justification="Fetch from remote")
+prefix_rule(pattern=["git", "cherry"], decision="allow", justification="Find commits not merged")
+prefix_rule(pattern=["git", "stash"], decision="allow", justification="Stash changes")
+prefix_rule(pattern=["git", "rev-parse"], decision="allow", justification="Parse git refs")
+prefix_rule(pattern=["git", "ls-files"], decision="allow", justification="List tracked files")
+prefix_rule(pattern=["git", "config"], decision="allow", justification="Show git config")
+
+# --- Git (write operations) ---
+prefix_rule(pattern=["git", "checkout"], decision="allow", justification="Switch branches/restore files")
+prefix_rule(pattern=["git", "switch"], decision="allow", justification="Switch branches")
+prefix_rule(pattern=["git", "add"], decision="allow", justification="Stage changes")
+prefix_rule(pattern=["git", "commit"], decision="allow", justification="Commit changes")
+prefix_rule(pattern=["git", "pull"], decision="allow", justification="Pull from remote")
+prefix_rule(pattern=["git", "push"], decision="allow", justification="Push to remote")
+prefix_rule(pattern=["git", "merge"], decision="allow", justification="Merge branches")
+prefix_rule(pattern=["git", "rebase"], decision="allow", justification="Rebase commits")
+
+# --- File search/view tools ---
+prefix_rule(pattern=["rg"], decision="allow", justification="ripgrep search")
+prefix_rule(pattern=["fd"], decision="allow", justification="fd file finder")
+prefix_rule(pattern=["bat"], decision="allow", justification="bat file viewer")
+prefix_rule(pattern=["eza"], decision="allow", justification="eza ls replacement")
+prefix_rule(pattern=["ls"], decision="allow", justification="List files")
+prefix_rule(pattern=["head"], decision="allow", justification="Show file head")
+prefix_rule(pattern=["tail"], decision="allow", justification="Show file tail")
+prefix_rule(pattern=["cat"], decision="allow", justification="Concatenate files")
+prefix_rule(pattern=["wc"], decision="allow", justification="Word count")
+prefix_rule(pattern=["tree"], decision="allow", justification="Directory tree")
+prefix_rule(pattern=["file"], decision="allow", justification="File type detection")
+prefix_rule(pattern=["stat"], decision="allow", justification="File status")
+prefix_rule(pattern=["which"], decision="allow", justification="Locate command")
+prefix_rule(pattern=["pwd"], decision="allow", justification="Print working directory")
+
+# --- GitHub CLI (read operations) ---
+prefix_rule(pattern=["gh", "auth"], decision="allow", justification="GitHub auth")
+prefix_rule(pattern=["gh", "pr", "view"], decision="allow", justification="View PR")
+prefix_rule(pattern=["gh", "pr", "list"], decision="allow", justification="List PRs")
+prefix_rule(pattern=["gh", "pr", "checkout"], decision="allow", justification="Checkout PR")
+prefix_rule(pattern=["gh", "pr", "checks"], decision="allow", justification="PR checks")
+prefix_rule(pattern=["gh", "pr", "diff"], decision="allow", justification="PR diff")
+prefix_rule(pattern=["gh", "pr", "status"], decision="allow", justification="PR status")
+prefix_rule(pattern=["gh", "issue", "view"], decision="allow", justification="View issue")
+prefix_rule(pattern=["gh", "issue", "list"], decision="allow", justification="List issues")
+prefix_rule(pattern=["gh", "issue", "status"], decision="allow", justification="Issue status")
+prefix_rule(pattern=["gh", "repo", "view"], decision="allow", justification="View repo")
+prefix_rule(pattern=["gh", "run", "list"], decision="allow", justification="List workflow runs")
+prefix_rule(pattern=["gh", "run", "view"], decision="allow", justification="View workflow run")
+prefix_rule(pattern=["gh", "run", "watch"], decision="allow", justification="Watch workflow run")
+prefix_rule(pattern=["gh", "workflow", "list"], decision="allow", justification="List workflows")
+prefix_rule(pattern=["gh", "workflow", "view"], decision="allow", justification="View workflow")
+prefix_rule(pattern=["gh", "release", "list"], decision="allow", justification="List releases")
+prefix_rule(pattern=["gh", "release", "view"], decision="allow", justification="View release")
+prefix_rule(pattern=["gh", "api"], decision="allow", justification="GitHub API calls")
+
+# --- Other safe commands ---
+prefix_rule(pattern=["echo"], decision="allow", justification="Print text")
+prefix_rule(pattern=["date"], decision="allow", justification="Show date/time")
+prefix_rule(pattern=["env"], decision="allow", justification="Show environment")
+prefix_rule(pattern=["printenv"], decision="allow", justification="Print environment")
+prefix_rule(pattern=["uname"], decision="allow", justification="System info")
+prefix_rule(pattern=["whoami"], decision="allow", justification="Current user")
+prefix_rule(pattern=["id"], decision="allow", justification="User/group IDs")
+prefix_rule(pattern=["hostname"], decision="allow", justification="System hostname")
+prefix_rule(pattern=["df"], decision="allow", justification="Disk usage")
+prefix_rule(pattern=["du"], decision="allow", justification="Directory usage")
+prefix_rule(pattern=["ps"], decision="allow", justification="Process list")
+prefix_rule(pattern=["top", "-l", "1"], decision="allow", justification="One-shot top")
+prefix_rule(pattern=["curl", "-s"], decision="allow", justification="Silent HTTP request")
+prefix_rule(pattern=["jq"], decision="allow", justification="JSON processor")
+prefix_rule(pattern=["yq"], decision="allow", justification="YAML processor")
+prefix_rule(pattern=["sort"], decision="allow", justification="Sort lines")
+prefix_rule(pattern=["uniq"], decision="allow", justification="Filter duplicates")
+prefix_rule(pattern=["grep"], decision="allow", justification="Pattern matching")
+prefix_rule(pattern=["awk"], decision="allow", justification="Text processing")
+prefix_rule(pattern=["sed"], decision="allow", justification="Stream editor")
+prefix_rule(pattern=["cut"], decision="allow", justification="Cut columns")
+prefix_rule(pattern=["tr"], decision="allow", justification="Translate chars")
+prefix_rule(pattern=["xargs"], decision="allow", justification="Build arguments")
+prefix_rule(pattern=["tee"], decision="allow", justification="Pipe to file")
+prefix_rule(pattern=["diff"], decision="allow", justification="Compare files")
+prefix_rule(pattern=["md5"], decision="allow", justification="MD5 checksum")
+prefix_rule(pattern=["shasum"], decision="allow", justification="SHA checksum")
+
+# --- Directory operations ---
+prefix_rule(pattern=["mkdir"], decision="allow", justification="Create directory")
+prefix_rule(pattern=["cd"], decision="allow", justification="Change directory")
+prefix_rule(pattern=["touch"], decision="allow", justification="Create/update file")
+prefix_rule(pattern=["cp"], decision="allow", justification="Copy files")
+prefix_rule(pattern=["mv"], decision="allow", justification="Move files")
+
+# -----------------------------------------------------------------------------
+# PROMPT: Potentially destructive commands (require confirmation)
+# -----------------------------------------------------------------------------
+
+prefix_rule(pattern=["rm"], decision="prompt", justification="Remove files - confirm before execution")
+prefix_rule(pattern=["rmdir"], decision="prompt", justification="Remove directory - confirm before execution")
+
+# -----------------------------------------------------------------------------
+# FORBIDDEN: Dangerous commands
+# -----------------------------------------------------------------------------
+
+prefix_rule(pattern=["sudo"], decision="forbidden", justification="Privilege escalation is forbidden")
+prefix_rule(pattern=["su"], decision="forbidden", justification="User switching is forbidden")
+prefix_rule(pattern=["chmod", "777"], decision="forbidden", justification="World-writable permissions forbidden")
+prefix_rule(pattern=["chown"], decision="prompt", justification="Change ownership requires confirmation")
