@@ -25,13 +25,13 @@ A fast CoVe-style loop:
 # Step 0 — Pre-flight
 1. Run `pwd` to confirm repo root
 2. Run `git status --porcelain` to check if working tree is clean
-3. If not clean: STOP and ask the user what to do
+3. If not clean: STOP and **use `AskUserQuestion` tool** to ask what to do
 
 ---
 
 # Step 1 — Branch
 - If `branch=<name>` is provided, use it
-- Else: derive a short branch name and ask the user to confirm
+- Else: derive a short branch name and **use `AskUserQuestion` tool** to confirm
 
 Run: `git checkout -b "<BRANCH_NAME>"`
 
@@ -46,7 +46,7 @@ Switch to Plan Mode and collect only the information you need:
 
 Hard rule:
 - If anything changes the implementation shape (API/schema/compat/consistency/rollout),
-  **STOP and ask the user a crisp question** (do NOT assume).
+  **STOP and use `AskUserQuestion` tool** with a crisp question (do NOT assume).
 
 ---
 
@@ -113,9 +113,9 @@ Update:
 - Phases (tasks & done-criteria)
 
 If codex feedback introduces a new ambiguity:
-- STOP and ask the user before coding.
+- STOP and **use `AskUserQuestion` tool** before coding.
 
-If codex feedback changes scope/spec or requires a trade-off decision, STOP and ask the user before applying it.
+If codex feedback changes scope/spec or requires a trade-off decision, STOP and **use `AskUserQuestion` tool** before applying it.
 
 ---
 
