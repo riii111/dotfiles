@@ -1,0 +1,17 @@
+# Colima default configuration
+# M4 Max 64GB optimized
+
+# Number of CPUs
+cpu: 8
+
+# Memory in GiB
+memory: 16
+
+# Disk size in GiB
+disk: 100
+
+# VM runtime (docker or containerd)
+runtime: docker
+
+# Mount type for macOS (virtiofs is fastest)
+mountType: virtiofs
