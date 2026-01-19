@@ -36,6 +36,7 @@
       "Bash(rg:*)",
       "Bash(fd:*)",
       "Bash(bat:*)",
+      "Bash(cat:*)",
       "Bash(eza:*)",
       "Bash(ls:*)",
       "Bash(gh auth:*)",
