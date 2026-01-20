@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+#
+# mux-launcher - Display service list for dashboard panes
+#
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")" && pwd)"
+source "${SCRIPT_DIR}/mux-core.sh"
+
+display_services() {
+    local filter_group="${1:-}"
+
+    clear
+    echo
+    local title="${PROJECT_NAME} - Development TUI"
+    local box_width=46
+    local padding=$(( (box_width - ${#title}) / 2 ))
+    echo -e "${BOLD}${CYAN}╔══════════════════════════════════════════════╗${NC}"
+    printf "${BOLD}${CYAN}║%*s%s%*s║${NC}\n" $padding "" "$title" $((box_width - padding - ${#title})) ""
+    echo -e "${BOLD}${CYAN}╚══════════════════════════════════════════════╝${NC}"
+    echo
+    echo -e "${DIM}Navigate: ${NC}${BOLD}Ctrl+b w${NC}${DIM} (list) ${NC}${BOLD}Ctrl+b '${NC}${DIM} (number) ${NC}${BOLD}Ctrl+b m${NC}${DIM} (toggle)${NC}"
+    echo
+
+    # Get unique groups
+    local groups
+    groups=$(parse_yaml_allow_null "$CONFIG_FILE" '.services[].group' | sort -u)
+
+    for group in $groups; do
+        # Skip if filter specified and doesn't match
+        [[ -n "$filter_group" && "$group" != "$filter_group" ]] && continue
+
+        echo -e "${BOLD}${YELLOW}[${group}]${NC}"
+
+        local services
+        services=$(parse_yaml_allow_null "$CONFIG_FILE" ".services[] | select(.group == \"$group\") | .name")
+
+        for svc in $services; do
+            local port cmd
+            port=$(get_service_prop "$svc" "port" "N/A")
+            cmd=$(get_start_command "$svc" 2>/dev/null || echo "N/A")
+            printf "  ${GREEN}%-15s${NC} ${DIM}:%-5s${NC}  %s\n" "$svc" "$port" "$cmd"
+        done
+        echo
+    done
+
+    echo -e "${DIM}────────────────────────────────────────────────${NC}"
+    echo -e "${BOLD}Commands:${NC}"
+    echo -e "  ${GREEN}${PROJECT_NAME} hello${NC}           Start all + attach"
+    echo -e "  ${GREEN}${PROJECT_NAME} bye${NC}             Graceful shutdown"
+    echo -e "  ${GREEN}${PROJECT_NAME} status${NC}          Show all status"
+    echo -e "  ${GREEN}${PROJECT_NAME} start <svc>${NC}     Start a service"
+    echo -e "  ${GREEN}${PROJECT_NAME} logs <svc>${NC}      Jump to window"
+    echo
+
+    exec "$SHELL"
+}
+
+main() {
+    local project="${1:-}"
+    local filter_group="${2:-}"
+
+    if [[ -z "$project" ]]; then
+        echo "Usage: mux-launcher <project> [group]"
+        exit 1
+    fi
+
+    load_config "$project" || exit 1
+    display_services "$filter_group"
+}
+
+main "$@"
