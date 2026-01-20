@@ -1,0 +1,223 @@
+#!/usr/bin/env bash
+#
+# mux-monitor - Service status monitor for mux dashboard
+#
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")" && pwd)"
+source "${SCRIPT_DIR}/mux-core.sh"
+
+REFRESH_INTERVAL=1
+
+#######################################
+# Get current display mode
+#######################################
+get_mode() {
+    tmux show-option -qv @mux_dash_mode 2>/dev/null || echo "all"
+}
+
+#######################################
+# Get pane status for a window
+# Returns: OK|START|DEAD
+#######################################
+get_pane_status() {
+    local window_name="$1"
+    local pane_info
+
+    pane_info=$(tmux list-panes -t "${SESSION_NAME}:${window_name}" -F '#{pane_dead}|#{pane_dead_status}|#{pane_pid}|#{pane_current_command}' 2>/dev/null | head -1 || true)
+
+    if [[ -z "$pane_info" ]]; then
+        echo "UNKNOWN||0|"
+        return
+    fi
+
+    local pane_dead pane_dead_status pane_pid pane_cmd
+    IFS='|' read -r pane_dead pane_dead_status pane_pid pane_cmd <<< "$pane_info"
+
+    if [[ "$pane_dead" == "1" ]]; then
+        echo "DEAD|${pane_dead_status}|${pane_pid}|${pane_cmd}"
+    elif [[ "$pane_cmd" == "zsh" || "$pane_cmd" == "bash" || "$pane_cmd" == "sh" ]]; then
+        echo "START|0|${pane_pid}|${pane_cmd}"
+    else
+        echo "OK|0|${pane_pid}|${pane_cmd}"
+    fi
+}
+
+#######################################
+# Get last log line for a pane
+#######################################
+get_last_log() {
+    local window_name="$1"
+    local line
+
+    line=$(tmux capture-pane -t "${SESSION_NAME}:${window_name}" -p 2>/dev/null | tr -d '\0' | sed 's/\x1b\[[0-9;]*m//g' | tr -s ' ' | sed '/^[[:space:]]*$/d' | tail -1 || true)
+    echo "${line:0:35}"
+}
+
+#######################################
+# Format service status for display
+#######################################
+format_service() {
+    local name="$1"
+    local status="$2"
+    local exit_code="$3"
+    local cmd="$4"
+    local show_log="$5"
+
+    local icon color
+    case "$status" in
+        OK)    icon="●"; color="$GREEN" ;;
+        START) icon="○"; color="$YELLOW" ;;
+        DEAD)  icon="✗"; color="$RED" ;;
+        *)     icon="?"; color="$DIM" ;;
+    esac
+
+    local display_name
+    display_name=$(printf "%-13.13s" "$name")
+
+    local status_text
+    if [[ "$status" == "DEAD" ]]; then
+        status_text="exit:${exit_code}"
+    elif [[ "$status" == "START" ]]; then
+        status_text="stopped"
+    else
+        status_text=$(printf "%.8s" "$cmd")
+    fi
+
+    local log=""
+    if [[ "$show_log" == "true" ]]; then
+        log=$(get_last_log "$name")
+        [[ -n "$log" ]] && log=" ${DIM}${log}${NC}"
+    fi
+
+    printf "%b%s%b %-13s %b%-8s%b%s" "$color" "$icon" "$NC" "$display_name" "$DIM" "$status_text" "$NC" "$log"
+}
+
+#######################################
+# Render status display
+#######################################
+render() {
+    local mode="$1"
+    local output=""
+    local ok_count=0
+    local start_count=0
+    local dead_count=0
+
+    # Get services from config
+    local services_list
+    services_list=$(get_services)
+
+    local statuses=()
+    local names=()
+    local exit_codes=()
+    local cmds=()
+
+    for svc in $services_list; do
+        local info
+        info=$(get_pane_status "$svc")
+
+        local status exit_code pid cmd
+        IFS='|' read -r status exit_code pid cmd <<< "$info"
+
+        statuses+=("$status")
+        names+=("$svc")
+        exit_codes+=("$exit_code")
+        cmds+=("$cmd")
+
+        case "$status" in
+            OK) ((ok_count++)) ;;
+            START) ((start_count++)) ;;
+            DEAD) ((dead_count++)) ;;
+        esac
+    done
+
+    # Header
+    output+="${BOLD}[mux-monitor]${NC} "
+    output+="${GREEN}OK:${ok_count}${NC} "
+    output+="${YELLOW}START:${start_count}${NC} "
+    output+="${RED}DEAD:${dead_count}${NC}  "
+    output+="${DIM}[${mode}]${NC}  "
+    output+="${DIM}Ctrl+b m: toggle${NC}"
+    output+=$'\n\n'
+
+    # Filter based on mode
+    local display_indices=()
+    for i in "${!statuses[@]}"; do
+        if [[ "$mode" == "all" ]] || [[ "${statuses[$i]}" != "OK" ]]; then
+            display_indices+=("$i")
+        fi
+    done
+
+    # 2-column layout
+    local total=${#display_indices[@]}
+    local half=$(( (total + 1) / 2 ))
+
+    for ((row=0; row<half; row++)); do
+        local left_idx=${display_indices[$row]:-}
+        local right_idx=${display_indices[$((row + half))]:-}
+
+        if [[ -n "$left_idx" ]]; then
+            local show_log="false"
+            [[ "$mode" == "bad" || "${statuses[$left_idx]}" != "OK" ]] && show_log="true"
+            output+=$(format_service "${names[$left_idx]}" "${statuses[$left_idx]}" "${exit_codes[$left_idx]}" "${cmds[$left_idx]}" "$show_log")
+        fi
+
+        if [[ -n "$right_idx" ]]; then
+            output+=" ${DIM}│${NC} "
+            local show_log="false"
+            [[ "$mode" == "bad" || "${statuses[$right_idx]}" != "OK" ]] && show_log="true"
+            output+=$(format_service "${names[$right_idx]}" "${statuses[$right_idx]}" "${exit_codes[$right_idx]}" "${cmds[$right_idx]}" "$show_log")
+        fi
+
+        output+=$'\n'
+    done
+
+    # Footer
+    output+=$'\n'
+    output+="${DIM}───────────────────────────────────────────────────────────────${NC}"$'\n'
+    output+="${DIM}Docker: Window 1 | ${PROJECT_NAME} status | ${PROJECT_NAME} logs <service>${NC}"
+
+    echo "$output"
+}
+
+#######################################
+# Main loop
+#######################################
+main() {
+    local project="${1:-}"
+
+    if [[ -z "$project" ]]; then
+        echo "Usage: mux-monitor <project>"
+        exit 1
+    fi
+
+    load_config "$project" || exit 1
+
+    if ! session_exists; then
+        echo -e "${RED}Session '${SESSION_NAME}' is not running${NC}"
+        exit 1
+    fi
+
+    local prev_output=""
+    clear
+
+    while true; do
+        local mode
+        mode=$(get_mode)
+
+        local output
+        output=$(render "$mode")
+
+        # Only redraw if changed
+        if [[ "$output" != "$prev_output" ]]; then
+            clear
+            echo "$output"
+            prev_output="$output"
+        fi
+
+        sleep "$REFRESH_INTERVAL"
+    done
+}
+
+main "$@"

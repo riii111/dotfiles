@@ -1,0 +1,450 @@
+#!/usr/bin/env bash
+#
+# mux - Project-agnostic TUI helper for development environments
+# Usage: mux <command> [options]
+#        <project> <command> [options]  (when called via symlink)
+#
+
+# Get script directory
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")" && pwd)"
+
+# Source core library
+source "${SCRIPT_DIR}/mux-core.sh"
+
+#######################################
+# Print usage information
+#######################################
+usage() {
+    local project_name="${PROJECT_NAME:-mux}"
+    cat <<EOF
+${BOLD}${project_name}${NC} - Development Environment TUI Helper
+
+${BOLD}Usage:${NC}
+    ${project_name} <command> [options]
+
+${BOLD}Commands:${NC}
+    hello               Start session + all services + attach
+    bye                 Graceful shutdown (stop all → kill session)
+    re                  bye + hello (restart entire session)
+    attach              Attach to existing session
+    detach              Detach from session (Ctrl+b d)
+    kill                Kill session immediately
+    status              Show status of all services
+    start [--all|docker|service]   Start service(s)
+    stop [--all|docker|service]    Stop service(s)
+    restart <docker|service>       Restart service(s)
+    logs <service>      Focus on specific service window
+    follow <service>    Follow service log in nvim (popup)
+    list                List all available services
+
+${BOLD}Examples:${NC}
+    ${project_name} hello           # Start session + all services
+    ${project_name} bye             # Graceful shutdown
+    ${project_name} attach          # Attach only (no start)
+    ${project_name} start studio-api # Start specific service
+    ${project_name} restart docker  # Restart docker services
+    ${project_name} status          # Show all status
+    ${project_name} logs studio-api # Focus on service window
+
+${BOLD}Keybindings (in tmux session):${NC}
+    Ctrl+b f           Follow current window's log in nvim
+    Ctrl+b m           Toggle dashboard mode (all/bad)
+    Ctrl+b w           List windows
+    Ctrl+b d           Detach from session
+
+EOF
+}
+
+#######################################
+# Generate tmuxp config dynamically
+#######################################
+generate_tmuxp_config() {
+    local config_file="$1"
+    local output_file="${MUX_CONFIG_DIR}/${PROJECT_NAME}/session.yml"
+
+    # Get services
+    local services
+    services=$(get_services)
+
+    # Start YAML
+    cat > "$output_file" <<EOF
+session_name: ${SESSION_NAME}
+start_directory: ${PROJECT_ROOT}
+
+options:
+  status-left: "[${PROJECT_NAME}] Ctrl+b w:list | f:follow | ':number | z:zoom | [:scroll | d:detach "
+  status-left-length: 80
+  status-right: ""
+  remain-on-exit: on
+  automatic-rename: off
+
+windows:
+  # Window 0: Dashboard (launcher + monitor)
+  - window_name: dashboard
+    layout: main-horizontal
+    options:
+      main-pane-height: 60%
+    panes:
+      - shell_command:
+          - ${SCRIPT_DIR}/mux-launcher ${PROJECT_NAME}
+      - shell_command:
+          - ${SCRIPT_DIR}/mux-monitor ${PROJECT_NAME}
+EOF
+
+    # Add Docker window if enabled
+    if [[ "$DOCKER_ENABLED" == "true" ]]; then
+        cat >> "$output_file" <<EOF
+
+  - window_name: docker
+    start_directory: ${PROJECT_ROOT}
+    panes:
+      - shell_command:
+          - echo "=== Docker Services ===" && echo "Waiting for start command..."
+EOF
+    fi
+
+    # Add service windows
+    for service in $services; do
+        local dir
+        dir=$(get_service_dir "$service")
+        cat >> "$output_file" <<EOF
+
+  - window_name: ${service}
+    start_directory: ${dir}
+    panes:
+      - shell_command:
+          - echo "=== ${service} ===" && echo "Waiting for start command..."
+EOF
+    done
+
+    echo "$output_file"
+}
+
+#######################################
+# Start all services
+#######################################
+start_all() {
+    echo -e "${BOLD}Starting all services...${NC}"
+    echo
+
+    # Run prechecks
+    run_prechecks || return 1
+    echo
+
+    # Start Docker if enabled
+    if [[ "$DOCKER_ENABLED" == "true" ]]; then
+        echo -e "${BOLD}[Docker]${NC}"
+        start_docker
+        wait_for_docker || true
+        echo
+    fi
+
+    # Get phases from config
+    local phase_count
+    phase_count=$(parse_yaml_allow_null "$CONFIG_FILE" '.phases | length')
+
+    if [[ -z "$phase_count" || "$phase_count" == "0" || "$phase_count" == "null" ]]; then
+        # No phases defined, start all services
+        echo -e "${BOLD}[Services]${NC}"
+        local services
+        services=$(get_services)
+        for service in $services; do
+            start_service "$service"
+        done
+    else
+        # Process phases
+        local i=0
+        while [[ $i -lt $phase_count ]]; do
+            local phase_name phase_type groups wait_ports
+
+            phase_name=$(parse_yaml "$CONFIG_FILE" ".phases[$i].name")
+            phase_type=$(parse_yaml_allow_null "$CONFIG_FILE" ".phases[$i].type // \"\"")
+
+            # Skip docker phase (already handled)
+            if [[ "$phase_type" == "docker" ]]; then
+                ((i++))
+                continue
+            fi
+
+            echo -e "${BOLD}[${phase_name}]${NC}"
+
+            # Get groups for this phase
+            groups=$(parse_yaml_allow_null "$CONFIG_FILE" ".phases[$i].groups[]" 2>/dev/null || echo "")
+
+            if [[ -n "$groups" ]]; then
+                for group in $groups; do
+                    # Get services in this group
+                    local group_services
+                    group_services=$(parse_yaml_allow_null "$CONFIG_FILE" ".services[] | select(.group == \"$group\") | .name")
+
+                    for service in $group_services; do
+                        start_service "$service"
+                    done
+                done
+            fi
+
+            # Wait for ports if specified
+            wait_ports=$(parse_yaml_allow_null "$CONFIG_FILE" ".phases[$i].wait_ports[]" 2>/dev/null || echo "")
+            if [[ -n "$wait_ports" ]]; then
+                echo -e "${DIM}Waiting for ports: ${wait_ports}...${NC}"
+                for port in $wait_ports; do
+                    wait_for_port "$port" 120 || true
+                done
+                echo -e "${GREEN}Ports ready${NC}"
+            fi
+
+            echo
+            ((i++))
+        done
+    fi
+
+    echo -e "${GREEN}All services started!${NC}"
+    echo -e "Use '${BOLD}${PROJECT_NAME} status${NC}' to check status"
+}
+
+#######################################
+# Stop all services
+#######################################
+stop_all() {
+    echo -e "${BOLD}Stopping all services (reverse order)...${NC}"
+
+    local services
+    services=$(get_services)
+
+    # Stop services in reverse order
+    local reversed=""
+    for service in $services; do
+        reversed="$service $reversed"
+    done
+
+    for service in $reversed; do
+        stop_service "$service"
+    done
+
+    stop_docker
+
+    echo -e "${GREEN}All services stopped${NC}"
+}
+
+#######################################
+# Start tmuxp session
+#######################################
+start_session() {
+    if session_exists; then
+        echo -e "${YELLOW}Session already exists. Starting services...${NC}"
+        start_all
+        echo -e "Attaching to session..."
+        sleep 1
+        tmux attach-session -t "$SESSION_NAME"
+        return
+    fi
+
+    echo -e "${CYAN}Starting ${PROJECT_NAME} TUI session...${NC}"
+
+    # Generate tmuxp config
+    local tmuxp_config
+    tmuxp_config=$(generate_tmuxp_config "$CONFIG_FILE")
+
+    # Load tmuxp session
+    tmuxp load -d "$tmuxp_config"
+
+    # Wait for windows
+    sleep 2
+
+    # Hide window list by overriding status-format[0]
+    tmux set-option -t "$SESSION_NAME" status-format[0] '#[align=left]#{T;=/#{status-left-length}:status-left}#[align=right]#{T;=/#{status-right-length}:status-right}'
+
+    # Setup dashboard mode toggle (Ctrl+b m)
+    tmux set-option -t "$SESSION_NAME" @mux_dash_mode all
+    tmux bind-key -T prefix m run-shell 'mode=$(tmux show-option -qv @mux_dash_mode); if [ "$mode" = "all" ]; then tmux set-option @mux_dash_mode bad; else tmux set-option @mux_dash_mode all; fi'
+
+    # Follow current window's log (Ctrl+b f)
+    tmux bind-key -T prefix f run-shell "${PROJECT_NAME} follow \"#{window_name}\""
+
+    # Setup logging
+    init_log_dir
+    setup_pipe_pane
+
+    start_all
+
+    echo
+    echo -e "${GREEN}Session ready!${NC}"
+    echo -e "Attaching to session..."
+    sleep 1
+    tmux attach-session -t "$SESSION_NAME"
+}
+
+#######################################
+# Kill tmuxp session
+#######################################
+kill_session() {
+    stop_docker
+    cleanup_pipe_pane
+
+    if session_exists; then
+        echo -e "${CYAN}Killing session...${NC}"
+        tmux kill-session -t "$SESSION_NAME"
+        echo -e "${GREEN}Session terminated${NC}"
+    else
+        echo -e "${YELLOW}Session not running${NC}"
+    fi
+}
+
+#######################################
+# Graceful shutdown
+#######################################
+graceful_shutdown() {
+    if ! session_exists; then
+        echo -e "${YELLOW}Session not running${NC}"
+        return 0
+    fi
+
+    echo -e "${BOLD}Gracefully shutting down...${NC}"
+    stop_all
+    cleanup_pipe_pane
+    sleep 1
+
+    echo -e "${CYAN}Killing session...${NC}"
+    tmux kill-session -t "$SESSION_NAME"
+    echo -e "${GREEN}Bye!${NC}"
+}
+
+#######################################
+# Main command dispatcher
+#######################################
+main() {
+    # Determine how we were called
+    local script_name
+    script_name="$(basename "$0")"
+
+    local project
+    if [[ "$script_name" == "mux" ]]; then
+        # Called as 'mux <project> <command>'
+        project="${1:-}"
+        if [[ -z "$project" ]]; then
+            echo -e "${RED}Error: Project name required${NC}"
+            echo "Usage: mux <project> <command>"
+            echo "   or: <project> <command> (via symlink)"
+            exit 1
+        fi
+        shift  # Remove project name from args
+    else
+        # Called via symlink (e.g., 'myproject <command>')
+        project="$script_name"
+    fi
+
+    # Load configuration
+    if ! load_config "$project"; then
+        exit 1
+    fi
+
+    local cmd="${1:-}"
+    local arg="${2:-}"
+
+    case "$cmd" in
+        hello)
+            acquire_lock "$project" || exit 1
+            start_session
+            ;;
+        bye)
+            acquire_lock "$project" || exit 1
+            graceful_shutdown
+            ;;
+        re)
+            acquire_lock "$project" || exit 1
+            # Detach first if running inside tmux session
+            if [[ -n "${TMUX:-}" ]]; then
+                tmux detach-client -E "${PROJECT_NAME} re"
+            else
+                graceful_shutdown
+                start_session
+            fi
+            ;;
+        attach)
+            if session_exists; then
+                tmux attach-session -t "$SESSION_NAME"
+            else
+                echo -e "${RED}Session not running${NC}"
+                exit 1
+            fi
+            ;;
+        detach)
+            if [[ -n "${TMUX:-}" ]]; then
+                tmux detach-client
+            else
+                echo -e "${YELLOW}Not in tmux session${NC}"
+            fi
+            ;;
+        kill)
+            acquire_lock "$project" || exit 1
+            kill_session
+            ;;
+        start)
+            if [[ "$arg" == "--all" || -z "$arg" ]]; then
+                if ! session_exists; then
+                    echo -e "${RED}Error: Session not running. Run '${PROJECT_NAME} hello' first.${NC}"
+                    exit 1
+                fi
+                start_all
+            elif [[ "$arg" == "docker" ]]; then
+                start_docker
+            else
+                start_service "$arg"
+            fi
+            ;;
+        stop)
+            if [[ "$arg" == "--all" || -z "$arg" ]]; then
+                stop_all
+            elif [[ "$arg" == "docker" ]]; then
+                stop_docker
+            else
+                stop_service "$arg"
+            fi
+            ;;
+        restart)
+            if [[ -z "$arg" ]]; then
+                echo -e "${RED}Error: Service name required${NC}"
+                echo "Usage: ${PROJECT_NAME} restart <service|docker>"
+                exit 1
+            fi
+            if [[ "$arg" == "docker" ]]; then
+                stop_docker
+                sleep 2
+                start_docker
+            else
+                restart_service "$arg"
+            fi
+            ;;
+        status)
+            show_status
+            ;;
+        logs)
+            if [[ -z "$arg" ]]; then
+                echo -e "${RED}Error: Service name required${NC}"
+                echo "Usage: ${PROJECT_NAME} logs <service>"
+                exit 1
+            fi
+            focus_logs "$arg"
+            ;;
+        follow)
+            follow_service "$arg"
+            ;;
+        list)
+            list_services
+            ;;
+        help|--help|-h)
+            usage
+            ;;
+        "")
+            usage
+            ;;
+        *)
+            echo -e "${RED}Unknown command: $cmd${NC}"
+            echo
+            usage
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"
