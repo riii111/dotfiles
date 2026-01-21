@@ -19,7 +19,7 @@ get_mode() {
 
 #######################################
 # Get pane status for a window
-# Returns: OK|START|DEAD
+# Returns: LIVE|READY|DEGRADED|STOP|DEAD|UNKNOWN
 #######################################
 get_pane_status() {
     local window_name="$1"
@@ -38,9 +38,12 @@ get_pane_status() {
     if [[ "$pane_dead" == "1" ]]; then
         echo "DEAD|${pane_dead_status}|${pane_pid}|${pane_cmd}"
     elif [[ "$pane_cmd" == "zsh" || "$pane_cmd" == "bash" || "$pane_cmd" == "sh" ]]; then
-        echo "START|0|${pane_pid}|${pane_cmd}"
+        echo "STOP|0|${pane_pid}|${pane_cmd}"
     else
-        echo "OK|0|${pane_pid}|${pane_cmd}"
+        # Process is running, check health
+        local health
+        health=$(check_health "$window_name")
+        echo "${health}|0|${pane_pid}|${pane_cmd}"
     fi
 }
 
@@ -64,34 +67,34 @@ format_service() {
     local exit_code="$3"
     local cmd="$4"
     local show_log="$5"
+    local port="$6"
 
-    local icon color
+    local icon color summary
     case "$status" in
-        OK)    icon="●"; color="$GREEN" ;;
-        START) icon="○"; color="$YELLOW" ;;
-        DEAD)  icon="✗"; color="$RED" ;;
-        *)     icon="?"; color="$DIM" ;;
+        LIVE)     icon="●"; color="$GREEN"; summary="live" ;;
+        READY)    icon="◐"; color="$CYAN"; summary="ready" ;;
+        DEGRADED) icon="▲"; color="$YELLOW"; summary="degraded" ;;
+        STOP)     icon="○"; color="$DIM"; summary="stop" ;;
+        DEAD)     icon="✗"; color="$RED"; summary="exit:${exit_code}" ;;
+        *)        icon="?"; color="$DIM"; summary="?" ;;
     esac
 
-    local display_name
-    display_name=$(printf "%-13.13s" "$name")
-
-    local status_text
-    if [[ "$status" == "DEAD" ]]; then
-        status_text="exit:${exit_code}"
-    elif [[ "$status" == "START" ]]; then
-        status_text="stopped"
-    else
-        status_text=$(printf "%.8s" "$cmd")
-    fi
+    # Fixed width columns: name(12) port(6) summary(8)
+    local port_display
+    [[ -z "$port" || "$port" == "null" ]] && port_display="  -   " || port_display=":${port}"
 
     local log=""
-    if [[ "$show_log" == "true" ]]; then
+    if [[ "$show_log" == "true" && ("$status" == "DEAD" || "$status" == "DEGRADED") ]]; then
         log=$(get_last_log "$name")
-        [[ -n "$log" ]] && log=" ${DIM}${log}${NC}"
+        [[ -n "$log" ]] && log=" ${DIM}│${NC} ${log}"
     fi
 
-    printf "%b%s%b %-13s %b%-8s%b%s" "$color" "$icon" "$NC" "$display_name" "$DIM" "$status_text" "$NC" "$log"
+    printf "%b%s%b %-12.12s %b%-6s%b %b%-8s%b%s" \
+        "$color" "$icon" "$NC" \
+        "$name" \
+        "$DIM" "$port_display" "$NC" \
+        "$color" "$summary" "$NC" \
+        "$log"
 }
 
 #######################################
@@ -100,8 +103,8 @@ format_service() {
 render() {
     local mode="$1"
     local output=""
-    local ok_count=0
-    local start_count=0
+    local live_count=0
+    local warn_count=0
     local dead_count=0
 
     # Get services from config
@@ -112,6 +115,7 @@ render() {
     local names=()
     local exit_codes=()
     local cmds=()
+    local ports=()
 
     for svc in $services_list; do
         local info
@@ -120,22 +124,26 @@ render() {
         local status exit_code pid cmd
         IFS='|' read -r status exit_code pid cmd <<< "$info"
 
+        local port
+        port=$(get_service_prop "$svc" "port" "")
+
         statuses+=("$status")
         names+=("$svc")
         exit_codes+=("$exit_code")
         cmds+=("$cmd")
+        ports+=("$port")
 
         case "$status" in
-            OK) ((ok_count++)) ;;
-            START) ((start_count++)) ;;
+            LIVE) ((live_count++)) ;;
+            READY|DEGRADED|STOP|UNKNOWN) ((warn_count++)) ;;
             DEAD) ((dead_count++)) ;;
         esac
     done
 
     # Header
     output+="${BOLD}[mux-monitor]${NC} "
-    output+="${GREEN}OK:${ok_count}${NC} "
-    output+="${YELLOW}START:${start_count}${NC} "
+    output+="${GREEN}LIVE:${live_count}${NC} "
+    output+="${YELLOW}WARN:${warn_count}${NC} "
     output+="${RED}DEAD:${dead_count}${NC}  "
     output+="${DIM}[${mode}]${NC}  "
     output+="${DIM}Ctrl+b m: toggle${NC}"
@@ -144,32 +152,16 @@ render() {
     # Filter based on mode
     local display_indices=()
     for i in "${!statuses[@]}"; do
-        if [[ "$mode" == "all" ]] || [[ "${statuses[$i]}" != "OK" ]]; then
+        if [[ "$mode" == "all" ]] || [[ "${statuses[$i]}" != "LIVE" ]]; then
             display_indices+=("$i")
         fi
     done
 
-    # 2-column layout
-    local total=${#display_indices[@]}
-    local half=$(( (total + 1) / 2 ))
-
-    for ((row=0; row<half; row++)); do
-        local left_idx=${display_indices[$row]:-}
-        local right_idx=${display_indices[$((row + half))]:-}
-
-        if [[ -n "$left_idx" ]]; then
-            local show_log="false"
-            [[ "$mode" == "bad" || "${statuses[$left_idx]}" != "OK" ]] && show_log="true"
-            output+=$(format_service "${names[$left_idx]}" "${statuses[$left_idx]}" "${exit_codes[$left_idx]}" "${cmds[$left_idx]}" "$show_log")
-        fi
-
-        if [[ -n "$right_idx" ]]; then
-            output+=" ${DIM}│${NC} "
-            local show_log="false"
-            [[ "$mode" == "bad" || "${statuses[$right_idx]}" != "OK" ]] && show_log="true"
-            output+=$(format_service "${names[$right_idx]}" "${statuses[$right_idx]}" "${exit_codes[$right_idx]}" "${cmds[$right_idx]}" "$show_log")
-        fi
-
+    # Single column layout
+    for idx in "${display_indices[@]}"; do
+        local show_log="false"
+        [[ "$mode" == "bad" || "${statuses[$idx]}" != "LIVE" ]] && show_log="true"
+        output+=$(format_service "${names[$idx]}" "${statuses[$idx]}" "${exit_codes[$idx]}" "${cmds[$idx]}" "$show_log" "${ports[$idx]}")
         output+=$'\n'
     done
 

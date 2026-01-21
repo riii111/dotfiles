@@ -279,6 +279,39 @@ wait_for_port() {
     return 1
 }
 
+# Check health status of a service
+# Returns: LIVE|READY|DEGRADED|UNKNOWN
+check_health() {
+    local service="$1"
+    local port hc_type hc_path
+
+    port=$(get_service_prop "$service" "port" "")
+    hc_type=$(get_service_prop "$service" "healthcheck.type" "tcp")
+    hc_path=$(get_service_prop "$service" "healthcheck.path" "/health")
+
+    # No port configured
+    [[ -z "$port" || "$port" == "null" ]] && echo "UNKNOWN" && return 0
+
+    # Port not open yet
+    if ! nc -z localhost "$port" 2>/dev/null; then
+        echo "READY"
+        return 0
+    fi
+
+    # HTTP healthcheck
+    if [[ "$hc_type" == "http" ]]; then
+        if curl -sf --max-time 1 "http://localhost:${port}${hc_path}" >/dev/null 2>&1; then
+            echo "LIVE"
+        else
+            echo "DEGRADED"
+        fi
+        return 0
+    fi
+
+    # TCP healthcheck (port is open = live)
+    echo "LIVE"
+}
+
 wait_for_service() {
     local service="$1"
     local port healthcheck_type healthcheck_path timeout
