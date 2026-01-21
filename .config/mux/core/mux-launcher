@@ -49,9 +49,13 @@ display_services() {
     echo -e "${BOLD}Commands:${NC}"
     echo -e "  ${GREEN}${PROJECT_NAME} hello${NC}           Start all + attach"
     echo -e "  ${GREEN}${PROJECT_NAME} bye${NC}             Graceful shutdown"
+    echo -e "  ${GREEN}${PROJECT_NAME} re${NC}              Restart session"
     echo -e "  ${GREEN}${PROJECT_NAME} status${NC}          Show all status"
     echo -e "  ${GREEN}${PROJECT_NAME} start <svc>${NC}     Start a service"
+    echo -e "  ${GREEN}${PROJECT_NAME} stop <svc>${NC}      Stop a service"
+    echo -e "  ${GREEN}${PROJECT_NAME} restart <svc>${NC}   Restart a service"
     echo -e "  ${GREEN}${PROJECT_NAME} logs <svc>${NC}      Jump to window"
+    echo -e "  ${GREEN}${PROJECT_NAME} follow <svc>${NC}    Tail log in nvim"
     echo
 
     exec "$SHELL"
