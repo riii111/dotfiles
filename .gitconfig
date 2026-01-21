@@ -62,8 +62,8 @@
 	# fzf staging (like GitHub Desktop - multi-select with Tab, confirm with Enter)
 	stf = "!git status -s -uall | fzf -m --marker '✔ ' --color 'marker:green:bold' --bind 'ctrl-a:select-all,ctrl-d:deselect-all' --preview 'file=$(echo {} | sed \"s/^...//\" | sed \"s/.* -> //\"); diff=$(git diff HEAD --color=always -- \"$file\" 2>/dev/null); if [ -n \"$diff\" ]; then echo \"$diff\" | delta --no-gitconfig --line-numbers --syntax-theme=Nord; else diff=$(git diff --cached --color=always -- \"$file\" 2>/dev/null); if [ -n \"$diff\" ]; then echo \"$diff\" | delta --no-gitconfig --line-numbers --syntax-theme=Nord; else bat --color=always \"$file\" 2>/dev/null; fi; fi' | sed 's/^...//' | sed 's/.* -> //' | xargs -I {} git add '{}'"
 
-	# Switch branch with fzf (simple version with preview fallback)
-	swf = "!git branch --all | grep -v '^\\*' | grep -v 'HEAD' | sed 's|^[[:space:]]*||' | sed 's|remotes/origin/||' | sort -u | fzf --preview 'git log --oneline --color=always -20 {} 2>/dev/null || echo No commits' | xargs -r git switch"
+	# Switch branch with fzf (only checked-out branches that still exist)
+	swf = "!git reflog | grep 'checkout: moving' | sed 's/.*to //' | sort -u | while read branch; do git rev-parse --verify \"$branch\" >/dev/null 2>&1 && echo \"$branch\"; done | fzf --preview 'git log --oneline --color=always -20 {} 2>/dev/null || echo No commits' | xargs -r git switch"
 
 	# Beautiful log with graph
 	logg = log --graph --all --format=format:'%C(bold blue)%h%C(reset) - %C(bold green)(%ar)%C(reset) %C(white)%s%C(reset) %C(dim white)- %an%C(reset)%C(auto)%d%C(reset)'
