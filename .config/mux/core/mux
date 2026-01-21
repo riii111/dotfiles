@@ -81,9 +81,9 @@ options:
 windows:
   # Window 0: Dashboard (launcher + monitor)
   - window_name: dashboard
-    layout: main-horizontal
+    layout: main-vertical
     options:
-      main-pane-height: 60%
+      main-pane-width: 50%
     panes:
       - shell_command:
           - ${SCRIPT_DIR}/mux-launcher ${PROJECT_NAME}
