@@ -91,18 +91,6 @@ windows:
           - ${SCRIPT_DIR}/mux-monitor ${PROJECT_NAME}
 EOF
 
-    # Add Docker window if enabled
-    if [[ "$DOCKER_ENABLED" == "true" ]]; then
-        cat >> "$output_file" <<EOF
-
-  - window_name: docker
-    start_directory: ${PROJECT_ROOT}
-    panes:
-      - shell_command:
-          - echo "=== Docker Services ===" && echo "Waiting for start command..."
-EOF
-    fi
-
     # Add service windows
     for service in $services; do
         local dir
@@ -116,6 +104,18 @@ EOF
           - echo "=== ${service} ===" && echo "Waiting for start command..."
 EOF
     done
+
+    # Add Docker window at the end if enabled
+    if [[ "$DOCKER_ENABLED" == "true" ]]; then
+        cat >> "$output_file" <<EOF
+
+  - window_name: docker
+    start_directory: ${DOCKER_DIR}
+    panes:
+      - shell_command:
+          - echo "=== Docker Services ===" && echo "Waiting for start command..."
+EOF
+    fi
 
     echo "$output_file"
 }
@@ -162,11 +162,21 @@ start_all() {
 
             # Skip docker phase (already handled)
             if [[ "$phase_type" == "docker" ]]; then
-                ((i++))
+                ((i++)) || true
                 continue
             fi
 
             echo -e "${BOLD}[${phase_name}]${NC}"
+
+            # Handle command phase
+            if [[ "$phase_type" == "command" ]]; then
+                if ! run_command_phase "$i"; then
+                    return 1
+                fi
+                echo
+                ((i++)) || true
+                continue
+            fi
 
             # Get groups for this phase
             groups=$(parse_yaml_allow_null "$CONFIG_FILE" ".phases[$i].groups[]" 2>/dev/null || echo "")
@@ -194,7 +204,7 @@ start_all() {
             fi
 
             echo
-            ((i++))
+            ((i++)) || true
         done
     fi
 
@@ -389,7 +399,16 @@ main() {
             elif [[ "$arg" == "docker" ]]; then
                 start_docker
             else
-                start_service "$arg"
+                # Try to resolve as group alias first
+                local group_services
+                if group_services=$(resolve_group_alias "$arg"); then
+                    echo -e "${BOLD}Starting group '${arg}'...${NC}"
+                    for service in $group_services; do
+                        start_service "$service"
+                    done
+                else
+                    start_service "$arg"
+                fi
             fi
             ;;
         stop)
@@ -398,13 +417,22 @@ main() {
             elif [[ "$arg" == "docker" ]]; then
                 stop_docker
             else
-                stop_service "$arg"
+                # Try to resolve as group alias first
+                local group_services
+                if group_services=$(resolve_group_alias "$arg"); then
+                    echo -e "${BOLD}Stopping group '${arg}'...${NC}"
+                    for service in $group_services; do
+                        stop_service "$service"
+                    done
+                else
+                    stop_service "$arg"
+                fi
             fi
             ;;
         restart)
             if [[ -z "$arg" ]]; then
                 echo -e "${RED}Error: Service name required${NC}"
-                echo "Usage: ${PROJECT_NAME} restart <service|docker>"
+                echo "Usage: ${PROJECT_NAME} restart <service|docker|group>"
                 exit 1
             fi
             if [[ "$arg" == "docker" ]]; then
@@ -412,7 +440,16 @@ main() {
                 sleep 2
                 start_docker
             else
-                restart_service "$arg"
+                # Try to resolve as group alias first
+                local group_services
+                if group_services=$(resolve_group_alias "$arg"); then
+                    echo -e "${BOLD}Restarting group '${arg}'...${NC}"
+                    for service in $group_services; do
+                        restart_service "$service"
+                    done
+                else
+                    restart_service "$arg"
+                fi
             fi
             ;;
         status)
