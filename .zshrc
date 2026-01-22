@@ -269,3 +269,8 @@ git-switch-fzf() {
   git swf
 }
 [[ -o zle ]] && bindkey -s '^B' 'git-switch-fzf\n'
+
+# ==========================================
+# Machine-specific config
+# ==========================================
+[[ -f ~/.zshrc.local ]] && source ~/.zshrc.local
