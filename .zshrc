@@ -256,18 +256,11 @@ fi
 # ==========================================
 export GHQ_ROOT="$HOME/ghq"
 
-# ghq × gwq × fzf: jump to repository or worktree (Ctrl-G)
+# ghq × fzf: jump to repository (Ctrl-G)
 cghq() {
-  local target gwq_out
-  # Only call slow gwq list -g if worktrees exist (dirs containing '=')
-  if fd -t d '.*=.*' ~/ghq/github.com --max-depth 3 -q 2>/dev/null; then
-    gwq_out="$(gwq list -g --json 2>/dev/null)"
-  fi
-  target="$({
-    ghq list
-    [[ "$gwq_out" == \[* ]] && echo "$gwq_out" | jq -r '.[].path' | sed "s|$HOME/ghq/||"
-  } | sort -u | fzf --preview 'eza --tree --level=2 --icons --color=always ~/ghq/{}')" || return
-  cd "$HOME/ghq/$target"
+  local repo
+  repo="$(ghq list | fzf --preview 'eza --tree --level=3 --icons --color=always $(ghq root)/{}')" || return
+  cd "$(ghq root)/$repo"
 }
 [[ -o zle ]] && bindkey -s '^G' 'cghq\n'
 
