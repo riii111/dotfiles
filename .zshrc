@@ -109,11 +109,6 @@ function bq() {
 # golang
 export GOTOOLCHAIN=auto
 
-# asdf (conditional)
-if [[ -f "$(brew --prefix asdf 2>/dev/null)/libexec/asdf.sh" ]]; then
-  . "$(brew --prefix asdf)/libexec/asdf.sh"
-fi
-
 # rust
 export PATH="$HOME/.cargo/bin:$PATH"
 
