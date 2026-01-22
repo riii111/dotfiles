@@ -79,33 +79,57 @@ export MANPAGER='nvim +Man!'
 typeset -U path PATH
 
 export PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
-export PATH=/opt/homebrew/bin:$PATH
+export PATH=/opt/homebrew/bin:/opt/homebrew/sbin:$PATH
+export PATH=$PATH:/Applications/IntelliJ\ IDEA\ CE.app/Contents/MacOS
 export PATH="$HOME/bin:$PATH"
-export PATH="$HOME/.local/bin:$PATH"
 
-# rust
-export PATH="$HOME/.cargo/bin:$PATH"
+# Google Cloud SDK (lazy loading)
+export CLOUDSDK_PYTHON=/opt/homebrew/bin/python3
+export PATH="/opt/homebrew/share/google-cloud-sdk/bin:$PATH"
 
-# bun
-export BUN_INSTALL="$HOME/.bun"
-export PATH="$BUN_INSTALL/bin:$PATH"
+# Load completions on first invocation
+function gcloud() {
+  unfunction gcloud gsutil bq 2>/dev/null
+  source "/opt/homebrew/share/google-cloud-sdk/path.zsh.inc"
+  source "/opt/homebrew/share/google-cloud-sdk/completion.zsh.inc"
+  gcloud "$@"
+}
+function gsutil() {
+  unfunction gcloud gsutil bq 2>/dev/null
+  source "/opt/homebrew/share/google-cloud-sdk/path.zsh.inc"
+  source "/opt/homebrew/share/google-cloud-sdk/completion.zsh.inc"
+  gsutil "$@"
+}
+function bq() {
+  unfunction gcloud gsutil bq 2>/dev/null
+  source "/opt/homebrew/share/google-cloud-sdk/path.zsh.inc"
+  source "/opt/homebrew/share/google-cloud-sdk/completion.zsh.inc"
+  bq "$@"
+}
 
 # golang
 export GOTOOLCHAIN=auto
 
-# asdf
-. $(brew --prefix asdf)/libexec/asdf.sh
+# asdf (conditional)
+if [[ -f "$(brew --prefix asdf 2>/dev/null)/libexec/asdf.sh" ]]; then
+  . "$(brew --prefix asdf)/libexec/asdf.sh"
+fi
 
-# ==========================================
+# rust
+export PATH="$HOME/.cargo/bin:$PATH"
+
+export PNPM_HOME="$HOME/Library/pnpm"
+case ":$PATH:" in
+  *":$PNPM_HOME:"*) ;;
+  *) export PATH="$PNPM_HOME:$PATH" ;;
+esac
+
 # Git hooks
-# ==========================================
 if [[ -f "$HOME/.git-hooks.zsh" ]]; then
   source "$HOME/.git-hooks.zsh"
 fi
 
-# ==========================================
 # Rust Development
-# ==========================================
 function rust-test-unit() {
   local dir="${1:-$PWD}"
   (cd -- "$dir" && cargo nextest run --workspace --lib -j"$(sysctl -n hw.ncpu)" --features test_utils)
@@ -120,6 +144,12 @@ function rust-test-all() {
   local dir="${1:-$PWD}"
   (cd -- "$dir" && cargo nextest run --workspace -j"$(sysctl -n hw.ncpu)" --features test_utils)
 }
+
+# bun
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
+export PATH="$HOME/.local/bin:$PATH"
+export PATH="/opt/homebrew/opt/mysql-client/bin:$PATH"
 
 # ==========================================
 # Interactive Shell Only
