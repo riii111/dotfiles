@@ -80,7 +80,6 @@ typeset -U path PATH
 
 export PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
 export PATH=/opt/homebrew/bin:/opt/homebrew/sbin:$PATH
-export PATH=$PATH:/Applications/IntelliJ\ IDEA\ CE.app/Contents/MacOS
 export PATH="$HOME/bin:$PATH"
 
 # Google Cloud SDK (lazy loading)
