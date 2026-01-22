@@ -143,6 +143,13 @@ load_config() {
     validate_path "$PROJECT_ROOT" "project root" || return 1
 
     DOCKER_ENABLED=$(parse_yaml_allow_null "$config_file" '.docker.enabled // false')
+    local docker_dir_raw
+    docker_dir_raw=$(parse_yaml_allow_null "$config_file" '.docker.dir // ""')
+    if [[ -n "$docker_dir_raw" && "$docker_dir_raw" != "null" ]]; then
+        DOCKER_DIR="${PROJECT_ROOT}/${docker_dir_raw}"
+    else
+        DOCKER_DIR="${PROJECT_ROOT}"
+    fi
     DOCKER_COMPOSE_FILE=$(parse_yaml_allow_null "$config_file" '.docker.compose_file // "docker-compose.yml"')
     DOCKER_WAIT_TIMEOUT=$(parse_yaml_allow_null "$config_file" '.docker.wait_timeout // 60')
 
@@ -153,7 +160,7 @@ load_config() {
     MUX_LOG_BASE_DIR="${MUX_DATA_DIR}/${project}/logs"
 
     export PROJECT_NAME PROJECT_ROOT SESSION_NAME
-    export DOCKER_ENABLED DOCKER_COMPOSE_FILE DOCKER_WAIT_TIMEOUT
+    export DOCKER_ENABLED DOCKER_DIR DOCKER_COMPOSE_FILE DOCKER_WAIT_TIMEOUT
     export MUX_LOG_BASE_DIR MUX_LOG_KEEP_SESSIONS
 
     CONFIG_FILE="$config_file"
@@ -225,6 +232,31 @@ get_service_dir() {
     fi
 }
 
+# Resolve group alias to list of services
+# Checks group_aliases first, then falls back to group name
+resolve_group_alias() {
+    local alias="$1"
+    local services
+
+    # Check if it's a group alias
+    services=$(parse_yaml_allow_null "$CONFIG_FILE" ".group_aliases.${alias}[]" 2>/dev/null || echo "")
+
+    if [[ -n "$services" && "$services" != "null" ]]; then
+        echo "$services"
+        return 0
+    fi
+
+    # Check if it's a group name
+    services=$(parse_yaml_allow_null "$CONFIG_FILE" ".services[] | select(.group == \"$alias\") | .name")
+
+    if [[ -n "$services" ]]; then
+        echo "$services"
+        return 0
+    fi
+
+    return 1
+}
+
 #######################################
 # Session & Health Checks
 #######################################
@@ -289,8 +321,15 @@ check_health() {
     hc_type=$(get_service_prop "$service" "healthcheck.type" "tcp")
     hc_path=$(get_service_prop "$service" "healthcheck.path" "/health")
 
-    # No port configured
-    [[ -z "$port" || "$port" == "null" ]] && echo "UNKNOWN" && return 0
+    # No port configured - check if process is running instead
+    if [[ -z "$port" || "$port" == "null" ]]; then
+        if is_service_running "$service"; then
+            echo "LIVE"
+        else
+            echo "UNKNOWN"
+        fi
+        return 0
+    fi
 
     # Port not open yet
     if ! nc -z localhost "$port" 2>/dev/null; then
@@ -366,7 +405,7 @@ wait_for_docker() {
     echo -e "${DIM}Waiting for Docker containers...${NC}"
     while [[ $attempt -lt $max_attempts ]]; do
         local running_count
-        running_count=$(cd "$PROJECT_ROOT" && docker compose ps --status running 2>/dev/null | tail -n +2 | wc -l | tr -d ' ' || echo "0")
+        running_count=$(cd "$DOCKER_DIR" && docker compose ps --status running 2>/dev/null | tail -n +2 | wc -l | tr -d ' \n' || echo "0")
 
         if [[ "$running_count" -ge 1 ]]; then
             sleep 2
@@ -486,6 +525,38 @@ run_prechecks() {
 
         ((i++))
     done
+
+    return 0
+}
+
+#######################################
+# Command Phase
+#######################################
+
+run_command_phase() {
+    local phase_idx="$1"
+    local name command dir on_fail
+
+    name=$(parse_yaml "$CONFIG_FILE" ".phases[$phase_idx].name")
+    command=$(parse_yaml "$CONFIG_FILE" ".phases[$phase_idx].command")
+    dir=$(parse_yaml_allow_null "$CONFIG_FILE" ".phases[$phase_idx].dir // \"\"")
+    on_fail=$(parse_yaml_allow_null "$CONFIG_FILE" ".phases[$phase_idx].on_fail // \"abort\"")
+
+    local exec_dir="${PROJECT_ROOT}"
+    [[ -n "$dir" && "$dir" != "null" ]] && exec_dir="${PROJECT_ROOT}/${dir}"
+
+    echo -e "${DIM}Running: ${command}${NC}"
+
+    if ! (cd "$exec_dir" && bash -c "$command"); then
+        if [[ "$on_fail" == "abort" ]]; then
+            echo -e "${RED}Phase '${name}' failed${NC}"
+            return 1
+        else
+            echo -e "${YELLOW}Warning: Phase '${name}' failed (continuing)${NC}"
+        fi
+    else
+        echo -e "${GREEN}${name}: OK${NC}"
+    fi
 }
 
 #######################################
@@ -595,7 +666,7 @@ start_docker() {
     fi
 
     echo -e "${BLUE}Starting Docker services...${NC}"
-    tmux send-keys -t "${SESSION_NAME}:docker" "cd '${PROJECT_ROOT}' && docker compose up" Enter
+    tmux send-keys -t "${SESSION_NAME}:docker" "cd '${DOCKER_DIR}' && docker compose up" Enter
 }
 
 stop_docker() {
@@ -605,7 +676,7 @@ stop_docker() {
 
     session_exists && { tmux send-keys -t "${SESSION_NAME}:docker" C-c 2>/dev/null || true; sleep 2; }
 
-    [[ -d "$PROJECT_ROOT" ]] && (cd "$PROJECT_ROOT" && docker compose down 2>/dev/null) || true
+    [[ -d "$DOCKER_DIR" ]] && (cd "$DOCKER_DIR" && docker compose down 2>/dev/null) || true
 }
 
 #######################################
