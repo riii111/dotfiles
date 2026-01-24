@@ -134,9 +134,9 @@ render() {
         ports+=("$port")
 
         case "$status" in
-            LIVE) ((live_count++)) ;;
-            READY|DEGRADED|STOP|UNKNOWN) ((warn_count++)) ;;
-            DEAD) ((dead_count++)) ;;
+            LIVE) ((live_count++)) || true ;;
+            READY|DEGRADED|STOP|UNKNOWN) ((warn_count++)) || true ;;
+            DEAD) ((dead_count++)) || true ;;
         esac
     done
 
