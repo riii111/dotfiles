@@ -277,7 +277,7 @@ wait_for_window() {
     while [[ $attempt -lt $max_attempts ]]; do
         is_window_ready "$window" && return 0
         sleep 0.3
-        ((attempt++))
+        ((attempt++)) || true
     done
     return 1
 }
@@ -414,7 +414,7 @@ wait_for_docker() {
         fi
 
         sleep 1
-        ((attempt++))
+        ((attempt++)) || true
     done
 
     echo -e "${YELLOW}Warning: Docker containers may not be fully ready${NC}"
@@ -513,17 +513,21 @@ run_prechecks() {
         if ! (cd "$check_dir" && bash -c "$command") &>/dev/null; then
             if [[ "$on_fail" == "abort" ]]; then
                 echo -e "${RED}Precheck failed: ${name}${NC}"
-                [[ -n "$hint" && "$hint" != "null" ]] && echo -e "${YELLOW}Hint: ${hint}${NC}"
+                if [[ -n "$hint" && "$hint" != "null" ]]; then
+                    echo -e "${YELLOW}Hint: ${hint}${NC}"
+                fi
                 return 1
             else
                 echo -e "${YELLOW}Warning: ${name} check failed${NC}"
-                [[ -n "$hint" && "$hint" != "null" ]] && echo -e "${DIM}Hint: ${hint}${NC}"
+                if [[ -n "$hint" && "$hint" != "null" ]]; then
+                    echo -e "${DIM}Hint: ${hint}${NC}"
+                fi
             fi
         else
             echo -e "${GREEN}${name}: OK${NC}"
         fi
 
-        ((i++))
+        ((i++)) || true
     done
 
     return 0
@@ -612,10 +616,14 @@ stop_service() {
     local wait_count=0
     while [[ $wait_count -lt 10 ]] && is_service_running "$service"; do
         sleep 0.5
-        ((wait_count++))
+        ((wait_count++)) || true
     done
 
-    is_service_running "$service" && echo -e "${YELLOW}Warning: ${service} may not have stopped completely${NC}"
+    if is_service_running "$service"; then
+        echo -e "${YELLOW}Warning: ${service} may not have stopped completely${NC}"
+    fi
+
+    return 0
 }
 
 restart_service() {
@@ -636,7 +644,7 @@ restart_service() {
         local wait_count=0
         while [[ $wait_count -lt 10 ]] && is_service_running "$service"; do
             sleep 0.5
-            ((wait_count++))
+            ((wait_count++)) || true
         done
     fi
 
@@ -646,6 +654,8 @@ restart_service() {
 
     tmux send-keys -t "${SESSION_NAME}:${service}" "cd '${service_dir}' && ${cmd}" Enter
     echo -e "${GREEN}${service} restarted${NC}"
+
+    return 0
 }
 
 #######################################
