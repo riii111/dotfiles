@@ -265,6 +265,86 @@ git-switch-fzf() {
 }
 [[ -o zle ]] && bindkey -s '^B' 'git-switch-fzf\n'
 
+# gwq wrapper: auto-create symlinks after 'gwq add'
+gwq() {
+  # Capture worktree count before
+  local before_count=0
+  if [[ "$1" == "add" ]]; then
+    before_count=$(command gwq list --json 2>/dev/null | grep -c '"path"' || echo 0)
+  fi
+
+  # Run original gwq
+  command gwq "$@"
+  local ret=$?
+
+  # After 'gwq add', create symlinks for the new worktree
+  if [[ $ret -eq 0 && "$1" == "add" ]]; then
+    local after_count=$(command gwq list --json 2>/dev/null | grep -c '"path"' || echo 0)
+    if (( after_count > before_count )); then
+      # Get main and newest worktree from JSON
+      local json=$(command gwq list --json 2>/dev/null)
+      local main_dir=$(echo "$json" | jq -r '.[] | select(.is_main == true) | .path')
+      local new_dir=$(echo "$json" | jq -r 'sort_by(.created_at) | last | .path')
+
+      if [[ -n "$main_dir" && -n "$new_dir" && "$main_dir" != "$new_dir" ]]; then
+        _gwq_create_links "$main_dir" "$new_dir"
+      fi
+    fi
+  fi
+
+  return $ret
+}
+
+# Helper: create symlinks for git-ignored files (based on .git/info/exclude)
+_gwq_create_links() {
+  local main_dir="$1" target_dir="$2"
+  local linked=()
+
+  # Link target candidates (directories and files)
+  local -a candidates=(
+    "exclude"
+    ".docs"
+    ".claude"
+    "CLAUDE.md"
+    "AGENTS.md"
+  )
+
+  for item in "${candidates[@]}"; do
+    local src="$main_dir/$item"
+    local dst="$target_dir/$item"
+
+    [[ -e "$src" ]] || continue
+
+    if git -C "$main_dir" check-ignore -q "$item" 2>/dev/null; then
+      # Whole item is git-ignored -> link it
+      [[ -e "$dst" && ! -L "$dst" ]] && rm -rf "$dst"
+      ln -sfn "$src" "$dst"
+      linked+=("$item")
+    elif [[ -d "$src" && ! -d "$dst" ]]; then
+      # Directory exists in main but not in worktree (not checked out) -> link whole dir
+      ln -sfn "$src" "$dst"
+      linked+=("$item/")
+    elif [[ -d "$src" && -d "$dst" ]]; then
+      # Both exist: link only git-ignored files inside
+      for f in "$src"/*; do
+        [[ -e "$f" ]] || continue
+        local fname="$(basename "$f")"
+        local rel_path="$item/$fname"
+        if git -C "$main_dir" check-ignore -q "$rel_path" 2>/dev/null; then
+          ln -sfn "$f" "$dst/$fname"
+          linked+=("$rel_path")
+        fi
+      done
+    fi
+  done
+
+  if (( ${#linked[@]} > 0 )); then
+    echo "Linked: ${linked[*]}"
+  else
+    echo "No files to link"
+  fi
+}
+
 # ==========================================
 # Machine-specific config
 # ==========================================
