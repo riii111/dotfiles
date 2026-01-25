@@ -95,6 +95,16 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ~/.claude/hooks/evaluate-session.mjs"
+          }
+        ]
+      }
     ]
   },
   "statusLine": {
