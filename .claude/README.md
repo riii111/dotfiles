@@ -6,7 +6,27 @@
 2. Add Stop hook to `~/.claude/settings.json` (see `settings.json` for reference)
 3. Setup periodic promotion (optional, see below)
 
-## Continuous Learning
+## Key Features
+
+### Second Opinion
+
+Get independent perspectives from other LLMs.
+
+- `/codex-2nd` - Get Codex's repo-aware opinion on current discussion
+- `/ask` - Feasibility check with structured questions before implementation
+
+### Review & Risk Analysis
+
+- `/cr` - CodeRabbit CLI review for quick diff analysis
+- `/premortem` - Assume failure happened, find causes and mitigations
+
+### Plan-CoVe
+
+Structured implementation with checkpoints: branch → plan → Codex review → implement per phase.
+
+- `/plan-cove` - CoVe loop with mandatory review gates and per-phase commits
+
+### Continuous Learning
 
 ```
 /learn   → Save to cache/learnings/
