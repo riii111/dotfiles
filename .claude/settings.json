@@ -85,6 +85,17 @@
     "context7"
   ],
   "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/[[YOUR_USER_NAME]]/.claude/hooks/gwq-post-add.sh"
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Bash",
