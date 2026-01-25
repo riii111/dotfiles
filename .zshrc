@@ -247,7 +247,7 @@ if [[ -o zle ]]; then
 fi
 
 # ==========================================
-# ghq + gwq
+# ghq + git worktree
 # ==========================================
 export GHQ_ROOT="$HOME/ghq"
 
@@ -265,39 +265,38 @@ git-switch-fzf() {
 }
 [[ -o zle ]] && bindkey -s '^B' 'git-switch-fzf\n'
 
-# gwq wrapper: auto-create symlinks after 'gwq add'
-gwq() {
-  # Capture worktree count before
-  local before_count=0
-  if [[ "$1" == "add" ]]; then
-    before_count=$(command gwq list --json 2>/dev/null | grep -c '"path"' || echo 0)
-  fi
-
-  # Run original gwq
-  command gwq "$@"
+# git worktree add wrapper: auto-create symlinks after adding worktree
+git() {
+  # Run original git
+  command git "$@"
   local ret=$?
 
-  # After 'gwq add', create symlinks for the new worktree
-  if [[ $ret -eq 0 && "$1" == "add" ]]; then
-    local after_count=$(command gwq list --json 2>/dev/null | grep -c '"path"' || echo 0)
-    if (( after_count > before_count )); then
-      # Get main and newest worktree from JSON
-      local json=$(command gwq list --json 2>/dev/null)
-      local main_dir=$(echo "$json" | jq -r '.[] | select(.is_main == true) | .path')
-      local new_dir=$(echo "$json" | jq -r 'sort_by(.created_at) | last | .path')
-
-      if [[ -n "$main_dir" && -n "$new_dir" && "$main_dir" != "$new_dir" ]]; then
-        _gwq_create_links "$main_dir" "$new_dir"
-      fi
-    fi
+  # After 'git worktree add', create symlinks for the new worktree
+  if [[ $ret -eq 0 && "$1" == "worktree" && "$2" == "add" ]]; then
+    _git_worktree_create_links
   fi
 
   return $ret
 }
 
-# Helper: create symlinks for git-ignored files (based on .git/info/exclude)
-_gwq_create_links() {
-  local main_dir="$1" target_dir="$2"
+# Helper: create symlinks for git-ignored files after worktree add
+_git_worktree_create_links() {
+  # Parse worktrees from porcelain output
+  local -a worktree_paths
+  worktree_paths=(${(f)"$(command git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2}')"})
+
+  if (( ${#worktree_paths[@]} < 2 )); then
+    return 0
+  fi
+
+  # First worktree is main, last is newest
+  local main_dir="${worktree_paths[1]}"
+  local new_dir="${worktree_paths[-1]}"
+
+  if [[ -z "$main_dir" || -z "$new_dir" || "$main_dir" == "$new_dir" ]]; then
+    return 0
+  fi
+
   local linked=()
 
   # Link target candidates (directories and files)
@@ -311,11 +310,11 @@ _gwq_create_links() {
 
   for item in "${candidates[@]}"; do
     local src="$main_dir/$item"
-    local dst="$target_dir/$item"
+    local dst="$new_dir/$item"
 
     [[ -e "$src" ]] || continue
 
-    if git -C "$main_dir" check-ignore -q "$item" 2>/dev/null; then
+    if command git -C "$main_dir" check-ignore -q "$item" 2>/dev/null; then
       # Whole item is git-ignored -> link it
       [[ -e "$dst" && ! -L "$dst" ]] && rm -rf "$dst"
       ln -sfn "$src" "$dst"
@@ -330,7 +329,7 @@ _gwq_create_links() {
         [[ -e "$f" ]] || continue
         local fname="$(basename "$f")"
         local rel_path="$item/$fname"
-        if git -C "$main_dir" check-ignore -q "$rel_path" 2>/dev/null; then
+        if command git -C "$main_dir" check-ignore -q "$rel_path" 2>/dev/null; then
           ln -sfn "$f" "$dst/$fname"
           linked+=("$rel_path")
         fi
