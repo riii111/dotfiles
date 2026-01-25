@@ -91,7 +91,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/Users/[[YOUR_USER_NAME]]/.claude/hooks/gwq-post-add.sh"
+            "command": "/Users/[[YOUR_USER_NAME]]/.claude/hooks/git-worktree-post-add.sh"
           }
         ]
       }
@@ -102,7 +102,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "read input; if echo \"$input\" | grep -q '\"command\":\"find'; then echo '{\"decision\": \"block\", \"reason\": \"Use fd instead of find! Example: fd --hidden --exclude .git --exclude node_modules --color=never --print0 <pattern>\"}'; elif echo \"$input\" | grep -q '\"command\":\"grep'; then echo '{\"decision\": \"block\", \"reason\": \"Use rg instead of grep! Example: rg --no-heading --color=never --json --trim --max-columns=120 <pattern>\"}'; elif echo \"$input\" | grep -q '\"command\":\"git worktree add'; then echo '{\"decision\": \"block\", \"reason\": \"Use gwq add instead of git worktree add! It auto-creates symlinks for git-ignored files. Run gwq --help to learn usage.\"}'; fi"
+            "command": "read input; if echo \"$input\" | grep -q '\"command\":\"find'; then echo '{\"decision\": \"block\", \"reason\": \"Use fd instead of find! Example: fd --hidden --exclude .git --exclude node_modules --color=never --print0 <pattern>\"}'; elif echo \"$input\" | grep -q '\"command\":\"grep'; then echo '{\"decision\": \"block\", \"reason\": \"Use rg instead of grep! Example: rg --no-heading --color=never --json --trim --max-columns=120 <pattern>\"}'; fi"
           }
         ]
       }
