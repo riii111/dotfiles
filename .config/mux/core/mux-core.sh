@@ -399,13 +399,46 @@ is_docker_running() {
     [[ -n "$pane_pid" ]] && pgrep -P "$pane_pid" >/dev/null 2>&1
 }
 
+# Check Docker pane status (for mux-monitor)
+# Returns: LIVE|READY|DEGRADED|STOP|DEAD
+get_docker_pane_status() {
+    [[ "$DOCKER_ENABLED" != "true" ]] && return 1
+
+    local pane_info
+    pane_info=$(tmux list-panes -t "${SESSION_NAME}:docker" -F '#{pane_dead}|#{pane_dead_status}|#{pane_pid}|#{pane_current_command}' 2>/dev/null | head -1 || true)
+
+    if [[ -z "$pane_info" ]]; then
+        echo "UNKNOWN|0|0|"
+        return
+    fi
+
+    local pane_dead pane_dead_status pane_pid pane_cmd
+    IFS='|' read -r pane_dead pane_dead_status pane_pid pane_cmd <<< "$pane_info"
+
+    if [[ "$pane_dead" == "1" ]]; then
+        echo "DEAD|${pane_dead_status}|${pane_pid}|${pane_cmd}"
+    elif [[ "$pane_cmd" == "zsh" || "$pane_cmd" == "bash" || "$pane_cmd" == "sh" ]]; then
+        echo "STOP|0|${pane_pid}|${pane_cmd}"
+    else
+        # Check if containers are actually running
+        local running_count
+        running_count=$(cd "$DOCKER_DIR" && docker compose -f "${DOCKER_COMPOSE_FILE}" ps --status running 2>/dev/null | tail -n +2 | wc -l | tr -d ' \n' || echo "0")
+
+        if [[ "$running_count" -ge 1 ]]; then
+            echo "LIVE|0|${pane_pid}|${pane_cmd}"
+        else
+            echo "READY|0|${pane_pid}|${pane_cmd}"
+        fi
+    fi
+}
+
 wait_for_docker() {
     local max_attempts="${DOCKER_WAIT_TIMEOUT:-60}" attempt=0
 
     echo -e "${DIM}Waiting for Docker containers...${NC}"
     while [[ $attempt -lt $max_attempts ]]; do
         local running_count
-        running_count=$(cd "$DOCKER_DIR" && docker compose ps --status running 2>/dev/null | tail -n +2 | wc -l | tr -d ' \n' || echo "0")
+        running_count=$(cd "$DOCKER_DIR" && docker compose -f "${DOCKER_COMPOSE_FILE}" ps --status running 2>/dev/null | tail -n +2 | wc -l | tr -d ' \n' || echo "0")
 
         if [[ "$running_count" -ge 1 ]]; then
             sleep 2
@@ -676,7 +709,7 @@ start_docker() {
     fi
 
     echo -e "${BLUE}Starting Docker services...${NC}"
-    tmux send-keys -t "${SESSION_NAME}:docker" "cd '${DOCKER_DIR}' && docker compose up" Enter
+    tmux send-keys -t "${SESSION_NAME}:docker" "cd '${DOCKER_DIR}' && docker compose -f '${DOCKER_COMPOSE_FILE}' up" Enter
 }
 
 stop_docker() {
@@ -686,7 +719,7 @@ stop_docker() {
 
     session_exists && { tmux send-keys -t "${SESSION_NAME}:docker" C-c 2>/dev/null || true; sleep 2; }
 
-    [[ -d "$DOCKER_DIR" ]] && (cd "$DOCKER_DIR" && docker compose down 2>/dev/null) || true
+    [[ -d "$DOCKER_DIR" ]] && (cd "$DOCKER_DIR" && docker compose -f "${DOCKER_COMPOSE_FILE}" down 2>/dev/null) || true
 }
 
 #######################################

@@ -135,7 +135,10 @@ start_all() {
     if [[ "$DOCKER_ENABLED" == "true" ]]; then
         echo -e "${BOLD}[Docker]${NC}"
         start_docker
-        wait_for_docker || true
+        if ! wait_for_docker; then
+            echo -e "${RED}Error: Docker failed to start${NC}"
+            return 1
+        fi
         echo
     fi
 

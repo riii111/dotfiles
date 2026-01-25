@@ -107,6 +107,20 @@ render() {
     local warn_count=0
     local dead_count=0
 
+    # Docker status (if enabled)
+    local docker_status="" docker_exit_code="" docker_cmd=""
+    if [[ "$DOCKER_ENABLED" == "true" ]]; then
+        local docker_info
+        docker_info=$(get_docker_pane_status)
+        IFS='|' read -r docker_status docker_exit_code _ docker_cmd <<< "$docker_info"
+
+        case "$docker_status" in
+            LIVE) ((live_count++)) || true ;;
+            READY|DEGRADED|STOP|UNKNOWN) ((warn_count++)) || true ;;
+            DEAD) ((dead_count++)) || true ;;
+        esac
+    fi
+
     # Get services from config
     local services_list
     services_list=$(get_services)
@@ -149,6 +163,16 @@ render() {
     output+="${DIM}Ctrl+b m: toggle${NC}"
     output+=$'\n\n'
 
+    # Docker status (displayed first if enabled)
+    if [[ "$DOCKER_ENABLED" == "true" && -n "$docker_status" ]]; then
+        if [[ "$mode" == "all" ]] || [[ "$docker_status" != "LIVE" ]]; then
+            local show_log="false"
+            [[ "$mode" == "bad" || "$docker_status" != "LIVE" ]] && show_log="true"
+            output+=$(format_service "docker" "$docker_status" "$docker_exit_code" "$docker_cmd" "$show_log" "compose")
+            output+=$'\n'
+        fi
+    fi
+
     # Filter based on mode
     local display_indices=()
     for i in "${!statuses[@]}"; do
@@ -168,7 +192,7 @@ render() {
     # Footer
     output+=$'\n'
     output+="${DIM}───────────────────────────────────────────────────────────────${NC}"$'\n'
-    output+="${DIM}Docker: Window 1 | ${PROJECT_NAME} status | ${PROJECT_NAME} logs <service>${NC}"
+    output+="${DIM}${PROJECT_NAME} status | ${PROJECT_NAME} logs <service>${NC}"
 
     echo "$output"
 }

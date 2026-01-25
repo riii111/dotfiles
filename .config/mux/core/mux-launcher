@@ -23,6 +23,13 @@ display_services() {
     echo -e "${DIM}Navigate: ${NC}${BOLD}Ctrl+b w${NC}${DIM} (list) ${NC}${BOLD}Ctrl+b '${NC}${DIM} (number) ${NC}${BOLD}Ctrl+b m${NC}${DIM} (toggle)${NC}"
     echo
 
+    # Docker info (if enabled)
+    if [[ "$DOCKER_ENABLED" == "true" ]]; then
+        echo -e "${BOLD}${BLUE}[docker]${NC}"
+        printf "  ${GREEN}%-15s${NC} ${DIM}%-6s${NC}  %s\n" "docker" "compose" "docker compose up"
+        echo
+    fi
+
     # Get unique groups
     local groups
     groups=$(parse_yaml_allow_null "$CONFIG_FILE" '.services[].group' | sort -u)
