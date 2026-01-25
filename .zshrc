@@ -349,3 +349,4 @@ _gwq_create_links() {
 # Machine-specific config
 # ==========================================
 [[ -f ~/.zshrc.local ]] && source ~/.zshrc.local
+
