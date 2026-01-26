@@ -1,10 +1,27 @@
 # Claude Code Configuration
 
+Settings are split into two files:
+- **settings.base.json** - Shared config (symlinked from dotfiles)
+- **settings.local.json** - Machine-specific paths (created per machine)
+
+The `claude` wrapper in `.zshrc` auto-merges them into `settings.json` on launch.
+
 ## Setup
 
-1. Symlink directories to `~/.claude/`
-2. Add Stop hook to `~/.claude/settings.json` (see `settings.json` for reference)
-3. Setup periodic promotion (optional, see below)
+1. Symlink to `~/.claude/`:
+   ```bash
+   ln -s /path/to/dotfiles/.claude/commands ~/.claude/commands
+   ln -s /path/to/dotfiles/.claude/agents ~/.claude/agents
+   ln -s /path/to/dotfiles/.claude/hooks ~/.claude/hooks
+   ln -s /path/to/dotfiles/.claude/settings.base.json ~/.claude/settings.base.json
+   ```
+2. Create `~/.claude/settings.local.json`:
+   ```bash
+   cp /path/to/dotfiles/.claude/settings.local.json.example ~/.claude/settings.local.json
+   # Edit: replace YOUR_USER_NAME with actual username
+   ```
+3. Open a new shell (or run `exec zsh`) to load the `claude` wrapper
+4. Setup periodic promotion (optional, see below)
 
 ## Key Features
 
