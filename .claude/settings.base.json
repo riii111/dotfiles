@@ -111,8 +111,8 @@
       {
         "hooks": [
           {
-            "type": "command",
-            "command": "node ~/.claude/hooks/evaluate-session.mjs"
+            "type": "prompt",
+            "prompt": "Check if this is a session-ending moment (user said goodbye, /exit, /resume, or explicitly ending). If NOT ending, just respond {\"ok\": true}. If ending session: extract learnings following ~/.claude/commands/learn.md, save to ~/.claude/cache/learnings/, then respond {\"ok\": true}."
           }
         ]
       }
