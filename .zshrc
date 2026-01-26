@@ -345,6 +345,39 @@ _git_worktree_create_links() {
 }
 
 # ==========================================
+# Claude Code settings merge wrapper
+# ==========================================
+claude() {
+  local base="${HOME}/.claude/settings.base.json"
+  local local_conf="${HOME}/.claude/settings.local.json"
+  local out="${HOME}/.claude/settings.json"
+
+  if [[ ! -f "$out" || "$base" -nt "$out" || "$local_conf" -nt "$out" ]]; then
+    if [[ ! -f "$base" ]]; then
+      echo "Error: $base not found. Symlink from dotfiles." >&2
+      return 1
+    fi
+    if [[ ! -f "$local_conf" ]]; then
+      echo "Error: $local_conf not found. Copy from settings.local.json.example" >&2
+      return 1
+    fi
+    if ! jq -s '
+      .[0] as $b | .[1] as $l |
+      ($b * $l) |
+      .permissions.allow = (
+        ($b.permissions.allow // [] | map(select(contains("[[YOUR_USER_NAME]]") | not))) +
+        ($l.permissions.allow // [])
+      )
+    ' "$base" "$local_conf" > "$out"; then
+      echo "Error: Failed to merge settings.json" >&2
+      return 1
+    fi
+  fi
+
+  command claude "$@"
+}
+
+# ==========================================
 # Machine-specific config
 # ==========================================
 [[ -f ~/.zshrc.local ]] && source ~/.zshrc.local
