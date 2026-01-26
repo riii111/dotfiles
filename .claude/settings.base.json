@@ -112,7 +112,7 @@
         "hooks": [
           {
             "type": "prompt",
-            "prompt": "Review this session and extract learnings following ~/.claude/commands/learn.md. Save to ~/.claude/cache/learnings/ (create dirs if needed). Quality > Quantity. After done (or if no learnings), respond with JSON: {\"ok\": true}"
+            "prompt": "Check if this is a session-ending moment (user said goodbye, /exit, /resume, or explicitly ending). If NOT ending, just respond {\"ok\": true}. If ending session: extract learnings following ~/.claude/commands/learn.md, save to ~/.claude/cache/learnings/, then respond {\"ok\": true}."
           }
         ]
       }
