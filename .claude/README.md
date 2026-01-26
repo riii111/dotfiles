@@ -47,7 +47,7 @@ Structured implementation with checkpoints: branch → plan → Codex review →
 
 ```
 /learn   → Save to cache/learnings/
-/recall  → Search past learnings
+/recall  → Search past learnings (use when facing similar errors or problems)
 /promote → Promote to rules/learnings/ (auto-loaded)
 ```
 
