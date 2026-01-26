@@ -112,7 +112,7 @@
         "hooks": [
           {
             "type": "prompt",
-            "prompt": "Review this session and extract learnings. Follow ~/.claude/commands/learn.md for criteria and format. Save to ~/.claude/cache/learnings/ (create dirs if needed). If no learnings, just report 'No learnings to extract' and stop. Quality > Quantity."
+            "prompt": "Review this session and extract learnings following ~/.claude/commands/learn.md. Save to ~/.claude/cache/learnings/ (create dirs if needed). Quality > Quantity. After done (or if no learnings), respond with JSON: {\"ok\": true}"
           }
         ]
       }
