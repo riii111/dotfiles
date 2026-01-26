@@ -1,50 +1,31 @@
 #!/bin/bash
 # PostToolUse hook: auto-create symlinks after 'git worktree add'
-#
-# Input (stdin): JSON with tool_name, tool_input, tool_response
-# Output: nothing (side effect only)
 
-set -euo pipefail
+input=$(cat 2>/dev/null) || exit 0
+[[ -z "$input" ]] && exit 0
 
-# Read input from stdin
-input=$(cat)
+tool_name=$(echo "$input" | jq -r '.tool_name // empty' 2>/dev/null) || exit 0
+[[ "$tool_name" != "Bash" ]] && exit 0
 
-# Check if this is a Bash tool call with 'git worktree add'
-tool_name=$(echo "$input" | jq -r '.tool_name // empty')
-command=$(echo "$input" | jq -r '.tool_input.command // empty')
+command=$(echo "$input" | jq -r '.tool_input.command // empty' 2>/dev/null) || exit 0
+[[ ! "$command" =~ ^git\ worktree\ add ]] && exit 0
 
-if [[ "$tool_name" != "Bash" ]]; then
-  exit 0
-fi
+tool_response=$(echo "$input" | jq -r '.tool_response // empty' 2>/dev/null) || exit 0
+[[ ! "$tool_response" =~ "Preparing worktree" ]] && exit 0
 
-if [[ ! "$command" =~ ^git\ worktree\ add ]]; then
-  exit 0
-fi
+# bash 3.2 compatible
+worktree_paths=$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2}') || exit 0
+[[ -z "$worktree_paths" ]] && exit 0
 
-# Check if the command succeeded (look for "Preparing worktree" in response)
-tool_response=$(echo "$input" | jq -r '.tool_response // empty')
-if [[ ! "$tool_response" =~ "Preparing worktree" ]]; then
-  exit 0
-fi
+worktree_count=$(echo "$worktree_paths" | wc -l | tr -d ' ')
+(( worktree_count < 2 )) && exit 0
 
-# Parse worktrees from porcelain output (bash 3.2 compatible)
-# Format: worktree <path>\nHEAD <hash>\nbranch <ref>\n\n...
-worktree_paths=$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2}')
-worktree_count=$(echo "$worktree_paths" | grep -c .)
-
-if (( worktree_count < 2 )); then
-  exit 0
-fi
-
-# First worktree is main, last is newest
+# first = main, last = newest
 main_dir=$(echo "$worktree_paths" | head -1)
 new_dir=$(echo "$worktree_paths" | tail -1)
 
-if [[ -z "$main_dir" || -z "$new_dir" || "$main_dir" == "$new_dir" ]]; then
-  exit 0
-fi
+[[ -z "$main_dir" || -z "$new_dir" || "$main_dir" == "$new_dir" ]] && exit 0
 
-# Create symlinks for git-ignored files
 linked=()
 candidates=("exclude" ".docs" ".claude" "CLAUDE.md" "AGENTS.md")
 
@@ -55,16 +36,14 @@ for item in "${candidates[@]}"; do
   [[ -e "$src" ]] || continue
 
   if git -C "$main_dir" check-ignore -q "$item" 2>/dev/null; then
-    # Whole item is git-ignored -> link it
     [[ -e "$dst" && ! -L "$dst" ]] && rm -rf "$dst"
     ln -sfn "$src" "$dst"
     linked+=("$item")
   elif [[ -d "$src" && ! -d "$dst" ]]; then
-    # Directory exists in main but not in worktree -> link whole dir
     ln -sfn "$src" "$dst"
     linked+=("$item/")
   elif [[ -d "$src" && -d "$dst" ]]; then
-    # Both exist: link only git-ignored files inside
+    # link only git-ignored files inside
     for f in "$src"/*; do
       [[ -e "$f" ]] || continue
       fname="$(basename "$f")"
