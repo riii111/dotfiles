@@ -3,7 +3,7 @@
 ## Setup
 
 1. Symlink directories to `~/.claude/`
-2. Add Stop hook to `~/.claude/settings.json` (see `settings.json` for reference)
+2. Add Stop hook (prompt type) to `~/.claude/settings.json` for auto-learning (see `settings.json` for reference)
 3. Setup periodic promotion (optional, see below)
 
 ## Key Features
@@ -30,7 +30,7 @@ Structured implementation with checkpoints: branch → plan → Codex review →
 
 ```
 /learn   → Save to cache/learnings/
-/recall  → Search past learnings
+/recall  → Search past learnings (use when facing similar errors or problems)
 /promote → Promote to rules/learnings/ (auto-loaded)
 ```
 
