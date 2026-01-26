@@ -1,0 +1,27 @@
+{
+  "env": {
+    "RIPGREP_CONFIG_PATH": "/Users/YOUR_USER_NAME/.ripgreprc"
+  },
+  "permissions": {
+    "allow": [
+      "Read(/Users/YOUR_USER_NAME/.zshrc)",
+      "Read(//Users/YOUR_USER_NAME/.config/nvim/**)",
+      "Write(//Users/YOUR_USER_NAME/.config/nvim/**)",
+      "Edit(//Users/YOUR_USER_NAME/.config/nvim/**)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/YOUR_USER_NAME/.claude/hooks/git-worktree-post-add.sh"
+          }
+        ]
+      }
+    ]
+  },
+  "model": "opus"
+}
