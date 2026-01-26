@@ -23,7 +23,8 @@ Keep it tight—Codex will inspect the repo itself for details.
 
 ### 2) Call Codex (read-only sandbox)
 
-Run exactly this command, pasting your brief where indicated:
+Run exactly this command, pasting your brief where indicated.
+**IMPORTANT**: Set Bash tool `timeout: 600000` (10 min) because Codex may take 5+ minutes to respond.
 
 ```bash
 RUST_LOG=RUST_LOG=off codex exec --sandbox read-only 2>/dev/null - <<'CODEX_PROMPT'
