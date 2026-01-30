@@ -19,8 +19,8 @@ EXAMPLES:
     # Check nested module
     dtk :core:domain
 
-    # Check specific directory
-    dtk :share src/main/kotlin/v2/adobeacrobatsign/
+    # Check specific directory (tab completion works)
+    dtk :share share/src/main/kotlin/v2/adobeacrobatsign/
 
     # Check only files changed in current PR (vs default branch)
     dtk --diff :share
@@ -190,7 +190,23 @@ else
     # Normal mode
     INPUT="${1:-.}"
     if [[ "$INPUT" != "." && "$INPUT" != "./" && "$INPUT" != --* ]]; then
-        SOURCE_DIR="$GRADLE_ROOT/$MODULE_PATH/$INPUT"
+        # Support multiple path formats for tab completion:
+        # 1. Absolute path: /full/path/to/dir
+        # 2. Relative to cwd: share/src/main/kotlin/v2/...
+        # 3. Relative to module: src/main/kotlin/v2/...
+        if [[ "$INPUT" == /* ]]; then
+            # Absolute path
+            SOURCE_DIR="$INPUT"
+        elif [[ -e "$INPUT" ]]; then
+            # Relative to current directory (enables tab completion)
+            SOURCE_DIR="$(cd "$INPUT" && pwd)"
+        elif [[ -e "$GRADLE_ROOT/$INPUT" ]]; then
+            # Relative to Gradle root
+            SOURCE_DIR="$GRADLE_ROOT/$INPUT"
+        else
+            # Relative to module directory
+            SOURCE_DIR="$GRADLE_ROOT/$MODULE_PATH/$INPUT"
+        fi
         shift || true
     else
         SOURCE_DIR="$MODULE_SRC_DIR"
