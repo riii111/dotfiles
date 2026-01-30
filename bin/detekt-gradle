@@ -35,9 +35,9 @@ EXAMPLES:
     dtk :share --language-version 1.9 --jvm-target 17
 
 OPTIONS:
-    --help       Show this help message
-    --diff       Check only files changed compared to base branch
-    --quiet      Suppress Gradle output (default: show errors)
+    --help        Show this help message
+    --diff        Check only files changed compared to base branch
+    -q, --quiet   Suppress Gradle output (default: show errors)
 
 CONFIGURATION:
     Config search order:
@@ -84,10 +84,10 @@ fi
 # Parse options
 DIFF_MODE=false
 QUIET_MODE=false
-while [[ "$1" == --* ]]; do
+while [[ "$1" == -* ]]; do
     case "$1" in
         --diff) DIFF_MODE=true; shift ;;
-        --quiet) QUIET_MODE=true; shift ;;
+        --quiet|-q) QUIET_MODE=true; shift ;;
         *) break ;;
     esac
 done
