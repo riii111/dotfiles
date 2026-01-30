@@ -1,0 +1,63 @@
+#!/bin/bash
+# detekt-gradle: Run detekt with type resolution using Gradle's classpath
+# Usage: detekt-gradle <module> [input_path]
+# Example: detekt-gradle :share src/main/kotlin/v2/adobeacrobatsign/
+
+set -e
+
+MODULE="${1:?Usage: detekt-gradle <module> [input_path]}"
+INPUT="${2:-.}"
+
+# Dotfiles paths
+DOTFILES_DIR="${HOME}/ghq/github.com/riii111/dotfiles"
+CLASSPATH_SCRIPT="${DOTFILES_DIR}/config/detekt/print-classpath.gradle.kts"
+CONFIG_FILE="${DOTFILES_DIR}/config/detekt/detekt.yml"
+
+# Fallback to XDG config if dotfiles not found
+if [[ ! -f "$CONFIG_FILE" ]]; then
+    CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/detekt/detekt.yml"
+fi
+
+# Find Gradle project root
+GRADLE_ROOT="$(pwd)"
+while [[ ! -f "$GRADLE_ROOT/gradlew" && "$GRADLE_ROOT" != "/" ]]; do
+    GRADLE_ROOT="$(dirname "$GRADLE_ROOT")"
+done
+
+if [[ ! -f "$GRADLE_ROOT/gradlew" ]]; then
+    echo "Error: Could not find gradlew. Run from a Gradle project directory." >&2
+    exit 1
+fi
+
+# Get classpath from Gradle
+echo "Getting classpath for $MODULE..." >&2
+CLASSPATH=$(cd "$GRADLE_ROOT" && ./gradlew "${MODULE}:printClasspath" -I "$CLASSPATH_SCRIPT" -q 2>/dev/null | tr '\n' ':')
+
+if [[ -z "$CLASSPATH" ]]; then
+    echo "Error: Could not get classpath for $MODULE" >&2
+    exit 1
+fi
+
+# Resolve module path
+MODULE_PATH="${MODULE//:/ }"
+MODULE_PATH="${MODULE_PATH// //}"
+SOURCE_DIR="$GRADLE_ROOT/$MODULE_PATH/src/main/kotlin"
+
+if [[ "$INPUT" != "." && "$INPUT" != "./" ]]; then
+    SOURCE_DIR="$GRADLE_ROOT/$MODULE_PATH/$INPUT"
+fi
+
+echo "Running detekt on $SOURCE_DIR with type resolution..." >&2
+
+# Shift past positional arguments
+shift
+[[ -n "$INPUT" && "$INPUT" != "." ]] && shift 2>/dev/null || true
+
+# Run detekt with classpath
+exec detekt \
+    --input "$SOURCE_DIR" \
+    --classpath "$CLASSPATH" \
+    --language-version 2.1 \
+    --jvm-target 21 \
+    --config "$CONFIG_FILE" \
+    "$@"
