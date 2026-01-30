@@ -1,12 +1,60 @@
 #!/bin/bash
 # detekt-gradle: Run detekt with type resolution using Gradle's classpath
-# Usage: detekt-gradle <module> [input_path]
-# Example: detekt-gradle :share src/main/kotlin/v2/adobeacrobatsign/
 
 set -e
 
-MODULE="${1:?Usage: detekt-gradle <module> [input_path]}"
-INPUT="${2:-.}"
+show_help() {
+    cat << 'EOF'
+detekt-gradle - Run detekt with type resolution
+
+USAGE:
+    detekt-gradle <module> [path]
+    detekt-gradle --diff <module> [base-branch]
+    detekt-gradle --help
+
+EXAMPLES:
+    # Check entire module
+    detekt-gradle :share
+
+    # Check specific directory
+    detekt-gradle :share src/main/kotlin/v2/adobeacrobatsign/
+
+    # Check only files changed in current PR (vs master)
+    detekt-gradle --diff :share
+
+    # Check only files changed vs specific branch
+    detekt-gradle --diff :share develop
+
+    # Generate HTML report
+    detekt-gradle :share --report html:report.html
+
+OPTIONS:
+    --help       Show this help message
+    --diff       Check only files changed compared to base branch (default: master)
+
+NOTES:
+    - Must be run from a Gradle project directory (where gradlew exists)
+    - First run is slow due to Gradle classpath resolution
+    - Config file: ~/.config/detekt/detekt.yml
+EOF
+    exit 0
+}
+
+# Help flag
+if [[ "$1" == "--help" || "$1" == "-h" ]]; then
+    show_help
+fi
+
+# Diff mode
+DIFF_MODE=false
+BASE_BRANCH="master"
+if [[ "$1" == "--diff" ]]; then
+    DIFF_MODE=true
+    shift
+fi
+
+MODULE="${1:?Usage: detekt-gradle <module> [path] or detekt-gradle --diff <module> [base-branch]}"
+shift || true
 
 # Dotfiles paths
 DOTFILES_DIR="${HOME}/ghq/github.com/riii111/dotfiles"
@@ -41,17 +89,46 @@ fi
 # Resolve module path
 MODULE_PATH="${MODULE//:/ }"
 MODULE_PATH="${MODULE_PATH// //}"
-SOURCE_DIR="$GRADLE_ROOT/$MODULE_PATH/src/main/kotlin"
+MODULE_SRC_DIR="$GRADLE_ROOT/$MODULE_PATH/src/main/kotlin"
 
-if [[ "$INPUT" != "." && "$INPUT" != "./" ]]; then
-    SOURCE_DIR="$GRADLE_ROOT/$MODULE_PATH/$INPUT"
+if [[ "$DIFF_MODE" == true ]]; then
+    # Diff mode: get changed .kt files
+    if [[ -n "$1" && "$1" != --* ]]; then
+        BASE_BRANCH="$1"
+        shift
+    fi
+
+    echo "Getting changed Kotlin files vs $BASE_BRANCH..." >&2
+    CHANGED_FILES=$(cd "$GRADLE_ROOT" && git diff --name-only "$BASE_BRANCH"...HEAD -- "$MODULE_PATH/src/main/kotlin" 2>/dev/null | grep '\.kt$' || true)
+
+    if [[ -z "$CHANGED_FILES" ]]; then
+        echo "No Kotlin files changed in $MODULE_PATH" >&2
+        exit 0
+    fi
+
+    # Convert to absolute paths, comma-separated
+    INPUT_FILES=""
+    while IFS= read -r file; do
+        if [[ -f "$GRADLE_ROOT/$file" ]]; then
+            INPUT_FILES="${INPUT_FILES:+$INPUT_FILES,}$GRADLE_ROOT/$file"
+        fi
+    done <<< "$CHANGED_FILES"
+
+    echo "Checking $(echo "$CHANGED_FILES" | wc -l | tr -d ' ') changed files..." >&2
+    SOURCE_DIR="$INPUT_FILES"
+else
+    # Normal mode
+    INPUT="${1:-.}"
+    if [[ "$INPUT" != "." && "$INPUT" != "./" && "$INPUT" != --* ]]; then
+        SOURCE_DIR="$GRADLE_ROOT/$MODULE_PATH/$INPUT"
+        shift || true
+    else
+        SOURCE_DIR="$MODULE_SRC_DIR"
+        [[ "$INPUT" != --* ]] && shift || true
+    fi
 fi
 
 echo "Running detekt on $SOURCE_DIR with type resolution..." >&2
-
-# Shift past positional arguments
-shift
-[[ -n "$INPUT" && "$INPUT" != "." ]] && shift 2>/dev/null || true
 
 # Run detekt with classpath
 exec detekt \
