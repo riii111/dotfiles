@@ -34,7 +34,7 @@ OPTIONS:
     -h, --help    Show this help message
     --diff        Check only files changed compared to base branch
     -q, --quiet   Suppress Gradle output (default: show errors)
-    --no-bang     Skip !! check (default: check enabled, catches platform types)
+    --no-bang     Skip !! check (default: enabled, excludes *Test.kt/*Spec.kt)
 
 CONFIGURATION:
     Config search order:
@@ -316,12 +316,15 @@ if [[ "$BANG_MODE" == true ]]; then
     echo "Checking for !! usage..." >&2
 
     # Convert comma-separated paths to array for rg
+    # Exclude test files
+    RG_OPTS=(-n --glob '!*Test.kt' --glob '!*Tests.kt' --glob '!*Spec.kt')
+
     if [[ "$SOURCE_DIR" == *","* ]]; then
         # Multiple files from --diff mode
         IFS=',' read -ra FILES <<< "$SOURCE_DIR"
-        BANG_OUTPUT=$(rg -n '!!' "${FILES[@]}" 2>/dev/null || true)
+        BANG_OUTPUT=$(rg "${RG_OPTS[@]}" '!!' "${FILES[@]}" 2>/dev/null || true)
     else
-        BANG_OUTPUT=$(rg -n '!!' --type kotlin "$SOURCE_DIR" 2>/dev/null || true)
+        BANG_OUTPUT=$(rg "${RG_OPTS[@]}" --type kotlin '!!' "$SOURCE_DIR" 2>/dev/null || true)
     fi
 
     if [[ -n "$BANG_OUTPUT" ]]; then
