@@ -10,7 +10,7 @@ dtk - Run detekt with type resolution
 USAGE:
     dtk [options] <path>
     dtk [options] <module> [path]
-    dtk --diff [module] [base-branch]
+    dtk --diff <module> [base-branch]
     dtk --help
 
 EXAMPLES:
@@ -114,13 +114,24 @@ while [[ $# -gt 0 ]]; do
             ;;
         -*)
             # detekt option (pass through)
-            DETEKT_ARGS+=("$1")
-            shift
-            # If it's an option that takes a value, grab the next arg too
-            if [[ $# -gt 0 && "$1" != -* ]]; then
-                DETEKT_ARGS+=("$1")
-                shift
-            fi
+            # Only these options take a value argument
+            case "$1" in
+                --config|-c|--input|-i|--classpath|-cp|--report|--baseline|-b|\
+                --excludes|-ex|--base-path|-bp|--language-version|--jvm-target|\
+                --config-resource|-cr|--includes)
+                    DETEKT_ARGS+=("$1")
+                    shift
+                    if [[ $# -gt 0 ]]; then
+                        DETEKT_ARGS+=("$1")
+                        shift
+                    fi
+                    ;;
+                *)
+                    # Flag without value (e.g., --build-upon-default-config)
+                    DETEKT_ARGS+=("$1")
+                    shift
+                    ;;
+            esac
             ;;
         *)
             # Positional argument (path or base branch for --diff)
