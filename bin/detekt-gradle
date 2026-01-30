@@ -5,28 +5,28 @@ set -e
 
 show_help() {
     cat << 'EOF'
-detekt-gradle - Run detekt with type resolution
+dtk - Run detekt with type resolution
 
 USAGE:
-    detekt-gradle <module> [path]
-    detekt-gradle --diff <module> [base-branch]
-    detekt-gradle --help
+    dtk <module> [path]
+    dtk --diff <module> [base-branch]
+    dtk --help
 
 EXAMPLES:
     # Check entire module
-    detekt-gradle :share
+    dtk :share
 
     # Check specific directory
-    detekt-gradle :share src/main/kotlin/v2/adobeacrobatsign/
+    dtk :share src/main/kotlin/v2/adobeacrobatsign/
 
     # Check only files changed in current PR (vs master)
-    detekt-gradle --diff :share
+    dtk --diff :share
 
     # Check only files changed vs specific branch
-    detekt-gradle --diff :share develop
+    dtk --diff :share develop
 
     # Generate HTML report
-    detekt-gradle :share --report html:report.html
+    dtk :share --report html:report.html
 
 OPTIONS:
     --help       Show this help message
