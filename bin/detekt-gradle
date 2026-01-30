@@ -8,55 +8,50 @@ show_help() {
 dtk - Run detekt with type resolution
 
 USAGE:
-    dtk <module> [path]
-    dtk --diff <module> [base-branch]
+    dtk [options] <path>
+    dtk [options] <module> [path]
+    dtk --diff [module] [base-branch]
     dtk --help
 
 EXAMPLES:
-    # Check entire module
-    dtk :share
+    # Check directory (module auto-detected from path)
+    dtk share/src/main/kotlin/v2/adobeacrobatsign/
 
-    # Check nested module
-    dtk :core:domain
+    # Check single file
+    dtk share/src/main/kotlin/v2/adobeacrobatsign/SomeFile.kt
 
-    # Check specific directory (tab completion works)
-    dtk :share share/src/main/kotlin/v2/adobeacrobatsign/
+    # Explicit module (for ambiguous paths)
+    dtk :share src/main/kotlin/v2/adobeacrobatsign/
 
-    # Check only files changed in current PR (vs default branch)
+    # Check only files changed in current PR
     dtk --diff :share
 
-    # Check only files changed vs specific branch
-    dtk --diff :share develop
-
-    # Generate HTML report
-    dtk :share --report html:report.html
-
-    # Override language/JVM version
-    dtk :share --language-version 1.9 --jvm-target 17
+    # With options
+    dtk -q share/src/main/kotlin/v2/
+    dtk share/src/main/kotlin/v2/ --report html:report.html
 
 OPTIONS:
-    --help        Show this help message
+    -h, --help    Show this help message
     --diff        Check only files changed compared to base branch
     -q, --quiet   Suppress Gradle output (default: show errors)
 
 CONFIGURATION:
     Config search order:
       1. <script-dir>/../config/detekt/detekt.yml (dotfiles)
-      2. $XDG_CONFIG_HOME/detekt/detekt.yml
-      3. ~/.config/detekt/detekt.yml
+      2. ${XDG_CONFIG_HOME:-~/.config}/detekt/detekt.yml
 
 NOTES:
     - Must be run from a Gradle project directory (where gradlew exists)
     - First run is slow due to Gradle classpath resolution
-    - Supports nested modules like :core:domain
+    - Module is auto-detected from path (e.g., share/src/... -> :share)
 EOF
     exit 0
 }
 
-# Help flag
-if [[ "$1" == "--help" || "$1" == "-h" ]]; then
-    show_help
-fi
+# Help flag (check early)
+for arg in "$@"; do
+    [[ "$arg" == "--help" || "$arg" == "-h" ]] && show_help
+done
 
 # Resolve script directory (follow symlinks)
 SCRIPT_PATH="${BASH_SOURCE[0]}"
@@ -81,20 +76,6 @@ if [[ ! -f "$CLASSPATH_SCRIPT" ]]; then
     exit 1
 fi
 
-# Parse options
-DIFF_MODE=false
-QUIET_MODE=false
-while [[ "$1" == -* ]]; do
-    case "$1" in
-        --diff) DIFF_MODE=true; shift ;;
-        --quiet|-q) QUIET_MODE=true; shift ;;
-        *) break ;;
-    esac
-done
-
-MODULE="${1:?Usage: dtk <module> [path] or dtk --diff <module> [base-branch]}"
-shift || true
-
 # Find Gradle project root
 GRADLE_ROOT="$(pwd)"
 while [[ ! -f "$GRADLE_ROOT/gradlew" && "$GRADLE_ROOT" != "/" ]]; do
@@ -106,15 +87,106 @@ if [[ ! -f "$GRADLE_ROOT/gradlew" ]]; then
     exit 1
 fi
 
+# Parse all arguments, separating our options from detekt options
+DIFF_MODE=false
+QUIET_MODE=false
+MODULE=""
+INPUT_PATH=""
+DETEKT_ARGS=()
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --diff)
+            DIFF_MODE=true
+            shift
+            ;;
+        -q|--quiet)
+            QUIET_MODE=true
+            shift
+            ;;
+        -h|--help)
+            show_help
+            ;;
+        :*)
+            # Explicit module specification
+            MODULE="$1"
+            shift
+            ;;
+        -*)
+            # detekt option (pass through)
+            DETEKT_ARGS+=("$1")
+            shift
+            # If it's an option that takes a value, grab the next arg too
+            if [[ $# -gt 0 && "$1" != -* ]]; then
+                DETEKT_ARGS+=("$1")
+                shift
+            fi
+            ;;
+        *)
+            # Positional argument (path or base branch for --diff)
+            if [[ -z "$INPUT_PATH" ]]; then
+                INPUT_PATH="$1"
+            else
+                DETEKT_ARGS+=("$1")
+            fi
+            shift
+            ;;
+    esac
+done
+
+# Function to detect module from path
+detect_module_from_path() {
+    local path="$1"
+    local resolved_path=""
+
+    # Resolve to absolute path
+    if [[ "$path" == /* ]]; then
+        resolved_path="$path"
+    elif [[ -e "$path" ]]; then
+        resolved_path="$(cd "$(dirname "$path")" && pwd)/$(basename "$path")"
+    elif [[ -e "$GRADLE_ROOT/$path" ]]; then
+        resolved_path="$GRADLE_ROOT/$path"
+    else
+        return 1
+    fi
+
+    # Extract module from path (first directory under GRADLE_ROOT)
+    local relative_path="${resolved_path#$GRADLE_ROOT/}"
+    local first_dir="${relative_path%%/*}"
+
+    # Check if it's a valid module (has build.gradle*)
+    if [[ -f "$GRADLE_ROOT/$first_dir/build.gradle.kts" || -f "$GRADLE_ROOT/$first_dir/build.gradle" ]]; then
+        echo ":$first_dir"
+        return 0
+    fi
+
+    return 1
+}
+
+# Auto-detect module if not specified
+if [[ -z "$MODULE" && -n "$INPUT_PATH" ]]; then
+    MODULE=$(detect_module_from_path "$INPUT_PATH") || true
+fi
+
+if [[ -z "$MODULE" ]]; then
+    echo "Error: Could not detect module. Specify explicitly: dtk :module path" >&2
+    exit 1
+fi
+
 # Get classpath from Gradle
 echo "Getting classpath for $MODULE..." >&2
 if [[ "$QUIET_MODE" == true ]]; then
-    CLASSPATH=$(cd "$GRADLE_ROOT" && ./gradlew "${MODULE}:printClasspath" -I "$CLASSPATH_SCRIPT" -q 2>/dev/null | tr '\n' ':')
+    CLASSPATH=$(cd "$GRADLE_ROOT" && ./gradlew "${MODULE}:printClasspath" -I "$CLASSPATH_SCRIPT" -q 2>/dev/null | tr '\n' ':') || {
+        echo "Error: Failed to get classpath for $MODULE" >&2
+        exit 1
+    }
 else
-    CLASSPATH=$(cd "$GRADLE_ROOT" && ./gradlew "${MODULE}:printClasspath" -I "$CLASSPATH_SCRIPT" -q 2>&1 | tee /dev/stderr | grep -v '^\s*$' | grep '^/' | tr '\n' ':') || true
-    # Retry quietly if verbose failed
+    CLASSPATH=$(cd "$GRADLE_ROOT" && ./gradlew "${MODULE}:printClasspath" -I "$CLASSPATH_SCRIPT" -q 2>&1 | tee /dev/stderr | grep '^/' | tr '\n' ':') || true
     if [[ -z "$CLASSPATH" ]]; then
-        CLASSPATH=$(cd "$GRADLE_ROOT" && ./gradlew "${MODULE}:printClasspath" -I "$CLASSPATH_SCRIPT" -q 2>/dev/null | tr '\n' ':')
+        CLASSPATH=$(cd "$GRADLE_ROOT" && ./gradlew "${MODULE}:printClasspath" -I "$CLASSPATH_SCRIPT" -q 2>/dev/null | tr '\n' ':') || {
+            echo "Error: Failed to get classpath for $MODULE" >&2
+            exit 1
+        }
     fi
 fi
 
@@ -124,30 +196,16 @@ if [[ -z "$CLASSPATH" ]]; then
 fi
 
 # Convert module path: :core:domain -> core/domain
-MODULE_PATH="${MODULE#:}"           # Remove leading :
-MODULE_PATH="${MODULE_PATH//://}"   # Replace : with /
-MODULE_SRC_DIR="$GRADLE_ROOT/$MODULE_PATH/src/main/kotlin"
+MODULE_PATH="${MODULE#:}"
+MODULE_PATH="${MODULE_PATH//://}"
 
-# Check for alternative source directories (MPP support)
-if [[ ! -d "$MODULE_SRC_DIR" ]]; then
-    for alt in "src/commonMain/kotlin" "src/jvmMain/kotlin" "src/androidMain/kotlin"; do
-        if [[ -d "$GRADLE_ROOT/$MODULE_PATH/$alt" ]]; then
-            MODULE_SRC_DIR="$GRADLE_ROOT/$MODULE_PATH/$alt"
-            break
-        fi
-    done
-fi
-
+# Resolve source directory
 if [[ "$DIFF_MODE" == true ]]; then
     # Auto-detect default branch
-    if [[ -n "$1" && "$1" != --* ]]; then
-        BASE_BRANCH="$1"
-        shift
-    else
-        # Try to detect default branch
+    BASE_BRANCH="$INPUT_PATH"
+    if [[ -z "$BASE_BRANCH" ]]; then
         BASE_BRANCH=$(cd "$GRADLE_ROOT" && git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@') || true
         if [[ -z "$BASE_BRANCH" ]]; then
-            # Fallback: check common branch names
             for branch in main master develop; do
                 if git rev-parse --verify "origin/$branch" &>/dev/null; then
                     BASE_BRANCH="$branch"
@@ -155,15 +213,15 @@ if [[ "$DIFF_MODE" == true ]]; then
                 fi
             done
         fi
-        if [[ -z "$BASE_BRANCH" ]]; then
-            echo "Error: Could not detect default branch. Specify it explicitly: dtk --diff :module <branch>" >&2
-            exit 1
-        fi
+    fi
+
+    if [[ -z "$BASE_BRANCH" ]]; then
+        echo "Error: Could not detect default branch. Specify explicitly: dtk --diff :module <branch>" >&2
+        exit 1
     fi
 
     echo "Getting changed Kotlin files vs $BASE_BRANCH..." >&2
 
-    # Verify base branch exists
     if ! git rev-parse --verify "origin/$BASE_BRANCH" &>/dev/null && ! git rev-parse --verify "$BASE_BRANCH" &>/dev/null; then
         echo "Error: Branch '$BASE_BRANCH' not found" >&2
         exit 1
@@ -176,7 +234,6 @@ if [[ "$DIFF_MODE" == true ]]; then
         exit 0
     fi
 
-    # Convert to absolute paths, comma-separated
     INPUT_FILES=""
     while IFS= read -r file; do
         if [[ -f "$GRADLE_ROOT/$file" ]]; then
@@ -187,49 +244,49 @@ if [[ "$DIFF_MODE" == true ]]; then
     echo "Checking $(echo "$CHANGED_FILES" | wc -l | tr -d ' ') changed files..." >&2
     SOURCE_DIR="$INPUT_FILES"
 else
-    # Normal mode
-    INPUT="${1:-.}"
-    if [[ "$INPUT" != "." && "$INPUT" != "./" && "$INPUT" != --* ]]; then
-        # Support multiple path formats for tab completion:
-        # 1. Absolute path: /full/path/to/dir
-        # 2. Relative to cwd: share/src/main/kotlin/v2/...
-        # 3. Relative to module: src/main/kotlin/v2/...
-        if [[ "$INPUT" == /* ]]; then
-            # Absolute path
-            SOURCE_DIR="$INPUT"
-        elif [[ -e "$INPUT" ]]; then
-            # Relative to current directory (enables tab completion)
-            SOURCE_DIR="$(cd "$INPUT" && pwd)"
-        elif [[ -e "$GRADLE_ROOT/$INPUT" ]]; then
-            # Relative to Gradle root
-            SOURCE_DIR="$GRADLE_ROOT/$INPUT"
-        else
-            # Relative to module directory
-            SOURCE_DIR="$GRADLE_ROOT/$MODULE_PATH/$INPUT"
+    # Normal mode - resolve input path
+    if [[ -z "$INPUT_PATH" ]]; then
+        # Default to module's src/main/kotlin
+        SOURCE_DIR="$GRADLE_ROOT/$MODULE_PATH/src/main/kotlin"
+        # MPP fallback
+        if [[ ! -d "$SOURCE_DIR" ]]; then
+            for alt in "src/commonMain/kotlin" "src/jvmMain/kotlin"; do
+                if [[ -d "$GRADLE_ROOT/$MODULE_PATH/$alt" ]]; then
+                    SOURCE_DIR="$GRADLE_ROOT/$MODULE_PATH/$alt"
+                    break
+                fi
+            done
         fi
-        shift || true
+    elif [[ "$INPUT_PATH" == /* ]]; then
+        # Absolute path
+        SOURCE_DIR="$INPUT_PATH"
+    elif [[ -e "$INPUT_PATH" ]]; then
+        # Relative to cwd (file or directory)
+        SOURCE_DIR="$(cd "$(dirname "$INPUT_PATH")" && pwd)/$(basename "$INPUT_PATH")"
+    elif [[ -e "$GRADLE_ROOT/$INPUT_PATH" ]]; then
+        # Relative to Gradle root
+        SOURCE_DIR="$GRADLE_ROOT/$INPUT_PATH"
+    elif [[ -e "$GRADLE_ROOT/$MODULE_PATH/$INPUT_PATH" ]]; then
+        # Relative to module
+        SOURCE_DIR="$GRADLE_ROOT/$MODULE_PATH/$INPUT_PATH"
     else
-        SOURCE_DIR="$MODULE_SRC_DIR"
-        [[ "$INPUT" != --* ]] && shift 2>/dev/null || true
+        echo "Error: Path not found: $INPUT_PATH" >&2
+        exit 1
     fi
 fi
 
 if [[ ! -e "$SOURCE_DIR" && "$SOURCE_DIR" != *","* ]]; then
-    echo "Error: Source directory not found: $SOURCE_DIR" >&2
+    echo "Error: Source not found: $SOURCE_DIR" >&2
     exit 1
 fi
 
 echo "Running detekt on $SOURCE_DIR with type resolution..." >&2
 
-# Default values (can be overridden via $@)
-LANG_VERSION="2.1"
-JVM_TARGET="21"
-
-# Run detekt with classpath
+# Run detekt
 exec detekt \
     --input "$SOURCE_DIR" \
     --classpath "$CLASSPATH" \
-    --language-version "$LANG_VERSION" \
-    --jvm-target "$JVM_TARGET" \
+    --language-version 2.1 \
+    --jvm-target 21 \
     --config "$CONFIG_FILE" \
-    "$@"
+    "${DETEKT_ARGS[@]}"
