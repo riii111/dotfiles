@@ -1,8 +1,26 @@
-local function apply_custom_devicons()
-	if vim.g.colors_name ~= "custom-theme-riii111" then
+local _default_icons_cache = nil
+
+local function save_default_icons()
+	if _default_icons_cache then
 		return
 	end
+	local devicons = require("nvim-web-devicons")
+	_default_icons_cache = devicons.get_icons()
+end
 
+local function restore_default_icons()
+	if not _default_icons_cache then
+		return
+	end
+	local devicons = require("nvim-web-devicons")
+	devicons.set_icon(_default_icons_cache)
+	devicons.setup({
+		default = true,
+		color_icons = true,
+	})
+end
+
+local function apply_custom_devicons()
 	local devicons = require("nvim-web-devicons")
 	local palette = require("custom-theme-riii111").palette()
 	local colors = palette.devicons
@@ -53,6 +71,14 @@ local function apply_custom_devicons()
 	})
 end
 
+local function on_colorscheme_change()
+	if vim.g.colors_name == "custom-theme-riii111" then
+		apply_custom_devicons()
+	else
+		restore_default_icons()
+	end
+end
+
 return {
 	{
 		"nvim-tree/nvim-web-devicons",
@@ -65,12 +91,15 @@ return {
 				color_icons = true,
 			})
 
-			apply_custom_devicons()
+			save_default_icons()
+
+			if vim.g.colors_name == "custom-theme-riii111" then
+				apply_custom_devicons()
+			end
 
 			vim.api.nvim_create_autocmd("ColorScheme", {
-				pattern = "custom-theme-riii111",
-				callback = apply_custom_devicons,
-				group = vim.api.nvim_create_augroup("DeviconsCustomTheme", { clear = true }),
+				callback = on_colorscheme_change,
+				group = vim.api.nvim_create_augroup("DeviconsThemeSwitch", { clear = true }),
 			})
 		end,
 	},

@@ -30,15 +30,20 @@ function M.load()
 	local highlights = require("custom-theme-riii111.highlights")
 	highlights.apply()
 
-	-- Apply bufferline overrides with slight delay to ensure bufferline is loaded
-	vim.defer_fn(highlights.apply_bufferline_overrides, 50)
+	-- Apply bufferline overrides after plugins are loaded
+	vim.api.nvim_create_autocmd("User", {
+		pattern = "VeryLazy",
+		once = true,
+		callback = highlights.apply_bufferline_overrides,
+		group = vim.api.nvim_create_augroup("CustomThemeBufferlineInit", { clear = true }),
+	})
 
-	-- P0 fix: Only reapply on ColorScheme change for THIS theme specifically
+	-- Reapply on ColorScheme change for THIS theme specifically
 	vim.api.nvim_create_autocmd("ColorScheme", {
 		pattern = THEME_NAME,
 		callback = function()
 			highlights.apply()
-			vim.defer_fn(highlights.apply_bufferline_overrides, 10)
+			highlights.apply_bufferline_overrides()
 		end,
 		group = vim.api.nvim_create_augroup("CustomThemeRiii111Apply", { clear = true }),
 	})

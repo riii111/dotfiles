@@ -5,7 +5,9 @@ local _file_icon_color_cache = nil
 local function get_devicons()
 	if _cache.devicons == nil then
 		local ok, mod = pcall(require, "nvim-web-devicons")
-		_cache.devicons = ok and mod or false
+		if ok then
+			_cache.devicons = mod
+		end
 	end
 	return _cache.devicons
 end
@@ -13,7 +15,9 @@ end
 local function get_lazy_status()
 	if _cache.lazy_status == nil then
 		local ok, mod = pcall(require, "lazy.status")
-		_cache.lazy_status = ok and mod or false
+		if ok then
+			_cache.lazy_status = mod
+		end
 	end
 	return _cache.lazy_status
 end
@@ -21,7 +25,9 @@ end
 local function get_treesitter_parsers()
 	if _cache.ts_parsers == nil then
 		local ok, mod = pcall(require, "nvim-treesitter.parsers")
-		_cache.ts_parsers = ok and mod or false
+		if ok then
+			_cache.ts_parsers = mod
+		end
 	end
 	return _cache.ts_parsers
 end
@@ -29,7 +35,9 @@ end
 local function get_dap()
 	if _cache.dap == nil then
 		local ok, mod = pcall(require, "dap")
-		_cache.dap = ok and mod or false
+		if ok then
+			_cache.dap = mod
+		end
 	end
 	return _cache.dap
 end
@@ -687,6 +695,20 @@ return {
 					current_time(),
 				},
 			},
+		})
+
+		-- Refresh lualine when colorscheme changes
+		vim.api.nvim_create_autocmd("ColorScheme", {
+			callback = function()
+				_cache.colors = nil
+				_file_icon_color_cache = nil
+				require("lualine").setup({
+					options = {
+						theme = get_lualine_theme(),
+					},
+				})
+			end,
+			group = vim.api.nvim_create_augroup("LualineThemeRefresh", { clear = true }),
 		})
 	end,
 }
