@@ -36,7 +36,7 @@ end
 
 local function get_colors()
 	if _cache.colors == nil then
-		_cache.colors = require("config.colors").lualine
+		_cache.colors = require("custom-theme-riii111").palette().lualine
 	end
 	return _cache.colors
 end
