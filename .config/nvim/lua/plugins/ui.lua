@@ -258,11 +258,9 @@ return {
 		config = function()
 			require("ibl").setup({
 				indent = {
-					highlight = { "IndentBlanklineChar" },
 					char = "│",
 				},
 				scope = {
-					highlight = { "IndentBlanklineContextChar" },
 					enabled = true,
 				},
 			})
