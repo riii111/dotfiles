@@ -91,9 +91,9 @@ function M.apply()
 		DiffDelete = { bg = palette.diff.delete },
 		DiffText = { bg = palette.diff.text },
 
-		-- Indent guideline color adjustment (v3 compatible)
-		IndentBlanklineChar = { fg = palette.visual.visual },
-		IndentBlanklineContextChar = { fg = palette.syntax.comment },
+		-- Indent guideline colors (ibl v3)
+		IblIndent = { fg = palette.visual.visual },
+		IblScope = { fg = palette.syntax.comment },
 
 		-- Diagnostics
 		DiagnosticError = { fg = palette.semantic.error },
