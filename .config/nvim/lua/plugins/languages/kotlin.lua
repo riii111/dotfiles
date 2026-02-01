@@ -4,11 +4,10 @@ return {
 	--       because lazy.nvim may skip this config function when lspconfig is already loaded
 	--       by plugins/lsp.lua. A separate plugin name ensures this config always runs.
 	--
-	-- SETUP: Using forked kotlin-language-server with fixes for generated code (e.g., jOOQ) definition jump.
-	--        The fork is built locally and symlinked to ~/.local/bin/kotlin-language-server
-	--        See: https://github.com/riii111/kotlin-language-server
+	-- SETUP: Using forked kotlin-language-server with fixes for multi-module source resolution.
+	--        The official version jumps to JAR instead of source in multi-module projects.
+	--        Fork: https://github.com/riii111/kotlin-language-server
 	--        Build: cd <fork-repo> && ./gradlew :server:installDist
-	--        Symlink: ln -sf <fork-repo>/server/build/install/server/bin/kotlin-language-server ~/.local/bin/
 	{
 		name = "kotlin-lsp-setup",
 		dir = vim.fn.stdpath("config") .. "/lua/plugins/languages",
@@ -18,11 +17,10 @@ return {
 			local java_home = vim.env.JAVA_HOME
 
 			vim.lsp.config("kotlin_language_server", {
-				cmd = {
-					vim.fn.expand(
-						"~/ghq/github.com/riii111/kotlin-language-server/server/build/install/server/bin/kotlin-language-server"
-					),
-				},
+				-- Fork (fixes multi-module source resolution)
+				cmd = { vim.fn.expand("~/ghq/github.com/riii111/kotlin-language-server/server/build/install/server/bin/kotlin-language-server") },
+				-- Official (Mason):
+				-- cmd = { "kotlin-language-server" },
 				cmd_env = {
 					JAVA_HOME = java_home,
 					JDK_HOME = java_home,
@@ -49,7 +47,7 @@ return {
 						},
 						externalSources = {
 							autoConvertToKotlin = false,
-							useKlsScheme = true,
+							useKlsScheme = false,
 						},
 					},
 				},

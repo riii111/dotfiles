@@ -1,4 +1,13 @@
-local colors = require("config.colors")
+local function is_custom_theme()
+	return vim.g.colors_name == "custom-theme-riii111"
+end
+
+local function get_colors()
+	if is_custom_theme() then
+		return require("custom-theme-riii111").palette()
+	end
+	return nil
+end
 
 return {
 
@@ -8,6 +17,138 @@ return {
 		dependencies = { "nvim-tree/nvim-web-devicons" },
 		version = "*",
 		config = function()
+			local colors = get_colors()
+
+			local groups_items = {}
+			local highlights = {
+				fill = { bg = "NONE" },
+				group_separator = { fg = "NONE", bg = "NONE" },
+			}
+
+			if colors then
+				groups_items = {
+					{
+						name = "docs",
+						highlight = { fg = colors.languages.docs },
+						priority = 2,
+						auto_close = true,
+						matcher = function(buf)
+							return buf.name:match("%.md$")
+								or buf.name:match("README")
+								or buf.name:match("%.rst$")
+						end,
+					},
+					{
+						name = "rs",
+						highlight = { fg = colors.languages.rust },
+						priority = 3,
+						auto_close = true,
+						matcher = function(buf)
+							return buf.name:match("%.rs$")
+						end,
+					},
+					{
+						name = "lua",
+						highlight = { fg = colors.languages.lua },
+						priority = 4,
+						auto_close = true,
+						matcher = function(buf)
+							return buf.name:match("%.lua$")
+						end,
+					},
+					{
+						name = "go",
+						highlight = { fg = colors.languages.go },
+						priority = 5,
+						auto_close = true,
+						matcher = function(buf)
+							return buf.name:match("%.go$")
+						end,
+					},
+					{
+						name = "kotlin",
+						highlight = { fg = colors.languages.kotlin },
+						priority = 5,
+						auto_close = true,
+						matcher = function(buf)
+							return buf.name:match("%.kt$") or buf.name:match("%.kts$")
+						end,
+					},
+					{
+						name = "c",
+						highlight = { fg = colors.languages.c },
+						priority = 5,
+						auto_close = true,
+						matcher = function(buf)
+							return buf.name:match("%.c$")
+						end,
+					},
+					{
+						name = "cpp",
+						highlight = { fg = colors.languages.cpp },
+						priority = 6,
+						auto_close = true,
+						matcher = function(buf)
+							return buf.name:match("%.cpp$")
+						end,
+					},
+					{
+						name = "tsx",
+						highlight = { fg = colors.languages.tsx },
+						priority = 6,
+						auto_close = true,
+						matcher = function(buf)
+							return buf.name:match("%.tsx$")
+						end,
+					},
+					{
+						name = "ts",
+						highlight = { fg = colors.languages.typescript },
+						priority = 7,
+						auto_close = true,
+						matcher = function(buf)
+							return buf.name:match("%.ts$")
+						end,
+					},
+					{
+						name = "jsx",
+						highlight = { fg = colors.languages.jsx },
+						priority = 8,
+						auto_close = true,
+						matcher = function(buf)
+							return buf.name:match("%.jsx$")
+						end,
+					},
+					{
+						name = "js",
+						highlight = { fg = colors.languages.javascript },
+						priority = 9,
+						auto_close = true,
+						matcher = function(buf)
+							return buf.name:match("%.js$")
+						end,
+					},
+				}
+
+				highlights = {
+					fill = { bg = "NONE" },
+					background = { fg = colors.base.fg_alt, bg = "NONE" },
+					buffer = { fg = colors.base.fg_alt, bg = "NONE" },
+					buffer_selected = { fg = colors.base.fg, bg = "NONE", bold = true },
+					buffer_visible = { fg = colors.base.fg_alt, bg = "NONE" },
+					tab = { fg = colors.base.fg_alt, bg = "NONE" },
+					tab_selected = { fg = colors.base.fg, bg = "NONE", bold = true },
+					tab_close = { fg = colors.base.fg_alt, bg = "NONE" },
+					indicator_selected = { fg = "NONE", bg = "NONE" },
+					indicator_visible = { fg = "NONE", bg = "NONE" },
+					modified = { fg = colors.semantic.warning, bg = "NONE" },
+					modified_selected = { fg = colors.semantic.warning, bg = "NONE" },
+					modified_visible = { fg = colors.semantic.warning, bg = "NONE" },
+					group_label = { fg = colors.base.fg_dark, bg = "NONE", bold = true },
+					group_separator = { fg = "NONE", bg = "NONE" },
+				}
+			end
+
 			require("bufferline").setup({
 				options = {
 					mode = "buffers",
@@ -37,109 +178,7 @@ return {
 						options = {
 							toggle_hidden_on_enter = true,
 						},
-						items = {
-							{
-								name = "docs",
-								highlight = { fg = colors.languages.docs },
-								priority = 2,
-								auto_close = true,
-								matcher = function(buf)
-									return buf.name:match("%.md$")
-										or buf.name:match("README")
-										or buf.name:match("%.rst$")
-								end,
-							},
-							{
-								name = "rs",
-								highlight = { fg = colors.languages.rust },
-								priority = 3,
-								auto_close = true,
-								matcher = function(buf)
-									return buf.name:match("%.rs$")
-								end,
-							},
-							{
-								name = "lua",
-								highlight = { fg = colors.languages.lua },
-								priority = 4,
-								auto_close = true,
-								matcher = function(buf)
-									return buf.name:match("%.lua$")
-								end,
-							},
-							{
-								name = "go",
-								highlight = { fg = colors.languages.go },
-								priority = 5,
-								auto_close = true,
-								matcher = function(buf)
-									return buf.name:match("%.go$")
-								end,
-							},
-							{
-								name = "kotlin",
-								highlight = { fg = colors.languages.kotlin },
-								priority = 5,
-								auto_close = true,
-								matcher = function(buf)
-									return buf.name:match("%.kt$") or buf.name:match("%.kts$")
-								end,
-							},
-							{
-								name = "c",
-								highlight = { fg = colors.languages.c },
-								priority = 5,
-								auto_close = true,
-								matcher = function(buf)
-									return buf.name:match("%.c$")
-								end,
-							},
-							{
-								name = "cpp",
-								highlight = { fg = colors.languages.cpp },
-								priority = 6,
-								auto_close = true,
-								matcher = function(buf)
-									return buf.name:match("%.cpp$")
-								end,
-							},
-							{
-								name = "tsx",
-								highlight = { fg = colors.languages.tsx },
-								priority = 6,
-								auto_close = true,
-								matcher = function(buf)
-									return buf.name:match("%.tsx$")
-								end,
-							},
-							{
-								name = "ts",
-								highlight = { fg = colors.languages.typescript },
-								priority = 7,
-								auto_close = true,
-								matcher = function(buf)
-									return buf.name:match("%.ts$")
-								end,
-							},
-							{
-								name = "jsx",
-								highlight = { fg = colors.languages.jsx },
-								priority = 8,
-								auto_close = true,
-								matcher = function(buf)
-									return buf.name:match("%.jsx$")
-								end,
-							},
-							{
-								name = "js",
-								highlight = { fg = colors.languages.javascript },
-								priority = 9,
-								auto_close = true,
-								matcher = function(buf)
-									return buf.name:match("%.js$")
-								end,
-							},
-						},
+						items = groups_items,
 					},
 					offsets = {
 						{
@@ -150,23 +189,7 @@ return {
 						},
 					},
 				},
-				highlights = {
-					fill = { bg = "NONE" },
-					background = { fg = colors.base.fg_alt, bg = "NONE" },
-					buffer = { fg = colors.base.fg_alt, bg = "NONE" },
-					buffer_selected = { fg = colors.base.fg, bg = "NONE", bold = true },
-					buffer_visible = { fg = colors.base.fg_alt, bg = "NONE" },
-					tab = { fg = colors.base.fg_alt, bg = "NONE" },
-					tab_selected = { fg = colors.base.fg, bg = "NONE", bold = true },
-					tab_close = { fg = colors.base.fg_alt, bg = "NONE" },
-					indicator_selected = { fg = "NONE", bg = "NONE" },
-					indicator_visible = { fg = "NONE", bg = "NONE" },
-					modified = { fg = colors.semantic.warning, bg = "NONE" },
-					modified_selected = { fg = colors.semantic.warning, bg = "NONE" },
-					modified_visible = { fg = colors.semantic.warning, bg = "NONE" },
-					group_label = { fg = colors.base.fg_dark, bg = "NONE", bold = true },
-					group_separator = { fg = "NONE", bg = "NONE" },
-				},
+				highlights = highlights,
 			})
 		end,
 	},
@@ -178,13 +201,9 @@ return {
 		event = "BufReadPre",
 		priority = 1200,
 		config = function()
-			require("incline").setup({
-				highlight = {
-					groups = {
-						InclineNormal = { guibg = colors.base.bg_medium, guifg = colors.base.fg_alt },
-						InclineNormalNC = { guifg = colors.base.fg_muted, guibg = colors.base.bg_dark },
-					},
-				},
+			local colors = get_colors()
+
+			local incline_opts = {
 				window = { margin = { vertical = 0, horizontal = 1 } },
 				hide = {
 					cursorline = false,
@@ -197,27 +216,37 @@ return {
 
 					local icon, color = require("nvim-web-devicons").get_icon_color(filename)
 
-					-- Simple path display without complex segments
 					local path = vim.api.nvim_buf_get_name(props.buf)
 					local segments = {}
 
 					if path ~= "" then
 						local parts = vim.split(path, "/")
-						-- Show only parent directory and filename
 						if #parts > 1 then
 							local parent = parts[#parts - 1]
-							table.insert(segments, { parent, guifg = colors.base.fg_muted })
-							table.insert(segments, { " > ", guifg = colors.base.fg_muted })
+							local muted_color = colors and colors.base.fg_muted or nil
+							table.insert(segments, { parent, guifg = muted_color })
+							table.insert(segments, { " > ", guifg = muted_color })
 						end
 					end
 
-					-- File icon and name
-					table.insert(segments, { (icon and icon .. " " or ""), guifg = color or colors.base.white })
+					local fallback_color = colors and colors.base.white or nil
+					table.insert(segments, { (icon and icon .. " " or ""), guifg = color or fallback_color })
 					table.insert(segments, { filename, gui = "bold" })
 
 					return segments
 				end,
-			})
+			}
+
+			if colors then
+				incline_opts.highlight = {
+					groups = {
+						InclineNormal = { guibg = colors.base.bg_medium, guifg = colors.base.fg_alt },
+						InclineNormalNC = { guifg = colors.base.fg_muted, guibg = colors.base.bg_dark },
+					},
+				}
+			end
+
+			require("incline").setup(incline_opts)
 		end,
 	},
 
@@ -251,6 +280,17 @@ return {
 		"akinsho/toggleterm.nvim",
 		version = "*",
 		opts = function()
+			local colors = get_colors()
+
+			local term_highlights = {
+				Normal = { guibg = "NONE" },
+				NormalFloat = { guibg = "NONE" },
+			}
+
+			if colors then
+				term_highlights.FloatBorder = { guifg = colors.base.accent, guibg = colors.base.bg }
+			end
+
 			return {
 				size = function(term)
 					if term.direction == "horizontal" then
@@ -281,11 +321,7 @@ return {
 					end,
 					winblend = 0,
 				},
-				highlights = {
-					Normal = { guibg = "NONE" },
-					NormalFloat = { guibg = "NONE" },
-					FloatBorder = { guifg = colors.base.accent, guibg = colors.base.bg },
-				},
+				highlights = term_highlights,
 			}
 		end,
 		config = function(_, opts)
@@ -325,13 +361,13 @@ return {
 
 			-- Terminal mode mappings
 			function _G.set_terminal_keymaps()
-				local opts = { buffer = 0 }
-				vim.keymap.set("t", "<esc>", [[<Cmd>ToggleTerm<CR>]], opts)
-				vim.keymap.set("t", "<C-h>", [[<Cmd>wincmd h<CR>]], opts)
-				vim.keymap.set("t", "<C-j>", [[<Cmd>wincmd j<CR>]], opts)
-				vim.keymap.set("t", "<C-k>", [[<Cmd>wincmd k<CR>]], opts)
-				vim.keymap.set("t", "<C-l>", [[<Cmd>wincmd l<CR>]], opts)
-				vim.keymap.set("t", "<C-w>", [[<C-\><C-n><C-w>]], opts)
+				local kopts = { buffer = 0 }
+				vim.keymap.set("t", "<esc>", [[<Cmd>ToggleTerm<CR>]], kopts)
+				vim.keymap.set("t", "<C-h>", [[<Cmd>wincmd h<CR>]], kopts)
+				vim.keymap.set("t", "<C-j>", [[<Cmd>wincmd j<CR>]], kopts)
+				vim.keymap.set("t", "<C-k>", [[<Cmd>wincmd k<CR>]], kopts)
+				vim.keymap.set("t", "<C-l>", [[<Cmd>wincmd l<CR>]], kopts)
+				vim.keymap.set("t", "<C-w>", [[<C-\><C-n><C-w>]], kopts)
 			end
 
 			vim.cmd("autocmd! TermOpen term://* lua set_terminal_keymaps()")

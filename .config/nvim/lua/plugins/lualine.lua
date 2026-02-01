@@ -5,7 +5,9 @@ local _file_icon_color_cache = nil
 local function get_devicons()
 	if _cache.devicons == nil then
 		local ok, mod = pcall(require, "nvim-web-devicons")
-		_cache.devicons = ok and mod or false
+		if ok then
+			_cache.devicons = mod
+		end
 	end
 	return _cache.devicons
 end
@@ -13,7 +15,9 @@ end
 local function get_lazy_status()
 	if _cache.lazy_status == nil then
 		local ok, mod = pcall(require, "lazy.status")
-		_cache.lazy_status = ok and mod or false
+		if ok then
+			_cache.lazy_status = mod
+		end
 	end
 	return _cache.lazy_status
 end
@@ -21,7 +25,9 @@ end
 local function get_treesitter_parsers()
 	if _cache.ts_parsers == nil then
 		local ok, mod = pcall(require, "nvim-treesitter.parsers")
-		_cache.ts_parsers = ok and mod or false
+		if ok then
+			_cache.ts_parsers = mod
+		end
 	end
 	return _cache.ts_parsers
 end
@@ -29,17 +35,34 @@ end
 local function get_dap()
 	if _cache.dap == nil then
 		local ok, mod = pcall(require, "dap")
-		_cache.dap = ok and mod or false
+		if ok then
+			_cache.dap = mod
+		end
 	end
 	return _cache.dap
 end
 
+local function is_custom_theme_active()
+	return vim.g.colors_name == "custom-theme-riii111"
+end
+
 local function get_colors()
+	if not is_custom_theme_active() then
+		return nil
+	end
 	if _cache.colors == nil then
-		_cache.colors = require("config.colors").lualine
+		_cache.colors = require("custom-theme-riii111").palette().lualine
 	end
 	return _cache.colors
 end
+
+vim.api.nvim_create_autocmd("ColorScheme", {
+	callback = function()
+		_cache.colors = nil
+		_file_icon_color_cache = nil
+	end,
+	group = vim.api.nvim_create_augroup("LualineColorCache", { clear = true }),
+})
 
 local icons = {
 	git = "",
@@ -130,7 +153,8 @@ local function get_file_icon_color()
 			return vim.fn.synIDattr(vim.fn.hlID(iconhl), "fg")
 		end
 	end
-	return get_colors().fg
+	local colors = get_colors()
+	return colors and colors.fg or nil
 end
 
 -- ============================================================================
@@ -156,14 +180,17 @@ end
 
 local function git()
 	local colors = get_colors()
-	return {
+	local component = {
 		"b:gitsigns_head",
 		icon = icons.git,
 		cond = conditions.check_git_workspace,
-		color = { fg = colors.magenta, bg = colors.section_b_bg },
 		padding = { left = 2, right = 2 },
 		separator = { right = "" },
 	}
+	if colors then
+		component.color = { fg = colors.fg, bg = colors.git_bg }
+	end
+	return component
 end
 
 local function file_icon()
@@ -173,7 +200,11 @@ local function file_icon()
 			local fi = get_file_icon()
 			local new_color = get_file_icon_color()
 			if _file_icon_color_cache ~= new_color then
-				vim.api.nvim_set_hl(0, "LualineFileIconColor", { fg = new_color, bg = colors.section_c_bg })
+				local hl_opts = { fg = new_color }
+				if colors then
+					hl_opts.bg = colors.section_c_bg
+				end
+				vim.api.nvim_set_hl(0, "LualineFileIconColor", hl_opts)
 				_file_icon_color_cache = new_color
 			end
 			if vim.bo.buftype == "terminal" then
@@ -195,7 +226,7 @@ end
 
 local function file_name()
 	local colors = get_colors()
-	return {
+	local component = {
 		function()
 			local show_name = vim.fn.expand("%:t")
 			local modified = ""
@@ -205,24 +236,22 @@ local function file_name()
 			return show_name .. modified
 		end,
 		padding = { left = 1, right = 1 },
-		color = { fg = colors.fg, gui = "bold", bg = colors.section_c_bg },
 		cond = conditions.buffer_not_empty,
 	}
+	if colors then
+		component.color = { fg = colors.fg, gui = "bold", bg = colors.section_c_bg }
+	end
+	return component
 end
 
 local function diff()
 	local colors = get_colors()
-	return {
+	local component = {
 		"diff",
 		symbols = {
 			added = lazy_icons.git.added,
 			modified = lazy_icons.git.modified,
 			removed = lazy_icons.git.removed,
-		},
-		diff_color = {
-			added = { fg = colors.git.add, bg = colors.section_c_bg },
-			modified = { fg = colors.git.change, bg = colors.section_c_bg },
-			removed = { fg = colors.git.delete, bg = colors.section_c_bg },
 		},
 		source = function()
 			local gitsigns = vim.b.gitsigns_status_dict
@@ -234,13 +263,21 @@ local function diff()
 				}
 			end
 		end,
-		color = { bg = colors.section_c_bg },
 	}
+	if colors then
+		component.diff_color = {
+			added = { fg = colors.git.add, bg = colors.section_c_bg },
+			modified = { fg = colors.git.change, bg = colors.section_c_bg },
+			removed = { fg = colors.git.delete, bg = colors.section_c_bg },
+		}
+		component.color = { bg = colors.section_c_bg }
+	end
+	return component
 end
 
 local function lazy_status()
 	local colors = get_colors()
-	return {
+	local component = {
 		function()
 			local lazy = get_lazy_status()
 			if lazy and lazy.updates then
@@ -252,37 +289,46 @@ local function lazy_status()
 			local lazy = get_lazy_status()
 			return lazy and lazy.has_updates and lazy.has_updates()
 		end,
-		color = { fg = colors.orange, bg = colors.section_c_bg },
 	}
+	if colors then
+		component.color = { fg = colors.orange, bg = colors.section_c_bg }
+	end
+	return component
 end
 
 -- Left arrow separator for Y section start
 local function section_separator_left()
 	local colors = get_colors()
-	return {
+	local component = {
 		function()
 			return ""
 		end,
 		padding = { left = 0, right = 0 },
-		color = { fg = colors.section_y_bg },
 	}
+	if colors then
+		component.color = { fg = colors.section_y_bg }
+	end
+	return component
 end
 
 -- Right arrow separator for C section end
 local function section_separator_right()
 	local colors = get_colors()
-	return {
+	local component = {
 		function()
 			return ""
 		end,
 		padding = { left = 0, right = 0 },
-		color = { fg = colors.section_c_bg },
 	}
+	if colors then
+		component.color = { fg = colors.section_c_bg }
+	end
+	return component
 end
 
 local function treesitter()
 	local colors = get_colors()
-	return {
+	local component = {
 		function()
 			local ts_parsers = get_treesitter_parsers()
 			if ts_parsers then
@@ -295,14 +341,17 @@ local function treesitter()
 			return ""
 		end,
 		padding = 0,
-		color = { fg = colors.green },
 		cond = conditions.hide_small,
 	}
+	if colors then
+		component.color = { fg = colors.green }
+	end
+	return component
 end
 
 local function file_size()
 	local colors = get_colors()
-	return {
+	local component = {
 		function()
 			local file = vim.fn.expand("%:p")
 			if string.len(file) == 0 then
@@ -320,20 +369,26 @@ local function file_size()
 			end
 			return string.format("%.1f%s", size, sufixes[i])
 		end,
-		color = { fg = colors.fg },
 		cond = conditions.buffer_not_empty,
 	}
+	if colors then
+		component.color = { fg = colors.fg }
+	end
+	return component
 end
 
 local function file_format()
 	local colors = get_colors()
-	return {
+	local component = {
 		"fileformat",
 		fmt = string.upper,
 		icons_enabled = true,
-		color = { fg = colors.green, gui = "bold" },
 		cond = conditions.hide_in_width,
 	}
+	if colors then
+		component.color = { fg = colors.green, gui = "bold" }
+	end
+	return component
 end
 
 local function get_lsp_client_names(buf_clients)
@@ -348,7 +403,7 @@ end
 
 local function lsp_servers()
 	local colors = get_colors()
-	return {
+	local component = {
 		function()
 			local buf_clients = vim.lsp.get_clients({ bufnr = vim.api.nvim_get_current_buf() })
 			if next(buf_clients) == nil then
@@ -363,48 +418,60 @@ local function lsp_servers()
 				return icons.ls_active .. table.concat(all_names, " ")
 			end
 		end,
-		color = { fg = colors.fg },
 		cond = conditions.hide_in_width,
 	}
+	if colors then
+		component.color = { fg = colors.fg }
+	end
+	return component
 end
 
 local function location()
 	local colors = get_colors()
-	return {
+	local component = {
 		"location",
 		padding = 0,
-		color = { fg = colors.orange },
 	}
+	if colors then
+		component.color = { fg = colors.orange }
+	end
+	return component
 end
 
 local function current_time()
 	local colors = get_colors()
-	return {
+	local component = {
 		function()
 			return os.date("%H:%M")
 		end,
 		icon = "󰥔",
-		color = { fg = colors.cyan },
 		separator = { right = "" },
 	}
+	if colors then
+		component.color = { fg = colors.cyan }
+	end
+	return component
 end
 
 local function file_read_only()
 	local colors = get_colors()
-	return {
+	local component = {
 		function()
 			if not vim.bo.readonly or not vim.bo.modifiable then
 				return ""
 			end
 			return string.gsub(icons.lock, "%s+", "")
 		end,
-		color = { fg = colors.red },
 	}
+	if colors then
+		component.color = { fg = colors.red }
+	end
+	return component
 end
 
 local function diagnostic_ok()
 	local colors = get_colors()
-	return {
+	local component = {
 		function()
 			local diagnostics_list = vim.diagnostic.get(0)
 			if #diagnostics_list == 0 then
@@ -414,14 +481,17 @@ local function diagnostic_ok()
 			end
 		end,
 		cond = conditions.hide_in_width,
-		color = { fg = colors.green },
 		padding = { left = 2, right = 0 },
 	}
+	if colors then
+		component.color = { fg = colors.green }
+	end
+	return component
 end
 
 local function diagnostics()
 	local colors = get_colors()
-	return {
+	local component = {
 		"diagnostics",
 		sources = { "nvim_diagnostic" },
 		symbols = {
@@ -430,22 +500,25 @@ local function diagnostics()
 			info = diagnostics_icons.Info,
 			hint = diagnostics_icons.Hint,
 		},
-		diagnostics_color = {
-			error = { fg = colors.red },
-			warn = { fg = colors.yellow },
-			info = { fg = colors.blue },
-			hint = { fg = colors.cyan },
-		},
 		cond = function()
 			local diagnostics_list = vim.diagnostic.get(0)
 			return #diagnostics_list > 0 and conditions.hide_in_width()
 		end,
 	}
+	if colors then
+		component.diagnostics_color = {
+			error = { fg = colors.red },
+			warn = { fg = colors.yellow },
+			info = { fg = colors.blue },
+			hint = { fg = colors.cyan },
+		}
+	end
+	return component
 end
 
 local function dap_status()
 	local colors = get_colors()
-	return {
+	local component = {
 		function()
 			local dap = get_dap()
 			if dap and dap.status then
@@ -460,8 +533,11 @@ local function dap_status()
 			local dap = get_dap()
 			return dap and dap.status and dap.status() ~= ""
 		end,
-		color = { fg = colors.red },
 	}
+	if colors then
+		component.color = { fg = colors.red }
+	end
+	return component
 end
 
 local function space()
@@ -476,26 +552,32 @@ end
 
 local function null_ls()
 	local colors = get_colors()
-	return {
+	local component = {
 		function()
 			return lsp_server_icon("null-ls", icons.code_lens_action)
 		end,
 		padding = 0,
-		color = { fg = colors.blue },
 		cond = conditions.hide_small,
 	}
+	if colors then
+		component.color = { fg = colors.blue }
+	end
+	return component
 end
 
 local function grammar_lsp(server_name)
 	local colors = get_colors()
-	return {
+	local component = {
 		function()
 			return lsp_server_icon(server_name, icons.typos)
 		end,
 		padding = 0,
-		color = { fg = colors.yellow },
 		cond = conditions.hide_small,
 	}
+	if colors then
+		component.color = { fg = colors.yellow }
+	end
+	return component
 end
 
 local function typos_lsp()
@@ -506,11 +588,10 @@ local function harper_ls()
 	return grammar_lsp("harper_ls")
 end
 
--- ============================================================================
--- Theme definition
--- ============================================================================
-
-local function get_custom_theme()
+local function get_lualine_theme()
+	if not is_custom_theme_active() then
+		return "auto"
+	end
 	local colors = get_colors()
 	return {
 		normal = {
@@ -564,16 +645,12 @@ local function get_custom_theme()
 	}
 end
 
--- ============================================================================
--- Plugin configuration
--- ============================================================================
-
 return {
 	"nvim-lualine/lualine.nvim",
 	config = function()
 		require("lualine").setup({
 			options = {
-				theme = get_custom_theme(),
+				theme = get_lualine_theme(),
 				globalstatus = true,
 				component_separators = { left = "", right = "" },
 				section_separators = { left = "", right = "" },
@@ -618,6 +695,20 @@ return {
 					current_time(),
 				},
 			},
+		})
+
+		-- Refresh lualine when colorscheme changes
+		vim.api.nvim_create_autocmd("ColorScheme", {
+			callback = function()
+				_cache.colors = nil
+				_file_icon_color_cache = nil
+				require("lualine").setup({
+					options = {
+						theme = get_lualine_theme(),
+					},
+				})
+			end,
+			group = vim.api.nvim_create_augroup("LualineThemeRefresh", { clear = true }),
 		})
 	end,
 }
