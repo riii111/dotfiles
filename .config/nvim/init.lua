@@ -17,8 +17,10 @@ vim.g.maplocalleader = "\\"
 require("config.options")
 require("config.keymaps")
 require("config.autocmd")
-
--- Apply colorscheme before lazy.nvim so plugins get correct vim.g.colors_name
-vim.cmd.colorscheme("custom-theme-riii111")
-
 require("config.lazy")
+
+-- Apply colorscheme after lazy.nvim (fallback to custom-theme if not found)
+local ok, _ = pcall(vim.cmd.colorscheme, "rose-pine-moon")
+if not ok then
+	vim.cmd.colorscheme("custom-theme-riii111")
+end
