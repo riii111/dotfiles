@@ -84,16 +84,27 @@ return {
 			},
 		},
 		config = function(_, opts)
-			-- Setup nvim-notify first
-			require("notify").setup({
-				background_colour = require("config.colors").base.bg_medium,
-				fps = 30,
-				level = 2,
-				minimum_width = 50,
-				render = "compact",
-				stages = "fade_in_slide_out",
-				timeout = 5000,
-				top_down = false,
+			local function setup_notify()
+				local notify_opts = {
+					fps = 30,
+					level = 2,
+					minimum_width = 50,
+					render = "compact",
+					stages = "fade_in_slide_out",
+					timeout = 5000,
+					top_down = false,
+				}
+				if vim.g.colors_name == "custom-theme-riii111" then
+					notify_opts.background_colour = require("custom-theme-riii111").palette().base.bg_medium
+				end
+				require("notify").setup(notify_opts)
+			end
+
+			setup_notify()
+
+			vim.api.nvim_create_autocmd("ColorScheme", {
+				callback = setup_notify,
+				group = vim.api.nvim_create_augroup("NotifyCustomTheme", { clear = true }),
 			})
 
 			require("noice").setup(opts)
