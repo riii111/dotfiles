@@ -188,7 +188,7 @@ local function git()
 		separator = { right = "" },
 	}
 	if colors then
-		component.color = { fg = colors.fg, bg = colors.git_bg }
+		component.color = { fg = colors.magenta, bg = colors.section_b_bg }
 	end
 	return component
 end
@@ -296,35 +296,38 @@ local function lazy_status()
 	return component
 end
 
--- Left arrow separator for Y section start
+-- Left arrow separator for Y section start (custom theme only)
 local function section_separator_left()
-	local colors = get_colors()
-	local component = {
+	return {
 		function()
+			local colors = get_colors()
+			if not colors then return "" end
 			return ""
 		end,
 		padding = { left = 0, right = 0 },
+		color = function()
+			local colors = get_colors()
+			if colors then return { fg = colors.section_y_bg } end
+		end,
 	}
-	if colors then
-		component.color = { fg = colors.section_y_bg }
-	end
-	return component
 end
 
--- Right arrow separator for C section end
+-- Right arrow separator for C section end (custom theme only)
 local function section_separator_right()
-	local colors = get_colors()
-	local component = {
+	return {
 		function()
+			local colors = get_colors()
+			if not colors then return "" end
 			return ""
 		end,
 		padding = { left = 0, right = 0 },
+		color = function()
+			local colors = get_colors()
+			if colors then return { fg = colors.section_c_bg } end
+		end,
 	}
-	if colors then
-		component.color = { fg = colors.section_c_bg }
-	end
-	return component
 end
+
 
 local function treesitter()
 	local colors = get_colors()
@@ -705,6 +708,49 @@ return {
 				require("lualine").setup({
 					options = {
 						theme = get_lualine_theme(),
+						globalstatus = true,
+						component_separators = { left = "", right = "" },
+						section_separators = { left = "", right = "" },
+						always_divide_middle = true,
+					},
+					sections = {
+						lualine_a = {
+							{
+								"mode",
+								fmt = function(str)
+									return str
+								end,
+								separator = { left = "", right = "" },
+							},
+						},
+						lualine_b = {
+							git(),
+						},
+						lualine_c = {
+							file_icon(),
+							file_name(),
+							diff(),
+							lazy_status(),
+							section_separator_right(),
+						},
+						lualine_x = {
+							section_separator_left(),
+						},
+						lualine_y = {
+							diagnostic_ok(),
+							diagnostics(),
+							space(),
+							dap_status(),
+							treesitter(),
+							typos_lsp(),
+							harper_ls(),
+							null_ls(),
+							lsp_servers(),
+						},
+						lualine_z = {
+							location(),
+							current_time(),
+						},
 					},
 				})
 			end,
