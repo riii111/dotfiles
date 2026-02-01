@@ -26,6 +26,9 @@ function M.load()
 	-- Set colorscheme name
 	vim.g.colors_name = THEME_NAME
 
+	-- Ensure 24-bit colors (other themes like pixel.nvim may disable this)
+	vim.opt.termguicolors = true
+
 	-- Apply main highlights
 	local highlights = require("custom-theme-riii111.highlights")
 	highlights.apply()
