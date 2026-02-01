@@ -169,8 +169,11 @@ function M.apply()
 	end
 end
 
--- BufferLine language group overrides
 function M.apply_bufferline_overrides()
+	if vim.g.colors_name ~= "custom-theme-riii111" then
+		return
+	end
+
 	local label_fg = palette.base.fg_dark
 	local inactive_fg = palette.base.fg_muted
 
