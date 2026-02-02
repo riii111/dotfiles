@@ -278,16 +278,12 @@ return {
 		"akinsho/toggleterm.nvim",
 		version = "*",
 		opts = function()
-			local colors = get_colors()
-
+			local palette = require("custom-theme-riii111").palette()
 			local term_highlights = {
 				Normal = { guibg = "NONE" },
 				NormalFloat = { guibg = "NONE" },
+				FloatBorder = { guifg = palette.base.accent, guibg = palette.base.bg },
 			}
-
-			if colors then
-				term_highlights.FloatBorder = { guifg = colors.base.accent, guibg = colors.base.bg }
-			end
 
 			return {
 				size = function(term)
