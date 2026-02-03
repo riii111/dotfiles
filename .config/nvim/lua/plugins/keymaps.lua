@@ -206,13 +206,67 @@ local function setup_keymaps()
         desc = "Code actions"
       },
 
-      -- Git conflict resolution with Diffview
-      ["<Leader>gd"] = { ":DiffviewOpen<CR>", desc = "Open diffview" },
-      ["<Leader>gc"] = { ":DiffviewClose<CR>", desc = "Close diffview" },
+      -- Git diff tools
+      ["<Leader>gd"] = {
+        function()
+          local result = vim.fn.system("git diff --quiet")
+          if vim.v.shell_error == 0 then
+            vim.notify("No local changes", vim.log.levels.INFO)
+          else
+            vim.notify("Opening difit...", vim.log.levels.INFO)
+            -- Use shell pipe: git diff | difit (difit reads from stdin when not TTY)
+            vim.fn.jobstart("git diff | difit", {
+              cwd = vim.fn.getcwd(),
+              detach = true,
+            })
+          end
+        end,
+        desc = "Open difit (local diff)"
+      },
+      ["<Leader>gD"] = {
+        function()
+          local pr = vim.fn.input("PR number (or Enter for current branch): ")
+          local cmd
+          if pr == "" then
+            cmd = "gh pr diff | delta"
+          else
+            cmd = "gh pr diff " .. pr .. " | delta"
+          end
+          vim.cmd("split | terminal " .. cmd)
+        end,
+        desc = "PR diff with delta"
+      },
+      ["<Leader>gm"] = {
+        function()
+          -- Try to get base branch from PR
+          local base = vim.fn.system("gh pr view --json baseRefName -q .baseRefName 2>/dev/null"):gsub("%s+", "")
+          if base == "" then
+            -- No PR, ask user for base branch
+            base = vim.fn.input("Base branch (without origin/): ", "main")
+            if base == "" then
+              return
+            end
+          end
+          -- Use origin/ prefix for remote comparison
+          local remote_base = "origin/" .. base
+          -- Check if there are differences
+          local diff_check = vim.fn.system("git diff --quiet " .. remote_base .. "..HEAD")
+          if vim.v.shell_error == 0 then
+            vim.notify("No differences with " .. remote_base, vim.log.levels.INFO)
+            return
+          end
+          vim.notify("Comparing with " .. remote_base .. "...", vim.log.levels.INFO)
+          -- Use shell pipe: git diff | difit (difit reads from stdin when not TTY)
+          vim.fn.jobstart("git diff " .. remote_base .. "..HEAD | difit", {
+            cwd = vim.fn.getcwd(),
+            detach = true,
+          })
+        end,
+        desc = "Compare with base branch (difit)"
+      },
+
+      -- Diffview (file history only)
       ["<Leader>gh"] = { ":DiffviewFileHistory<CR>", desc = "File history" },
-      ["<Leader>gf"] = { ":DiffviewToggleFiles<CR>", desc = "Toggle file panel" },
-      ["<Leader>df"] = { ":lua require('diffview.actions').focus_files()<CR>", desc = "Focus diffview files" },
-      ["<Leader>gm"] = { ":DiffviewOpen origin/main...HEAD<CR>", desc = "Compare with main" },
 
       -- Quick replace shortcuts
       ["<Leader>r"] = { ":%s/<C-r><C-w>//g<Left><Left>", desc = "Replace word under cursor" },
