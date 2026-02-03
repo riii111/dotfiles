@@ -47,8 +47,8 @@ config.window_background_gradient = {
 -- Pane
 ---------------------------------------------------------------
 config.inactive_pane_hsb = {
-	saturation = 0.85,
-	brightness = 0.75,
+	saturation = 0.95,
+	brightness = 0.35,
 }
 
 ---------------------------------------------------------------
