@@ -342,7 +342,7 @@ return {
         { "<M-/>", group = "+comment" },
         { "<M-S-v>", group = "+preview" },
         { "<M-CR>", group = "+code action" },
-        { "<leader>g", group = "+git diffview" },
+        { "<leader>g", group = "+git" },
         { "<leader>gd", group = "+diffview open" },
         { "<leader>gc", group = "+diffview close" },
         { "<leader>gh", group = "+file history" },
