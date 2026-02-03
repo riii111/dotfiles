@@ -62,14 +62,10 @@ local keys = {
 
 	---------------------------------------------------------------
 	-- Pass Cmd keys to Neovim as Ctrl keys
-	-- (macOS terminals don't send Cmd to apps)
-	-- NOTE: Cmd+C/V/A/X are NOT overridden to keep standard copy/paste
-	-- NOTE: Cmd+F is NOT overridden to keep WezTerm search
+	-- Only override keys that don't conflict with WezTerm functions
+	-- For other Ctrl combinations, just press Ctrl directly
 	---------------------------------------------------------------
 	{ key = "p", mods = "CMD", action = act.SendKey({ key = "p", mods = "CTRL" }) },
-	{ key = "n", mods = "CMD", action = act.SendKey({ key = "n", mods = "CTRL" }) },
-	{ key = "o", mods = "CMD", action = act.SendKey({ key = "o", mods = "CTRL" }) },
-	{ key = "r", mods = "CMD", action = act.SendKey({ key = "r", mods = "CTRL" }) },
 	{ key = "u", mods = "CMD", action = act.SendKey({ key = "u", mods = "CTRL" }) },
 	{ key = "e", mods = "CMD", action = act.SendKey({ key = "e", mods = "CTRL" }) },
 
