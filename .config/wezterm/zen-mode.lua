@@ -21,10 +21,10 @@ wezterm.on("user-var-changed", function(window, pane, name, value)
 			end
 			overrides.enable_tab_bar = false
 		elseif number_value < 0 then
-			-- Reset to default
+			-- Reset to default (nil restores original config)
 			window:perform_action(wezterm.action.ResetFontSize, pane)
 			overrides.font_size = nil
-			overrides.enable_tab_bar = true
+			overrides.enable_tab_bar = nil
 		else
 			-- Set specific font size
 			overrides.font_size = number_value
