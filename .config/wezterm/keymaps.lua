@@ -69,6 +69,9 @@ local keys = {
 	{ key = "u", mods = "CMD", action = act.SendKey({ key = "u", mods = "CTRL" }) },
 	{ key = "e", mods = "CMD", action = act.SendKey({ key = "e", mods = "CTRL" }) },
 
+	-- Cmd+F for buffer search in Neovim (disable WezTerm's search)
+	{ key = "f", mods = "CMD", action = act.SendKey({ key = "f", mods = "ALT" }) },
+
 	-- Cmd+Shift combinations (for Telescope etc.)
 	{ key = "f", mods = "CMD|SHIFT", action = act.SendKey({ key = "f", mods = "CTRL|SHIFT" }) },
 	{ key = "p", mods = "CMD|SHIFT", action = act.SendKey({ key = "p", mods = "CTRL|SHIFT" }) },
