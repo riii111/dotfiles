@@ -37,50 +37,5 @@ return {
 			[16] = "#B6927B",
 			[17] = "#B98D7B",
 		},
-
-		-- Tab bar colors
-		tab_bar = {
-			background = "#181616",
-			inactive_tab_edge = "none",
-
-			active_tab = {
-				bg_color = "#2D4F67",
-				fg_color = "#C8C093",
-				intensity = "Normal",
-				underline = "None",
-				italic = false,
-				strikethrough = false,
-			},
-
-			inactive_tab = {
-				bg_color = "#1D1C1C",
-				fg_color = "#727169",
-				intensity = "Normal",
-				underline = "None",
-				italic = false,
-				strikethrough = false,
-			},
-
-			inactive_tab_hover = {
-				bg_color = "#2A2A2A",
-				fg_color = "#C8C093",
-				intensity = "Normal",
-				underline = "None",
-				italic = true,
-				strikethrough = false,
-			},
-
-			new_tab = {
-				bg_color = "#181616",
-				fg_color = "#727169",
-				italic = false,
-			},
-
-			new_tab_hover = {
-				bg_color = "#2D4F67",
-				fg_color = "#C8C093",
-				italic = false,
-			},
-		},
 	},
 }

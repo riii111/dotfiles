@@ -1,6 +1,5 @@
 local wezterm = require("wezterm")
-local utils = require("utils")
-local config = {}
+local config = wezterm.config_builder()
 
 -- モジュール読み込み
 local keymaps = require("keymaps")
@@ -33,6 +32,14 @@ config.tab_bar_at_bottom = false
 config.use_fancy_tab_bar = false
 config.hide_tab_bar_if_only_one_tab = true
 config.show_new_tab_button_in_tab_bar = false
+
+---------------------------------------------------------------
+-- Pane
+---------------------------------------------------------------
+config.inactive_pane_hsb = {
+	saturation = 0.95,
+	brightness = 0.85,
+}
 
 ---------------------------------------------------------------
 -- IME / Input
