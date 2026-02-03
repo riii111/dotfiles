@@ -1,0 +1,87 @@
+local wezterm = require("wezterm")
+local act = wezterm.action
+
+local keys = {
+	---------------------------------------------------------------
+	-- Pane: Split (same as Ghostty)
+	---------------------------------------------------------------
+	{ key = "d", mods = "CMD", action = act.SplitHorizontal({ domain = "CurrentPaneDomain" }) },
+	{ key = "d", mods = "CMD|SHIFT", action = act.SplitVertical({ domain = "CurrentPaneDomain" }) },
+
+	---------------------------------------------------------------
+	-- Pane: Navigation (same as Ghostty)
+	---------------------------------------------------------------
+	{ key = "[", mods = "CMD", action = act.ActivatePaneDirection("Prev") },
+	{ key = "]", mods = "CMD", action = act.ActivatePaneDirection("Next") },
+	{ key = "LeftArrow", mods = "CMD|ALT", action = act.ActivatePaneDirection("Left") },
+	{ key = "RightArrow", mods = "CMD|ALT", action = act.ActivatePaneDirection("Right") },
+	{ key = "UpArrow", mods = "CMD|ALT", action = act.ActivatePaneDirection("Up") },
+	{ key = "DownArrow", mods = "CMD|ALT", action = act.ActivatePaneDirection("Down") },
+
+	---------------------------------------------------------------
+	-- Pane: Resize (Vim style)
+	---------------------------------------------------------------
+	{ key = "h", mods = "CMD|SHIFT", action = act.AdjustPaneSize({ "Left", 5 }) },
+	{ key = "j", mods = "CMD|SHIFT", action = act.AdjustPaneSize({ "Down", 5 }) },
+	{ key = "k", mods = "CMD|SHIFT", action = act.AdjustPaneSize({ "Up", 5 }) },
+	{ key = "l", mods = "CMD|SHIFT", action = act.AdjustPaneSize({ "Right", 5 }) },
+
+	---------------------------------------------------------------
+	-- Pane: Close / Zoom
+	---------------------------------------------------------------
+	{ key = "w", mods = "CMD", action = act.CloseCurrentPane({ confirm = true }) },
+	{ key = "z", mods = "CMD", action = act.TogglePaneZoomState },
+
+	---------------------------------------------------------------
+	-- Tab
+	---------------------------------------------------------------
+	{ key = "t", mods = "CMD", action = act.SpawnTab("CurrentPaneDomain") },
+	{ key = "w", mods = "CMD|SHIFT", action = act.CloseCurrentTab({ confirm = true }) },
+
+	-- Tab switching with Leader + number
+	{ key = "1", mods = "LEADER", action = act.ActivateTab(0) },
+	{ key = "2", mods = "LEADER", action = act.ActivateTab(1) },
+	{ key = "3", mods = "LEADER", action = act.ActivateTab(2) },
+	{ key = "4", mods = "LEADER", action = act.ActivateTab(3) },
+	{ key = "5", mods = "LEADER", action = act.ActivateTab(4) },
+	{ key = "6", mods = "LEADER", action = act.ActivateTab(5) },
+	{ key = "7", mods = "LEADER", action = act.ActivateTab(6) },
+	{ key = "8", mods = "LEADER", action = act.ActivateTab(7) },
+	{ key = "9", mods = "LEADER", action = act.ActivateTab(8) },
+
+	---------------------------------------------------------------
+	-- Toggle opacity / blur
+	---------------------------------------------------------------
+	{ key = "o", mods = "CMD|CTRL", action = act.EmitEvent("toggle-opacity") },
+	{ key = "b", mods = "CMD|CTRL", action = act.EmitEvent("toggle-blur") },
+
+	---------------------------------------------------------------
+	-- Quick select (like tmux copy mode)
+	---------------------------------------------------------------
+	{ key = "Space", mods = "LEADER", action = act.QuickSelect },
+
+	---------------------------------------------------------------
+	-- Pass Cmd keys to Neovim as Ctrl keys
+	-- (macOS terminals don't send Cmd to apps)
+	---------------------------------------------------------------
+	{ key = "p", mods = "CMD", action = act.SendKey({ key = "p", mods = "CTRL" }) },
+	{ key = "n", mods = "CMD", action = act.SendKey({ key = "n", mods = "CTRL" }) },
+	{ key = "o", mods = "CMD", action = act.SendKey({ key = "o", mods = "CTRL" }) },
+	{ key = "r", mods = "CMD", action = act.SendKey({ key = "r", mods = "CTRL" }) },
+	{ key = "s", mods = "CMD", action = act.SendKey({ key = "s", mods = "CTRL" }) },
+	{ key = "f", mods = "CMD", action = act.SendKey({ key = "f", mods = "CTRL" }) },
+	{ key = "b", mods = "CMD", action = act.SendKey({ key = "b", mods = "CTRL" }) },
+	{ key = "u", mods = "CMD", action = act.SendKey({ key = "u", mods = "CTRL" }) },
+	{ key = "e", mods = "CMD", action = act.SendKey({ key = "e", mods = "CTRL" }) },
+
+	-- Cmd+Shift combinations
+	{ key = "f", mods = "CMD|SHIFT", action = act.SendKey({ key = "f", mods = "CTRL|SHIFT" }) },
+	{ key = "p", mods = "CMD|SHIFT", action = act.SendKey({ key = "p", mods = "CTRL|SHIFT" }) },
+
+	---------------------------------------------------------------
+	-- macOS system shortcuts (pass through to OS)
+	---------------------------------------------------------------
+	{ key = "h", mods = "CMD|ALT", action = act.DisableDefaultAssignment },
+}
+
+return keys
