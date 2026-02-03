@@ -102,7 +102,18 @@ local keys = {
 			},
 			action = wezterm.action_callback(function(window, _, _, label)
 				if label then
-					window:set_config_overrides({ color_scheme = label })
+					local schemes = wezterm.get_builtin_color_schemes()
+					schemes["Kanagawa Dragon"] = require("colors.kanagawa_dragon").colors
+					local scheme = schemes[label]
+					local bg = scheme and scheme.background or "#181616"
+					window:set_config_overrides({
+						color_scheme = label,
+						window_background_gradient = { colors = { bg } },
+						window_frame = {
+							active_titlebar_bg = bg,
+							inactive_titlebar_bg = bg,
+						},
+					})
 				end
 			end),
 		}),

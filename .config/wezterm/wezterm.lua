@@ -28,9 +28,20 @@ config.window_padding = {
 -- Tab bar
 ---------------------------------------------------------------
 config.tab_bar_at_bottom = false
-config.use_fancy_tab_bar = false
+config.use_fancy_tab_bar = true
 config.hide_tab_bar_if_only_one_tab = true
 config.show_new_tab_button_in_tab_bar = false
+config.window_frame = {
+	active_titlebar_bg = "#181616",
+	inactive_titlebar_bg = "#181616",
+}
+
+---------------------------------------------------------------
+-- Background
+---------------------------------------------------------------
+config.window_background_gradient = {
+	colors = { "#181616" },
+}
 
 ---------------------------------------------------------------
 -- Pane
