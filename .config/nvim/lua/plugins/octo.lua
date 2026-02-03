@@ -10,35 +10,88 @@ return {
 		config = function(_, opts)
 			require("octo").setup(opts)
 
-			-- Custom highlight groups for better visibility
+			-- Catppuccin Mocha inspired highlights for Octo
 			local function setup_octo_highlights()
-				-- Editable areas with subtle background
-				vim.api.nvim_set_hl(0, "OctoEditable", { bg = "#2d333b" })
+				-- Catppuccin Mocha palette
+				local mocha = {
+					rosewater = "#f5e0dc",
+					flamingo = "#f2cdcd",
+					pink = "#f5c2e7",
+					mauve = "#cba6f7",
+					red = "#f38ba8",
+					maroon = "#eba0ac",
+					peach = "#fab387",
+					yellow = "#f9e2af",
+					green = "#a6e3a1",
+					teal = "#94e2d5",
+					sky = "#89dceb",
+					sapphire = "#74c7ec",
+					blue = "#89b4fa",
+					lavender = "#b4befe",
+					text = "#cdd6f4",
+					subtext1 = "#bac2de",
+					subtext0 = "#a6adc8",
+					overlay2 = "#9399b2",
+					overlay1 = "#7f849c",
+					overlay0 = "#6c7086",
+					surface2 = "#585b70",
+					surface1 = "#45475a",
+					surface0 = "#313244",
+					base = "#1e1e2e",
+					mantle = "#181825",
+					crust = "#11111b",
+				}
 
-				-- Details label (bold and bright)
-				vim.api.nvim_set_hl(0, "OctoDetailsLabel", { fg = "#7dcfff", bold = true })
-				vim.api.nvim_set_hl(0, "OctoDetailsValue", { fg = "#c0caf5" })
+				-- Editable areas
+				vim.api.nvim_set_hl(0, "OctoEditable", { bg = mocha.surface0 })
+
+				-- Details label
+				vim.api.nvim_set_hl(0, "OctoDetailsLabel", { fg = mocha.sapphire, bold = true })
+				vim.api.nvim_set_hl(0, "OctoDetailsValue", { fg = mocha.text })
 
 				-- User bubbles
-				vim.api.nvim_set_hl(0, "OctoBubble", { fg = "#1a1b26", bg = "#7aa2f7" })
+				vim.api.nvim_set_hl(0, "OctoBubble", { fg = mocha.crust, bg = mocha.blue })
 
-				-- State bubbles (Open/Closed/Merged etc.) - darker bg for better contrast
-				vim.api.nvim_set_hl(0, "OctoBubbleGreen", { fg = "#1a1b26", bg = "#73daca" })
-				vim.api.nvim_set_hl(0, "OctoStateOpenBubble", { fg = "#1a1b26", bg = "#73daca" })
+				-- State bubbles
+				vim.api.nvim_set_hl(0, "OctoBubbleGreen", { fg = mocha.crust, bg = mocha.green })
+				vim.api.nvim_set_hl(0, "OctoStateOpenBubble", { fg = mocha.crust, bg = mocha.green })
 
-				-- Timeline/commit history (no bold)
-				vim.api.nvim_set_hl(0, "OctoTimelineItemHeading", { fg = "#565f89" })
-				vim.api.nvim_set_hl(0, "OctoSymbol", { fg = "#565f89" })
+				-- Timeline/commit history
+				vim.api.nvim_set_hl(0, "OctoTimelineItemHeading", { fg = mocha.overlay1 })
+				vim.api.nvim_set_hl(0, "OctoSymbol", { fg = mocha.overlay1 })
 
-				-- Markdown headings in Octo buffers (purple/blue tones to match theme)
-				vim.api.nvim_set_hl(0, "OctoH1", { fg = "#bb9af7", bold = true })
-				vim.api.nvim_set_hl(0, "OctoH2", { fg = "#7aa2f7", bold = true })
-				vim.api.nvim_set_hl(0, "OctoH3", { fg = "#7dcfff", bold = true })
+				-- Headings
+				vim.api.nvim_set_hl(0, "@markup.heading.1.markdown", { fg = mocha.text, bold = true })
+				vim.api.nvim_set_hl(0, "@markup.heading.2.markdown", { fg = mocha.text, bold = true })
+				vim.api.nvim_set_hl(0, "@markup.heading.3.markdown", { fg = mocha.subtext1, bold = true })
+				vim.api.nvim_set_hl(0, "@markup.heading.4.markdown", { fg = mocha.subtext1, bold = true })
+				vim.api.nvim_set_hl(0, "@markup.heading.5.markdown", { fg = mocha.subtext0, bold = true })
+				vim.api.nvim_set_hl(0, "@markup.heading.6.markdown", { fg = mocha.subtext0, bold = true })
+
+				-- Heading backgrounds for render-markdown
+				vim.api.nvim_set_hl(0, "RenderMarkdownH1Bg", { bg = mocha.surface0 })
+				vim.api.nvim_set_hl(0, "RenderMarkdownH2Bg", { bg = "#292938" })
+				vim.api.nvim_set_hl(0, "RenderMarkdownH3Bg", { bg = "#242434" })
+				vim.api.nvim_set_hl(0, "RenderMarkdownH4Bg", { bg = "#212130" })
+				vim.api.nvim_set_hl(0, "RenderMarkdownH5Bg", { bg = mocha.mantle })
+				vim.api.nvim_set_hl(0, "RenderMarkdownH6Bg", { bg = mocha.crust })
+
+				-- Buffer background (slightly darker than mantle)
+				vim.api.nvim_set_hl(0, "OctoNormal", { bg = "#14141f" })
+				vim.api.nvim_set_hl(0, "OctoNormalNC", { bg = "#14141f" })
 			end
 
 			setup_octo_highlights()
 
-			-- Apply heading highlights to Octo buffers
+			-- Apply darker background to Octo buffers only
+			vim.api.nvim_create_autocmd("FileType", {
+				pattern = "octo",
+				callback = function()
+					vim.opt_local.winhighlight = "Normal:OctoNormal,NormalNC:OctoNormalNC"
+				end,
+			})
+
+			-- Apply heading highlights and fold <details> tags in Octo buffers
 			vim.api.nvim_create_autocmd("FileType", {
 				pattern = "octo",
 				callback = function(ev)
@@ -47,13 +100,26 @@ return {
 							return
 						end
 
-						-- Match markdown headings
-						vim.fn.matchadd("OctoH1", "^# .*$")
-						vim.fn.matchadd("OctoH2", "^## .*$")
-						vim.fn.matchadd("OctoH3", "^### .*$")
+						-- Fold <details> tags by default
+						vim.wo.foldmethod = "expr"
+						vim.wo.foldexpr = "v:lua.OctoDetailsFold(v:lnum)"
+						vim.wo.foldlevel = 0
+						vim.wo.foldenable = true
 					end)
 				end,
 			})
+
+			-- Fold expression for <details> tags
+			_G.OctoDetailsFold = function(lnum)
+				local line = vim.fn.getline(lnum)
+				if line:match("^<details") then
+					return ">1"
+				elseif line:match("^</details>") then
+					return "<1"
+				else
+					return "="
+				end
+			end
 		end,
 		keys = {
 			{ "<leader>gi", "<cmd>Octo issue list<cr>", desc = "List issues" },

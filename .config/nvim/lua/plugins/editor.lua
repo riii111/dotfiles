@@ -177,6 +177,41 @@ return {
 		},
 	},
 
+	-- Markdown rendering for Octo buffers (markview handles regular markdown)
+	{
+		"MeanderingProgrammer/render-markdown.nvim",
+		dependencies = { "nvim-treesitter/nvim-treesitter", "nvim-tree/nvim-web-devicons" },
+		ft = { "octo" },
+		config = function(_, opts)
+			vim.treesitter.language.register("markdown", "octo")
+			require("render-markdown").setup(opts)
+		end,
+		opts = {
+			file_types = { "octo" },
+			render_modes = { "n", "c" },
+			heading = {
+				icons = { "󰎤 ", "󰎧 ", "󰎪 ", "󰎭 ", "󰎱 ", "󰎳 " },
+				backgrounds = {
+					"RenderMarkdownH1Bg",
+					"RenderMarkdownH2Bg",
+					"RenderMarkdownH3Bg",
+					"RenderMarkdownH4Bg",
+					"RenderMarkdownH5Bg",
+					"RenderMarkdownH6Bg",
+				},
+			},
+			code = {
+				sign = false,
+				width = "block",
+				right_pad = 1,
+			},
+			pipe_table = {
+				style = "full",
+				cell = "padded",
+			},
+		},
+	},
+
 	-- Oil.nvim (file explorer that edits filesystem like a buffer)
 	{
 		"stevearc/oil.nvim",
