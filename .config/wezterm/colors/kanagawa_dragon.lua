@@ -15,12 +15,12 @@ return {
 
 		ansi = {
 			"#0D0C0C", -- black
-			"#C4746E", -- red (朱色)
-			"#8A9A7B", -- green (抹茶)
-			"#C4B28A", -- yellow (金)
-			"#8BA4B0", -- blue (藍)
-			"#A292A3", -- magenta (藤)
-			"#8EA4A2", -- cyan (浅葱)
+			"#C4746E", -- red
+			"#8A9A7B", -- green
+			"#C4B28A", -- yellow
+			"#8BA4B0", -- blue
+			"#A292A3", -- magenta
+			"#8EA4A2", -- cyan
 			"#C8C093", -- white
 		},
 		brights = {

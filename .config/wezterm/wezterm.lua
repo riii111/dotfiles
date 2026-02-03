@@ -1,7 +1,6 @@
 local wezterm = require("wezterm")
 local config = wezterm.config_builder()
 
--- モジュール読み込み
 local keymaps = require("keymaps")
 require("on")
 require("zen-mode")
@@ -60,8 +59,12 @@ config.keys = keymaps
 ---------------------------------------------------------------
 -- Color scheme
 ---------------------------------------------------------------
+-- Register custom Kanagawa Dragon (with adjusted bright black)
 local kanagawa_dragon = require("colors.kanagawa_dragon")
-config.colors = kanagawa_dragon.colors
+config.color_schemes = {
+	["Kanagawa Dragon"] = kanagawa_dragon.colors,
+}
+config.color_scheme = "Kanagawa Dragon"
 
 ---------------------------------------------------------------
 -- Misc

@@ -83,6 +83,30 @@ local keys = {
 	-- macOS system shortcuts (pass through to OS)
 	---------------------------------------------------------------
 	{ key = "h", mods = "CMD|ALT", action = act.DisableDefaultAssignment },
+
+	---------------------------------------------------------------
+	-- Theme switcher (Leader + t)
+	---------------------------------------------------------------
+	{
+		key = "t",
+		mods = "LEADER",
+		action = act.InputSelector({
+			title = "Color Scheme",
+			choices = {
+				{ label = "Kanagawa Dragon" },
+				{ label = "Catppuccin Mocha" },
+				{ label = "Catppuccin Macchiato" },
+				{ label = "Catppuccin Frappe" },
+				{ label = "Catppuccin Latte" },
+				{ label = "duckbones" },
+			},
+			action = wezterm.action_callback(function(window, _, _, label)
+				if label then
+					window:set_config_overrides({ color_scheme = label })
+				end
+			end),
+		}),
+	},
 }
 
 return keys
