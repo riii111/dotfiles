@@ -19,12 +19,12 @@ local keys = {
 	{ key = "DownArrow", mods = "CMD|ALT", action = act.ActivatePaneDirection("Down") },
 
 	---------------------------------------------------------------
-	-- Pane: Resize (Vim style)
+	-- Pane: Resize (Cmd+Opt+hjkl)
 	---------------------------------------------------------------
-	{ key = "h", mods = "CMD|SHIFT", action = act.AdjustPaneSize({ "Left", 5 }) },
-	{ key = "j", mods = "CMD|SHIFT", action = act.AdjustPaneSize({ "Down", 5 }) },
-	{ key = "k", mods = "CMD|SHIFT", action = act.AdjustPaneSize({ "Up", 5 }) },
-	{ key = "l", mods = "CMD|SHIFT", action = act.AdjustPaneSize({ "Right", 5 }) },
+	{ key = "h", mods = "CMD|ALT", action = act.AdjustPaneSize({ "Left", 5 }) },
+	{ key = "j", mods = "CMD|ALT", action = act.AdjustPaneSize({ "Down", 5 }) },
+	{ key = "k", mods = "CMD|ALT", action = act.AdjustPaneSize({ "Up", 5 }) },
+	{ key = "l", mods = "CMD|ALT", action = act.AdjustPaneSize({ "Right", 5 }) },
 
 	---------------------------------------------------------------
 	-- Pane: Close / Zoom
@@ -79,10 +79,6 @@ local keys = {
 	{ key = "¥", mods = "ALT", action = act.SendString("|") },
 	{ key = "|", mods = "ALT|SHIFT", action = act.SendString("\\") },
 
-	---------------------------------------------------------------
-	-- macOS system shortcuts (pass through to OS)
-	---------------------------------------------------------------
-	{ key = "h", mods = "CMD|ALT", action = act.DisableDefaultAssignment },
 
 	---------------------------------------------------------------
 	-- Theme switcher (Leader + t)
