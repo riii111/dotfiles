@@ -7,6 +7,12 @@ wezterm.on("user-var-changed", function(window, pane, name, value)
 	if name == "ZEN_MODE" then
 		local incremental = value:find("+")
 		local number_value = tonumber(value)
+
+		-- Guard against non-numeric values
+		if number_value == nil then
+			return
+		end
+
 		if incremental ~= nil then
 			-- Increase font size incrementally
 			while number_value > 0 do

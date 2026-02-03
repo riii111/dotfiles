@@ -63,20 +63,25 @@ local keys = {
 	---------------------------------------------------------------
 	-- Pass Cmd keys to Neovim as Ctrl keys
 	-- (macOS terminals don't send Cmd to apps)
+	-- NOTE: Cmd+C/V/A/X are NOT overridden to keep standard copy/paste
+	-- NOTE: Cmd+F is NOT overridden to keep WezTerm search
 	---------------------------------------------------------------
 	{ key = "p", mods = "CMD", action = act.SendKey({ key = "p", mods = "CTRL" }) },
 	{ key = "n", mods = "CMD", action = act.SendKey({ key = "n", mods = "CTRL" }) },
 	{ key = "o", mods = "CMD", action = act.SendKey({ key = "o", mods = "CTRL" }) },
 	{ key = "r", mods = "CMD", action = act.SendKey({ key = "r", mods = "CTRL" }) },
-	{ key = "s", mods = "CMD", action = act.SendKey({ key = "s", mods = "CTRL" }) },
-	{ key = "f", mods = "CMD", action = act.SendKey({ key = "f", mods = "CTRL" }) },
-	{ key = "b", mods = "CMD", action = act.SendKey({ key = "b", mods = "CTRL" }) },
 	{ key = "u", mods = "CMD", action = act.SendKey({ key = "u", mods = "CTRL" }) },
 	{ key = "e", mods = "CMD", action = act.SendKey({ key = "e", mods = "CTRL" }) },
 
-	-- Cmd+Shift combinations
+	-- Cmd+Shift combinations (for Telescope etc.)
 	{ key = "f", mods = "CMD|SHIFT", action = act.SendKey({ key = "f", mods = "CTRL|SHIFT" }) },
 	{ key = "p", mods = "CMD|SHIFT", action = act.SendKey({ key = "p", mods = "CTRL|SHIFT" }) },
+
+	---------------------------------------------------------------
+	-- JIS keyboard: Option+¥ for | and \
+	---------------------------------------------------------------
+	{ key = "¥", mods = "ALT", action = act.SendString("|") },
+	{ key = "|", mods = "ALT|SHIFT", action = act.SendString("\\") },
 
 	---------------------------------------------------------------
 	-- macOS system shortcuts (pass through to OS)
