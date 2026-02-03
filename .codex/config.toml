@@ -1,8 +1,8 @@
 model_reasoning_effort = "high"
+web_search = "live"
 
 [features]
 streamable_shell = true
-web_search_request = true
 
 [mcp_servers.context7]
 command = "npx"
