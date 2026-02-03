@@ -37,8 +37,8 @@ config.show_new_tab_button_in_tab_bar = false
 -- Pane
 ---------------------------------------------------------------
 config.inactive_pane_hsb = {
-	saturation = 0.95,
-	brightness = 0.85,
+	saturation = 0.85,
+	brightness = 0.75,
 }
 
 ---------------------------------------------------------------
@@ -69,5 +69,6 @@ config.colors = kanagawa_dragon.colors
 config.audible_bell = "Disabled"
 config.enable_csi_u_key_encoding = true
 config.adjust_window_size_when_changing_font_size = false
+config.hide_mouse_cursor_when_typing = true
 
 return config
