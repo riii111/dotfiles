@@ -371,10 +371,10 @@ return {
 	-- Markdown rendering
 	{
 		"MeanderingProgrammer/render-markdown.nvim",
-		ft = { "markdown" },
+		ft = { "markdown", "octo" },
 		dependencies = { "nvim-treesitter/nvim-treesitter", "nvim-tree/nvim-web-devicons" },
 		opts = {
-			file_types = { "markdown" },
+			file_types = { "markdown", "octo" },
 			ignore = function(bufnr)
 				return vim.bo[bufnr].filetype == "oil"
 			end,
