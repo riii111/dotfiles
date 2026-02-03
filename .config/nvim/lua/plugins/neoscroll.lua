@@ -11,6 +11,7 @@ return {
 			respect_scrolloff = false,
 			cursor_scrolls_alone = true,
 			easing = "circular",
+			performance_mode = true,
 		})
 
 		local keymap = {
