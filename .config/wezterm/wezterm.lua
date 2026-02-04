@@ -8,7 +8,11 @@ require("zen-mode")
 ---------------------------------------------------------------
 -- Font
 ---------------------------------------------------------------
-config.font = wezterm.font("DroidSansM Nerd Font Mono")
+-- Fallback prevents CJK punctuation from rendering at vertical center (HK/TW font style)
+config.font = wezterm.font_with_fallback({
+	"DroidSansM Nerd Font Mono",
+	"Hiragino Sans",
+})
 config.font_size = 14.0
 
 ---------------------------------------------------------------
