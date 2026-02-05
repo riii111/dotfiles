@@ -6,9 +6,11 @@ end
 local function setup_keymaps()
   local mappings = {
     n = {
-      -- Window splits
+      -- Window splits (WezTerm: Cmd+Arrow → Ctrl+Shift+Arrow)
       ["<D-Down>"] = { ":split<CR>", desc = "Split window below" },
       ["<D-Right>"] = { ":vsplit<CR>", desc = "Split window right" },
+      ["<C-S-Down>"] = { ":split<CR>", desc = "Split window below" },
+      ["<C-S-Right>"] = { ":vsplit<CR>", desc = "Split window right" },
 
       ["<C-g>"] = {
         function()
@@ -140,9 +142,11 @@ local function setup_keymaps()
       ["<Leader>tt"] = { ":ToggleTerm<CR>", desc = "Toggle terminal (leader)" },
 
 
-      -- Buffer operations
+      -- Buffer navigation (WezTerm: Cmd+Opt+Arrow → Alt+Shift+Arrow)
       ["<D-M-Right>"] = { ":bnext<CR>", desc = "Next buffer" },
       ["<D-M-Left>"] = { ":bprevious<CR>", desc = "Previous buffer" },
+      ["<M-S-Right>"] = { ":bnext<CR>", desc = "Next buffer" },
+      ["<M-S-Left>"] = { ":bprevious<CR>", desc = "Previous buffer" },
       ["<Leader>n"] = {
         function()
           vim.cmd("enew")

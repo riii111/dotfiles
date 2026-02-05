@@ -9,14 +9,18 @@ local keys = {
 	{ key = "d", mods = "CMD|SHIFT", action = act.SplitVertical({ domain = "CurrentPaneDomain" }) },
 
 	---------------------------------------------------------------
-	-- Pane: Navigation (same as Ghostty)
+	-- Pane: Navigation (Cmd+[ / Cmd+] for prev/next)
 	---------------------------------------------------------------
 	{ key = "[", mods = "CMD", action = act.ActivatePaneDirection("Prev") },
 	{ key = "]", mods = "CMD", action = act.ActivatePaneDirection("Next") },
-	{ key = "LeftArrow", mods = "CMD|ALT", action = act.ActivatePaneDirection("Left") },
-	{ key = "RightArrow", mods = "CMD|ALT", action = act.ActivatePaneDirection("Right") },
-	{ key = "UpArrow", mods = "CMD|ALT", action = act.ActivatePaneDirection("Up") },
-	{ key = "DownArrow", mods = "CMD|ALT", action = act.ActivatePaneDirection("Down") },
+
+	---------------------------------------------------------------
+	-- Forward to Neovim (Cmd+Arrow / Cmd+Opt+Arrow)
+	---------------------------------------------------------------
+	{ key = "DownArrow", mods = "CMD", action = act.SendKey({ key = "DownArrow", mods = "CTRL|SHIFT" }) },
+	{ key = "RightArrow", mods = "CMD", action = act.SendKey({ key = "RightArrow", mods = "CTRL|SHIFT" }) },
+	{ key = "LeftArrow", mods = "CMD|ALT", action = act.SendKey({ key = "LeftArrow", mods = "ALT|SHIFT" }) },
+	{ key = "RightArrow", mods = "CMD|ALT", action = act.SendKey({ key = "RightArrow", mods = "ALT|SHIFT" }) },
 
 	---------------------------------------------------------------
 	-- Pane: Resize (Cmd+Opt+hjkl)
