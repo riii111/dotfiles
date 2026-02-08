@@ -1,4 +1,5 @@
 ---
+description: CodeRabbit CLI Review - run AI-powered code review on changes
 argument-hint: [c=committed|a=all] [base-branch] (default: uncommitted)
 ---
 

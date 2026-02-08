@@ -13,7 +13,7 @@ argument-hint: "branch=<name> | optional extra constraints/instructions (free-fo
 ## STATE TRANSITIONS (MUST FOLLOW)
 - Draft Plan -> User Approval -> Codex Review -> Plan Updated -> User Re-Approval -> Implement Phase N -> Commit -> Ask to Continue
 
-## Input 
+## Input
 $ARGUMENTS
 
 ## What this command does
@@ -72,7 +72,7 @@ Output:
 Keep it concise."
 
 ---
- 
+
 # Step 4 — Reflect codex feedback into the plan
 Update the plan based on feedback.
 

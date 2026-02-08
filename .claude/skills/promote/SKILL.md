@@ -1,6 +1,7 @@
 ---
 name: promote
 description: Promote frequent learnings to rules
+disable-model-invocation: true
 ---
 
 Scan files in `~/.claude/cache/learnings/` and suggest promotion candidates to rules.

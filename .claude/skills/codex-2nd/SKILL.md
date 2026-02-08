@@ -47,9 +47,8 @@ CODEX_PROMPT
 
 3) Share back to the user (Japanese, conversational)
 
-Summarize Codex’s result in Japanese and continue discussion naturally:
+Summarize Codex's result in Japanese and continue discussion naturally:
 	•	重要な指摘（必要なら3つ以上でもOK）
 	•	次にやること（目安5つ前後、順番つき）
 	•	追加で当たるべき調査ポイント（ファイル名/grep観点/コマンド例など）
 	•	必要なら、確認質問や選択肢も提示してOK
-

@@ -1,5 +1,7 @@
 ---
+description: PR Review - structured feedback for pull requests, applicable to any language or stack
 argument-hint: [additional instructions / language-specific guidelines]
+disable-model-invocation: true
 ---
 
 # PR Review

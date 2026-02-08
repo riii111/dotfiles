@@ -1,5 +1,7 @@
 ---
+description: Rust PR Review - structured Rust-specific feedback for pull requests
 argument-hint: [additional instructions]
+disable-model-invocation: true
 ---
 
 # Rust PR Review
