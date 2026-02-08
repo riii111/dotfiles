@@ -1,6 +1,7 @@
 ---
 description: Interview-mode feasibility check (runs in a forked sub-agent context)
 argument-hint: "Paste the proposal + current context (goal, constraints, relevant snippets/links). 5-30 lines."
+disable-model-invocation: true
 context: fork
 agent: Explore
 allowed-tools: Bash(git status:*), Bash(git diff:*), Bash(rg:*), Bash(ls:*), Bash(cat:*)
@@ -29,7 +30,7 @@ For each question:
 3) **Default assumption if unanswered** (1 line)
 
 ### Question priorities (in this order)
-1) Goal & success criteria (what “good” means)
+1) Goal & success criteria (what "good" means)
 2) Scope boundaries (in / out)
 3) Constraints (latency, cost, compliance, SLOs)
 4) Data & correctness (idempotency, ordering, consistency, migrations)
