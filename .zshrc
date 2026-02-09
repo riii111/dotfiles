@@ -439,8 +439,7 @@ HELP
 
   local found=false
   git branch -r | rg -o 'origin/deploy-stg/\S+' | while read -r branch; do
-    local hit
-    hit=$(git ls-tree --name-only "$branch" -- "$migration_path/" 2>/dev/null | rg -F "$version")
+    local hit=$(git ls-tree --name-only "$branch" -- "$migration_path/" 2>/dev/null | rg -F -- "$version")
     if [[ -n "$hit" ]]; then
       found=true
       echo "\033[1;33m=== ${branch#origin/} ===\033[0m"
