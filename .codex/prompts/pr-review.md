@@ -38,6 +38,16 @@ git diff --stat
 
 ### 4. Execute Reviews Based on Aspects
 
+#### Architecture Review (always applicable)
+
+- Verify that changes respect the project's architectural boundaries in the touched area (layering, module boundaries, dependency direction)
+- If a "pure" layer is directly doing I/O or data access, always report and propose extracting to the appropriate data-access layer
+
+#### Issue Alignment Review (required if issue/spec docs are provided)
+
+- Verify the implementation approach aligns with the issue/spec proposals
+- If not aligned, call out the reason and risk
+
 #### Code Review (always applicable)
 
 Review code against project guidelines with high precision:
