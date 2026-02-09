@@ -391,14 +391,19 @@ find-migration() {
 find-migration - Search deploy-stg branches for a Flyway migration version
 
 USAGE
-  find-migration <VERSION>
+  find-migration [OPTIONS] <VERSION>
 
 ARGS
   VERSION   Migration version prefix to search (e.g. V0524)
 
+OPTIONS
+  --no-fetch   Skip "git fetch" and use locally cached branches
+  -h, --help   Show this help
+
 EXAMPLES
-  find-migration V0524        # find which deploy-stg branches have V0524
-  find-migration V052         # broader search covering V0520-V0529
+  find-migration V0524             # find which deploy-stg branches have V0524
+  find-migration V052              # broader search covering V0520-V0529
+  find-migration --no-fetch V0524  # skip fetch for faster re-runs
 
 WHEN TO USE
   Flyway reports "Migration checksum mismatch for migration version XXXX"
@@ -414,23 +419,42 @@ HELP
     return 0
   fi
 
-  local version="$1"
+  if ! git rev-parse --is-inside-work-tree &>/dev/null; then
+    echo "Error: not a git repository" >&2
+    return 1
+  fi
+
+  local do_fetch=true
+  if [[ "$1" == "--no-fetch" ]]; then
+    do_fetch=false
+    shift
+  fi
+
+  local version="${1:?Usage: find-migration [--no-fetch] <VERSION>}"
   local migration_path="backend/database/src/main/resources/db/tenant/migration"
 
-  git fetch origin 'refs/heads/deploy-stg/*:refs/remotes/origin/deploy-stg/*' 2>/dev/null
+  if $do_fetch; then
+    git fetch origin 'refs/heads/deploy-stg/*:refs/remotes/origin/deploy-stg/*' 2>/dev/null
+  fi
 
+  local found=false
   git branch -r | rg -o 'origin/deploy-stg/\S+' | while read -r branch; do
     local hit
-    hit=$(git ls-tree --name-only "$branch" -- "$migration_path/" 2>/dev/null | rg "$version")
+    hit=$(git ls-tree --name-only "$branch" -- "$migration_path/" 2>/dev/null | rg -F "$version")
     if [[ -n "$hit" ]]; then
+      found=true
       echo "\033[1;33m=== ${branch#origin/} ===\033[0m"
       echo "$hit" | while read -r file; do
-        echo "  $file"
+        echo "  ${file##*/}"
         git log --format='  %C(yellow)%h%C(reset) %s (%an, %ad)' --date=short "$branch" -- \
-          "$migration_path/$file" 2>/dev/null
+          "$file" 2>/dev/null
       done
     fi
   done
+
+  if ! $found; then
+    echo "No matches for '$version' in any deploy-stg branch" >&2
+  fi
 }
 
 # ==========================================
