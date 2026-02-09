@@ -381,6 +381,59 @@ claude() {
 }
 
 # ==========================================
+# Flyway Migration Search
+# ==========================================
+# Search all deploy-stg branches for a Flyway migration version.
+# Useful for diagnosing checksum mismatch errors during STG deployment.
+find-migration() {
+  if [[ "$1" == "--help" || "$1" == "-h" || -z "$1" ]]; then
+    cat <<'HELP'
+find-migration - Search deploy-stg branches for a Flyway migration version
+
+USAGE
+  find-migration <VERSION>
+
+ARGS
+  VERSION   Migration version prefix to search (e.g. V0524)
+
+EXAMPLES
+  find-migration V0524        # find which deploy-stg branches have V0524
+  find-migration V052         # broader search covering V0520-V0529
+
+WHEN TO USE
+  Flyway reports "Migration checksum mismatch for migration version XXXX"
+  during STG deployment. This means the same version number was previously
+  applied to the DB with different file contents.
+
+  Run this command with the version from the error to find which past
+  deploy-stg branch introduced the conflicting migration and who committed it.
+
+SEE ALSO
+  Learning: ~/.claude/cache/learnings/contract-one/flyway-checksum-mismatch-deploy-stg.md
+HELP
+    return 0
+  fi
+
+  local version="$1"
+  local migration_path="backend/database/src/main/resources/db/tenant/migration"
+
+  git fetch origin 'refs/heads/deploy-stg/*:refs/remotes/origin/deploy-stg/*' 2>/dev/null
+
+  git branch -r | rg -o 'origin/deploy-stg/\S+' | while read -r branch; do
+    local hit
+    hit=$(git ls-tree --name-only "$branch" -- "$migration_path/" 2>/dev/null | rg "$version")
+    if [[ -n "$hit" ]]; then
+      echo "\033[1;33m=== ${branch#origin/} ===\033[0m"
+      echo "$hit" | while read -r file; do
+        echo "  $file"
+        git log --format='  %C(yellow)%h%C(reset) %s (%an, %ad)' --date=short "$branch" -- \
+          "$migration_path/$file" 2>/dev/null
+      done
+    fi
+  done
+}
+
+# ==========================================
 # Machine-specific config
 # ==========================================
 [[ -f ~/.zshrc.local ]] && source ~/.zshrc.local
