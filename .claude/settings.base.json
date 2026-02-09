@@ -106,16 +106,6 @@
           }
         ]
       }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "prompt",
-            "prompt": "Check if this is a session-ending moment (user said goodbye, /exit, /resume, or explicitly ending). If NOT ending: respond {\"ok\": true}. If ending: extract non-obvious learnings (error fixes, workarounds, user corrections) worth remembering in 6 months. Skip typos, one-time fixes, docs-obvious things. Save to ~/.claude/cache/learnings/general/ (or {project-name}/ for project-specific). Create dirs if needed. Use YAML frontmatter with name, description, first_seen, last_seen, frequency, tags, project, status. Then respond {\"ok\": true}."
-          }
-        ]
-      }
     ]
   },
   "statusLine": {
