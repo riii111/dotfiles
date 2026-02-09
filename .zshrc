@@ -419,10 +419,11 @@ HELP
     return 0
   fi
 
-  if ! git rev-parse --is-inside-work-tree &>/dev/null; then
+  local repo_root
+  repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || {
     echo "Error: not a git repository" >&2
     return 1
-  fi
+  }
 
   local do_fetch=true
   if [[ "$1" == "--no-fetch" ]]; then
@@ -434,18 +435,20 @@ HELP
   local migration_path="backend/database/src/main/resources/db/tenant/migration"
 
   if $do_fetch; then
-    git fetch origin 'refs/heads/deploy-stg/*:refs/remotes/origin/deploy-stg/*' 2>/dev/null
+    if ! git -C "$repo_root" fetch origin 'refs/heads/deploy-stg/*:refs/remotes/origin/deploy-stg/*' 2>/dev/null; then
+      echo "Warning: fetch failed, using locally cached branches" >&2
+    fi
   fi
 
   local found=false
-  git branch -r | rg -o 'origin/deploy-stg/\S+' | while read -r branch; do
-    local hit=$(git ls-tree --name-only "$branch" -- "$migration_path/" 2>/dev/null | rg -F -- "$version")
+  git -C "$repo_root" branch -r | rg -o 'origin/deploy-stg/\S+' | while read -r branch; do
+    local hit=$(git -C "$repo_root" ls-tree --full-tree --name-only "$branch" -- "$migration_path/" 2>/dev/null | rg -F -- "$version")
     if [[ -n "$hit" ]]; then
       found=true
       echo "\033[1;33m=== ${branch#origin/} ===\033[0m"
       echo "$hit" | while read -r file; do
         echo "  ${file##*/}"
-        git log --format='  %C(yellow)%h%C(reset) %s (%an, %ad)' --date=short "$branch" -- \
+        git -C "$repo_root" log --format='  %C(yellow)%h%C(reset) %s (%an, %ad)' --date=short "$branch" -- \
           "$file" 2>/dev/null
       done
     fi
