@@ -65,6 +65,19 @@ local keys = {
 	{ key = "Space", mods = "LEADER", action = act.QuickSelect },
 
 	---------------------------------------------------------------
+	-- Select All: enter CopyMode and select text above cursor
+	---------------------------------------------------------------
+	{
+		key = "a",
+		mods = "CMD",
+		action = wezterm.action_callback(function(window, pane)
+			window:perform_action(act.ActivateCopyMode, pane)
+			window:perform_action(act.CopyMode({ SetSelectionMode = "Cell" }), pane)
+			window:perform_action(act.CopyMode("MoveToScrollbackTop"), pane)
+		end),
+	},
+
+	---------------------------------------------------------------
 	-- Pass Cmd keys to Neovim as Ctrl keys
 	-- Only override keys that don't conflict with WezTerm functions
 	-- For other Ctrl combinations, just press Ctrl directly
