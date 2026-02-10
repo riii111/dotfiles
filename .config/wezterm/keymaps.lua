@@ -80,6 +80,9 @@ local keys = {
 	{ key = "f", mods = "CMD|SHIFT", action = act.SendKey({ key = "f", mods = "CTRL|SHIFT" }) },
 	{ key = "p", mods = "CMD|SHIFT", action = act.SendKey({ key = "p", mods = "CTRL|SHIFT" }) },
 
+	-- Cmd+Shift+R → Alt+Shift+R (Neovim refactor menu via <M-S-r> fallback)
+	{ key = "r", mods = "CMD|SHIFT", action = act.SendKey({ key = "r", mods = "ALT|SHIFT" }) },
+
 	---------------------------------------------------------------
 	-- JIS keyboard: Option+¥ for | and \
 	---------------------------------------------------------------
