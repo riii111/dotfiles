@@ -37,6 +37,8 @@ local keys = {
 	---------------------------------------------------------------
 	{ key = "w", mods = "CMD", action = act.CloseCurrentPane({ confirm = true }) },
 	{ key = "z", mods = "CMD", action = act.TogglePaneZoomState },
+	{ key = "Enter", mods = "CMD", action = act.ToggleFullScreen },
+	{ key = "Enter", mods = "ALT", action = act.SendKey({ key = "Enter", mods = "ALT" }) },
 
 	---------------------------------------------------------------
 	-- Tab
