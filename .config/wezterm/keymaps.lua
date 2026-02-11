@@ -19,6 +19,8 @@ local keys = {
 	---------------------------------------------------------------
 	{ key = "DownArrow", mods = "CMD", action = act.SendKey({ key = "DownArrow", mods = "CTRL|SHIFT" }) },
 	{ key = "RightArrow", mods = "CMD", action = act.SendKey({ key = "RightArrow", mods = "CTRL|SHIFT" }) },
+	{ key = "LeftArrow", mods = "ALT", action = act.SendString("\x1bb") },
+	{ key = "RightArrow", mods = "ALT", action = act.SendString("\x1bf") },
 	{ key = "LeftArrow", mods = "CMD|ALT", action = act.SendKey({ key = "LeftArrow", mods = "ALT|SHIFT" }) },
 	{ key = "RightArrow", mods = "CMD|ALT", action = act.SendKey({ key = "RightArrow", mods = "ALT|SHIFT" }) },
 
