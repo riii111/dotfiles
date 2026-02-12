@@ -115,12 +115,6 @@ export GOTOOLCHAIN=auto
 # rust
 export PATH="$HOME/.cargo/bin:$PATH"
 
-export PNPM_HOME="$HOME/Library/pnpm"
-case ":$PATH:" in
-  *":$PNPM_HOME:"*) ;;
-  *) export PATH="$PNPM_HOME:$PATH" ;;
-esac
-
 # Git hooks
 if [[ -f "$HOME/.git-hooks.zsh" ]]; then
   source "$HOME/.git-hooks.zsh"
