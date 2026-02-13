@@ -1,8 +1,13 @@
 model_reasoning_effort = "high"
+model = "gpt-5.3-codex"
 web_search = "live"
+personality = "pragmatic"
 
 [features]
 streamable_shell = true
+
+[sandbox_workspace_write]
+network_access = true
 
 [mcp_servers.context7]
 command = "npx"
