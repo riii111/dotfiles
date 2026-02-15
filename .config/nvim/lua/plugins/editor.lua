@@ -345,5 +345,18 @@ return {
 				["<C-v>"] = { "actions.select", opts = { vertical = true }, desc = "Open in vertical split" },
 			},
 		},
+		config = function(_, opts)
+			require("oil").setup(opts)
+			-- Restore default yank-on-delete in oil buffers so dd/p can move files
+			vim.api.nvim_create_autocmd("FileType", {
+				pattern = "oil",
+				callback = function()
+					local bopts = { buffer = true }
+					vim.keymap.set("n", "dd", "dd", bopts)
+					vim.keymap.set("n", "d", "d", bopts)
+					vim.keymap.set("v", "d", "d", bopts)
+				end,
+			})
+		end,
 	},
 }
