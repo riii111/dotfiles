@@ -1,0 +1,19 @@
+#!/bin/bash
+if [ -z "$1" ]; then
+  echo "Usage: wlay <nv|git|command> [args...]"
+  exit 1
+fi
+
+cmd="$1"; shift
+case "$cmd" in
+  nv)  args=(nvim "$@") ;;
+  lg)  args=(lazygit) ;;
+  *)   args=("$cmd" "$@") ;;
+esac
+
+# split current pane and launch command
+pane_id=$(wezterm cli split-pane --bottom -- "${args[@]}")
+
+if [ -n "$pane_id" ]; then
+  wezterm cli zoom-pane --pane-id "$pane_id"
+fi
