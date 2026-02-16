@@ -272,6 +272,29 @@ local function setup_keymaps()
       -- Diffview (file history only)
       ["<Leader>gh"] = { ":DiffviewFileHistory<CR>", desc = "File history" },
 
+      -- Copy file path to clipboard
+      ["<Leader>cp"] = {
+        function()
+          local ok, oil = pcall(require, "oil")
+          if ok and oil.get_current_dir then
+            local dir = oil.get_current_dir()
+            if dir then
+              local entry = oil.get_cursor_entry()
+              if entry then
+                local full = dir .. entry.name
+                vim.fn.setreg("+", full)
+                vim.notify("Copied: " .. full)
+                return
+              end
+            end
+          end
+          local path = vim.fn.expand("%:p")
+          vim.fn.setreg("+", path)
+          vim.notify("Copied: " .. path)
+        end,
+        desc = "Copy path to clipboard",
+      },
+
       -- Quick replace shortcuts
       ["<Leader>r"] = { ":%s/<C-r><C-w>//g<Left><Left>", desc = "Replace word under cursor" },
       ["<Leader>R"] = { ":%s//g<Left><Left><Left>", desc = "Replace text (global)" },
@@ -400,6 +423,7 @@ return {
         { "<M-/>", group = "+comment" },
         { "<M-S-v>", group = "+preview" },
         { "<M-CR>", group = "+code action" },
+        { "<leader>cp", desc = "Copy path to clipboard" },
         { "<leader>g", group = "+git" },
         { "<leader>gd", group = "+diffview open" },
         { "<leader>gc", group = "+diffview close" },
