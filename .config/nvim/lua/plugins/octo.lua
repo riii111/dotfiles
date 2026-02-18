@@ -77,8 +77,8 @@ return {
 				vim.api.nvim_set_hl(0, "RenderMarkdownH6Bg", { bg = mocha.crust })
 
 				-- Buffer background (slightly darker than mantle)
-				vim.api.nvim_set_hl(0, "OctoNormal", { bg = "#14141f" })
-				vim.api.nvim_set_hl(0, "OctoNormalNC", { bg = "#14141f" })
+				vim.api.nvim_set_hl(0, "OctoNormal", { bg = "NONE" })
+				vim.api.nvim_set_hl(0, "OctoNormalNC", { bg = "NONE" })
 			end
 
 			setup_octo_highlights()
