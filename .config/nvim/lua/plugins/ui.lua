@@ -449,7 +449,18 @@ return {
 		version = "*",
 		event = "VeryLazy",
 		config = function()
-			require("mini.move").setup()
+			require("mini.move").setup({
+				mappings = {
+					left = "",
+					right = "",
+					down = "",
+					up = "",
+					line_left = "",
+					line_right = "",
+					line_down = "",
+					line_up = "",
+				},
+			})
 			vim.keymap.set("v", "<M-Down>", function()
 				require("mini.move").move_selection("down")
 			end)
