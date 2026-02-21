@@ -229,7 +229,7 @@ local function setup_keymaps()
       },
       ["<Leader>gD"] = {
         function()
-          local pr = vim.fn.input("PR number (or Enter for current branch): ")
+          local pr = vim.fn.input("PR number (Enter = current PR): ")
           local cmd
           if pr == "" then
             cmd = "gh pr diff | delta"
