@@ -171,7 +171,6 @@ return {
 					remove_assignee = { lhs = "<leader>ad", desc = "Remove assignee" },
 					add_label = { lhs = "<leader>la", desc = "Add label" },
 					remove_label = { lhs = "<leader>ld", desc = "Remove label" },
-					goto_issue = { lhs = "<leader>gi", desc = "Go to issue" },
 					add_comment = { lhs = "<leader>ca", desc = "Add comment" },
 					delete_comment = { lhs = "<leader>cd", desc = "Delete comment" },
 					next_comment = { lhs = "]c", desc = "Next comment" },
@@ -205,7 +204,6 @@ return {
 					remove_assignee = { lhs = "<leader>ad", desc = "Remove assignee" },
 					add_label = { lhs = "<leader>la", desc = "Add label" },
 					remove_label = { lhs = "<leader>ld", desc = "Remove label" },
-					goto_issue = { lhs = "<leader>gi", desc = "Go to issue" },
 					add_comment = { lhs = "<leader>ca", desc = "Add comment" },
 					delete_comment = { lhs = "<leader>cd", desc = "Delete comment" },
 					next_comment = { lhs = "]c", desc = "Next comment" },
@@ -220,7 +218,6 @@ return {
 					react_confused = { lhs = "<leader>rc", desc = "React 😕" },
 				},
 				review_thread = {
-					goto_issue = { lhs = "<leader>gi", desc = "Go to issue" },
 					add_comment = { lhs = "<leader>ca", desc = "Add comment" },
 					add_suggestion = { lhs = "<leader>sa", desc = "Add suggestion" },
 					delete_comment = { lhs = "<leader>cd", desc = "Delete comment" },
