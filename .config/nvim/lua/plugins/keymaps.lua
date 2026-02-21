@@ -240,35 +240,6 @@ local function setup_keymaps()
         end,
         desc = "PR diff with delta"
       },
-      ["<Leader>gm"] = {
-        function()
-          -- Try to get base branch from PR
-          local base = vim.fn.system("gh pr view --json baseRefName -q .baseRefName 2>/dev/null"):gsub("%s+", "")
-          if base == "" then
-            -- No PR, ask user for base branch
-            base = vim.fn.input("Base branch (without origin/): ", "main")
-            if base == "" then
-              return
-            end
-          end
-          -- Use origin/ prefix for remote comparison
-          local remote_base = "origin/" .. base
-          -- Check if there are differences
-          local diff_check = vim.fn.system("git diff --quiet " .. remote_base .. "..HEAD")
-          if vim.v.shell_error == 0 then
-            vim.notify("No differences with " .. remote_base, vim.log.levels.INFO)
-            return
-          end
-          vim.notify("Comparing with " .. remote_base .. "...", vim.log.levels.INFO)
-          -- Use shell pipe: git diff | difit (difit reads from stdin when not TTY)
-          vim.fn.jobstart("git diff " .. remote_base .. "..HEAD | difit", {
-            cwd = vim.fn.getcwd(),
-            detach = true,
-          })
-        end,
-        desc = "Compare with base branch (difit)"
-      },
-
       -- Diffview (file history only)
       ["<Leader>gh"] = { ":DiffviewFileHistory<CR>", desc = "File history" },
 
@@ -426,11 +397,8 @@ return {
         { "<leader>cp", desc = "Copy path to clipboard" },
         { "<leader>g", group = "+git" },
         { "<leader>gd", group = "+diffview open" },
-        { "<leader>gc", group = "+diffview close" },
         { "<leader>gh", group = "+file history" },
-        { "<leader>gf", group = "+toggle files" },
         { "<leader>df", group = "+focus diffview files" },
-        { "<leader>gm", group = "+compare main" },
         { "-", group = "+oil parent directory" },
       })
 
