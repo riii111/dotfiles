@@ -398,6 +398,10 @@ return {
         { "<leader>g", group = "+git" },
         { "<leader>gd", group = "+diffview open" },
         { "<leader>gh", group = "+file history" },
+        { "<leader>gA", group = "+actions history" },
+        { "<leader>gB", group = "+actions history by PR" },
+        { "<leader>gX", group = "+actions dispatch" },
+        { "<leader>gW", group = "+actions watch" },
         { "<leader>df", group = "+focus diffview files" },
         { "-", group = "+oil parent directory" },
       })
