@@ -232,13 +232,16 @@ local function setup_keymaps()
           local pr = vim.fn.input("PR number (Enter = current PR): ")
           local cmd
           if pr == "" then
-            cmd = "gh pr diff | delta"
+            cmd = "gh pr diff | difit"
           else
-            cmd = "gh pr diff " .. pr .. " | delta"
+            cmd = "gh pr diff " .. pr .. " | difit"
           end
-          vim.cmd("split | terminal " .. cmd)
+          vim.fn.jobstart(cmd, {
+            cwd = vim.fn.getcwd(),
+            detach = true,
+          })
         end,
-        desc = "PR diff with delta"
+        desc = "PR diff with difit"
       },
       -- Diffview (file history only)
       ["<Leader>gh"] = { ":DiffviewFileHistory<CR>", desc = "File history" },
