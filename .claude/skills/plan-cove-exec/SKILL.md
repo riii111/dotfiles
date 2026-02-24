@@ -5,7 +5,7 @@ argument-hint: "branch=<name>"
 
 ## PRECONDITION
 - Plan Mode is **already active** (inherited from plan-cove). Do NOT call `EnterPlanMode`.
-- Plan file: `.claude/plans/<BRANCH_NAME>/plan.md`
+- Plan file: the file created by Plan Mode (CC manages the path automatically).
 
 ---
 
@@ -15,10 +15,10 @@ This is the most important step. Inspired by Boris Tane's annotation workflow:
 the plan improves through repeated inline review, not one-shot approval.
 
 **Use `AskUserQuestion` tool**:
-"Annotation round. Review `.claude/plans/<BRANCH_NAME>/plan.md` and add inline notes, or type `done` to finish annotation and proceed to Codex review."
+"Annotation round. Review the plan file and add inline notes, or type `done` to finish annotation and proceed to Codex review."
 
 If user provides annotations:
-- Re-read `.claude/plans/<BRANCH_NAME>/plan.md`
+- Re-read the plan file
 - Incorporate all inline notes:
   - Wrong assumption → correct (e.g. "no — this API already exists")
   - Rejected approach → remove or replace (e.g. "remove this section")
@@ -32,7 +32,7 @@ If `done`: proceed to Step 2.
 
 # Step 2 — Codex Review (HARD GATE — DO NOT SKIP)
 
-Run exactly:
+Read the plan file content, then run codex with it:
 ```bash
 codex "Review this plan as a senior engineer. Find missing assumptions, edge cases, and rollout/rollback gaps.
 Output:
@@ -41,7 +41,7 @@ Output:
 - Any missing tests
 Keep it concise.
 
-$(cat .claude/plans/<BRANCH_NAME>/plan.md)"
+$(cat <PLAN_FILE_PATH>)"
 ```
 
 After running, STOP and **use `AskUserQuestion` tool**:
