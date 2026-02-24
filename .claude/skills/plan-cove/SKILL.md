@@ -27,11 +27,7 @@ $ARGUMENTS
 - If `branch=<name>` is provided, use it
 - Else: derive a short branch name and **use `AskUserQuestion` tool** to confirm
 
-Run: `git checkout -b "<BRANCH_NAME>" && mkdir -p .claude/plans/<BRANCH_NAME>`
-
-Plan and research files for this session:
-- `.claude/plans/<BRANCH_NAME>/plan.md`
-- `.claude/plans/<BRANCH_NAME>/research.md`
+Run: `git checkout -b "<BRANCH_NAME>"`
 
 ---
 
@@ -52,7 +48,7 @@ Hard rule:
 
 # Step 3 — Hand off (Plan Mode stays active)
 
-When the draft plan is written to `.claude/plans/<BRANCH_NAME>/plan.md`:
+Once the draft plan is complete:
 - Do NOT call `ExitPlanMode`.
 - Immediately invoke the `plan-cove-exec` skill using the `Skill` tool with args `branch=<BRANCH_NAME>`.
 - Do NOT ask the user to run it manually. Do NOT end your turn.
