@@ -10,7 +10,8 @@ return {
           load_vscode_settings = false,
           default_settings = {
             ["rust-analyzer"] = {
-              checkOnSave = {
+              checkOnSave = true,
+              check = {
                 command = "clippy",  -- ファイル保存時にclippyを自動実行
                 -- 重かったら以下に変更
                 -- command = "check",
