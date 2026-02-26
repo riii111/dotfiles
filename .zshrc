@@ -374,6 +374,18 @@ claude() {
   command claude "$@"
 }
 
+# Launch Claude Code as implementation AI with tmux pane named "impl"
+# Usage: cc-impl [--resume | claude options...]
+cc-impl() {
+  if [[ -n "$TMUX" ]]; then
+    tmux select-pane -T impl
+  else
+    tmux new-session -s dev -n dev \; select-pane -T impl \; send-keys "cc-impl $*" Enter
+    return
+  fi
+  claude "$@"
+}
+
 # ==========================================
 # Flyway Migration Search
 # ==========================================

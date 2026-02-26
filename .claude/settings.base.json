@@ -105,6 +105,15 @@
             "command": "/Users/[[YOUR_USER_NAME]]/.claude/hooks/git-worktree-post-add.sh"
           }
         ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/notify-impl-review.sh"
+          }
+        ]
       }
     ]
   },
