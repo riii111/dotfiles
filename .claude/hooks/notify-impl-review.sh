@@ -21,11 +21,14 @@ else
   exit 0
 fi
 
-# Extract relative path for the notification message
+# Extract branch name and relative path from file path
+# reviews/{branch}/codex.md → branch = {branch}
 rel_path="${file_path#*reviews/}"
+branch="${rel_path%%/*}"
 rel_path="reviews/${rel_path}"
 
-# Notify the implementation CC pane via tmux (fail silently if tmux/pane unavailable)
-tmux send-keys -t impl \
-  "${rel_path} に${reviewer}からレビューが届いたのだ。内容を確認し、以下の内容が妥当であるか客観的に分析してユーザに見解を述べて。" Enter \
-  2>/dev/null || true
+msg="${rel_path} に${reviewer}からレビューが届いたのだ。内容を確認し、以下の内容が妥当であるか客観的に分析してユーザに見解を述べて。"
+
+# Try branch-named session first, fall back to "dev" session
+tmux send-keys -t "${branch}:.impl" "$msg" Enter 2>/dev/null ||
+tmux send-keys -t "dev:.impl" "$msg" Enter 2>/dev/null || true
