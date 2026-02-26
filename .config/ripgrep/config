@@ -2,5 +2,6 @@
 # Symlinked to ~/.config/ripgrep/config
 
 --smart-case
+--no-ignore-vcs
 
 # Note: Exclusion patterns are in ~/.config/ripgrep/ignore

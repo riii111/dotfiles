@@ -36,6 +36,7 @@ return {
 						"--smart-case",
 						"--trim",
 						"--hidden",
+						"--no-ignore-vcs",
 						"--fixed-strings",
 					},
 					mappings = {
