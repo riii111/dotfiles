@@ -63,6 +63,8 @@ Rate each issue from 0-100 (only report issues with confidence ≥ 80):
 
 #### Test Analysis (if test files changed)
 
+> **Note: Do not run tests. Test execution is handled by CI. Review test code quality only.**
+
 Focus on behavioral coverage rather than line coverage:
 
 - Untested error handling paths
