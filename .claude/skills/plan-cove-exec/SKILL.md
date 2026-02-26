@@ -14,8 +14,8 @@ argument-hint: "branch=<name>"
 This is the most important step. Inspired by Boris Tane's annotation workflow:
 the plan improves through repeated inline review, not one-shot approval.
 
-**Use `AskUserQuestion` tool**:
-"Annotation round. Review the plan file and add inline notes, or type `done` to finish annotation and proceed to Codex review."
+**Use `AskUserQuestion` tool** (include the plan file name so the user knows which file to open):
+"Annotation round. Plan is in `<PLAN_FILE_NAME>`. Review the plan file and add inline notes, or type `done` to finish annotation and proceed to Codex review."
 
 If user provides annotations:
 - Re-read the plan file
