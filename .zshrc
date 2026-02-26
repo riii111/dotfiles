@@ -375,12 +375,24 @@ claude() {
 }
 
 # Launch Claude Code as implementation AI with tmux pane named "impl"
-# Usage: cc-impl [--resume | claude options...]
+# Usage: cc-impl [session-name] [claude options...]
+# Examples:
+#   cc-impl                → session "dev"
+#   cc-impl feat-auth      → session "feat-auth"
+#   cc-impl --resume       → session "dev", resume
+#   cc-impl feat-auth --resume → session "feat-auth", resume
 cc-impl() {
+  local session="dev"
+  # First non-flag arg is session name
+  if [[ $# -gt 0 && "$1" != -* ]]; then
+    session="$1"
+    shift
+  fi
+
   if [[ -n "$TMUX" ]]; then
     tmux select-pane -T impl
   else
-    tmux new-session -s dev -n dev \; select-pane -T impl \; send-keys "cc-impl $*" Enter
+    tmux new-session -s "$session" -n dev \; select-pane -T impl \; send-keys "cc-impl $session $*" Enter
     return
   fi
   claude "$@"

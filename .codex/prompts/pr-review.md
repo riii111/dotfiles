@@ -194,9 +194,13 @@ Follow the format defined in `.claude/reviews/TEMPLATE.md`:
 After writing the review file, **always** execute this command to notify the implementation AI:
 
 ```bash
-BRANCH=$(git branch --show-current) && tmux send-keys -t impl "reviews/${BRANCH}/codex.md にcodexからレビューが届いたのだ。内容を確認し、以下の内容が妥当であるか客観的に分析してユーザに見解を述べて。" Enter
+BRANCH=$(git branch --show-current) && \
+MSG="reviews/${BRANCH}/codex.md にcodexからレビューが届いたのだ。内容を確認し、以下の内容が妥当であるか客観的に分析してユーザに見解を述べて。" && \
+(tmux send-keys -t "${BRANCH}:.impl" "$MSG" Enter 2>/dev/null || \
+ tmux send-keys -t "dev:.impl" "$MSG" Enter 2>/dev/null || true)
 ```
 
+The command tries the branch-named session first, then falls back to "dev".
 If tmux or the target pane is unavailable, skip notification silently and inform the user.
 
 ## Tips
