@@ -36,7 +36,6 @@ return {
 						"--smart-case",
 						"--trim",
 						"--hidden",
-						"--no-ignore-vcs",
 						"--fixed-strings",
 					},
 					mappings = {
@@ -85,7 +84,7 @@ return {
 					},
 					live_grep_args = {
 						auto_quoting = true,
-						prompt_title = "Live Grep [⌥I:in ⌥E:ex ⌥W:word ⌥Q:qf ^jk:hist]",
+						prompt_title = "Live Grep",
 						mappings = {
 							i = {
 								["<C-r>"] = require("telescope-live-grep-args.actions").quote_prompt({
@@ -103,6 +102,9 @@ return {
 								end,
 								["<M-w>"] = require("telescope-live-grep-args.actions").quote_prompt({
 									postfix = " -w ",
+								}),
+								["<M-v>"] = require("telescope-live-grep-args.actions").quote_prompt({
+									postfix = " --no-ignore-vcs ",
 								}),
 								["<M-i>"] = function()
 									local action_state = require("telescope.actions.state")
@@ -158,6 +160,28 @@ return {
 			telescope.setup(opts)
 			telescope.load_extension("fzf")
 			telescope.load_extension("live_grep_args")
+
+			vim.api.nvim_create_autocmd("FileType", {
+				pattern = "TelescopePrompt",
+				callback = function()
+					vim.schedule(function()
+						local ok, action_state = pcall(require, "telescope.actions.state")
+						if not ok then
+							return
+						end
+						local picker = action_state.get_current_picker(vim.api.nvim_get_current_buf())
+						if not picker or not picker.results_border then
+							return
+						end
+						if picker.prompt_title and picker.prompt_title:find("Live Grep") then
+							picker.results_border:change_title(
+								"⌥I:in ⌥E:ex ⌥W:word ⌥V:+ign ⌥Q:qf ^jk:hist",
+								"S"
+							)
+						end
+					end)
+				end,
+			})
 		end,
 	},
 }
