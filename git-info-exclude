@@ -1,0 +1,5 @@
+memo/**
+AGENTS.md
+.claude/settings.local.json
+.claude/plans
+.claude/worktrees/
