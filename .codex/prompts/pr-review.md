@@ -165,6 +165,40 @@ Structure findings as:
 /pr-review ASPECTS=simplify
 ```
 
+## Output Destination
+
+**IMPORTANT**: Write review results to a file, not just stdout.
+
+### File Path
+
+```
+reviews/{branch}/codex.md
+```
+
+Where `{branch}` is the current git branch name (from `git branch --show-current`).
+
+Create the directory if it does not exist: `mkdir -p reviews/$(git branch --show-current)`
+
+### File Format
+
+Follow the format defined in `.claude/reviews/TEMPLATE.md`:
+
+- Header: `# Review: {branch}` with `<!-- reviewer: codex -->`
+- Each finding: `## [C1] file:line` (sequential IDs)
+- Wrap each thread body in `~~~` fences
+- Use `### codex` before your comment (the `impl` section will be filled by the implementation AI)
+- Code snippets use ` ``` ` inside the `~~~` fences
+
+### Post-Review Notification
+
+After writing the review file, **always** execute this command to notify the implementation AI:
+
+```bash
+BRANCH=$(git branch --show-current) && tmux send-keys -t impl "reviews/${BRANCH}/codex.md にcodexからレビューが届いたのだ。内容を確認し、以下の内容が妥当であるか客観的に分析してユーザに見解を述べて。" Enter
+```
+
+If tmux or the target pane is unavailable, skip notification silently and inform the user.
+
 ## Tips
 
 - **Run early**: Before creating PR, not after
