@@ -86,11 +86,10 @@ config.color_scheme = "Kanagawa Dragon"
 ---------------------------------------------------------------
 config.max_fps = 165
 config.audible_bell = "Disabled"
--- NOTE: Deprecated but still needed — without this, unmapped Cmd keys
--- (e.g. Cmd+Enter for Claude Code) are silently dropped by WezTerm.
--- Keys that need special handling (Cmd+A, Cmd+Shift+R) are overridden
--- with explicit bindings in keymaps.lua which take priority over CSI-u.
-config.enable_csi_u_key_encoding = true
+-- Kitty keyboard protocol: lets apps (Claude Code, Neovim, etc.) detect
+-- Shift+Enter, Cmd+key and other modified keys through tmux.
+-- Replaces the deprecated enable_csi_u_key_encoding.
+config.enable_kitty_keyboard = true
 config.adjust_window_size_when_changing_font_size = false
 config.hide_mouse_cursor_when_typing = true
 
