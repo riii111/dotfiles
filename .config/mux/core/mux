@@ -36,6 +36,7 @@ ${BOLD}Commands:${NC}
     logs <service>      Focus on specific service window
     follow <service>    Follow service log in nvim (popup)
     list                List all available services
+    exec <container> [--shell]     Enter Docker container
 
 ${BOLD}Examples:${NC}
     ${project_name} hello           # Start session + all services
@@ -45,6 +46,8 @@ ${BOLD}Examples:${NC}
     ${project_name} restart docker  # Restart docker services
     ${project_name} status          # Show all status
     ${project_name} logs studio-api # Focus on service window
+    ${project_name} exec local-db   # Enter container (default cmd)
+    ${project_name} exec local-db --shell  # Enter with bash
 
 ${BOLD}Keybindings (in tmux session):${NC}
     Ctrl+b f           Follow current window's log in nvim
@@ -471,6 +474,19 @@ main() {
             ;;
         list)
             list_services
+            ;;
+        exec)
+            local container="${arg:-}"
+            if [[ -z "$container" ]]; then
+                echo -e "${RED}Error: Container name required${NC}"
+                echo "Usage: ${PROJECT_NAME} exec <container> [--shell]"
+                exit 1
+            fi
+            local use_shell="false"
+            if [[ "${3:-}" == "--shell" ]]; then
+                use_shell="true"
+            fi
+            docker_exec_container "$container" "$use_shell"
             ;;
         help|--help|-h)
             usage
