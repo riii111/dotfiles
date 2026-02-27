@@ -2,7 +2,7 @@
 
 vim.o.scrollback = 100000
 
--- Timer instead of TermClose because tail -f keeps the process alive
+-- Wait for cat to finish rendering, then position viewport
 vim.defer_fn(function()
   vim.cmd("stopinsert")
 
@@ -31,4 +31,4 @@ vim.defer_fn(function()
   end, { buffer = true, nowait = true })
 
   vim.keymap.set("n", "q", "<cmd>bd!<cr>", { buffer = true, nowait = true })
-end, 200)
+end, 50)
