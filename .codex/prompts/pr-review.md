@@ -196,11 +196,17 @@ After writing the review file, **always** execute this command to notify the imp
 ```bash
 BRANCH=$(git branch --show-current) && \
 MSG="reviews/${BRANCH}/codex.md にcodexからレビューが届いたのだ。内容を確認し、以下の内容が妥当であるか客観的に分析してユーザに見解を述べて。" && \
-(tmux send-keys -t "${BRANCH}:.impl" "$MSG" Enter 2>/dev/null || \
- tmux send-keys -t "dev:.impl" "$MSG" Enter 2>/dev/null || true)
+if command -v tmux >/dev/null 2>&1; then
+  (tmux send-keys -t "${BRANCH}:.impl" "$MSG" Enter 2>/dev/null || \
+   tmux send-keys -t "${BRANCH}:0.0" "$MSG" Enter 2>/dev/null || \
+   tmux send-keys -t "dev:.impl" "$MSG" Enter 2>/dev/null || \
+   tmux send-keys -t "dev:0.0" "$MSG" Enter 2>/dev/null || \
+   tmux send-keys -t "sabiql:.impl" "$MSG" Enter 2>/dev/null || \
+   tmux send-keys -t "sabiql:0.0" "$MSG" Enter 2>/dev/null || true)
+fi
 ```
 
-The command tries the branch-named session first, then falls back to "dev".
+The command tries `.impl` first, then `0.0`, and falls back across branch/dev/sabiql sessions.
 If tmux or the target pane is unavailable, skip notification silently and inform the user.
 
 ## Tips

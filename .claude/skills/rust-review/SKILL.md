@@ -103,8 +103,20 @@ Follow the format defined in `.claude/reviews/TEMPLATE.md`:
 
 ### Post-Review Notification
 
-Notification to the implementation AI is handled automatically by a PostToolUse hook.
-No manual `tmux send-keys` command is needed from this reviewer.
+After writing the review file, execute this command to notify the implementation AI:
+
+```bash
+BRANCH=$(git branch --show-current) && \
+MSG="reviews/${BRANCH}/cc-rev.md にcc-revからレビューが届いたのだ。内容を確認し、以下の内容が妥当であるか客観的に分析してユーザに見解を述べて。" && \
+if command -v tmux >/dev/null 2>&1; then
+  (tmux send-keys -t "${BRANCH}:.impl" "$MSG" Enter 2>/dev/null || \
+   tmux send-keys -t "${BRANCH}:0.0" "$MSG" Enter 2>/dev/null || \
+   tmux send-keys -t "dev:.impl" "$MSG" Enter 2>/dev/null || \
+   tmux send-keys -t "dev:0.0" "$MSG" Enter 2>/dev/null || \
+   tmux send-keys -t "sabiql:.impl" "$MSG" Enter 2>/dev/null || \
+   tmux send-keys -t "sabiql:0.0" "$MSG" Enter 2>/dev/null || true)
+fi
+```
 
 ---
 
