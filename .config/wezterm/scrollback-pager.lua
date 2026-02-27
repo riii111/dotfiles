@@ -23,5 +23,12 @@ vim.defer_fn(function()
   local cursor_x = vim.g.scrollback_cursor_x or 0
   vim.fn.winrestview({ topline = topline, lnum = last_content, col = cursor_x })
 
+  -- Remap G to stop at last content line, not empty tail region
+  vim.b.scrollback_last_content = last_content
+  vim.keymap.set("n", "G", function()
+    local lc = vim.b.scrollback_last_content or vim.api.nvim_buf_line_count(0)
+    vim.api.nvim_win_set_cursor(0, { lc, 0 })
+  end, { buffer = true, nowait = true })
+
   vim.keymap.set("n", "q", "<cmd>bd!<cr>", { buffer = true, nowait = true })
 end, 200)
