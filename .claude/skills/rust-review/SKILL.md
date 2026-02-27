@@ -77,6 +77,37 @@ List issues by severity (omit empty categories):
 
 ---
 
+## Output Destination
+
+**IMPORTANT**: Write review results to a file, not just stdout.
+
+### File Path
+
+```
+reviews/{branch}/cc-rev.md
+```
+
+Where `{branch}` is the current git branch name (from `git branch --show-current`).
+
+Create the directory if it does not exist: `mkdir -p reviews/$(git branch --show-current)`
+
+### File Format
+
+Follow the format defined in `.claude/reviews/TEMPLATE.md`:
+
+- Header: `# Review: {branch}` with `<!-- reviewer: cc-rev -->`
+- Each finding: `## [C1] file:line` (sequential IDs)
+- Wrap each thread body in `~~~` fences
+- Use `### cc-rev` before your comment (the `impl` section will be filled by the implementation AI)
+- Code snippets use ` ``` ` inside the `~~~` fences
+
+### Post-Review Notification
+
+Notification to the implementation AI is handled automatically by a PostToolUse hook.
+No manual `tmux send-keys` command is needed from this reviewer.
+
+---
+
 ## Additional Instructions
 
 $ARGUMENTS
