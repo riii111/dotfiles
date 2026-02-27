@@ -32,8 +32,14 @@ end
 vim.api.nvim_create_autocmd("TermOpen", {
   once = true,
   callback = function()
-    -- Register q immediately so user can exit even during polling
-    vim.keymap.set("n", "q", "<cmd>quit!<cr>", { buffer = true, nowait = true })
+    -- q: return to original tab then close (early registration so it works during polling)
+    vim.keymap.set("n", "q", function()
+      local tab_id = vim.g.scrollback_prev_tab
+      if tab_id then
+        vim.fn.system("/opt/homebrew/bin/wezterm cli activate-tab --tab-id " .. tab_id)
+      end
+      vim.cmd("quit!")
+    end, { buffer = true, nowait = true })
 
     local elapsed = 0
     local prev_lines = -1
