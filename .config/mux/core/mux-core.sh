@@ -695,6 +695,51 @@ restart_service() {
 # Docker Operations
 #######################################
 
+docker_exec_container() {
+    local container="$1"
+    local use_shell="${2:-false}"
+
+    if [[ "$DOCKER_ENABLED" != "true" ]]; then
+        echo -e "${RED}Error: Docker is not enabled for this project${NC}"
+        return 1
+    fi
+
+    validate_identifier "$container" "container name" || return 1
+
+    # Check if service is running (auto-detect from docker compose)
+    local running
+    running=$(cd "$DOCKER_DIR" && \
+        docker compose -f "${DOCKER_COMPOSE_FILE}" ps --status running --format '{{.Service}}' 2>/dev/null)
+
+    if [[ -z "$running" ]]; then
+        echo -e "${RED}Error: No running containers${NC}"
+        echo -e "Start docker first: ${CYAN}${PROJECT_NAME} start docker${NC}"
+        return 1
+    fi
+
+    if ! echo "$running" | grep -qx "$container"; then
+        echo -e "${RED}Error: Container '${container}' is not running${NC}"
+        echo -e "Running containers:"
+        echo "$running" | while IFS= read -r svc; do
+            echo "  - $svc"
+        done
+        return 1
+    fi
+
+    # Determine command: config override > bash (default)
+    local exec_cmd="bash"
+    if [[ "$use_shell" != "true" ]]; then
+        local override
+        override=$(parse_yaml_allow_null "$CONFIG_FILE" ".docker.exec_defaults.\"$container\"")
+        if [[ -n "$override" && "$override" != "null" ]]; then
+            exec_cmd="$override"
+        fi
+    fi
+
+    echo -e "${CYAN}Entering ${container}...${NC}"
+    (cd "$DOCKER_DIR" && docker compose -f "${DOCKER_COMPOSE_FILE}" exec "$container" $exec_cmd)
+}
+
 start_docker() {
     [[ "$DOCKER_ENABLED" != "true" ]] && return 0
 
