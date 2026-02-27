@@ -22,6 +22,7 @@ wezterm.on("open-scrollback-in-nvim", function(window, pane)
 	-- marker file signals cat completion without polluting the terminal buffer
 	local marker = os.tmpname() .. "_done"
 	local cursor = pane:get_cursor_position()
+	local tab_id = window:active_tab():tab_id()
 	local pager = wezterm.config_dir .. "/scrollback-pager.lua"
 	window:perform_action(
 		act.SpawnCommandInNewTab({
@@ -29,6 +30,7 @@ wezterm.on("open-scrollback-in-nvim", function(window, pane)
 				"/opt/homebrew/bin/nvim",
 				"-c", "let g:scrollback_cursor_x = " .. cursor.x,
 				"-c", "let g:scrollback_marker = '" .. marker .. "'",
+				"-c", "let g:scrollback_prev_tab = " .. tab_id,
 				"-c", "luafile " .. pager,
 				-- tail keeps process alive to suppress "[Process exited 0]"
 				"-c", "terminal cat " .. tmp .. "; rm " .. tmp
