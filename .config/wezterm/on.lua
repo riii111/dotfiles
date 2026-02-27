@@ -1,4 +1,39 @@
 local wezterm = require("wezterm")
+local act = wezterm.action
+local io = require("io")
+local os = require("os")
+
+-- Scrollback pager: open in nvim with ANSI colors
+wezterm.on("open-scrollback-in-nvim", function(window, pane)
+	local dims = pane:get_dimensions()
+	local nlines = dims.scrollback_rows + dims.viewport_rows
+	local text = pane:get_lines_as_escapes(nlines)
+
+	local tmp = os.tmpname()
+	local f, err = io.open(tmp, "w+")
+	if not f then
+		wezterm.log_error("scrollback pager: " .. (err or "unknown error"))
+		return
+	end
+	f:write(text)
+	f:flush()
+	f:close()
+
+	local cursor = pane:get_cursor_position()
+	local pager = wezterm.config_dir .. "/scrollback-pager.lua"
+	window:perform_action(
+		act.SpawnCommandInNewTab({
+			args = {
+				"/opt/homebrew/bin/nvim",
+				"-c", "let g:scrollback_cursor_x = " .. cursor.x,
+				"-c", "luafile " .. pager,
+				-- tail keeps process alive to suppress "[Process exited 0]"
+				"-c", "terminal cat " .. tmp .. "; rm " .. tmp .. "; tail -f /dev/null",
+			},
+		}),
+		pane
+	)
+end)
 
 -- Toggle window opacity
 wezterm.on("toggle-opacity", function(window, _)

@@ -67,6 +67,11 @@ local keys = {
 	{ key = "b", mods = "CMD|CTRL", action = act.EmitEvent("toggle-blur") },
 
 	---------------------------------------------------------------
+	-- Scrollback pager: open in Neovim
+	---------------------------------------------------------------
+	{ key = "e", mods = "CMD|SHIFT", action = act.EmitEvent("open-scrollback-in-nvim") },
+
+	---------------------------------------------------------------
 	-- Quick select (like tmux copy mode)
 	---------------------------------------------------------------
 	{ key = "Space", mods = "LEADER", action = act.QuickSelect },
