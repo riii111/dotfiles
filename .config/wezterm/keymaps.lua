@@ -39,6 +39,9 @@ local keys = {
 	{ key = "z", mods = "CMD", action = act.TogglePaneZoomState },
 	{ key = "Enter", mods = "CMD", action = act.ToggleFullScreen },
 	{ key = "Enter", mods = "ALT", action = act.SendKey({ key = "Enter", mods = "ALT" }) },
+	-- Shift+Enter: send CSI-u sequence explicitly (WezTerm doesn't advertise
+	-- extkeys to tmux, so protocol negotiation fails; this is a workaround)
+	{ key = "Enter", mods = "SHIFT", action = act.SendString("\x1b[13;2u") },
 
 	---------------------------------------------------------------
 	-- Tab
