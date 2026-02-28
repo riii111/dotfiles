@@ -32,16 +32,17 @@ If `done`: proceed to Step 2.
 
 # Step 2 — Codex Review (HARD GATE — DO NOT SKIP)
 
-Read the plan file content, then run codex with it:
+Run codex to review the plan file:
 ```bash
-codex "Review this plan as a senior engineer. Find missing assumptions, edge cases, and rollout/rollback gaps.
+RUST_LOG=off codex exec --sandbox read-only 2>/dev/null - <<'CODEX_PROMPT'
+Review the plan file at <PLAN_FILE_PATH> as a senior engineer.
+Read the file yourself, then find missing assumptions, edge cases, and rollout/rollback gaps.
 Output:
 - P0 (must fix before implementation)
 - P1 (nice-to-have)
 - Any missing tests
 Keep it concise.
-
-$(cat <PLAN_FILE_PATH>)"
+CODEX_PROMPT
 ```
 
 After running, STOP and **use `AskUserQuestion` tool**:
