@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+#
+# tmux-pr-info - Show PR number and title for the current git branch.
+# Outputs "│ #42 Title" when a PR exists, empty string otherwise.
+# Uses file-based cache (60s TTL) to avoid slow gh API calls.
+#
+# Usage: tmux-pr-info <path>
+
+set -euo pipefail
+
+dir="${1:-.}"
+
+# Must be in a git repo
+branch=$(git -C "$dir" symbolic-ref --short HEAD 2>/dev/null) || exit 0
+
+# Cache keyed by branch name
+cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/tmux-pr-info"
+cache_key=$(printf '%s' "$branch" | tr '/' '_')
+cache_file="${cache_dir}/${cache_key}"
+cache_ttl=60
+
+# Return cached result if fresh
+if [[ -f "$cache_file" ]]; then
+  file_age=$(( $(date +%s) - $(stat -f %m "$cache_file") ))
+  if [[ $file_age -lt $cache_ttl ]]; then
+    cat "$cache_file"
+    exit 0
+  fi
+fi
+
+mkdir -p "$cache_dir"
+
+# Fetch PR info (cd into repo so gh detects the correct remote)
+pr_json=$(cd "$dir" && gh pr view --json number,title 2>/dev/null) || {
+  printf '' > "$cache_file"; exit 0
+}
+
+pr_number=$(printf '%s' "$pr_json" | jq -r '.number // empty')
+
+if [[ -z "$pr_number" ]]; then
+  printf '' > "$cache_file"; exit 0
+fi
+
+result="│ PR #${pr_number}"
+printf '%s' "$result" > "$cache_file"
+printf '%s' "$result"
