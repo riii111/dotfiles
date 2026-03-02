@@ -213,35 +213,31 @@ local function setup_keymaps()
       -- Git diff tools
       ["<Leader>gd"] = {
         function()
-          local result = vim.fn.system("git diff --quiet")
-          if vim.v.shell_error == 0 then
-            vim.notify("No local changes", vim.log.levels.INFO)
-          else
-            vim.notify("Opening difit...", vim.log.levels.INFO)
-            -- Use shell pipe: git diff | difit (difit reads from stdin when not TTY)
-            vim.fn.jobstart("git diff | difit", {
-              cwd = vim.fn.getcwd(),
-              detach = true,
-            })
+          local branches_raw = vim.fn.system("git branch --format='%(refname:short)' 2>/dev/null")
+          local current = vim.fn.system("git branch --show-current 2>/dev/null"):gsub("%s+", "")
+          local branches = {}
+          for line in branches_raw:gmatch("[^\n]+") do
+            local b = line:gsub("%s+", "")
+            if b ~= "" and b ~= current then
+              table.insert(branches, b)
+            end
           end
+          table.insert(branches, "(manual input)")
+
+          vim.ui.select(branches, { prompt = "Base branch for diff:" }, function(choice)
+            if not choice then return end
+            local base
+            if choice == "(manual input)" then
+              base = vim.fn.input("Base branch: ")
+              if base == "" then return end
+            else
+              base = choice
+            end
+            local cmd = "git diff origin/" .. base .. "...HEAD | difit"
+            vim.fn.jobstart(cmd, { cwd = vim.fn.getcwd(), detach = true })
+          end)
         end,
-        desc = "Open difit (local diff)"
-      },
-      ["<Leader>gD"] = {
-        function()
-          local pr = vim.fn.input("PR number (Enter = current PR): ")
-          local cmd
-          if pr == "" then
-            cmd = "gh pr diff | difit"
-          else
-            cmd = "gh pr diff " .. pr .. " | difit"
-          end
-          vim.fn.jobstart(cmd, {
-            cwd = vim.fn.getcwd(),
-            detach = true,
-          })
-        end,
-        desc = "PR diff with difit"
+        desc = "Branch diff with difit (no PR needed)"
       },
       -- Diffview (file history only)
       ["<Leader>gh"] = { ":DiffviewFileHistory<CR>", desc = "File history" },
@@ -399,7 +395,7 @@ return {
         { "<M-CR>", group = "+code action" },
         { "<leader>cp", desc = "Copy path to clipboard" },
         { "<leader>g", group = "+git" },
-        { "<leader>gd", group = "+diffview open" },
+        { "<leader>gd", desc = "Branch diff with difit" },
         { "<leader>gh", group = "+file history" },
         { "<leader>gA", group = "+actions history" },
         { "<leader>gB", group = "+actions history by PR" },
