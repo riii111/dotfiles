@@ -342,10 +342,35 @@ return {
 				direction = "float",
 			})
 
+			-- Lazygit terminal (full window size)
+			local lazygit_term = Terminal:new({
+				cmd = "lazygit",
+				direction = "float",
+				float_opts = {
+					border = "rounded",
+					width = function()
+						return vim.o.columns
+					end,
+					height = function()
+						return vim.o.lines - 2
+					end,
+					row = 0,
+					col = 0,
+				},
+				on_open = function(term)
+					-- lazygit uses <esc> internally, so don't map it to close
+					vim.keymap.del("t", "<esc>", { buffer = term.bufnr })
+				end,
+				hidden = true,
+			})
+
 			-- Key mappings for different layouts
 			vim.keymap.set("n", "<Leader>tf", function()
 				float_term:toggle()
 			end, { desc = "Float terminal" })
+			vim.keymap.set("n", "<Leader>lg", function()
+				lazygit_term:toggle()
+			end, { desc = "Lazygit" })
 			vim.keymap.set("n", "<Leader>th", function()
 				horizontal_term:toggle()
 			end, { desc = "Horizontal terminal" })
