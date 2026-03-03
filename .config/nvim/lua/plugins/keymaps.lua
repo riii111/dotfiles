@@ -233,7 +233,12 @@ local function setup_keymaps()
             else
               base = choice
             end
-            local cmd = "git diff origin/" .. base .. "...HEAD | difit"
+            local diff = vim.fn.system("git diff --quiet " .. base .. "...HEAD")
+            if vim.v.shell_error == 0 then
+              vim.notify("No diff from " .. base, vim.log.levels.INFO)
+              return
+            end
+            local cmd = "git diff " .. base .. "...HEAD | difit"
             vim.fn.jobstart(cmd, { cwd = vim.fn.getcwd(), detach = true })
           end)
         end,
