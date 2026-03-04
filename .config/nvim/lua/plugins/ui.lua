@@ -381,7 +381,11 @@ return {
 			-- Terminal mode mappings
 			function _G.set_terminal_keymaps()
 				local kopts = { buffer = 0 }
-				vim.keymap.set("t", "<esc>", [[<Cmd>ToggleTerm<CR>]], kopts)
+				-- 1st Esc: terminal → normal mode, 2nd Esc: close terminal
+				vim.keymap.set("t", "<esc>", [[<C-\><C-n>]], kopts)
+				vim.keymap.set("n", "<esc>", [[<Cmd>ToggleTerm<CR>]], kopts)
+				-- q: normal mode → back to terminal input
+				vim.keymap.set("n", "q", "i", kopts)
 				vim.keymap.set("t", "<C-h>", [[<Cmd>wincmd h<CR>]], kopts)
 				vim.keymap.set("t", "<C-j>", [[<Cmd>wincmd j<CR>]], kopts)
 				vim.keymap.set("t", "<C-k>", [[<Cmd>wincmd k<CR>]], kopts)
