@@ -119,7 +119,7 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "ccusage statusline --visual-burn-rate emoji"
+    "command": "/Users/[[YOUR_USER_NAME]]/.claude/statusline-command.sh"
   },
   "alwaysThinkingEnabled": true
 }
