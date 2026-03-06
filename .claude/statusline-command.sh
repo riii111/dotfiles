@@ -10,16 +10,18 @@ GRAY=$'\e[38;2;74;88;92m'
 DIM=$'\e[2m'
 RESET=$'\e[0m'
 
-# ── Read stdin JSON (single jq call) ──
+# ── Read stdin JSON (eval-free, @tsv) ──
 INPUT=$(cat)
-eval "$(echo "$INPUT" | jq -r '
-  "MODEL_DISPLAY=" + (.model.display_name // "Unknown" | @sh),
-  "CTX_PCT=" + (.context_window.used_percentage // 0 | tostring),
-  "LINES_ADD=" + (.cost.total_lines_added // 0 | tostring),
-  "LINES_DEL=" + (.cost.total_lines_removed // 0 | tostring),
-  "CWD=" + (.cwd // "" | @sh),
-  "CC_VERSION=" + (.version // "0.0.0" | @sh)
-' 2>/dev/null)"
+IFS=$'\t' read -r MODEL_DISPLAY CTX_PCT LINES_ADD LINES_DEL CWD CC_VERSION < <(
+  printf '%s' "$INPUT" | jq -r '[
+    (.model.display_name // "Unknown"),
+    (.context_window.used_percentage // 0 | tostring),
+    (.cost.total_lines_added // 0 | tostring),
+    (.cost.total_lines_removed // 0 | tostring),
+    (.cwd // ""),
+    (.version // "0.0.0")
+  ] | @tsv' 2>/dev/null
+)
 
 # ── Git branch ──
 GIT_BRANCH=""
@@ -27,15 +29,18 @@ if [ -n "$CWD" ] && [ -d "$CWD" ]; then
   GIT_BRANCH=$(git -C "$CWD" --no-optional-locks rev-parse --abbrev-ref HEAD 2>/dev/null || true)
 fi
 
+# ── Numeric validation ──
+is_number() {
+  printf '%s' "$1" | grep -qE '^[0-9]+(\.[0-9]+)?$'
+}
+
 # ── Color by percentage ──
 color_for_pct() {
   local pct="$1"
-  if [ -z "$pct" ] || [ "$pct" = "null" ]; then
-    printf '%s' "$GRAY"
-    return
+  local ipct=0
+  if is_number "$pct"; then
+    ipct=$(printf "%.0f" "$pct" 2>/dev/null || echo 0)
   fi
-  local ipct
-  ipct=$(printf "%.0f" "$pct" 2>/dev/null || echo "0")
   if [ "$ipct" -ge 80 ]; then
     printf '%s' "$RED"
   elif [ "$ipct" -ge 50 ]; then
@@ -48,10 +53,11 @@ color_for_pct() {
 # ── Progress bar (10 segments) ──
 progress_bar() {
   local pct="$1"
+  is_number "$pct" || pct=0
   local filled
-  filled=$(awk "BEGIN{printf \"%d\", int($pct / 10 + 0.5)}" 2>/dev/null || echo 0)
-  [ "$filled" -gt 10 ] 2>/dev/null && filled=10
-  [ "$filled" -lt 0 ] 2>/dev/null && filled=0
+  filled=$(awk "BEGIN{printf \"%d\", int($pct / 10 + 0.5)}")
+  [ "$filled" -gt 10 ] && filled=10
+  [ "$filled" -lt 0 ] && filled=0
   local bar=""
   for i in $(seq 1 10); do
     if [ "$i" -le "$filled" ]; then
@@ -77,8 +83,8 @@ fetch_usage() {
   [ -z "$token" ] && return 1
 
   local access_token
-  if echo "$token" | jq -e . >/dev/null 2>&1; then
-    access_token=$(echo "$token" | jq -r '.claudeAiOauth.accessToken // empty' 2>/dev/null)
+  if printf '%s' "$token" | jq -e . >/dev/null 2>&1; then
+    access_token=$(printf '%s' "$token" | jq -r '.claudeAiOauth.accessToken // empty' 2>/dev/null)
   else
     access_token="$token"
   fi
@@ -96,34 +102,50 @@ fetch_usage() {
   [ -z "$full_response" ] && return 1
 
   local h5_util h5_reset h7_util h7_reset
-  h5_util=$(echo "$full_response" | grep -i 'anthropic-ratelimit-unified-5h-utilization' | tr -d '\r' | awk '{print $2}')
-  h5_reset=$(echo "$full_response" | grep -i 'anthropic-ratelimit-unified-5h-reset' | tr -d '\r' | awk '{print $2}')
-  h7_util=$(echo "$full_response" | grep -i 'anthropic-ratelimit-unified-7d-utilization' | tr -d '\r' | awk '{print $2}')
-  h7_reset=$(echo "$full_response" | grep -i 'anthropic-ratelimit-unified-7d-reset' | tr -d '\r' | awk '{print $2}')
-  [ -z "$h5_util" ] && return 1
+  h5_util=$(printf '%s' "$full_response" | grep -i 'anthropic-ratelimit-unified-5h-utilization' | tr -d '\r' | awk '{print $2}')
+  h5_reset=$(printf '%s' "$full_response" | grep -i 'anthropic-ratelimit-unified-5h-reset'       | tr -d '\r' | awk '{print $2}')
+  h7_util=$(printf '%s' "$full_response" | grep -i 'anthropic-ratelimit-unified-7d-utilization' | tr -d '\r' | awk '{print $2}')
+  h7_reset=$(printf '%s' "$full_response" | grep -i 'anthropic-ratelimit-unified-7d-reset'       | tr -d '\r' | awk '{print $2}')
+
+  # Require numeric utilization value before writing cache
+  is_number "$h5_util" || return 1
+
+  # Atomic write with restricted permissions
+  local old_umask tmp_cache
+  old_umask=$(umask)
+  umask 077
+  tmp_cache=$(mktemp "${CACHE_FILE}.XXXXXX")
+  umask "$old_umask"
 
   jq -n \
     --arg h5u "$h5_util" --arg h5r "$h5_reset" \
     --arg h7u "$h7_util" --arg h7r "$h7_reset" \
     '{five_hour_util: $h5u, five_hour_reset: $h5r, seven_day_util: $h7u, seven_day_reset: $h7r}' \
-    > "$CACHE_FILE"
+    > "$tmp_cache" && mv "$tmp_cache" "$CACHE_FILE" || rm -f "$tmp_cache"
   return 0
 }
 
 load_usage() {
   local data="$1"
-  eval "$(echo "$data" | jq -r '
-    "FIVE_HOUR_UTIL=" + (.five_hour_util // ""),
-    "FIVE_HOUR_RESET=" + (.five_hour_reset // ""),
-    "SEVEN_DAY_UTIL=" + (.seven_day_util // ""),
-    "SEVEN_DAY_RESET=" + (.seven_day_reset // "")
-  ' 2>/dev/null)"
+  # Validate cache structure before reading
+  if ! printf '%s' "$data" | jq -e 'has("five_hour_util")' >/dev/null 2>&1; then
+    return 1
+  fi
+  IFS=$'\t' read -r FIVE_HOUR_UTIL FIVE_HOUR_RESET SEVEN_DAY_UTIL SEVEN_DAY_RESET < <(
+    printf '%s' "$data" | jq -r '[
+      (.five_hour_util  // ""),
+      (.five_hour_reset // ""),
+      (.seven_day_util  // ""),
+      (.seven_day_reset // "")
+    ] | @tsv' 2>/dev/null
+  )
 }
 
 # ── Check cache validity ──
 USE_CACHE=false
 if [ -f "$CACHE_FILE" ]; then
-  cache_age=$(( $(date +%s) - $(stat -f '%m' "$CACHE_FILE" 2>/dev/null || echo 0) ))
+  cache_mtime=$(stat -f '%m' "$CACHE_FILE" 2>/dev/null || stat -c '%Y' "$CACHE_FILE" 2>/dev/null || echo 0)
+  cache_age=$(( $(date +%s) - cache_mtime ))
   if [ "$cache_age" -lt "$CACHE_TTL" ]; then
     USE_CACHE=true
   fi
@@ -142,11 +164,9 @@ fi
 # ── Convert utilization (0.0-1.0) to percentage ──
 to_pct() {
   local val="$1"
-  if [ -z "$val" ] || [ "$val" = "null" ] || [ "$val" = "0" ]; then
-    echo ""
-    return
-  fi
-  awk "BEGIN{printf \"%.0f\", $val * 100}" 2>/dev/null || echo ""
+  [ -z "$val" ] || [ "$val" = "null" ] && echo "" && return
+  is_number "$val" || { echo ""; return; }
+  awk "BEGIN{printf \"%.0f\", $val * 100}"
 }
 
 FIVE_HR_PCT=$(to_pct "$FIVE_HOUR_UTIL")
@@ -157,10 +177,11 @@ format_epoch_time() {
   local epoch="$1"
   local format="$2"
   [ -z "$epoch" ] || [ "$epoch" = "0" ] && echo "" && return
+  is_number "$epoch" || { echo ""; return; }
   local result
   result=$(TZ="Asia/Tokyo" date -j -f "%s" "$epoch" "$format" 2>/dev/null || \
            TZ="Asia/Tokyo" date -d "@${epoch}" "$format" 2>/dev/null || echo "")
-  echo "$result" | sed 's/AM/am/;s/PM/pm/'
+  printf '%s' "$result" | sed 's/AM/am/;s/PM/pm/'
 }
 
 five_reset_display=""
@@ -175,7 +196,7 @@ fi
 
 # ── Format context used% ──
 ctx_pct_int=0
-if [ -n "$CTX_PCT" ] && [ "$CTX_PCT" != "null" ] && [ "$CTX_PCT" != "0" ]; then
+if [ -n "$CTX_PCT" ] && is_number "$CTX_PCT"; then
   ctx_pct_int=$(printf "%.0f" "$CTX_PCT" 2>/dev/null || echo 0)
 fi
 
