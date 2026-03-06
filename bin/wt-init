@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+#
+# wt-init - Create reusable git worktree slots with symlinked excluded files.
+# Slots are named w1, w2, ... and auto-increment from the highest existing slot.
+#
+# Usage: wt-init <count>
+#   count: number of worktree slots to create
+#
+# Examples:
+#   wt-init 3     # creates w1, w2, w3
+#   wt-init 1     # if w1-w3 exist, creates w4
+
+set -euo pipefail
+
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || {
+  echo "Error: not in a git repo" >&2; exit 1
+}
+cd "$repo_root"
+
+count="${1:-}"
+if [[ -z "$count" || ! "$count" =~ ^[0-9]+$ || "$count" -lt 1 ]]; then
+  echo "Usage: wt-init <count>" >&2
+  exit 1
+fi
+
+worktree_dir=".worktrees"
+exclude_file=".git/info/exclude"
+
+# Ensure .worktrees/ is in exclude
+if ! grep -qx '.worktrees/' "$exclude_file" 2>/dev/null; then
+  echo '.worktrees/' >> "$exclude_file"
+  echo "Added .worktrees/ to $exclude_file"
+fi
+
+# Find highest existing slot number
+max=0
+for d in "$worktree_dir"/w[0-9]*; do
+  [[ -d "$d" ]] || continue
+  num="${d##*/w}"
+  [[ "$num" =~ ^[0-9]+$ ]] && (( num > max )) && max=$num
+done
+
+# Parse exclude file for symlink candidates
+candidates=()
+if [[ -f "$exclude_file" ]]; then
+  while IFS= read -r line; do
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    path="$line"
+    path="${path#/}"
+    path="${path%/\*\*}"
+    path="${path%/}"
+    [[ "$path" == *"*"* ]] && continue
+    [[ "$path" == ".worktrees" ]] && continue
+    [[ -e "$repo_root/$path" ]] && candidates+=("$path")
+  done < "$exclude_file"
+fi
+
+# Select symlink targets via fzf
+selected=()
+if [[ ${#candidates[@]} -gt 0 ]]; then
+  echo "Select files/dirs to symlink into worktrees (TAB to select, Enter to confirm):"
+  mapfile -t selected < <(printf '%s\n' "${candidates[@]}" | fzf --multi --prompt="symlink> ")
+fi
+
+if [[ ${#selected[@]} -eq 0 ]]; then
+  echo "No symlink targets selected. Creating worktrees without symlinks."
+fi
+
+# Get default branch for worktree base
+default_branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@') || default_branch="main"
+
+# Create worktree slots
+mkdir -p "$worktree_dir"
+for ((i=1; i<=count; i++)); do
+  slot=$((max + i))
+  name="w${slot}"
+  path="$worktree_dir/$name"
+
+  if [[ -d "$path" ]]; then
+    echo "Skip: $name already exists"
+    continue
+  fi
+
+  echo "Creating $name..."
+  git worktree add "$path" -b "_slot-${name}" "$default_branch" --quiet
+
+  # Create symlinks
+  for item in "${selected[@]}"; do
+    src="$repo_root/$item"
+    dst="$path/$item"
+    mkdir -p "$(dirname "$dst")"
+    [[ -e "$dst" && ! -L "$dst" ]] && rm -rf "$dst"
+    ln -sfn "$src" "$dst"
+    echo "  Linked: $item"
+  done
+
+  echo "  Done: $path (branch: _slot-${name})"
+done
+
+echo ""
+echo "Slots ready! Usage:"
+echo "  cd $worktree_dir/w$((max + 1))"
+echo "  git checkout -b feature/your-branch"
+echo "  cc-impl w$((max + 1))"
