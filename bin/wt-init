@@ -27,7 +27,11 @@ worktree_dir=".worktrees"
 exclude_file=".git/info/exclude"
 
 # Ensure .worktrees/ is in exclude
-if ! grep -qx '.worktrees/' "$exclude_file" 2>/dev/null; then
+if [[ ! -f "$exclude_file" ]]; then
+  mkdir -p "$(dirname "$exclude_file")"
+  touch "$exclude_file"
+fi
+if ! grep -qx '.worktrees/' "$exclude_file"; then
   echo '.worktrees/' >> "$exclude_file"
   echo "Added .worktrees/ to $exclude_file"
 fi
@@ -59,7 +63,9 @@ fi
 selected=()
 if [[ ${#candidates[@]} -gt 0 ]]; then
   echo "Select files/dirs to symlink into worktrees (TAB to select, Enter to confirm):"
-  mapfile -t selected < <(printf '%s\n' "${candidates[@]}" | fzf --multi --prompt="symlink> ")
+  while IFS= read -r item; do
+    selected+=("$item")
+  done < <(printf '%s\n' "${candidates[@]}" | fzf --multi --prompt="symlink> ")
 fi
 
 if [[ ${#selected[@]} -eq 0 ]]; then
