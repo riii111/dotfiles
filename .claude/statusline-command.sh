@@ -70,7 +70,7 @@ progress_bar() {
 }
 
 # ── Rate limit via Haiku probe (cached 360s) ──
-CACHE_FILE="/tmp/claude-usage-cache.json"
+CACHE_FILE="${TMPDIR:-/tmp}/claude-usage-cache-${UID}.json"
 CACHE_TTL=360
 FIVE_HOUR_UTIL=""
 FIVE_HOUR_RESET=""
@@ -121,14 +121,14 @@ fetch_usage() {
     --arg h5u "$h5_util" --arg h5r "$h5_reset" \
     --arg h7u "$h7_util" --arg h7r "$h7_reset" \
     '{five_hour_util: $h5u, five_hour_reset: $h5r, seven_day_util: $h7u, seven_day_reset: $h7r}' \
-    > "$tmp_cache" && mv "$tmp_cache" "$CACHE_FILE" || rm -f "$tmp_cache"
+    > "$tmp_cache" && mv "$tmp_cache" "$CACHE_FILE" || { rm -f "$tmp_cache"; return 1; }
   return 0
 }
 
 load_usage() {
   local data="$1"
-  # Validate cache structure before reading
-  if ! printf '%s' "$data" | jq -e 'has("five_hour_util")' >/dev/null 2>&1; then
+  # Validate cache structure before reading (all 4 fields required)
+  if ! printf '%s' "$data" | jq -e 'has("five_hour_util") and has("five_hour_reset") and has("seven_day_util") and has("seven_day_reset")' >/dev/null 2>&1; then
     return 1
   fi
   IFS=$'\t' read -r FIVE_HOUR_UTIL FIVE_HOUR_RESET SEVEN_DAY_UTIL SEVEN_DAY_RESET < <(
@@ -146,18 +146,22 @@ USE_CACHE=false
 if [ -f "$CACHE_FILE" ]; then
   cache_mtime=$(stat -f '%m' "$CACHE_FILE" 2>/dev/null || stat -c '%Y' "$CACHE_FILE" 2>/dev/null || echo 0)
   cache_age=$(( $(date +%s) - cache_mtime ))
-  if [ "$cache_age" -lt "$CACHE_TTL" ]; then
+  if [ "$cache_age" -ge 0 ] && [ "$cache_age" -lt "$CACHE_TTL" ]; then
     USE_CACHE=true
   fi
 fi
 
+_reset_usage_vars() {
+  FIVE_HOUR_UTIL=""; FIVE_HOUR_RESET=""; SEVEN_DAY_UTIL=""; SEVEN_DAY_RESET=""
+}
+
 if $USE_CACHE; then
-  load_usage "$(cat "$CACHE_FILE")"
+  load_usage "$(cat "$CACHE_FILE")" || _reset_usage_vars
 else
   if fetch_usage; then
-    load_usage "$(cat "$CACHE_FILE")"
+    load_usage "$(cat "$CACHE_FILE")" || _reset_usage_vars
   elif [ -f "$CACHE_FILE" ]; then
-    load_usage "$(cat "$CACHE_FILE")"
+    load_usage "$(cat "$CACHE_FILE")" || _reset_usage_vars
   fi
 fi
 
