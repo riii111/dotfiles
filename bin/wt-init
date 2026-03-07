@@ -41,7 +41,7 @@ max=0
 for d in "$worktree_dir"/w[0-9]*; do
   [[ -d "$d" ]] || continue
   num="${d##*/w}"
-  [[ "$num" =~ ^[0-9]+$ ]] && (( num > max )) && max=$num
+  if [[ "$num" =~ ^[0-9]+$ ]] && [[ "$num" -gt "$max" ]]; then max=$num; fi
 done
 
 # Parse exclude file for symlink candidates
@@ -55,25 +55,56 @@ if [[ -f "$exclude_file" ]]; then
     path="${path%/}"
     [[ "$path" == *"*"* ]] && continue
     [[ "$path" == ".worktrees" ]] && continue
+    [[ "$path" == *".."* ]] && continue
     [[ -e "$repo_root/$path" ]] && candidates+=("$path")
   done < "$exclude_file"
 fi
 
-# Select symlink targets via fzf
+# Select symlink targets via fzf (skip if fzf is not available)
 selected=()
 if [[ ${#candidates[@]} -gt 0 ]]; then
-  echo "Select files/dirs to symlink into worktrees (TAB to select, Enter to confirm):"
-  while IFS= read -r item; do
-    selected+=("$item")
-  done < <(printf '%s\n' "${candidates[@]}" | fzf --multi --prompt="symlink> ")
+  if command -v fzf >/dev/null 2>&1; then
+    echo "Select files/dirs to symlink into worktrees (TAB to select, Enter to confirm):"
+    fzf_exit=0
+    while IFS= read -r item; do
+      selected+=("$item")
+    done < <(printf '%s\n' "${candidates[@]}" | fzf --multi --prompt="symlink> ") || fzf_exit=$?
+    if [[ "$fzf_exit" -ne 0 ]] && [[ ${#selected[@]} -eq 0 ]]; then
+      echo "fzf selection cancelled."
+    fi
+  else
+    echo "Warning: fzf not found. Skipping symlink selection." >&2
+  fi
 fi
 
 if [[ ${#selected[@]} -eq 0 ]]; then
   echo "No symlink targets selected. Creating worktrees without symlinks."
 fi
 
-# Get default branch for worktree base
-default_branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@') || default_branch="main"
+# Resolve default branch: origin/HEAD -> current branch -> main/master -> error
+resolve_default_branch() {
+  local branch
+  branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@') && [[ -n "$branch" ]] && echo "$branch" && return
+  branch=$(git symbolic-ref --short HEAD 2>/dev/null) && [[ -n "$branch" ]] && echo "$branch" && return
+  for candidate in main master; do
+    if git show-ref --verify --quiet "refs/heads/$candidate"; then
+      echo "$candidate" && return
+    fi
+  done
+  echo "Error: cannot determine default branch" >&2
+  return 1
+}
+default_branch=$(resolve_default_branch)
+
+# Rollback helper: remove a partially created slot
+rollback_slot() {
+  local slot_path="$1" slot_branch="$2"
+  echo "  Rolling back $slot_path..." >&2
+  git worktree remove "$slot_path" --force 2>/dev/null || rm -rf "$slot_path"
+  if git show-ref --verify --quiet "refs/heads/$slot_branch"; then
+    git branch -D "$slot_branch" 2>/dev/null || true
+  fi
+}
 
 # Create worktree slots
 mkdir -p "$worktree_dir"
@@ -88,21 +119,38 @@ for ((i=1; i<=count; i++)); do
   fi
 
   echo "Creating $name..."
+  git worktree prune
   if git show-ref --verify --quiet "refs/heads/_slot-${name}"; then
-    git branch -D "_slot-${name}" --quiet 2>/dev/null
+    echo "  Warning: stale branch _slot-${name} found, removing." >&2
+    git branch -D "_slot-${name}" 2>/dev/null || echo "  Warning: failed to delete _slot-${name}" >&2
   fi
-  git worktree prune --quiet 2>/dev/null
-  git worktree add "$path" -b "_slot-${name}" "$default_branch" --quiet
 
-  # Create symlinks
+  if ! git worktree add "$path" -b "_slot-${name}" "$default_branch"; then
+    echo "  Error: failed to create worktree $name" >&2
+    rollback_slot "$path" "_slot-${name}"
+    continue
+  fi
+
+  # Create symlinks (with rollback on failure)
+  link_failed=0
   for item in "${selected[@]+${selected[@]}}"; do
     src="$repo_root/$item"
     dst="$path/$item"
-    mkdir -p "$(dirname "$dst")"
+    if ! mkdir -p "$(dirname "$dst")"; then
+      link_failed=1; break
+    fi
     [[ -e "$dst" && ! -L "$dst" ]] && rm -rf "$dst"
-    ln -sfn "$src" "$dst"
+    if ! ln -sfn "$src" "$dst"; then
+      link_failed=1; break
+    fi
     echo "  Linked: $item"
   done
+
+  if [[ "$link_failed" -ne 0 ]]; then
+    echo "  Error: symlink creation failed for $name, rolling back." >&2
+    rollback_slot "$path" "_slot-${name}"
+    continue
+  fi
 
   echo "  Done: $path (branch: _slot-${name})"
 done
