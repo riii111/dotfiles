@@ -88,10 +88,14 @@ for ((i=1; i<=count; i++)); do
   fi
 
   echo "Creating $name..."
+  if git show-ref --verify --quiet "refs/heads/_slot-${name}"; then
+    git branch -D "_slot-${name}" --quiet 2>/dev/null
+  fi
+  git worktree prune --quiet 2>/dev/null
   git worktree add "$path" -b "_slot-${name}" "$default_branch" --quiet
 
   # Create symlinks
-  for item in "${selected[@]}"; do
+  for item in "${selected[@]+${selected[@]}}"; do
     src="$repo_root/$item"
     dst="$path/$item"
     mkdir -p "$(dirname "$dst")"
