@@ -90,24 +90,15 @@ export CLOUDSDK_PYTHON=/opt/homebrew/bin/python3
 export PATH="/opt/homebrew/share/google-cloud-sdk/bin:$PATH"
 
 # Load completions on first invocation
-function gcloud() {
-  unfunction gcloud gsutil bq 2>/dev/null
-  source "/opt/homebrew/share/google-cloud-sdk/path.zsh.inc"
-  source "/opt/homebrew/share/google-cloud-sdk/completion.zsh.inc"
-  gcloud "$@"
-}
-function gsutil() {
-  unfunction gcloud gsutil bq 2>/dev/null
-  source "/opt/homebrew/share/google-cloud-sdk/path.zsh.inc"
-  source "/opt/homebrew/share/google-cloud-sdk/completion.zsh.inc"
-  gsutil "$@"
-}
-function bq() {
-  unfunction gcloud gsutil bq 2>/dev/null
-  source "/opt/homebrew/share/google-cloud-sdk/path.zsh.inc"
-  source "/opt/homebrew/share/google-cloud-sdk/completion.zsh.inc"
-  bq "$@"
-}
+for _gcmd in gcloud gsutil bq; do
+  eval "${_gcmd}() {
+    unfunction gcloud gsutil bq 2>/dev/null
+    source /opt/homebrew/share/google-cloud-sdk/path.zsh.inc
+    source /opt/homebrew/share/google-cloud-sdk/completion.zsh.inc
+    ${_gcmd} \"\$@\"
+  }"
+done
+unset _gcmd
 
 # golang
 export GOTOOLCHAIN=auto
@@ -402,4 +393,3 @@ HELP
 # Machine-specific config
 # ==========================================
 [[ -f ~/.zshrc.local ]] && source ~/.zshrc.local
-
