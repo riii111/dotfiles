@@ -73,7 +73,7 @@ _set_terminal_title() {
   local git_dir
   git_dir=$(git rev-parse --git-dir 2>/dev/null) || { printf '\e]2;%s\a' "$dir"; return; }
 
-  # Repository name (toplevel basename)
+  # Repository name
   local repo
   repo=$(basename "$(git rev-parse --show-toplevel 2>/dev/null)")
 
