@@ -83,9 +83,11 @@ wezterm.on("update-status", function(window, pane)
 
 	local segments = {}
 
+	-- Directory
 	table.insert(segments, { Foreground = { Color = "#c0caf5" } })
 	table.insert(segments, { Text = "  " .. dir })
 
+	-- Git branch
 	if branch and #branch > 0 then
 		table.insert(segments, { Foreground = { Color = "#565f89" } })
 		table.insert(segments, { Text = "  " .. SEP .. "  " })
@@ -93,6 +95,7 @@ wezterm.on("update-status", function(window, pane)
 		table.insert(segments, { Text = " " .. branch })
 	end
 
+	-- Time
 	table.insert(segments, { Foreground = { Color = "#565f89" } })
 	table.insert(segments, { Text = "  " .. SEP .. "  " })
 	table.insert(segments, { Foreground = { Color = "#bb9af7" } })
