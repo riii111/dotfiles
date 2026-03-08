@@ -31,13 +31,35 @@ config.window_padding = {
 ---------------------------------------------------------------
 -- Tab bar
 ---------------------------------------------------------------
+local TAB_BG = "#1f1f28"
+
 config.tab_bar_at_bottom = false
 config.use_fancy_tab_bar = true
-config.hide_tab_bar_if_only_one_tab = true
+config.hide_tab_bar_if_only_one_tab = false
 config.show_new_tab_button_in_tab_bar = false
 config.window_frame = {
-	active_titlebar_bg = "#181616",
-	inactive_titlebar_bg = "#181616",
+	font = wezterm.font("DroidSansM Nerd Font Mono", { weight = "Bold" }),
+	font_size = 12.0,
+	active_titlebar_bg = TAB_BG,
+	inactive_titlebar_bg = TAB_BG,
+}
+config.colors = {
+	tab_bar = {
+		background = TAB_BG,
+		active_tab = {
+			bg_color = "#2a2a37",
+			fg_color = "#c5c9c5",
+			intensity = "Bold",
+		},
+		inactive_tab = {
+			bg_color = TAB_BG,
+			fg_color = "#565f89",
+		},
+		inactive_tab_hover = {
+			bg_color = "#2a2a37",
+			fg_color = "#c5c9c5",
+		},
+	},
 }
 
 ---------------------------------------------------------------

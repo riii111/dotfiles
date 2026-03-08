@@ -62,3 +62,41 @@ wezterm.on("toggle-blur", function(window, _)
 	end
 	window:set_config_overrides(overrides)
 end)
+
+-- Tab title: show process name instead of shell-set title
+wezterm.on("format-tab-title", function(tab)
+	local pane = tab.active_pane
+	local process = pane.foreground_process_name or ""
+	local name = process:match("([^/]+)$") or pane.title
+	return " " .. name .. " "
+end)
+
+-- Right status: dir, git branch, time (parsed from zsh precmd "dir::branch")
+local SEP = "\u{e0b3}"
+
+wezterm.on("update-status", function(window, pane)
+	local title = pane:get_title()
+	local dir, branch = title:match("^(.+)::(.+)$")
+	if not dir then
+		dir = title
+	end
+
+	local segments = {}
+
+	table.insert(segments, { Foreground = { Color = "#c0caf5" } })
+	table.insert(segments, { Text = "  " .. dir })
+
+	if branch and #branch > 0 then
+		table.insert(segments, { Foreground = { Color = "#565f89" } })
+		table.insert(segments, { Text = "  " .. SEP .. "  " })
+		table.insert(segments, { Foreground = { Color = "#7dcfff" } })
+		table.insert(segments, { Text = " " .. branch })
+	end
+
+	table.insert(segments, { Foreground = { Color = "#565f89" } })
+	table.insert(segments, { Text = "  " .. SEP .. "  " })
+	table.insert(segments, { Foreground = { Color = "#bb9af7" } })
+	table.insert(segments, { Text = " " .. wezterm.strftime("%H:%M") .. "  " })
+
+	window:set_right_status(wezterm.format(segments))
+end)
