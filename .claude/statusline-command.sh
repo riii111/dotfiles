@@ -11,13 +11,16 @@ RESET=$'\e[0m'
 
 # ── Read stdin JSON (eval-free, @tsv) ──
 INPUT=$(cat)
-IFS=$'\t' read -r MODEL_DISPLAY CTX_PCT LINES_ADD LINES_DEL CWD < <(
+IFS=$'\t' read -r MODEL_DISPLAY CTX_PCT LINES_ADD LINES_DEL CWD COST_USD WT_NAME WT_ORIG_BRANCH < <(
   printf '%s' "$INPUT" | jq -r '[
     (.model.display_name // "Unknown"),
     (.context_window.used_percentage // 0 | tostring),
     (.cost.total_lines_added // 0 | tostring),
     (.cost.total_lines_removed // 0 | tostring),
-    (.cwd // "")
+    (.cwd // ""),
+    (.cost.total_cost_usd // 0 | tostring),
+    (.worktree.name // ""),
+    (.worktree.original_branch // "")
   ] | @tsv' 2>/dev/null
 )
 
@@ -64,8 +67,18 @@ if [ "$LINES_ADD" -gt 0 ] 2>/dev/null || [ "$LINES_DEL" -gt 0 ] 2>/dev/null; the
   line1+="${SEP}✏️  ${GREEN}+${LINES_ADD}/-${LINES_DEL}${RESET}"
 fi
 
-if [ -n "$GIT_BRANCH" ]; then
+# ── Branch / Worktree ──
+if [ -n "$WT_NAME" ]; then
+  line1+="${SEP}🌳 ${WT_NAME}"
+  [ -n "$WT_ORIG_BRANCH" ] && line1+=" ← ${WT_ORIG_BRANCH}"
+elif [ -n "$GIT_BRANCH" ]; then
   line1+="${SEP}🔀 ${GIT_BRANCH}"
+fi
+
+# ── Cost ──
+if is_number "$COST_USD" && [ "$(awk "BEGIN{print ($COST_USD > 0)}")" = "1" ]; then
+  cost_display=$(awk "BEGIN{printf \"$%.2f\", $COST_USD}")
+  line1+="${SEP}💰 ${cost_display}"
 fi
 
 # ── Output ──
