@@ -85,48 +85,47 @@ local FLAG_BADGES = {
 wezterm.on("update-status", function(window, pane)
 	local title = pane:get_title()
 
-	-- Parse "dir::ref::flags" or "dir::ref" or "dir"
-	local parts = {}
-	for part in title:gmatch("[^:]+") do
-		table.insert(parts, part)
-	end
-	local dir = parts[1] or title
-	local ref = parts[2]
-	local flags = parts[3] or ""
-
 	local segments = {}
 
-	-- Directory
-	table.insert(segments, { Foreground = { Color = "#c0caf5" } })
-	table.insert(segments, { Text = "  " .. dir })
-
-	-- Git ref (branch or detached SHA)
-	if ref and #ref > 0 then
-		table.insert(segments, { Foreground = { Color = "#565f89" } })
-		table.insert(segments, { Text = "  " .. SEP .. "  " })
-
-		-- Worktree badge
-		if flags:find("w") then
-			table.insert(segments, { Foreground = { Color = "#9ece6a" } })
-			table.insert(segments, { Text = "󰙅 " })
+	-- Only show git info when title matches our "repo::ref" format
+	if title:find("::") then
+		local parts = {}
+		for part in title:gmatch("[^:]+") do
+			table.insert(parts, part)
 		end
+		local dir = parts[1] or title
+		local ref = parts[2]
+		local flags = parts[3] or ""
 
-		-- Ref name (cyan for branch, orange for detached)
-		local is_detached = flags:find("D")
-		table.insert(segments, { Foreground = { Color = is_detached and "#ff9e64" or "#7dcfff" } })
-		table.insert(segments, { Text = " " .. ref })
+		table.insert(segments, { Foreground = { Color = "#c0caf5" } })
+		table.insert(segments, { Text = "  " .. dir })
 
-		-- Dirty indicator
-		if flags:find("d") then
-			table.insert(segments, { Foreground = { Color = "#e6c384" } })
-			table.insert(segments, { Text = " *" })
-		end
+		if ref and #ref > 0 then
+			table.insert(segments, { Foreground = { Color = "#565f89" } })
+			table.insert(segments, { Text = "  " .. SEP .. "  " })
 
-		-- Rebase / Merge / Cherry-pick badge
-		for flag, badge in pairs(FLAG_BADGES) do
-			if flags:find(flag) then
-				table.insert(segments, { Foreground = { Color = badge.color } })
-				table.insert(segments, { Text = badge.text })
+			-- Worktree badge
+			if flags:find("w") then
+				table.insert(segments, { Foreground = { Color = "#9ece6a" } })
+				table.insert(segments, { Text = "󰙅 " })
+			end
+
+			local is_detached = flags:find("D")
+			table.insert(segments, { Foreground = { Color = is_detached and "#ff9e64" or "#7dcfff" } })
+			table.insert(segments, { Text = " " .. ref })
+
+			-- Dirty indicator
+			if flags:find("d") then
+				table.insert(segments, { Foreground = { Color = "#e6c384" } })
+				table.insert(segments, { Text = " *" })
+			end
+
+			-- Rebase / Merge / Cherry-pick badge
+			for flag, badge in pairs(FLAG_BADGES) do
+				if flags:find(flag) then
+					table.insert(segments, { Foreground = { Color = badge.color } })
+					table.insert(segments, { Text = badge.text })
+				end
 			end
 		end
 	end
