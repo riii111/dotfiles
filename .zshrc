@@ -176,43 +176,43 @@ if [[ -o zle ]]; then
 fi
 
 # ==========================================
-# Modern CLI Tools Aliases
+# zsh-abbr
 # ==========================================
-# Use modern replacements for traditional Unix tools
-alias cat='bat'
-alias ls='eza'
-alias ll='eza -hl'
-alias la='eza -hla'
-alias lt='eza --tree'
-alias llg='eza -hlFg'
-
-# ==========================================
-# Basic Aliases
-# ==========================================
-alias vim='nvim'
-alias v='nvim'
-alias nv='nvim'
-alias clr='clear'
-alias o='open'
+source /opt/homebrew/share/zsh-abbr/zsh-abbr.zsh
 export LG_CONFIG_FILE="$HOME/.config/lazygit/config.yml"
-alias lg='lazygit'
 
-alias mkdir='mkdir -p'
-alias mkd='mkdir -p'
+# Modern CLI Tools (--force: override same-name system commands)
+abbr -S -qq --force cat='bat'
+abbr -S -qq --force ls='eza'
+abbr -S -qq ll='eza -hl'
+abbr -S -qq la='eza -hla'
+abbr -S -qq lt='eza --tree'
+abbr -S -qq llg='eza -hlFg'
 
-alias dc='docker compose'
-alias dcb='docker compose build'
-alias dcbn='docker compose build --no-cache'
-alias dcu='docker compose up -d'
-alias dcub='docker compose up --build -d'
-alias dcd='docker compose down -v'
-alias dcr='docker compose restart'
-alias dps='docker ps'
-alias dpa='docker ps -a'
+# Basic
+abbr -S -qq --force vim='nvim'
+abbr -S -qq v='nvim'
+abbr -S -qq nv='nvim'
+abbr -S -qq clr='clear'
+abbr -S -qq --force o='open'
+abbr -S -qq lg='lazygit'
+abbr -S -qq --force mkdir='mkdir -p'
+abbr -S -qq mkd='mkdir -p'
 
-# Clipboard operations
-alias cpf='pbcopy <'
-alias paf='pbpaste >'
+# Docker
+abbr -S -qq --force dc='docker compose'
+abbr -S -qq dcb='docker compose build'
+abbr -S -qq dcbn='docker compose build --no-cache'
+abbr -S -qq dcu='docker compose up -d'
+abbr -S -qq dcub='docker compose up --build -d'
+abbr -S -qq dcd='docker compose down -v'
+abbr -S -qq dcr='docker compose restart'
+abbr -S -qq dps='docker ps'
+abbr -S -qq dpa='docker ps -a'
+
+# Clipboard
+abbr -S -qq cpf='pbcopy <'
+abbr -S -qq paf='pbpaste >'
 
 # ==========================================
 # fzf Configuration
