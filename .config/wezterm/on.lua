@@ -71,15 +71,28 @@ wezterm.on("format-tab-title", function(tab)
 	return " " .. name .. " "
 end)
 
--- Right status: dir, git branch, time (parsed from zsh precmd "dir::branch")
+-- Right status: dir, git ref, flags, time
+-- Parsed from zsh precmd title: "dir::ref::flags"
+-- Flags: d=dirty, w=worktree, R=rebase, M=merge, C=cherry-pick
 local SEP = "\u{e0b3}"
+
+local FLAG_BADGES = {
+	R = { text = " REBASE", color = "#ff9e64" },
+	M = { text = " MERGE", color = "#ff9e64" },
+	C = { text = " PICK", color = "#ff9e64" },
+}
 
 wezterm.on("update-status", function(window, pane)
 	local title = pane:get_title()
-	local dir, branch = title:match("^(.+)::(.+)$")
-	if not dir then
-		dir = title
+
+	-- Parse "dir::ref::flags" or "dir::ref" or "dir"
+	local parts = {}
+	for part in title:gmatch("[^:]+") do
+		table.insert(parts, part)
 	end
+	local dir = parts[1] or title
+	local ref = parts[2]
+	local flags = parts[3] or ""
 
 	local segments = {}
 
@@ -87,12 +100,35 @@ wezterm.on("update-status", function(window, pane)
 	table.insert(segments, { Foreground = { Color = "#c0caf5" } })
 	table.insert(segments, { Text = "  " .. dir })
 
-	-- Git branch
-	if branch and #branch > 0 then
+	-- Git ref (branch or detached SHA)
+	if ref and #ref > 0 then
 		table.insert(segments, { Foreground = { Color = "#565f89" } })
 		table.insert(segments, { Text = "  " .. SEP .. "  " })
-		table.insert(segments, { Foreground = { Color = "#7dcfff" } })
-		table.insert(segments, { Text = " " .. branch })
+
+		-- Worktree badge
+		if flags:find("w") then
+			table.insert(segments, { Foreground = { Color = "#9ece6a" } })
+			table.insert(segments, { Text = "󰙅 " })
+		end
+
+		-- Ref name (cyan for branch, orange for detached SHA)
+		local is_detached = ref:match("^%x+$") and #ref <= 12
+		table.insert(segments, { Foreground = { Color = is_detached and "#ff9e64" or "#7dcfff" } })
+		table.insert(segments, { Text = " " .. ref })
+
+		-- Dirty indicator
+		if flags:find("d") then
+			table.insert(segments, { Foreground = { Color = "#e6c384" } })
+			table.insert(segments, { Text = " *" })
+		end
+
+		-- Rebase / Merge / Cherry-pick badge
+		for flag, badge in pairs(FLAG_BADGES) do
+			if flags:find(flag) then
+				table.insert(segments, { Foreground = { Color = badge.color } })
+				table.insert(segments, { Text = badge.text })
+			end
+		end
 	end
 
 	-- Time
