@@ -64,6 +64,15 @@ setopt HIST_REDUCE_BLANKS
 # ==========================================
 export PS1="%1~ %# "
 
+# Set terminal title for WezTerm right status
+_set_terminal_title() {
+  local dir="${PWD##*/}"
+  local branch=$(git symbolic-ref --short HEAD 2>/dev/null)
+  printf '\e]2;%s\a' "${dir}${branch:+::$branch}"
+}
+autoload -Uz add-zsh-hook
+add-zsh-hook precmd _set_terminal_title
+
 # ==========================================
 # Environment Variables
 # ==========================================
