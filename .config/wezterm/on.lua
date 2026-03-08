@@ -71,8 +71,8 @@ wezterm.on("format-tab-title", function(tab)
 	return " " .. name .. " "
 end)
 
--- Right status: dir, git ref, flags, time
--- Parsed from zsh precmd title: "dir::ref::flags"
+-- Right status: repo, git ref, flags, time
+-- Parsed from zsh precmd title: "repo::ref::flags"
 -- Flags: d=dirty, D=detached, w=worktree, R=rebase, M=merge, C=cherry-pick
 local SEP = "\u{e0b3}"
 
