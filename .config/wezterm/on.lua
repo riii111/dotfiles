@@ -135,7 +135,7 @@ wezterm.on("update-status", function(window, pane)
 	table.insert(segments, { Foreground = { Color = "#565f89" } })
 	table.insert(segments, { Text = "  " .. SEP .. "  " })
 	table.insert(segments, { Foreground = { Color = "#bb9af7" } })
-	table.insert(segments, { Text = " " .. wezterm.strftime("%H:%M") .. "  " })
+	table.insert(segments, { Text = " " .. wezterm.strftime("%a %b %e %H:%M") .. "  " })
 
 	window:set_right_status(wezterm.format(segments))
 end)
