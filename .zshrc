@@ -75,12 +75,10 @@ _set_terminal_title() {
 
   # Branch or detached short SHA
   local ref flags=""
-  if ref=$(git symbolic-ref --short HEAD 2>/dev/null); then
-    :
-  else
+  ref=$(git symbolic-ref --short HEAD 2>/dev/null) || {
     ref=$(git rev-parse --short HEAD 2>/dev/null)
     flags="${flags}D"
-  fi
+  }
 
   # Dirty (includes staged, unstaged, and untracked)
   [[ -n $(git status --porcelain 2>/dev/null | head -1) ]] && flags="${flags}d"
