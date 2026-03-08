@@ -78,6 +78,48 @@ if format_ok then
   })
 end
 
+-- Send git info to WezTerm right status via OSC 2
+local wezterm_status = vim.api.nvim_create_augroup("wezterm_status", { clear = true })
+vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter", "DirChanged" }, {
+  group = wezterm_status,
+  callback = function()
+    local git_dir = vim.fn.system("git rev-parse --git-dir 2>/dev/null"):gsub("\n", "")
+    if vim.v.shell_error ~= 0 then
+      local dir = vim.fn.fnamemodify(vim.fn.getcwd(), ":t")
+      io.write(string.format("\027]2;%s\a", dir))
+      return
+    end
+
+    local repo = vim.fn.fnamemodify(vim.fn.system("git rev-parse --show-toplevel 2>/dev/null"):gsub("\n", ""), ":t")
+
+    local flags = ""
+    local ref = vim.fn.system("git symbolic-ref --short HEAD 2>/dev/null"):gsub("\n", "")
+    if vim.v.shell_error ~= 0 then
+      ref = vim.fn.system("git rev-parse --short HEAD 2>/dev/null"):gsub("\n", "")
+      flags = flags .. "D"
+    end
+
+    if vim.fn.system("git status --porcelain 2>/dev/null | head -1"):gsub("\n", "") ~= "" then
+      flags = flags .. "d"
+    end
+
+    local common_dir = vim.fn.system("git rev-parse --git-common-dir 2>/dev/null"):gsub("\n", "")
+    if vim.fn.resolve(git_dir) ~= vim.fn.resolve(common_dir) then
+      flags = flags .. "w"
+    end
+
+    if vim.fn.isdirectory(git_dir .. "/rebase-merge") == 1 or vim.fn.isdirectory(git_dir .. "/rebase-apply") == 1 then
+      flags = flags .. "R"
+    end
+    if vim.fn.filereadable(git_dir .. "/MERGE_HEAD") == 1 then flags = flags .. "M" end
+    if vim.fn.filereadable(git_dir .. "/CHERRY_PICK_HEAD") == 1 then flags = flags .. "C" end
+
+    local title = repo .. "::" .. ref
+    if flags ~= "" then title = title .. "::" .. flags end
+    io.write(string.format("\027]2;%s\a", title))
+  end,
+})
+
 -- KotlinCompileDaemon has 2-hour idle timeout (not configurable: KT-50510)
 -- Kill daemons on exit to prevent memory bloat from zombie processes
 local daemon_cleanup = vim.api.nvim_create_augroup("daemon_cleanup", { clear = true })
