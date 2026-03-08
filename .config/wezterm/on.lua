@@ -73,7 +73,7 @@ end)
 
 -- Right status: dir, git ref, flags, time
 -- Parsed from zsh precmd title: "dir::ref::flags"
--- Flags: d=dirty, w=worktree, R=rebase, M=merge, C=cherry-pick
+-- Flags: d=dirty, D=detached, w=worktree, R=rebase, M=merge, C=cherry-pick
 local SEP = "\u{e0b3}"
 
 local FLAG_BADGES = {
@@ -111,8 +111,8 @@ wezterm.on("update-status", function(window, pane)
 			table.insert(segments, { Text = "󰙅 " })
 		end
 
-		-- Ref name (cyan for branch, orange for detached SHA)
-		local is_detached = ref:match("^%x+$") and #ref <= 12
+		-- Ref name (cyan for branch, orange for detached)
+		local is_detached = flags:find("D")
 		table.insert(segments, { Foreground = { Color = is_detached and "#ff9e64" or "#7dcfff" } })
 		table.insert(segments, { Text = " " .. ref })
 

@@ -65,7 +65,7 @@ setopt HIST_REDUCE_BLANKS
 export PS1="%1~ %# "
 
 # Set terminal title for WezTerm right status
-# Format: "dir::ref::flags" (flags: d=dirty, w=worktree, R=rebase, M=merge, C=cherry-pick)
+# Format: "dir::ref::flags" (flags: d=dirty, D=detached, w=worktree, R=rebase, M=merge, C=cherry-pick)
 _set_terminal_title() {
   local dir="${PWD##*/}"
   dir="${dir:-/}"
@@ -74,14 +74,22 @@ _set_terminal_title() {
   git_dir=$(git rev-parse --git-dir 2>/dev/null) || { printf '\e]2;%s\a' "$dir"; return; }
 
   # Branch or detached short SHA
-  local ref
-  ref=$(git symbolic-ref --short HEAD 2>/dev/null) || ref=$(git rev-parse --short HEAD 2>/dev/null)
+  local ref flags=""
+  if ref=$(git symbolic-ref --short HEAD 2>/dev/null); then
+    :
+  else
+    ref=$(git rev-parse --short HEAD 2>/dev/null)
+    flags="${flags}D"
+  fi
 
-  # Flags
-  local flags=""
-  git diff --quiet 2>/dev/null && git diff --cached --quiet 2>/dev/null || flags="${flags}d"
+  # Dirty (includes staged, unstaged, and untracked)
+  [[ -n $(git status --porcelain 2>/dev/null) ]] && flags="${flags}d"
+
+  # Worktree
   local common_dir=$(git rev-parse --git-common-dir 2>/dev/null)
   ! [[ "$git_dir" = "$common_dir" ]] && flags="${flags}w"
+
+  # Rebase / Merge / Cherry-pick
   [[ -d "$git_dir/rebase-merge" || -d "$git_dir/rebase-apply" ]] && flags="${flags}R"
   [[ -f "$git_dir/MERGE_HEAD" ]] && flags="${flags}M"
   [[ -f "$git_dir/CHERRY_PICK_HEAD" ]] && flags="${flags}C"
