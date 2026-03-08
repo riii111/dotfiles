@@ -65,10 +65,28 @@ setopt HIST_REDUCE_BLANKS
 export PS1="%1~ %# "
 
 # Set terminal title for WezTerm right status
+# Format: "dir::ref::flags" (flags: d=dirty, w=worktree, R=rebase, M=merge, C=cherry-pick)
 _set_terminal_title() {
   local dir="${PWD##*/}"
-  local branch=$(git symbolic-ref --short HEAD 2>/dev/null)
-  printf '\e]2;%s\a' "${dir}${branch:+::$branch}"
+  dir="${dir:-/}"
+
+  local git_dir
+  git_dir=$(git rev-parse --git-dir 2>/dev/null) || { printf '\e]2;%s\a' "$dir"; return; }
+
+  # Branch or detached short SHA
+  local ref
+  ref=$(git symbolic-ref --short HEAD 2>/dev/null) || ref=$(git rev-parse --short HEAD 2>/dev/null)
+
+  # Flags
+  local flags=""
+  git diff --quiet 2>/dev/null && git diff --cached --quiet 2>/dev/null || flags="${flags}d"
+  local common_dir=$(git rev-parse --git-common-dir 2>/dev/null)
+  ! [[ "$git_dir" = "$common_dir" ]] && flags="${flags}w"
+  [[ -d "$git_dir/rebase-merge" || -d "$git_dir/rebase-apply" ]] && flags="${flags}R"
+  [[ -f "$git_dir/MERGE_HEAD" ]] && flags="${flags}M"
+  [[ -f "$git_dir/CHERRY_PICK_HEAD" ]] && flags="${flags}C"
+
+  printf '\e]2;%s\a' "${dir}::${ref}${flags:+::$flags}"
 }
 autoload -Uz add-zsh-hook
 add-zsh-hook precmd _set_terminal_title
