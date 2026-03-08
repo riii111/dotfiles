@@ -83,7 +83,7 @@ _set_terminal_title() {
   fi
 
   # Dirty (includes staged, unstaged, and untracked)
-  [[ -n $(git status --porcelain 2>/dev/null) ]] && flags="${flags}d"
+  [[ -n $(git status --porcelain 2>/dev/null | head -1) ]] && flags="${flags}d"
 
   # Worktree
   local common_dir=$(git rev-parse --git-common-dir 2>/dev/null)
