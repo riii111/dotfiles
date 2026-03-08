@@ -25,32 +25,22 @@ zsh -il -c exit: 129.7ms → 39.2ms (-70%)
 - Bufferline with language-colored labels (GitHub Linguist)
 - Inline reference count (symbol-usage)
 - One-key Quick Fix / Refactor menu
-- Per-language modules (Rust, Go, TypeScript, Python, C++)
+- Per-language modules (Rust, Go, TypeScript, Python, C++, Kotlin, Terraform, SQL, Lua)
 
 <img width="600" alt="Quick Fix / Refactor" src="https://github.com/user-attachments/assets/da51445c-1d46-4980-a469-fc094a2ba3f8" />
 
-### DB tools: dbx / dbn
+### DB tools: [sabiql](https://github.com/riii111/sabiql)
 
-Per-project DB connection management.
+TUI-based DB management tool built with Rust + Ratatui.
 
-- `dbx`: opens pgcli/mycli with per-project history
-- `dbn`: table browser with column/relation preview, copy query template
-
-<img width="720" alt="dbn / dbx" src="https://github.com/user-attachments/assets/e69b298b-e0bb-4d87-a9da-fe0e1641af37" />
-
-Config: place `.dbx.toml` at project root (do not commit):
-
-```toml
-default = "app_ro"
-
-[profiles.app_ro]
-dsn = "postgres://user:pass@127.0.0.1:5432/app?sslmode=disable"
-```
+- Per-project connection profiles
+- Table browser with column/relation preview
+- Query editor with syntax highlighting
 
 ### lazygit
 
 Delta for modern diffs. `|` key toggles split/unified view.
-<img width="720" alt="dbn / dbx" src="https://github.com/user-attachments/assets/8669819b-945f-43d3-b030-0ae668032efd" />
+<img width="720" alt="lazygit" src="https://github.com/user-attachments/assets/8669819b-945f-43d3-b030-0ae668032efd" />
 
 ### AI tooling
 
@@ -83,4 +73,3 @@ Add `~/bin` to PATH for scripts in `bin/`.
 
 - macOS only (AppleScript, pbcopy, etc.)
 - Kotlin LSP assumes forked version
-- dbx/dbn require fzf, yq, pgcli/mycli, pspg, etc.
