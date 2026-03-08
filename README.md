@@ -31,6 +31,9 @@ zsh -il -c exit: 129.7ms → 39.2ms (-70%)
 
 ### DB tools: [sabiql](https://github.com/riii111/sabiql)
 
+<img width="720" alt="DB Tool - sabiql" src="https://github.com/user-attachments/assets/57567e97-69b7-4851-baee-8aba9df1a84f" />
+
+
 TUI-based DB management tool built with Rust + Ratatui.
 
 - Per-project connection profiles
