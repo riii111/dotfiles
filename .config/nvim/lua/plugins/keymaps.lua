@@ -1,424 +1,426 @@
 local function get_visual_selection()
-  vim.cmd('normal! "ay')
-  return vim.fn.getreg('a'):gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
+	vim.cmd('normal! "ay')
+	return vim.fn.getreg("a"):gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
 end
 
 local function setup_keymaps()
-  local mappings = {
-    n = {
-      -- Window splits (WezTerm: Cmd+Arrow → Ctrl+Shift+Arrow)
-      ["<D-Down>"] = { ":split<CR>", desc = "Split window below" },
-      ["<D-Right>"] = { ":vsplit<CR>", desc = "Split window right" },
-      ["<C-S-Down>"] = { ":split<CR>", desc = "Split window below" },
-      ["<C-S-Right>"] = { ":vsplit<CR>", desc = "Split window right" },
+	local mappings = {
+		n = {
+			-- Window splits (WezTerm: Cmd+Arrow → Ctrl+Shift+Arrow)
+			["<D-Down>"] = { ":split<CR>", desc = "Split window below" },
+			["<D-Right>"] = { ":vsplit<CR>", desc = "Split window right" },
+			["<C-S-Down>"] = { ":split<CR>", desc = "Split window below" },
+			["<C-S-Right>"] = { ":vsplit<CR>", desc = "Split window right" },
 
-      ["<C-g>"] = {
-        function()
-          require("telescope.builtin").live_grep()
-        end,
-        desc = "Search text in project",
-      },
+			["<C-g>"] = {
+				function()
+					require("telescope.builtin").live_grep()
+				end,
+				desc = "Search text in project",
+			},
 
-      -- Resume last telescope search
-      ["<M-g>"] = {
-        function()
-          require("telescope.builtin").resume()
-        end,
-        desc = "Resume last search",
-      },
+			-- Resume last telescope search
+			["<M-g>"] = {
+				function()
+					require("telescope.builtin").resume()
+				end,
+				desc = "Resume last search",
+			},
 
-      ["<D-F>"] = {
-        function()
-          require("telescope").extensions.live_grep_args.live_grep_args({
-            default_text = _G.last_grep_input or "",
-          })
-        end,
-        desc = "Live Grep with Args"
-      },
-      ["<D-f>"] = {
-        function()
-          require("telescope.builtin").current_buffer_fuzzy_find()
-        end,
-        desc = "Find in current buffer"
-      },
-      ["<D-p>"] = {
-        function()
-          require("telescope.builtin").find_files()
-        end,
-        desc = "Find files"
-      },
+			["<D-F>"] = {
+				function()
+					require("telescope").extensions.live_grep_args.live_grep_args({
+						default_text = _G.last_grep_input or "",
+					})
+				end,
+				desc = "Live Grep with Args",
+			},
+			["<D-f>"] = {
+				function()
+					require("telescope.builtin").current_buffer_fuzzy_find()
+				end,
+				desc = "Find in current buffer",
+			},
+			["<D-p>"] = {
+				function()
+					require("telescope.builtin").find_files()
+				end,
+				desc = "Find files",
+			},
 
-      -- Meta key aliases for tmux (Cmd keys appear as Meta in tmux)
-      ["<M-F>"] = {
-        function()
-          require("telescope").extensions.live_grep_args.live_grep_args({
-            default_text = _G.last_grep_input or "",
-          })
-        end,
-        desc = "Live Grep with Args (tmux)"
-      },
-      ["<M-f>"] = {
-        function()
-          require("telescope.builtin").current_buffer_fuzzy_find()
-        end,
-        desc = "Find in current buffer (tmux)"
-      },
-      ["<M-p>"] = {
-        function()
-          require("telescope.builtin").find_files()
-        end,
-        desc = "Find files (tmux)"
-      },
+			-- Meta key aliases for tmux (Cmd keys appear as Meta in tmux)
+			["<M-F>"] = {
+				function()
+					require("telescope").extensions.live_grep_args.live_grep_args({
+						default_text = _G.last_grep_input or "",
+					})
+				end,
+				desc = "Live Grep with Args (tmux)",
+			},
+			["<M-f>"] = {
+				function()
+					require("telescope.builtin").current_buffer_fuzzy_find()
+				end,
+				desc = "Find in current buffer (tmux)",
+			},
+			["<M-p>"] = {
+				function()
+					require("telescope.builtin").find_files()
+				end,
+				desc = "Find files (tmux)",
+			},
 
-      -- Reliable keymaps that work in both tmux and non-tmux environments  
-      ["<C-p>"] = {
-        function()
-          require("telescope.builtin").find_files()
-        end,
-        desc = "Find files (universal)"
-      },
-      ["<C-S-f>"] = {
-        function()
-          require("telescope").extensions.live_grep_args.live_grep_args()
-        end,
-        desc = "Live Grep (universal)"
-      },
-      ["<C-S-b>"] = {
-        function()
-          require("telescope.builtin").current_buffer_fuzzy_find()
-        end,
-        desc = "Find in buffer (universal)"
-      },
+			-- Reliable keymaps that work in both tmux and non-tmux environments
+			["<C-p>"] = {
+				function()
+					require("telescope.builtin").find_files()
+				end,
+				desc = "Find files (universal)",
+			},
+			["<C-S-f>"] = {
+				function()
+					require("telescope").extensions.live_grep_args.live_grep_args()
+				end,
+				desc = "Live Grep (universal)",
+			},
+			["<C-S-b>"] = {
+				function()
+					require("telescope.builtin").current_buffer_fuzzy_find()
+				end,
+				desc = "Find in buffer (universal)",
+			},
 
-      -- Keymaps
-      ["<Leader>?"] = {
-        function()
-          vim.ui.select(
-            { "all", "normal", "insert", "visual", "visual block", "terminal" },
-            { prompt = "Keymap mode:" },
-            function(choice)
-              if choice then
-                local mode_map = {
-                  all = nil,
-                  normal = "n",
-                  insert = "i",
-                  visual = "v",
-                  ["visual block"] = "x",
-                  terminal = "t",
-                }
-                local modes = mode_map[choice] and { mode_map[choice] } or nil
-                require("telescope.builtin").keymaps({ modes = modes })
-              end
-            end
-          )
-        end,
-        desc = "Keymaps (select mode)"
-      },
+			-- Keymaps
+			["<Leader>?"] = {
+				function()
+					vim.ui.select(
+						{ "all", "normal", "insert", "visual", "visual block", "terminal" },
+						{ prompt = "Keymap mode:" },
+						function(choice)
+							if choice then
+								local mode_map = {
+									all = nil,
+									normal = "n",
+									insert = "i",
+									visual = "v",
+									["visual block"] = "x",
+									terminal = "t",
+								}
+								local modes = mode_map[choice] and { mode_map[choice] } or nil
+								require("telescope.builtin").keymaps({ modes = modes })
+							end
+						end
+					)
+				end,
+				desc = "Keymaps (select mode)",
+			},
 
-      -- Commenting
-      ["<D-/>"] = {
-        function()
-          require("Comment.api").toggle.linewise.current()
-        end,
-        desc = "Toggle comment"
-      },
-      ["<M-/>"] = {
-        function()
-          require("Comment.api").toggle.linewise.current()
-        end,
-        desc = "Toggle comment (tmux)"
-      },
-      ["<D-k>c"] = {
-        function()
-          require("Comment.api").toggle.linewise.current()
-        end,
-        desc = "Add line comment (chord)"
-      },
+			-- Commenting
+			["<D-/>"] = {
+				function()
+					require("Comment.api").toggle.linewise.current()
+				end,
+				desc = "Toggle comment",
+			},
+			["<M-/>"] = {
+				function()
+					require("Comment.api").toggle.linewise.current()
+				end,
+				desc = "Toggle comment (tmux)",
+			},
+			["<D-k>c"] = {
+				function()
+					require("Comment.api").toggle.linewise.current()
+				end,
+				desc = "Add line comment (chord)",
+			},
 
-      ["<C-S-@>"] = { ":ToggleTerm<CR>", desc = "Toggle terminal" },
-      ["<C-@>"] = { ":ToggleTerm<CR>", desc = "Toggle terminal (tmux compatible)" },
-      ["<C-S-2>"] = { ":ToggleTerm<CR>", desc = "Toggle terminal (tmux fallback)" },
-      ["<F12>"] = { ":ToggleTerm<CR>", desc = "Toggle terminal (universal)" },
-      ["<Leader>tt"] = { ":ToggleTerm<CR>", desc = "Toggle terminal (leader)" },
+			["<C-S-@>"] = { ":ToggleTerm<CR>", desc = "Toggle terminal" },
+			["<C-@>"] = { ":ToggleTerm<CR>", desc = "Toggle terminal (tmux compatible)" },
+			["<C-S-2>"] = { ":ToggleTerm<CR>", desc = "Toggle terminal (tmux fallback)" },
+			["<F12>"] = { ":ToggleTerm<CR>", desc = "Toggle terminal (universal)" },
+			["<Leader>tt"] = { ":ToggleTerm<CR>", desc = "Toggle terminal (leader)" },
 
+			-- Buffer navigation (WezTerm: Cmd+Opt+Arrow → Alt+Shift+Arrow)
+			["<D-M-Right>"] = { ":bnext<CR>", desc = "Next buffer" },
+			["<D-M-Left>"] = { ":bprevious<CR>", desc = "Previous buffer" },
+			["<M-S-Right>"] = { ":bnext<CR>", desc = "Next buffer" },
+			["<M-S-Left>"] = { ":bprevious<CR>", desc = "Previous buffer" },
+			["<Leader>n"] = {
+				function()
+					vim.cmd("enew")
+					vim.bo.filetype = "markdown"
+					vim.cmd("doautocmd FileType markdown")
+				end,
+				desc = "New markdown note",
+			},
+			["<Leader>w"] = { ":bdelete<CR>", desc = "Close buffer" },
 
-      -- Buffer navigation (WezTerm: Cmd+Opt+Arrow → Alt+Shift+Arrow)
-      ["<D-M-Right>"] = { ":bnext<CR>", desc = "Next buffer" },
-      ["<D-M-Left>"] = { ":bprevious<CR>", desc = "Previous buffer" },
-      ["<M-S-Right>"] = { ":bnext<CR>", desc = "Next buffer" },
-      ["<M-S-Left>"] = { ":bprevious<CR>", desc = "Previous buffer" },
-      ["<Leader>n"] = {
-        function()
-          vim.cmd("enew")
-          vim.bo.filetype = "markdown"
-          vim.cmd("doautocmd FileType markdown")
-        end,
-        desc = "New markdown note"
-      },
-      ["<Leader>w"] = { ":bdelete<CR>", desc = "Close buffer" },
+			-- Markdown preview
+			["<D-S-v>"] = {
+				function()
+					vim.cmd("RenderMarkdown toggle")
+				end,
+				desc = "Markdown preview toggle",
+			},
 
-      -- Markdown preview
-      ["<D-S-v>"] = {
-        function()
-          vim.cmd("RenderMarkdown toggle")
-        end,
-        desc = "Markdown preview toggle"
-      },
+			-- Oil.nvim file explorer
+			["<Leader>o"] = {
+				function()
+					require("oil").toggle_float()
+				end,
+				desc = "Toggle Oil file explorer (float)",
+			},
+			["<Leader>E"] = {
+				function()
+					require("oil").open_float(vim.fn.getcwd())
+				end,
+				desc = "Open Oil in current working directory",
+			},
 
-      -- Oil.nvim file explorer
-      ["<Leader>o"] = {
-        function()
-          require("oil").toggle_float()
-        end,
-        desc = "Toggle Oil file explorer (float)"
-      },
-      ["<Leader>E"] = {
-        function()
-          require("oil").open_float(vim.fn.getcwd())
-        end,
-        desc = "Open Oil in current working directory"
-      },
+			-- Cmd key aliases for oil
+			["<D-e>"] = {
+				function()
+					require("oil").toggle_float()
+				end,
+				desc = "Toggle Oil file explorer (float)",
+			},
 
-      -- Cmd key aliases for oil
-      ["<D-e>"] = {
-        function()
-          require("oil").toggle_float()
-        end,
-        desc = "Toggle Oil file explorer (float)"
-      },
+			-- Meta key aliases for tmux (all Cmd keys)
+			["<M-M-Right>"] = { ":bnext<CR>", desc = "Next buffer (tmux)" },
+			["<M-M-Left>"] = { ":bprevious<CR>", desc = "Previous buffer (tmux)" },
+			["<M-S-v>"] = {
+				function()
+					vim.cmd("RenderMarkdown toggle")
+				end,
+				desc = "Markdown preview toggle (tmux)",
+			},
+			["<M-e>"] = {
+				function()
+					require("oil").toggle_float()
+				end,
+				desc = "Toggle Oil file explorer (float) (tmux)",
+			},
 
-      -- Meta key aliases for tmux (all Cmd keys)
-      ["<M-M-Right>"] = { ":bnext<CR>", desc = "Next buffer (tmux)" },
-      ["<M-M-Left>"] = { ":bprevious<CR>", desc = "Previous buffer (tmux)" },
-      ["<M-S-v>"] = {
-        function()
-          vim.cmd("RenderMarkdown toggle")
-        end,
-        desc = "Markdown preview toggle (tmux)"
-      },
-      ["<M-e>"] = {
-        function()
-          require("oil").toggle_float()
-        end,
-        desc = "Toggle Oil file explorer (float) (tmux)"
-      },
+			["<M-CR>"] = {
+				function()
+					require("utils.lsp-actions").language_specific_code_action()
+				end,
+				desc = "Code actions",
+			},
 
-      ["<M-CR>"] = {
-        function()
-          require("utils.lsp-actions").language_specific_code_action()
-        end,
-        desc = "Code actions"
-      },
+			-- Git diff tools
+			["<Leader>gd"] = {
+				function()
+					local branches_raw = vim.fn.system("git branch --format='%(refname:short)' 2>/dev/null")
+					local current = vim.fn.system("git branch --show-current 2>/dev/null"):gsub("%s+", "")
+					local branches = {}
+					for line in branches_raw:gmatch("[^\n]+") do
+						local b = line:gsub("%s+", "")
+						if b ~= "" and b ~= current then
+							table.insert(branches, b)
+						end
+					end
+					table.insert(branches, "(manual input)")
 
-      -- Git diff tools
-      ["<Leader>gd"] = {
-        function()
-          local branches_raw = vim.fn.system("git branch --format='%(refname:short)' 2>/dev/null")
-          local current = vim.fn.system("git branch --show-current 2>/dev/null"):gsub("%s+", "")
-          local branches = {}
-          for line in branches_raw:gmatch("[^\n]+") do
-            local b = line:gsub("%s+", "")
-            if b ~= "" and b ~= current then
-              table.insert(branches, b)
-            end
-          end
-          table.insert(branches, "(manual input)")
+					vim.ui.select(branches, { prompt = "Base branch for diff:" }, function(choice)
+						if not choice then
+							return
+						end
+						local base
+						if choice == "(manual input)" then
+							base = vim.fn.input("Base branch: ")
+							if base == "" then
+								return
+							end
+						else
+							base = choice
+						end
+						if vim.v.shell_error == 0 then
+							vim.notify("No diff from " .. base, vim.log.levels.INFO)
+							return
+						end
+						local cmd = "git diff " .. base .. "...HEAD | difit"
+						vim.fn.jobstart(cmd, { cwd = vim.fn.getcwd(), detach = true })
+					end)
+				end,
+				desc = "Branch diff with difit (no PR needed)",
+			},
+			-- Diffview (file history only)
+			["<Leader>gh"] = { ":DiffviewFileHistory<CR>", desc = "File history" },
 
-          vim.ui.select(branches, { prompt = "Base branch for diff:" }, function(choice)
-            if not choice then return end
-            local base
-            if choice == "(manual input)" then
-              base = vim.fn.input("Base branch: ")
-              if base == "" then return end
-            else
-              base = choice
-            end
-            local diff = vim.fn.system("git diff --quiet " .. base .. "...HEAD")
-            if vim.v.shell_error == 0 then
-              vim.notify("No diff from " .. base, vim.log.levels.INFO)
-              return
-            end
-            local cmd = "git diff " .. base .. "...HEAD | difit"
-            vim.fn.jobstart(cmd, { cwd = vim.fn.getcwd(), detach = true })
-          end)
-        end,
-        desc = "Branch diff with difit (no PR needed)"
-      },
-      -- Diffview (file history only)
-      ["<Leader>gh"] = { ":DiffviewFileHistory<CR>", desc = "File history" },
+			-- Copy file path to clipboard
+			["<Leader>cp"] = {
+				function()
+					local ok, oil = pcall(require, "oil")
+					if ok and oil.get_current_dir then
+						local dir = oil.get_current_dir()
+						if dir then
+							local entry = oil.get_cursor_entry()
+							if entry then
+								local full = dir .. entry.name
+								vim.fn.setreg("+", full)
+								vim.notify("Copied: " .. full)
+								return
+							end
+						end
+					end
+					local path = vim.fn.expand("%:p")
+					vim.fn.setreg("+", path)
+					vim.notify("Copied: " .. path)
+				end,
+				desc = "Copy path to clipboard",
+			},
 
-      -- Copy file path to clipboard
-      ["<Leader>cp"] = {
-        function()
-          local ok, oil = pcall(require, "oil")
-          if ok and oil.get_current_dir then
-            local dir = oil.get_current_dir()
-            if dir then
-              local entry = oil.get_cursor_entry()
-              if entry then
-                local full = dir .. entry.name
-                vim.fn.setreg("+", full)
-                vim.notify("Copied: " .. full)
-                return
-              end
-            end
-          end
-          local path = vim.fn.expand("%:p")
-          vim.fn.setreg("+", path)
-          vim.notify("Copied: " .. path)
-        end,
-        desc = "Copy path to clipboard",
-      },
+			-- Quick replace shortcuts
+			["<Leader>r"] = { ":%s/<C-r><C-w>//g<Left><Left>", desc = "Replace word under cursor" },
+			["<Leader>R"] = { ":%s//g<Left><Left><Left>", desc = "Replace text (global)" },
+		},
+		x = {
+			-- Commenting (use operator 'gc' directly for reliability)
+			["<D-/>"] = {
+				function()
+					local keys = vim.api.nvim_replace_termcodes("gc", true, false, true)
+					vim.api.nvim_feedkeys(keys, "x", false)
+				end,
+				desc = "Toggle comment",
+			},
+			["<M-/>"] = {
+				function()
+					local keys = vim.api.nvim_replace_termcodes("gc", true, false, true)
+					vim.api.nvim_feedkeys(keys, "x", false)
+				end,
+				desc = "Toggle comment (tmux)",
+			},
+			["<D-k>c"] = {
+				function()
+					local keys = vim.api.nvim_replace_termcodes("gc", true, false, true)
+					vim.api.nvim_feedkeys(keys, "x", false)
+				end,
+				desc = "Add line comment (selection, chord)",
+			},
+			["<D-c>"] = { '"+y', desc = "Copy to system clipboard" },
+			["<M-c>"] = { '"+y', desc = "Copy to system clipboard (tmux)" },
 
-      -- Quick replace shortcuts
-      ["<Leader>r"] = { ":%s/<C-r><C-w>//g<Left><Left>", desc = "Replace word under cursor" },
-      ["<Leader>R"] = { ":%s//g<Left><Left><Left>", desc = "Replace text (global)" },
-    },
-    x = {
-      -- Commenting (use operator 'gc' directly for reliability)
-      ["<D-/>"] = {
-        function()
-          local keys = vim.api.nvim_replace_termcodes('gc', true, false, true)
-          vim.api.nvim_feedkeys(keys, 'x', false)
-        end,
-        desc = "Toggle comment"
-      },
-      ["<M-/>"] = {
-        function()
-          local keys = vim.api.nvim_replace_termcodes('gc', true, false, true)
-          vim.api.nvim_feedkeys(keys, 'x', false)
-        end,
-        desc = "Toggle comment (tmux)"
-      },
-      ["<D-k>c"] = {
-        function()
-          local keys = vim.api.nvim_replace_termcodes('gc', true, false, true)
-          vim.api.nvim_feedkeys(keys, 'x', false)
-        end,
-        desc = "Add line comment (selection, chord)"
-      },
-      ["<D-c>"] = { '"+y', desc = "Copy to system clipboard" },
-      ["<M-c>"] = { '"+y', desc = "Copy to system clipboard (tmux)" },
+			-- Indentation
+			["<Tab>"] = { ">gv", desc = "Indent selection" },
+			["<S-Tab>"] = { "<gv", desc = "Unindent selection" },
 
-      -- Indentation
-      ["<Tab>"] = { ">gv", desc = "Indent selection" },
-      ["<S-Tab>"] = { "<gv", desc = "Unindent selection" },
+			-- Visual mode replace
+			["<Leader>r"] = { ":s//g<Left><Left>", desc = "Replace in selection" },
+		},
+		i = {
+			-- Buffer operations
+			["<C-Tab>"] = { "<Esc>:bnext<CR>a", desc = "Next buffer" },
+			["<C-S-Tab>"] = { "<Esc>:bprevious<CR>a", desc = "Previous buffer" },
+			["<C-d>"] = { "<Del>", desc = "Forward delete character" },
 
-      -- Visual mode replace
-      ["<Leader>r"] = { ":s//g<Left><Left>", desc = "Replace in selection" },
-    },
-    i = {
-      -- Buffer operations
-      ["<C-Tab>"] = { "<Esc>:bnext<CR>a", desc = "Next buffer" },
-      ["<C-S-Tab>"] = { "<Esc>:bprevious<CR>a", desc = "Previous buffer" },
-      ["<C-d>"] = { "<Del>", desc = "Forward delete character" },
+			-- Indentation
+			["<S-Tab>"] = { "<C-d>", desc = "Unindent line" },
+		},
+		t = {
+			["<C-S-@>"] = { "<C-\\><C-n>:ToggleTerm<CR>", desc = "Toggle terminal from terminal" },
+			["<C-S-2>"] = { "<C-\\><C-n>:ToggleTerm<CR>", desc = "Toggle terminal from terminal (tmux)" },
+			["<F12>"] = { "<C-\\><C-n>:ToggleTerm<CR>", desc = "Toggle terminal from terminal (fallback)" },
+		},
+		v = {
+			["<D-F>"] = {
+				function()
+					local selection = get_visual_selection()
+					require("telescope").extensions.live_grep_args.live_grep_args({
+						default_text = selection,
+					})
+				end,
+				desc = "Live Grep with selection",
+			},
+			["<M-F>"] = {
+				function()
+					local selection = get_visual_selection()
+					require("telescope").extensions.live_grep_args.live_grep_args({
+						default_text = selection,
+					})
+				end,
+				desc = "Live Grep with selection (tmux)",
+			},
+		},
+	}
 
-      -- Indentation
-      ["<S-Tab>"] = { "<C-d>", desc = "Unindent line" },
-    },
-    t = {
-      ["<C-S-@>"] = { "<C-\\><C-n>:ToggleTerm<CR>", desc = "Toggle terminal from terminal" },
-      ["<C-S-2>"] = { "<C-\\><C-n>:ToggleTerm<CR>", desc = "Toggle terminal from terminal (tmux)" },
-      ["<F12>"] = { "<C-\\><C-n>:ToggleTerm<CR>", desc = "Toggle terminal from terminal (fallback)" },
-    },
-    v = {
-      ["<D-F>"] = {
-        function()
-          local selection = get_visual_selection()
-          require("telescope").extensions.live_grep_args.live_grep_args({
-            default_text = selection,
-          })
-        end,
-        desc = "Live Grep with selection"
-      },
-      ["<M-F>"] = {
-        function()
-          local selection = get_visual_selection()
-          require("telescope").extensions.live_grep_args.live_grep_args({
-            default_text = selection,
-          })
-        end,
-        desc = "Live Grep with selection (tmux)"
-      },
-    },
-  }
+	-- Apply keymaps
+	for mode, mode_mappings in pairs(mappings) do
+		for lhs, mapping in pairs(mode_mappings) do
+			local rhs = mapping[1]
+			local opts = { desc = mapping.desc, silent = true }
 
-  -- Apply keymaps
-  for mode, mode_mappings in pairs(mappings) do
-    for lhs, mapping in pairs(mode_mappings) do
-      local rhs = mapping[1]
-      local opts = { desc = mapping.desc, silent = true }
-
-      if type(rhs) == "function" then
-        vim.keymap.set(mode, lhs, rhs, opts)
-      else
-        vim.keymap.set(mode, lhs, rhs, opts)
-      end
-    end
-  end
+			if type(rhs) == "function" then
+				vim.keymap.set(mode, lhs, rhs, opts)
+			else
+				vim.keymap.set(mode, lhs, rhs, opts)
+			end
+		end
+	end
 end
 
 return {
-  -- This plugin just sets up the keymaps
-  {
-    "folke/which-key.nvim",
-    event = "VeryLazy",
-    init = function()
-      vim.o.timeout = true
-      vim.o.timeoutlen = 300
-    end,
-    config = function()
-      local wk = require("which-key")
-      wk.setup({})
+	-- This plugin just sets up the keymaps
+	{
+		"folke/which-key.nvim",
+		event = "VeryLazy",
+		init = function()
+			vim.o.timeout = true
+			vim.o.timeoutlen = 300
+		end,
+		config = function()
+			local wk = require("which-key")
+			wk.setup({})
 
-      -- Register key groups
-      wk.add({
-        { "<leader>?", desc = "+keymaps" },
-        { "<leader>e", group = "+oil file explorer" },
-        { "<leader>E", group = "+oil file explorer" },
-        { "<leader>w", group = "+window/buffer" },
-        { "<leader>r", group = "+replace" },
-        { "<leader>R", group = "+replace global" },
-        { "<C-g>", group = "+grep/search" },
-        { "<C-p>", group = "+files" },
-        { "<C-S-f>", group = "+search" },
-        { "<C-S-b>", group = "+buffer search" },
-        { "<D-f>", group = "+find" },
-        { "<D-F>", group = "+grep" },
-        { "<D-p>", group = "+files" },
-        { "<D-e>", group = "+oil file explorer" },
-        { "<D-S-v>", group = "+preview" },
-        { "<D-M-Right>", group = "+buffer navigation" },
-        { "<D-M-Left>", group = "+buffer navigation" },
-        { "<M-f>", group = "+find" },
-        { "<M-F>", group = "+grep" },
-        { "<M-p>", group = "+files" },
-        { "<M-e>", group = "+oil file explorer" },
-        { "<M-c>", group = "+clipboard" },
-        { "<M-/>", group = "+comment" },
-        { "<M-S-v>", group = "+preview" },
-        { "<M-CR>", group = "+code action" },
-        { "<leader>cp", desc = "Copy path to clipboard" },
-        { "<leader>g", group = "+git" },
-        { "<leader>gd", desc = "Branch diff with difit" },
-        { "<leader>gh", group = "+file history" },
-        { "<leader>gA", group = "+actions history" },
-        { "<leader>gB", group = "+actions history by PR" },
-        { "<leader>gX", group = "+actions dispatch" },
-        { "<leader>gW", group = "+actions watch" },
-        { "<leader>df", group = "+focus diffview files" },
-        { "-", group = "+oil parent directory" },
-      })
+			-- Register key groups
+			wk.add({
+				{ "<leader>?", desc = "+keymaps" },
+				{ "<leader>e", group = "+oil file explorer" },
+				{ "<leader>E", group = "+oil file explorer" },
+				{ "<leader>w", group = "+window/buffer" },
+				{ "<leader>r", group = "+replace" },
+				{ "<leader>R", group = "+replace global" },
+				{ "<C-g>", group = "+grep/search" },
+				{ "<C-p>", group = "+files" },
+				{ "<C-S-f>", group = "+search" },
+				{ "<C-S-b>", group = "+buffer search" },
+				{ "<D-f>", group = "+find" },
+				{ "<D-F>", group = "+grep" },
+				{ "<D-p>", group = "+files" },
+				{ "<D-e>", group = "+oil file explorer" },
+				{ "<D-S-v>", group = "+preview" },
+				{ "<D-M-Right>", group = "+buffer navigation" },
+				{ "<D-M-Left>", group = "+buffer navigation" },
+				{ "<M-f>", group = "+find" },
+				{ "<M-F>", group = "+grep" },
+				{ "<M-p>", group = "+files" },
+				{ "<M-e>", group = "+oil file explorer" },
+				{ "<M-c>", group = "+clipboard" },
+				{ "<M-/>", group = "+comment" },
+				{ "<M-S-v>", group = "+preview" },
+				{ "<M-CR>", group = "+code action" },
+				{ "<leader>cp", desc = "Copy path to clipboard" },
+				{ "<leader>g", group = "+git" },
+				{ "<leader>gd", desc = "Branch diff with difit" },
+				{ "<leader>gh", group = "+file history" },
+				{ "<leader>gA", group = "+actions history" },
+				{ "<leader>gB", group = "+actions history by PR" },
+				{ "<leader>gX", group = "+actions dispatch" },
+				{ "<leader>gW", group = "+actions watch" },
+				{ "<leader>df", group = "+focus diffview files" },
+				{ "-", group = "+oil parent directory" },
+			})
 
-      setup_keymaps()
+			setup_keymaps()
 
-      -- Global Oil.nvim keymaps
-      vim.keymap.set("n", "-", "<CMD>Oil<CR>", { desc = "Open parent directory in Oil" })
+			-- Global Oil.nvim keymaps
+			vim.keymap.set("n", "-", "<CMD>Oil<CR>", { desc = "Open parent directory in Oil" })
 
-      -- Short command aliases for tmux popup compatibility
-      vim.api.nvim_create_user_command('BF', function()
-        require('telescope.builtin').current_buffer_fuzzy_find()
-      end, { desc = 'Buffer Find (fuzzy)' })
-    end,
-  },
+			-- Short command aliases for tmux popup compatibility
+			vim.api.nvim_create_user_command("BF", function()
+				require("telescope.builtin").current_buffer_fuzzy_find()
+			end, { desc = "Buffer Find (fuzzy)" })
+		end,
+	},
 }
