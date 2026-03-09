@@ -18,8 +18,8 @@ config.font_size = 14.0
 ---------------------------------------------------------------
 -- Window
 ---------------------------------------------------------------
-config.window_background_opacity = 0.85
-config.macos_window_background_blur = 20
+config.window_background_opacity = 0.40
+config.macos_window_background_blur = 40
 config.window_decorations = "RESIZE"
 config.window_padding = {
 	left = 20,
@@ -63,18 +63,28 @@ config.colors = {
 }
 
 ---------------------------------------------------------------
--- Background
+-- Background: layered frosted-glass effect
 ---------------------------------------------------------------
-config.window_background_gradient = {
-	colors = { "#181616" },
+config.background = {
+	{
+		source = {
+			Gradient = {
+				orientation = { Linear = { angle = -60.0 } },
+				colors = { "#1e2028", "#242628" },
+			},
+		},
+		width = "100%",
+		height = "100%",
+		opacity = 0.40,
+	},
 }
 
 ---------------------------------------------------------------
 -- Pane
 ---------------------------------------------------------------
 config.inactive_pane_hsb = {
-	saturation = 0.95,
-	brightness = 0.50,
+	saturation = 0.70,
+	brightness = 0.60,
 }
 
 ---------------------------------------------------------------

@@ -28,13 +28,17 @@ wezterm.on("open-scrollback-in-nvim", function(window, pane)
 		act.SpawnCommandInNewTab({
 			args = {
 				"/opt/homebrew/bin/nvim",
-				"-c", "let g:scrollback_cursor_x = " .. cursor.x,
-				"-c", "let g:scrollback_marker = '" .. marker .. "'",
-				"-c", "let g:scrollback_prev_tab = " .. tab_id,
-				"-c", "luafile " .. pager,
+				"-c",
+				"let g:scrollback_cursor_x = " .. cursor.x,
+				"-c",
+				"let g:scrollback_marker = '" .. marker .. "'",
+				"-c",
+				"let g:scrollback_prev_tab = " .. tab_id,
+				"-c",
+				"luafile " .. pager,
 				-- tail keeps process alive to suppress "[Process exited 0]"
-				"-c", "terminal cat " .. tmp .. "; rm " .. tmp
-					.. "; touch '" .. marker .. "'; tail -f /dev/null",
+				"-c",
+				"terminal cat " .. tmp .. "; rm " .. tmp .. "; touch '" .. marker .. "'; tail -f /dev/null",
 			},
 		}),
 		pane
@@ -45,9 +49,13 @@ end)
 wezterm.on("toggle-opacity", function(window, _)
 	local overrides = window:get_config_overrides() or {}
 	if not overrides.window_background_opacity then
-		overrides.window_background_opacity = 0.6
+		overrides.window_background_opacity = 0.85
+		overrides.macos_window_background_blur = 20
+		overrides.background = {}
 	else
 		overrides.window_background_opacity = nil
+		overrides.macos_window_background_blur = nil
+		overrides.background = nil
 	end
 	window:set_config_overrides(overrides)
 end)
@@ -55,7 +63,7 @@ end)
 -- Toggle background blur
 wezterm.on("toggle-blur", function(window, _)
 	local overrides = window:get_config_overrides() or {}
-	if not overrides.macos_window_background_blur then
+	if overrides.macos_window_background_blur ~= 0 then
 		overrides.macos_window_background_blur = 0
 	else
 		overrides.macos_window_background_blur = nil
