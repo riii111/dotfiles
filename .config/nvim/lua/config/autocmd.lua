@@ -80,7 +80,7 @@ end
 
 -- Send git info to WezTerm right status via OSC 2 (async + debounced)
 local wezterm_status = vim.api.nvim_create_augroup("wezterm_status", { clear = true })
-local _wezterm_timer = nil
+local _wezterm_timer = vim.uv.new_timer()
 
 local _git_info_script = [[
 toplevel=$(git rev-parse --show-toplevel) || exit 1
@@ -118,10 +118,8 @@ end
 vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter", "DirChanged" }, {
   group = wezterm_status,
   callback = function()
-    if _wezterm_timer then
-      _wezterm_timer:stop()
-    end
-    _wezterm_timer = vim.defer_fn(_update_wezterm_title, 200)
+    _wezterm_timer:stop()
+    _wezterm_timer:start(200, 0, vim.schedule_wrap(_update_wezterm_title))
   end,
 })
 
