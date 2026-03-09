@@ -88,41 +88,29 @@ git_dir=$(git rev-parse --git-dir)
 ref=$(git symbolic-ref --short HEAD 2>/dev/null) && detached=0 || { ref=$(git rev-parse --short HEAD); detached=1; }
 dirty=$(git status --porcelain | head -1)
 common=$(git rev-parse --git-common-dir)
-printf '%s\n%s\n%s\n%s\n%s\n%s\n' "$toplevel" "$ref" "$detached" "$dirty" "$common" "$git_dir"
+flags=""
+[ "$detached" = 1 ] && flags="${flags}D"
+[ -n "$dirty" ] && flags="${flags}d"
+[ "$(realpath "$git_dir")" != "$(realpath "$common")" ] && flags="${flags}w"
+{ [ -d "$git_dir/rebase-merge" ] || [ -d "$git_dir/rebase-apply" ]; } && flags="${flags}R"
+[ -f "$git_dir/MERGE_HEAD" ] && flags="${flags}M"
+[ -f "$git_dir/CHERRY_PICK_HEAD" ] && flags="${flags}C"
+repo="${toplevel##*/}"
+title="${repo}::${ref}"
+[ -n "$flags" ] && title="${title}::${flags}"
+printf '%s\n' "$title"
 ]]
 
 local function _update_wezterm_title()
   local cwd = vim.fn.getcwd()
 
   vim.system({ "sh", "-c", _git_info_script }, { cwd = cwd }, function(out)
+    local title
     if out.code ~= 0 then
-      local dir = vim.fn.fnamemodify(cwd, ":t")
-      io.write(string.format("\027]2;%s\a", dir))
-      return
+      title = cwd:match("[^/]+$") or cwd
+    else
+      title = vim.trim(out.stdout)
     end
-
-    local lines = vim.split(out.stdout, "\n")
-    local toplevel = lines[1] or ""
-    local ref = lines[2] or ""
-    local detached = lines[3] or "0"
-    local dirty = lines[4] or ""
-    local common_dir = lines[5] or ""
-
-    local repo = vim.fn.fnamemodify(toplevel, ":t")
-    local git_dir = lines[6] or ""
-
-    local flags = ""
-    if detached == "1" then flags = flags .. "D" end
-    if dirty ~= "" then flags = flags .. "d" end
-    if vim.fn.resolve(git_dir) ~= vim.fn.resolve(common_dir) then flags = flags .. "w" end
-    if vim.fn.isdirectory(git_dir .. "/rebase-merge") == 1 or vim.fn.isdirectory(git_dir .. "/rebase-apply") == 1 then
-      flags = flags .. "R"
-    end
-    if vim.fn.filereadable(git_dir .. "/MERGE_HEAD") == 1 then flags = flags .. "M" end
-    if vim.fn.filereadable(git_dir .. "/CHERRY_PICK_HEAD") == 1 then flags = flags .. "C" end
-
-    local title = repo .. "::" .. ref
-    if flags ~= "" then title = title .. "::" .. flags end
     io.write(string.format("\027]2;%s\a", title))
   end)
 end
