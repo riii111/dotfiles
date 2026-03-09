@@ -2,7 +2,8 @@
 
 Dev environment for macOS.
 
-<img width="720" alt="Neovim UI" src="https://github.com/user-attachments/assets/a6a51025-2e52-400e-a5bf-577ef2cd2ed0" />
+<img width="720" alt="after-2" src="https://github.com/user-attachments/assets/ab112ea6-e819-46de-9cc1-eb0961824efe" />
+
 
 ## Features
 
@@ -27,11 +28,9 @@ zsh -il -c exit: 129.7ms → 39.2ms (-70%)
 - One-key Quick Fix / Refactor menu
 - Per-language modules (Rust, Go, TypeScript, Python, C++, Kotlin, Terraform, SQL, Lua)
 
-<img width="600" alt="Quick Fix / Refactor" src="https://github.com/user-attachments/assets/da51445c-1d46-4980-a469-fc094a2ba3f8" />
-
 ### DB tools: [sabiql](https://github.com/riii111/sabiql)
 
-<img width="720" alt="DB Tool - sabiql" src="https://github.com/user-attachments/assets/57567e97-69b7-4851-baee-8aba9df1a84f" />
+<img width="720" alt="DB Tool - sabiql" src="https://github.com/user-attachments/assets/35cdc1fc-21ee-4446-a8f7-f3d217e3437e" />
 
 
 TUI-based DB management tool built with Rust + Ratatui.
@@ -43,7 +42,8 @@ TUI-based DB management tool built with Rust + Ratatui.
 ### lazygit
 
 Delta for modern diffs. `|` key toggles split/unified view.
-<img width="720" alt="lazygit" src="https://github.com/user-attachments/assets/8669819b-945f-43d3-b030-0ae668032efd" />
+
+<img width="720" alt="lazygit" src="https://github.com/user-attachments/assets/4312502b-c2a9-4269-86a0-9eeda9671fed" />
 
 ### AI tooling
 
