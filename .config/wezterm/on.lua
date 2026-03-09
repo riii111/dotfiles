@@ -45,14 +45,39 @@ wezterm.on("open-scrollback-in-nvim", function(window, pane)
 	)
 end)
 
--- Toggle window opacity
+-- Toggle window opacity (dark <-> light frosted-glass)
 wezterm.on("toggle-opacity", function(window, _)
 	local overrides = window:get_config_overrides() or {}
 	if not overrides.window_background_opacity then
+		-- Light mode: brighter, more wallpaper visible
 		overrides.window_background_opacity = 0.85
 		overrides.macos_window_background_blur = 20
-		overrides.background = {}
+		overrides.background = {
+			{
+				source = {
+					Gradient = {
+						orientation = { Linear = { angle = -45.0 } },
+						colors = { "#181616", "#1e1e22", "#221c24", "#1c1a20" },
+					},
+				},
+				width = "100%",
+				height = "100%",
+				opacity = 0.70,
+			},
+			{
+				source = {
+					Gradient = {
+						orientation = { Linear = { angle = 60.0 } },
+						colors = { "#221e26", "#181616", "#261e24" },
+					},
+				},
+				width = "100%",
+				height = "100%",
+				opacity = 0.21,
+			},
+		}
 	else
+		-- Dark mode: restore defaults
 		overrides.window_background_opacity = nil
 		overrides.macos_window_background_blur = nil
 		overrides.background = nil

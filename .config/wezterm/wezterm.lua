@@ -18,7 +18,7 @@ config.font_size = 14.0
 ---------------------------------------------------------------
 -- Window
 ---------------------------------------------------------------
-config.window_background_opacity = 0.40
+config.window_background_opacity = 0.35
 config.macos_window_background_blur = 40
 config.window_decorations = "RESIZE"
 config.window_padding = {
@@ -66,16 +66,29 @@ config.colors = {
 -- Background: layered frosted-glass effect
 ---------------------------------------------------------------
 config.background = {
+	-- Base layer: warm dark gradient aligned with Kanagawa Dragon
 	{
 		source = {
 			Gradient = {
-				orientation = { Linear = { angle = -60.0 } },
-				colors = { "#1e2028", "#242628" },
+				orientation = { Linear = { angle = -45.0 } },
+				colors = { "#0e0e10", "#141416", "#18141a", "#121014" },
 			},
 		},
 		width = "100%",
 		height = "100%",
-		opacity = 0.40,
+		opacity = 0.82,
+	},
+	-- Accent layer: warm purple wash for depth
+	{
+		source = {
+			Gradient = {
+				orientation = { Linear = { angle = 60.0 } },
+				colors = { "#221e26", "#181616", "#261e24" },
+			},
+		},
+		width = "100%",
+		height = "100%",
+		opacity = 0.25,
 	},
 }
 
@@ -83,7 +96,7 @@ config.background = {
 -- Pane
 ---------------------------------------------------------------
 config.inactive_pane_hsb = {
-	saturation = 0.70,
+	saturation = 0.80,
 	brightness = 0.60,
 }
 
