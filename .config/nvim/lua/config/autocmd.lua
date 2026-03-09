@@ -78,36 +78,43 @@ if format_ok then
   })
 end
 
--- Send git info to WezTerm right status via OSC 2
+-- Send git info to WezTerm right status via OSC 2 (async + debounced)
 local wezterm_status = vim.api.nvim_create_augroup("wezterm_status", { clear = true })
-vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter", "DirChanged" }, {
-  group = wezterm_status,
-  callback = function()
-    local git_dir = vim.fn.system("git rev-parse --git-dir 2>/dev/null"):gsub("\n", "")
-    if vim.v.shell_error ~= 0 then
-      local dir = vim.fn.fnamemodify(vim.fn.getcwd(), ":t")
+local _wezterm_timer = nil
+
+local _git_info_script = [[
+toplevel=$(git rev-parse --show-toplevel) || exit 1
+git_dir=$(git rev-parse --git-dir)
+ref=$(git symbolic-ref --short HEAD 2>/dev/null) && detached=0 || { ref=$(git rev-parse --short HEAD); detached=1; }
+dirty=$(git status --porcelain | head -1)
+common=$(git rev-parse --git-common-dir)
+printf '%s\n%s\n%s\n%s\n%s\n%s\n' "$toplevel" "$ref" "$detached" "$dirty" "$common" "$git_dir"
+]]
+
+local function _update_wezterm_title()
+  local cwd = vim.fn.getcwd()
+
+  vim.system({ "sh", "-c", _git_info_script }, { cwd = cwd }, function(out)
+    if out.code ~= 0 then
+      local dir = vim.fn.fnamemodify(cwd, ":t")
       io.write(string.format("\027]2;%s\a", dir))
       return
     end
 
-    local repo = vim.fn.fnamemodify(vim.fn.system("git rev-parse --show-toplevel 2>/dev/null"):gsub("\n", ""), ":t")
+    local lines = vim.split(out.stdout, "\n")
+    local toplevel = lines[1] or ""
+    local ref = lines[2] or ""
+    local detached = lines[3] or "0"
+    local dirty = lines[4] or ""
+    local common_dir = lines[5] or ""
+
+    local repo = vim.fn.fnamemodify(toplevel, ":t")
+    local git_dir = lines[6] or ""
 
     local flags = ""
-    local ref = vim.fn.system("git symbolic-ref --short HEAD 2>/dev/null"):gsub("\n", "")
-    if vim.v.shell_error ~= 0 then
-      ref = vim.fn.system("git rev-parse --short HEAD 2>/dev/null"):gsub("\n", "")
-      flags = flags .. "D"
-    end
-
-    if vim.fn.system("git status --porcelain 2>/dev/null | head -1"):gsub("\n", "") ~= "" then
-      flags = flags .. "d"
-    end
-
-    local common_dir = vim.fn.system("git rev-parse --git-common-dir 2>/dev/null"):gsub("\n", "")
-    if vim.fn.resolve(git_dir) ~= vim.fn.resolve(common_dir) then
-      flags = flags .. "w"
-    end
-
+    if detached == "1" then flags = flags .. "D" end
+    if dirty ~= "" then flags = flags .. "d" end
+    if vim.fn.resolve(git_dir) ~= vim.fn.resolve(common_dir) then flags = flags .. "w" end
     if vim.fn.isdirectory(git_dir .. "/rebase-merge") == 1 or vim.fn.isdirectory(git_dir .. "/rebase-apply") == 1 then
       flags = flags .. "R"
     end
@@ -117,6 +124,16 @@ vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter", "DirChanged" }, {
     local title = repo .. "::" .. ref
     if flags ~= "" then title = title .. "::" .. flags end
     io.write(string.format("\027]2;%s\a", title))
+  end)
+end
+
+vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter", "DirChanged" }, {
+  group = wezterm_status,
+  callback = function()
+    if _wezterm_timer then
+      _wezterm_timer:stop()
+    end
+    _wezterm_timer = vim.defer_fn(_update_wezterm_title, 200)
   end,
 })
 
