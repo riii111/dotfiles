@@ -20,7 +20,7 @@ import sys
 import urllib.error
 import urllib.request
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 API_BASE = "https://clouderrorreporting.googleapis.com/v1beta1"
 
@@ -349,7 +349,7 @@ def cmd_trace(args):
     result["cloudLogging"] = {"filter": filt}
 
     try:
-        logs = logging_read(project, filt, limit=3)
+        logs = logging_read(project, token, filt, limit=3)
     except LoggingError as e:
         result["cloudLogging"]["error"] = str(e)
         if as_json:
@@ -397,13 +397,13 @@ def cmd_trace(args):
         f'resource.labels.service_name="{service}" jsonPayload.trace_id="{trace_id}"'
     )
     try:
-        t_logs = logging_read(project, t_filt, limit=30)
+        t_logs = logging_read(project, token, t_filt, limit=30)
         if not t_logs:
             t_filt = (
                 f'resource.labels.service_name="{service}" '
                 f'trace="projects/{project}/traces/{trace_id}"'
             )
-            t_logs = logging_read(project, t_filt, limit=30)
+            t_logs = logging_read(project, token, t_filt, limit=30)
     except LoggingError as e:
         result["lifecycle"] = {"error": str(e)}
         if as_json:
@@ -469,7 +469,7 @@ def cmd_trace(args):
         f'timestamp>="{error_ts}"'
     )
     try:
-        r_logs = logging_read(project, r_filt, limit=30, freshness="1d")
+        r_logs = logging_read(project, token, r_filt, limit=30, freshness="1d")
     except LoggingError as e:
         result["retryCheck"] = {"error": str(e)}
         if as_json:
@@ -571,28 +571,39 @@ class LoggingError(Exception):
     pass
 
 
-def logging_read(project, filt, limit=10, freshness="7d"):
+def logging_read(project, token, filt, limit=10, freshness="7d"):
     """Raises LoggingError on query failure, returns [] on empty results."""
-    r = subprocess.run(
-        [
-            "gcloud",
-            "logging",
-            "read",
-            filt,
-            f"--project={project}",
-            f"--limit={limit}",
-            "--format=json",
-            f"--freshness={freshness}",
-        ],
-        capture_output=True,
-        text=True,
-        timeout=120,
+    # Convert freshness (e.g. "7d", "1d") to a timestamp filter
+    m = re.match(r"^(\d+)d$", freshness)
+    days = int(m.group(1)) if m else 7
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    time_filter = cutoff.strftime("%Y-%m-%dT%H:%M:%SZ")
+    full_filter = f'{filt} timestamp>="{time_filter}"'
+
+    body = json.dumps({
+        "resourceNames": [f"projects/{project}"],
+        "filter": full_filter,
+        "orderBy": "timestamp desc",
+        "pageSize": limit,
+    }).encode()
+
+    req = urllib.request.Request(
+        "https://logging.googleapis.com/v2/entries:list",
+        data=body,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
     )
-    if r.returncode != 0:
-        raise LoggingError(r.stderr.strip()[:200])
-    if not r.stdout.strip():
-        return []
-    return json.loads(r.stdout)
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        raise LoggingError(e.read().decode("utf-8", errors="replace")[:200])
+    except urllib.error.URLError as e:
+        raise LoggingError(str(e.reason)[:200])
+    return data.get("entries", [])
 
 
 def strip_ansi(text):
