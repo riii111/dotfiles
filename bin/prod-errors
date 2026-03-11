@@ -533,8 +533,9 @@ def get_token():
     # Fast path: read cached token from gcloud's SQLite cache (~20ms vs ~1.5s)
     try:
         gcloud_dir = os.path.expanduser("~/.config/gcloud")
+        config_name = os.environ.get("CLOUDSDK_ACTIVE_CONFIG_NAME", "default")
         cfg = configparser.ConfigParser()
-        cfg.read(os.path.join(gcloud_dir, "configurations", "config_default"))
+        cfg.read(os.path.join(gcloud_dir, "configurations", f"config_{config_name}"))
         account = cfg.get("core", "account", fallback="")
         if account:
             conn = sqlite3.connect(os.path.join(gcloud_dir, "access_tokens.db"))
