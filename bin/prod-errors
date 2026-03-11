@@ -3,8 +3,8 @@
 prod-errors - Production Error Reporting investigation tool.
 
 Usage:
-  prod-errors summary [--status OPEN] [--since TIMESTAMP] [--group-by service]
-  prod-errors trace GROUP_ID [--project PROJECT]
+  prod-errors summary [--status OPEN] [--since TIMESTAMP] [--group-by service] [--json]
+  prod-errors trace GROUP_ID [--project PROJECT] [--json]
 
 Configuration:
   Set GCP_PROJECT env var (e.g. in ~/.zshrc.local) or use --project flag.
@@ -132,6 +132,54 @@ def build_group_stats_url(project):
 # ---------- summary ----------
 
 
+def _build_summary_data(filtered, since=None):
+    items = []
+    for item in filtered:
+        g = item["group"]
+        entry = {
+            "groupId": g.get("groupId", ""),
+            "status": g.get("resolutionStatus", ""),
+            "message": item.get("representative", {}).get("message", "").split("\n")[0],
+            "count": int(item.get("count", "0")),
+            "firstSeenTime": item.get("firstSeenTime", ""),
+            "lastSeenTime": item.get("lastSeenTime", ""),
+            "service": get_service_from_group(item) or None,
+        }
+        if since:
+            entry["isNew"] = item.get("firstSeenTime", "") >= since
+        items.append(entry)
+    return items
+
+
+def _build_service_summary_data(filtered, since=None):
+    by_service = defaultdict(list)
+    for item in filtered:
+        svc = get_service_from_group(item) or "(unknown)"
+        by_service[svc].append(item)
+
+    services = []
+    for svc, items in sorted(
+        by_service.items(),
+        key=lambda kv: sum(int(g.get("count", "0")) for g in kv[1]),
+        reverse=True,
+    ):
+        top = sorted(items, key=lambda g: int(g.get("count", "0")), reverse=True)[:3]
+        services.append(
+            {
+                "service": svc,
+                "groupCount": len(items),
+                "totalCount": sum(int(g.get("count", "0")) for g in items),
+                "oldestFirstSeen": min(g.get("firstSeenTime", "") for g in items),
+                "latestLastSeen": max(g.get("lastSeenTime", "") for g in items),
+                "topErrors": [
+                    g.get("representative", {}).get("message", "").split("\n")[0][:80]
+                    for g in top
+                ],
+            }
+        )
+    return services
+
+
 def cmd_summary(args):
     token = get_token()
     base_url = build_group_stats_url(args.project)
@@ -144,6 +192,26 @@ def cmd_summary(args):
 
     if args.since:
         filtered = [g for g in filtered if g.get("lastSeenTime", "") >= args.since]
+
+    if args.json:
+        if args.group_by == "service":
+            data = _build_service_summary_data(filtered, args.since)
+        else:
+            data = _build_summary_data(filtered, args.since)
+        result = {
+            "project": args.project,
+            "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+            "status": args.status,
+            "period": f"since {args.since}" if args.since else "30 days",
+            "total": len(filtered),
+            "groupBy": args.group_by,
+        }
+        if args.group_by == "service":
+            result["services"] = data
+        else:
+            result["errors"] = data
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return
 
     if not filtered:
         print(f"No errors with status [{args.status}] in the given time range.")
@@ -238,6 +306,7 @@ def cmd_trace(args):
     token = get_token()
     gid = args.group_id
     project = args.project
+    as_json = args.json
 
     base_url = build_group_stats_url(args.project)
     groups = api_get_all_pages(base_url, token, "errorGroupStats")
@@ -253,13 +322,23 @@ def cmd_trace(args):
     first_line = rep_msg.split("\n")[0]
     known_service = get_service_from_group(target)
 
-    print(f"## Error Group: {gid}\n")
-    print(f"- Message: {first_line[:120]}")
-    print(f"- Count: {target.get('count', '0')}")
-    print(f"- First: {target.get('firstSeenTime', '')[:19]}Z")
-    print(f"- Last:  {target.get('lastSeenTime', '')[:19]}Z")
-    if known_service:
-        print(f"- Service (from Error Reporting): {known_service}")
+    result = {
+        "groupId": gid,
+        "message": first_line,
+        "count": int(target.get("count", "0")),
+        "firstSeenTime": target.get("firstSeenTime", ""),
+        "lastSeenTime": target.get("lastSeenTime", ""),
+        "service": known_service or None,
+    }
+
+    if not as_json:
+        print(f"## Error Group: {gid}\n")
+        print(f"- Message: {first_line[:120]}")
+        print(f"- Count: {target.get('count', '0')}")
+        print(f"- First: {target.get('firstSeenTime', '')[:19]}Z")
+        print(f"- Last:  {target.get('lastSeenTime', '')[:19]}Z")
+        if known_service:
+            print(f"- Service (from Error Reporting): {known_service}")
 
     ev_data = api_get(
         f"{API_BASE}/projects/{project}/events"
@@ -267,11 +346,20 @@ def cmd_trace(args):
         token,
     )
     events = ev_data.get("errorEvents", [])
-    print(f"\n### Recent Events ({len(events)})\n")
-    for ev in events:
-        t = ev.get("eventTime", "")[:19]
-        s = ev.get("serviceContext", {}).get("service", "unknown")
-        print(f"  - {t}Z | {s}")
+    result["recentEvents"] = [
+        {
+            "eventTime": ev.get("eventTime", ""),
+            "service": ev.get("serviceContext", {}).get("service", "unknown"),
+        }
+        for ev in events
+    ]
+
+    if not as_json:
+        print(f"\n### Recent Events ({len(events)})\n")
+        for ev in events:
+            t = ev.get("eventTime", "")[:19]
+            s = ev.get("serviceContext", {}).get("service", "unknown")
+            print(f"  - {t}Z | {s}")
 
     # Narrow Cloud Logging search using service from Error Reporting when available
     search = first_line[:80].replace('"', '\\"')
@@ -281,37 +369,56 @@ def cmd_trace(args):
         )
     else:
         filt = f'"{search}" severity>=ERROR'
-    print("\n### Cloud Logging Lookup\n")
-    print(f"Filter: `{filt}`\n")
+
+    if not as_json:
+        print("\n### Cloud Logging Lookup\n")
+        print(f"Filter: `{filt}`\n")
+
+    result["cloudLogging"] = {"filter": filt}
 
     try:
         logs = logging_read(project, filt, limit=3)
     except LoggingError as e:
-        print(f"**Cloud Logging query FAILED**: {e}")
-        print("Cannot determine if logs exist. Check auth and filter syntax.")
+        result["cloudLogging"]["error"] = str(e)
+        if as_json:
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+        else:
+            print(f"**Cloud Logging query FAILED**: {e}")
+            print("Cannot determine if logs exist. Check auth and filter syntax.")
         return
 
     if not logs:
-        print("No matching logs in Cloud Logging (7d window).")
+        result["cloudLogging"]["matched"] = False
+        if as_json:
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+        else:
+            print("No matching logs in Cloud Logging (7d window).")
         return
 
+    result["cloudLogging"]["matched"] = True
     entry = logs[0]
     res_labels = entry.get("resource", {}).get("labels", {})
     service = res_labels.get(
         "service_name", res_labels.get("configuration_name", "unknown")
     )
     trace_id = extract_trace_id(entry)
+    result["cloudLogging"]["service"] = service
+    result["cloudLogging"]["traceId"] = trace_id or None
 
-    print(f"- Service: **{service}**")
-    print(f"- Trace ID: `{trace_id}`")
+    if not as_json:
+        print(f"- Service: **{service}**")
+        print(f"- Trace ID: `{trace_id}`")
 
     if not trace_id:
-        print(
-            "\nNo trace_id in log entry. Likely an uncaught exception logged as textPayload."
-        )
-        print("Tip: search Cloud Logging manually with:")
-        print(f'  `resource.labels.service_name="{service}" severity>=ERROR`')
-        print("  and look at surrounding logs by timestamp.")
+        if as_json:
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+        else:
+            print(
+                "\nNo trace_id in log entry. Likely an uncaught exception logged as textPayload."
+            )
+            print("Tip: search Cloud Logging manually with:")
+            print(f'  `resource.labels.service_name="{service}" severity>=ERROR`')
+            print("  and look at surrounding logs by timestamp.")
         return
 
     t_filt = (
@@ -326,19 +433,36 @@ def cmd_trace(args):
             )
             t_logs = logging_read(project, t_filt, limit=30)
     except LoggingError as e:
-        print(f"\n**Cloud Logging trace query FAILED**: {e}")
+        result["lifecycle"] = {"error": str(e)}
+        if as_json:
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+        else:
+            print(f"\n**Cloud Logging trace query FAILED**: {e}")
         return
 
     if t_logs:
-        print("\n### Request Lifecycle\n")
+        lifecycle = []
         for tl in reversed(t_logs):
             tjp = tl.get("jsonPayload", {})
-            ts = tl.get("timestamp", "")[:23]
-            sev = tl.get("severity", "")
             raw = tjp.get("message", "") or tl.get("textPayload", "")
-            tmsg = strip_ansi(raw).split("\n")[0][:150]
-            logger = tjp.get("logger", "")
-            print(f"  [{ts}] {sev:7s} [{logger}] {tmsg}")
+            lifecycle.append(
+                {
+                    "timestamp": tl.get("timestamp", ""),
+                    "severity": tl.get("severity", ""),
+                    "logger": tjp.get("logger", ""),
+                    "message": strip_ansi(raw).split("\n")[0][:150],
+                }
+            )
+        result["lifecycle"] = lifecycle
+
+        if not as_json:
+            print("\n### Request Lifecycle\n")
+            for entry in lifecycle:
+                ts = entry["timestamp"][:23]
+                sev = entry["severity"]
+                logger = entry["logger"]
+                tmsg = entry["message"]
+                print(f"  [{ts}] {sev:7s} [{logger}] {tmsg}")
 
     endpoint = None
     error_ts = None
@@ -354,13 +478,18 @@ def cmd_trace(args):
             break
 
     if not endpoint or not error_ts:
-        print("\n### Retry Check\n")
-        print("Could not extract endpoint. Manual investigation needed.")
+        result["retryCheck"] = {"status": "could_not_extract_endpoint"}
+        if as_json:
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+        else:
+            print("\n### Retry Check\n")
+            print("Could not extract endpoint. Manual investigation needed.")
         return
 
-    print("\n### Retry Check\n")
-    print(f"- Endpoint: `{endpoint}`")
-    print(f"- Error at: {error_ts[:23]}Z")
+    if not as_json:
+        print("\n### Retry Check\n")
+        print(f"- Endpoint: `{endpoint}`")
+        print(f"- Error at: {error_ts[:23]}Z")
 
     r_filt = (
         f'resource.labels.service_name="{service}" '
@@ -370,7 +499,11 @@ def cmd_trace(args):
     try:
         r_logs = logging_read(project, r_filt, limit=30, freshness="1d")
     except LoggingError as e:
-        print(f"**Retry check query FAILED**: {e}")
+        result["retryCheck"] = {"error": str(e)}
+        if as_json:
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+        else:
+            print(f"**Retry check query FAILED**: {e}")
         return
 
     ok = 0
@@ -386,6 +519,26 @@ def cmd_trace(args):
                 first_ok_ts = rl.get("timestamp", "")[:23]
         elif "500" in rmsg and "Internal Server Error" in rmsg:
             fail += 1
+
+    if ok > 0:
+        verdict = "recovered"
+    elif fail > 0:
+        verdict = "still_failing"
+    else:
+        verdict = "no_subsequent_requests"
+
+    result["retryCheck"] = {
+        "endpoint": endpoint,
+        "errorTimestamp": error_ts,
+        "successCount": ok,
+        "failureCount": fail,
+        "firstSuccessTimestamp": first_ok_ts,
+        "verdict": verdict,
+    }
+
+    if as_json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return
 
     print(f"- After error: **{ok}** success / **{fail}** failure on same endpoint")
     if ok > 0:
@@ -428,6 +581,12 @@ def main():
         default=project_from_env,
         help="GCP project ID (env: GCP_PROJECT)"
         + (f" [{project_from_env}]" if project_from_env else " [REQUIRED]"),
+    )
+    p.add_argument(
+        "--json",
+        action="store_true",
+        default=False,
+        help="Output as JSON instead of Markdown",
     )
 
     sub = p.add_subparsers(dest="command")
