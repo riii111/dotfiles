@@ -1,0 +1,400 @@
+#!/usr/bin/env python3
+"""
+prod-errors - Production Error Reporting investigation tool.
+
+Usage:
+  prod-errors summary [--status OPEN] [--project PROJECT]
+  prod-errors trace GROUP_ID [--project PROJECT]
+
+Configuration:
+  Set GCP_PROJECT env var (e.g. in ~/.zshrc.local) or use --project flag.
+  No default project is hardcoded — GCP_PROJECT is required.
+"""
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+import urllib.error
+import urllib.request
+from datetime import datetime, timezone
+
+API_BASE = "https://clouderrorreporting.googleapis.com/v1beta1"
+
+
+# ---------- helpers ----------
+
+
+def get_token():
+    r = subprocess.run(
+        ["gcloud", "auth", "print-access-token"],
+        capture_output=True,
+        text=True,
+    )
+    if r.returncode != 0:
+        print(f"gcloud auth failed: {r.stderr.strip()}", file=sys.stderr)
+        sys.exit(1)
+    return r.stdout.strip()
+
+
+def api_get(url, token):
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")[:200]
+        print(f"API error: HTTP {e.code} — {body}", file=sys.stderr)
+        sys.exit(1)
+    except urllib.error.URLError as e:
+        print(f"API connection error: {e.reason}", file=sys.stderr)
+        sys.exit(1)
+
+
+def api_get_all_pages(base_url, token, items_key):
+    """Fetch all pages from a paginated API endpoint."""
+    all_items = []
+    url = base_url
+    while True:
+        data = api_get(url, token)
+        all_items.extend(data.get(items_key, []))
+        next_token = data.get("nextPageToken")
+        if not next_token:
+            break
+        sep = "&" if "?" in base_url else "?"
+        url = f"{base_url}{sep}pageToken={next_token}"
+    return all_items
+
+
+class LoggingError(Exception):
+    """Raised when Cloud Logging query fails (as opposed to returning 0 results)."""
+
+    pass
+
+
+def logging_read(project, filt, limit=10, freshness="7d"):
+    """Read Cloud Logging. Raises LoggingError on failure, returns [] on empty."""
+    r = subprocess.run(
+        [
+            "gcloud",
+            "logging",
+            "read",
+            filt,
+            f"--project={project}",
+            f"--limit={limit}",
+            "--format=json",
+            f"--freshness={freshness}",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    if r.returncode != 0:
+        raise LoggingError(r.stderr.strip()[:200])
+    if not r.stdout.strip():
+        return []
+    return json.loads(r.stdout)
+
+
+def strip_ansi(text):
+    return re.sub(r"\x1b\[[0-9;]*m", "", text)
+
+
+def extract_trace_id(entry):
+    """Extract trace_id from a log entry (multiple possible locations)."""
+    # 1. jsonPayload.trace_id (Ktor/tasks-api style)
+    jp = entry.get("jsonPayload", {})
+    tid = jp.get("trace_id", "")
+    if tid:
+        return tid
+    # 2. Top-level trace field: "projects/{project}/traces/{trace_id}"
+    trace_field = entry.get("trace", "")
+    if trace_field and "/traces/" in trace_field:
+        return trace_field.split("/traces/")[-1]
+    return ""
+
+
+def get_service_from_group(item):
+    """Extract service name from Error Reporting group's affectedServices."""
+    svcs = item.get("affectedServices", [])
+    for s in svcs:
+        name = s.get("service", "")
+        if name:
+            return name
+    return ""
+
+
+# ---------- summary ----------
+
+
+def cmd_summary(args):
+    token = get_token()
+    base_url = (
+        f"{API_BASE}/projects/{args.project}/groupStats"
+        f"?timeRange.period=PERIOD_30_DAYS&pageSize=100"
+    )
+    groups = api_get_all_pages(base_url, token, "errorGroupStats")
+
+    statuses = {s.strip().upper() for s in args.status.split(",")}
+    filtered = [
+        g for g in groups if g["group"].get("resolutionStatus", "UNKNOWN") in statuses
+    ]
+
+    if not filtered:
+        print(f"No errors with status [{args.status}] in the last 30 days.")
+        return
+
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    print(f"## {args.project} - Error Summary ({today})\n")
+    print(f"Status: {args.status} | Period: 30 days | Total: {len(filtered)}\n")
+    print("| # | Status | groupId | Error | Count | First | Last | Service |")
+    print("|---|--------|---------|-------|-------|-------|------|---------|")
+
+    for i, item in enumerate(filtered, 1):
+        g = item["group"]
+        gid = g.get("groupId", "")
+        status = g.get("resolutionStatus", "")
+        count = item.get("count", "0")
+        first = item.get("firstSeenTime", "")[:10]
+        last = item.get("lastSeenTime", "")[:10]
+        msg = item.get("representative", {}).get("message", "").split("\n")[0]
+        msg = msg[:80]
+        svc = get_service_from_group(item) or "-"
+        print(
+            f"| {i} | {status} | `{gid}` | {msg} | {count} | {first} | {last} | {svc} |"
+        )
+
+    print("\n> Detail: `prod-errors trace <groupId>`")
+
+
+# ---------- trace ----------
+
+
+def cmd_trace(args):
+    token = get_token()
+    gid = args.group_id
+    project = args.project
+
+    # 1. Find group in Error Reporting (with pagination)
+    base_url = (
+        f"{API_BASE}/projects/{project}/groupStats"
+        f"?timeRange.period=PERIOD_30_DAYS&pageSize=100"
+    )
+    groups = api_get_all_pages(base_url, token, "errorGroupStats")
+    target = next(
+        (g for g in groups if g["group"].get("groupId") == gid),
+        None,
+    )
+    if not target:
+        print(f"Error group {gid} not found.", file=sys.stderr)
+        sys.exit(1)
+
+    rep_msg = target.get("representative", {}).get("message", "")
+    first_line = rep_msg.split("\n")[0]
+    known_service = get_service_from_group(target)
+
+    print(f"## Error Group: {gid}\n")
+    print(f"- Message: {first_line[:120]}")
+    print(f"- Count: {target.get('count', '0')}")
+    print(f"- First: {target.get('firstSeenTime', '')[:19]}Z")
+    print(f"- Last:  {target.get('lastSeenTime', '')[:19]}Z")
+    if known_service:
+        print(f"- Service (from Error Reporting): {known_service}")
+
+    # 2. Recent events from Error Reporting
+    ev_data = api_get(
+        f"{API_BASE}/projects/{project}/events"
+        f"?groupId={gid}&timeRange.period=PERIOD_30_DAYS&pageSize=5",
+        token,
+    )
+    events = ev_data.get("errorEvents", [])
+    print(f"\n### Recent Events ({len(events)})\n")
+    for ev in events:
+        t = ev.get("eventTime", "")[:19]
+        s = ev.get("serviceContext", {}).get("service", "unknown")
+        print(f"  - {t}Z | {s}")
+
+    # 3. Cloud Logging — identify service & trace_id
+    #    Use known_service from Error Reporting to narrow search
+    search = first_line[:80].replace('"', '\\"')
+    if known_service:
+        filt = (
+            f'resource.labels.service_name="{known_service}" "{search}" severity>=ERROR'
+        )
+    else:
+        filt = f'"{search}" severity>=ERROR'
+    print("\n### Cloud Logging Lookup\n")
+    print(f"Filter: `{filt}`\n")
+
+    try:
+        logs = logging_read(project, filt, limit=3)
+    except LoggingError as e:
+        print(f"**Cloud Logging query FAILED**: {e}")
+        print("Cannot determine if logs exist. Check auth and filter syntax.")
+        return
+
+    if not logs:
+        print("No matching logs in Cloud Logging (7d window).")
+        return
+
+    entry = logs[0]
+    res_labels = entry.get("resource", {}).get("labels", {})
+    service = res_labels.get(
+        "service_name", res_labels.get("configuration_name", "unknown")
+    )
+    trace_id = extract_trace_id(entry)
+
+    print(f"- Service: **{service}**")
+    print(f"- Trace ID: `{trace_id}`")
+
+    if not trace_id:
+        print(
+            "\nNo trace_id in log entry. Likely an uncaught exception logged as textPayload."
+        )
+        print("Tip: search Cloud Logging manually with:")
+        print(f'  `resource.labels.service_name="{service}" severity>=ERROR`')
+        print("  and look at surrounding logs by timestamp.")
+        return
+
+    # 4. Request lifecycle via trace_id
+    #    Try jsonPayload.trace_id first, fall back to top-level trace field
+    t_filt = (
+        f'resource.labels.service_name="{service}" '
+        f'jsonPayload.trace_id=~"{trace_id[:12]}"'
+    )
+    try:
+        t_logs = logging_read(project, t_filt, limit=30)
+        if not t_logs:
+            t_filt = (
+                f'resource.labels.service_name="{service}" trace=~"{trace_id[:12]}"'
+            )
+            t_logs = logging_read(project, t_filt, limit=30)
+    except LoggingError as e:
+        print(f"\n**Cloud Logging trace query FAILED**: {e}")
+        return
+
+    if t_logs:
+        print("\n### Request Lifecycle\n")
+        for tl in reversed(t_logs):
+            tjp = tl.get("jsonPayload", {})
+            ts = tl.get("timestamp", "")[:23]
+            sev = tl.get("severity", "")
+            raw = tjp.get("message", "") or tl.get("textPayload", "")
+            tmsg = strip_ansi(raw).split("\n")[0][:150]
+            logger = tjp.get("logger", "")
+            print(f"  [{ts}] {sev:7s} [{logger}] {tmsg}")
+
+    # 5. Retry check — extract endpoint & error timestamp
+    endpoint = None
+    error_ts = None
+    for tl in t_logs:
+        tjp = tl.get("jsonPayload", {})
+        raw = tjp.get("message", "") or tl.get("textPayload", "")
+        clean = strip_ansi(raw)
+        if "500" in clean and (" POST " in clean or " GET " in clean):
+            m = re.search(r"- (.+?) in \d+ms", clean)
+            if m:
+                endpoint = m.group(1).strip()
+            error_ts = tl.get("timestamp", "")
+            break
+
+    if not endpoint or not error_ts:
+        print("\n### Retry Check\n")
+        print("Could not extract endpoint. Manual investigation needed.")
+        return
+
+    print("\n### Retry Check\n")
+    print(f"- Endpoint: `{endpoint}`")
+    print(f"- Error at: {error_ts[:23]}Z")
+
+    r_filt = (
+        f'resource.labels.service_name="{service}" '
+        f'jsonPayload.message:"{endpoint}" '
+        f'timestamp>="{error_ts}"'
+    )
+    try:
+        r_logs = logging_read(project, r_filt, limit=30, freshness="1d")
+    except LoggingError as e:
+        print(f"**Retry check query FAILED**: {e}")
+        return
+
+    ok = 0
+    fail = 0
+    first_ok_ts = None
+    for rl in reversed(r_logs):  # chronological order (oldest first)
+        rjp = rl.get("jsonPayload", {})
+        raw = rjp.get("message", "") or rl.get("textPayload", "")
+        rmsg = strip_ansi(raw)
+        if "200 OK" in rmsg:
+            ok += 1
+            if first_ok_ts is None:
+                first_ok_ts = rl.get("timestamp", "")[:23]
+        elif "500" in rmsg and "Internal Server Error" in rmsg:
+            fail += 1
+
+    print(f"- After error: **{ok}** success / **{fail}** failure on same endpoint")
+    if ok > 0:
+        print(f"- First success: {first_ok_ts}Z")
+        print(
+            "- Verdict: **Subsequent success on same endpoint** "
+            "(likely recovered, but may be unrelated request)"
+        )
+    elif fail > 0:
+        print("- Verdict: **No success found** — subsequent requests also failed")
+    else:
+        print("- Verdict: **No subsequent requests found** on this endpoint")
+
+
+# ---------- main ----------
+
+
+def main():
+    project_from_env = os.environ.get("GCP_PROJECT", "")
+
+    p = argparse.ArgumentParser(
+        prog="prod-errors",
+        description="Production Error Reporting investigation tool.",
+        epilog=(
+            "Examples:\n"
+            "  prod-errors summary\n"
+            "  prod-errors summary --status OPEN,ACKNOWLEDGED\n"
+            "  prod-errors trace CNrJvq3nnZqKLA\n"
+            "  prod-errors --project my-gcp-project summary\n"
+            "\n"
+            "Configuration:\n"
+            "  Set GCP_PROJECT in ~/.zshrc.local (or use --project flag).\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p.add_argument(
+        "--project",
+        default=project_from_env,
+        help="GCP project ID (env: GCP_PROJECT)"
+        + (f" [{project_from_env}]" if project_from_env else " [REQUIRED]"),
+    )
+
+    sub = p.add_subparsers(dest="command")
+    sub.required = True
+
+    s = sub.add_parser("summary", help="List error groups")
+    s.add_argument(
+        "--status",
+        default="OPEN",
+        help="Comma-separated status filter (default: OPEN)",
+    )
+
+    t = sub.add_parser("trace", help="Deep-dive into an error group")
+    t.add_argument("group_id", help="Error group ID from summary output")
+
+    args = p.parse_args()
+
+    if not args.project:
+        p.error("--project is required (or set GCP_PROJECT env var in ~/.zshrc.local)")
+
+    {"summary": cmd_summary, "trace": cmd_trace}[args.command](args)
+
+
+if __name__ == "__main__":
+    main()
