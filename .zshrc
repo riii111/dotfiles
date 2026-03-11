@@ -193,9 +193,11 @@ if [[ -o zle ]]; then
   fpath+=~/.zfunc
   autoload -Uz compinit
 
-  # Use compinit -C unless .zshrc, fpath dirs, or ~/.zfunc files are newer than .zcompdump
+  # Use compinit -C unless fpath membership, dir contents, or user files changed
+  local _fpath_cache="$HOME/.zcompdump.fpath"
+  local _fpath_sig="${(pj:\n:)fpath}"
   local _compinit_flags=(-C)
-  if [[ ! -f ~/.zcompdump ]] || [[ ~/.zshrc -nt ~/.zcompdump ]]; then
+  if [[ ! -f ~/.zcompdump ]] || [[ ! -f "$_fpath_cache" ]] || [[ "$(<$_fpath_cache)" != "$_fpath_sig" ]]; then
     _compinit_flags=()
   else
     for _fp in $fpath; do
@@ -212,6 +214,7 @@ if [[ -o zle ]]; then
     fi
   fi
   compinit $_compinit_flags[@]
+  printf '%s\n' $fpath > "$_fpath_cache"
   [[ -s "$HOME/.bun/_bun" ]] && source "$HOME/.bun/_bun"
 
   # Completion styles
