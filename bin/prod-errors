@@ -541,6 +541,11 @@ def get_token():
         config_name = config_name or "default"
         cfg = configparser.ConfigParser()
         cfg.read(os.path.join(gcloud_dir, "configurations", f"config_{config_name}"))
+        # Skip fast path when auth overrides are active (impersonation, token file, etc.)
+        if cfg.has_option("auth", "impersonate_service_account") or cfg.has_option(
+            "auth", "access_token_file"
+        ):
+            raise LookupError("auth override detected")
         account = cfg.get("core", "account", fallback="")
         if account:
             conn = sqlite3.connect(os.path.join(gcloud_dir, "access_tokens.db"))
