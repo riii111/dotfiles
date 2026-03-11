@@ -25,128 +25,72 @@ from datetime import datetime, timezone
 API_BASE = "https://clouderrorreporting.googleapis.com/v1beta1"
 
 
-# ---------- helpers ----------
+# ---------- main ----------
 
 
-def get_token():
-    r = subprocess.run(
-        ["gcloud", "auth", "print-access-token"],
-        capture_output=True,
-        text=True,
+def main():
+    project_from_env = os.environ.get("GCP_PROJECT", "")
+
+    p = argparse.ArgumentParser(
+        prog="prod-errors",
+        description="Production Error Reporting investigation tool.",
+        epilog=(
+            "Examples:\n"
+            "  prod-errors summary\n"
+            "  prod-errors summary --status OPEN,ACKNOWLEDGED\n"
+            "  prod-errors summary --group-by service\n"
+            "  prod-errors summary --since 2026-03-10T12:00:00Z\n"
+            "  prod-errors trace CNrJvq3nnZqKLA\n"
+            "  prod-errors --project my-gcp-project summary\n"
+            "\n"
+            "Configuration:\n"
+            "  Set GCP_PROJECT in ~/.zshrc.local (or use --project flag).\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    if r.returncode != 0:
-        print(f"gcloud auth failed: {r.stderr.strip()}", file=sys.stderr)
-        sys.exit(1)
-    return r.stdout.strip()
-
-
-def api_get(url, token):
-    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            return json.loads(resp.read())
-    except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8", errors="replace")[:200]
-        print(f"API error: HTTP {e.code} — {body}", file=sys.stderr)
-        sys.exit(1)
-    except urllib.error.URLError as e:
-        print(f"API connection error: {e.reason}", file=sys.stderr)
-        sys.exit(1)
-
-
-def api_get_all_pages(base_url, token, items_key):
-    all_items = []
-    url = base_url
-    while True:
-        data = api_get(url, token)
-        all_items.extend(data.get(items_key, []))
-        next_token = data.get("nextPageToken")
-        if not next_token:
-            break
-        sep = "&" if "?" in base_url else "?"
-        url = f"{base_url}{sep}pageToken={next_token}"
-    return all_items
-
-
-class LoggingError(Exception):
-    pass
-
-
-def logging_read(project, filt, limit=10, freshness="7d"):
-    """Raises LoggingError on query failure, returns [] on empty results."""
-    r = subprocess.run(
-        [
-            "gcloud",
-            "logging",
-            "read",
-            filt,
-            f"--project={project}",
-            f"--limit={limit}",
-            "--format=json",
-            f"--freshness={freshness}",
-        ],
-        capture_output=True,
-        text=True,
-        timeout=120,
+    p.add_argument(
+        "--project",
+        default=project_from_env,
+        help="GCP project ID (env: GCP_PROJECT)"
+        + (f" [{project_from_env}]" if project_from_env else " [REQUIRED]"),
     )
-    if r.returncode != 0:
-        raise LoggingError(r.stderr.strip()[:200])
-    if not r.stdout.strip():
-        return []
-    return json.loads(r.stdout)
-
-
-def strip_ansi(text):
-    return re.sub(r"\x1b\[[0-9;]*m", "", text)
-
-
-def extract_trace_id(entry):
-    """trace_id is stored in different locations depending on the service."""
-    jp = entry.get("jsonPayload", {})
-    tid = jp.get("trace_id", "")
-    if tid:
-        return tid
-    trace_field = entry.get("trace", "")
-    if trace_field and "/traces/" in trace_field:
-        return trace_field.split("/traces/")[-1]
-    return ""
-
-
-def get_service_from_group(item):
-    svcs = item.get("affectedServices", [])
-    for s in svcs:
-        name = s.get("service", "")
-        if name:
-            return name
-    return ""
-
-
-def parse_since(value):
-    """Normalize --since to UTC ISO 8601 string for safe comparison with API timestamps."""
-    for fmt in ("%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%dT%H:%M:%S.%f%z"):
-        try:
-            dt = datetime.strptime(value, fmt)
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
-            return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-        except ValueError:
-            continue
-    # Bare date like 2026-03-10
-    try:
-        dt = datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-        return dt.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-    except ValueError:
-        pass
-    print(f"Cannot parse --since value: {value}", file=sys.stderr)
-    sys.exit(1)
-
-
-def build_group_stats_url(project):
-    # API doesn't support custom time ranges; --since is filtered locally
-    return (
-        f"{API_BASE}/projects/{project}/groupStats"
-        f"?timeRange.period=PERIOD_30_DAYS&pageSize=100"
+    p.add_argument(
+        "--json",
+        action="store_true",
+        default=False,
+        help="Output as JSON instead of Markdown",
     )
+
+    sub = p.add_subparsers(dest="command")
+    sub.required = True
+
+    s = sub.add_parser("summary", help="List error groups")
+    s.add_argument(
+        "--status",
+        default="OPEN",
+        help="Comma-separated status filter (default: OPEN)",
+    )
+    s.add_argument(
+        "--group-by",
+        choices=["service"],
+        default=None,
+        help="Group results by service",
+    )
+    s.add_argument(
+        "--since",
+        default=None,
+        help="Show errors since timestamp (ISO 8601, e.g. 2026-03-10T12:00:00Z). Useful for post-release monitoring.",
+    )
+
+    t = sub.add_parser("trace", help="Deep-dive into an error group")
+    t.add_argument("group_id", help="Error group ID from summary output")
+
+    args = p.parse_args()
+
+    if not args.project:
+        p.error("--project is required (or set GCP_PROJECT env var in ~/.zshrc.local)")
+
+    {"summary": cmd_summary, "trace": cmd_trace}[args.command](args)
 
 
 # ---------- summary ----------
@@ -581,72 +525,128 @@ def cmd_trace(args):
         print("- Verdict: **No subsequent requests found** on this endpoint")
 
 
-# ---------- main ----------
+# ---------- helpers ----------
 
 
-def main():
-    project_from_env = os.environ.get("GCP_PROJECT", "")
-
-    p = argparse.ArgumentParser(
-        prog="prod-errors",
-        description="Production Error Reporting investigation tool.",
-        epilog=(
-            "Examples:\n"
-            "  prod-errors summary\n"
-            "  prod-errors summary --status OPEN,ACKNOWLEDGED\n"
-            "  prod-errors summary --group-by service\n"
-            "  prod-errors summary --since 2026-03-10T12:00:00Z\n"
-            "  prod-errors trace CNrJvq3nnZqKLA\n"
-            "  prod-errors --project my-gcp-project summary\n"
-            "\n"
-            "Configuration:\n"
-            "  Set GCP_PROJECT in ~/.zshrc.local (or use --project flag).\n"
-        ),
-        formatter_class=argparse.RawDescriptionHelpFormatter,
+def get_token():
+    r = subprocess.run(
+        ["gcloud", "auth", "print-access-token"],
+        capture_output=True,
+        text=True,
     )
-    p.add_argument(
-        "--project",
-        default=project_from_env,
-        help="GCP project ID (env: GCP_PROJECT)"
-        + (f" [{project_from_env}]" if project_from_env else " [REQUIRED]"),
+    if r.returncode != 0:
+        print(f"gcloud auth failed: {r.stderr.strip()}", file=sys.stderr)
+        sys.exit(1)
+    return r.stdout.strip()
+
+
+def api_get(url, token):
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")[:200]
+        print(f"API error: HTTP {e.code} — {body}", file=sys.stderr)
+        sys.exit(1)
+    except urllib.error.URLError as e:
+        print(f"API connection error: {e.reason}", file=sys.stderr)
+        sys.exit(1)
+
+
+def api_get_all_pages(base_url, token, items_key):
+    all_items = []
+    url = base_url
+    while True:
+        data = api_get(url, token)
+        all_items.extend(data.get(items_key, []))
+        next_token = data.get("nextPageToken")
+        if not next_token:
+            break
+        sep = "&" if "?" in base_url else "?"
+        url = f"{base_url}{sep}pageToken={next_token}"
+    return all_items
+
+
+class LoggingError(Exception):
+    pass
+
+
+def logging_read(project, filt, limit=10, freshness="7d"):
+    """Raises LoggingError on query failure, returns [] on empty results."""
+    r = subprocess.run(
+        [
+            "gcloud",
+            "logging",
+            "read",
+            filt,
+            f"--project={project}",
+            f"--limit={limit}",
+            "--format=json",
+            f"--freshness={freshness}",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=120,
     )
-    p.add_argument(
-        "--json",
-        action="store_true",
-        default=False,
-        help="Output as JSON instead of Markdown",
+    if r.returncode != 0:
+        raise LoggingError(r.stderr.strip()[:200])
+    if not r.stdout.strip():
+        return []
+    return json.loads(r.stdout)
+
+
+def strip_ansi(text):
+    return re.sub(r"\x1b\[[0-9;]*m", "", text)
+
+
+def extract_trace_id(entry):
+    """trace_id is stored in different locations depending on the service."""
+    jp = entry.get("jsonPayload", {})
+    tid = jp.get("trace_id", "")
+    if tid:
+        return tid
+    trace_field = entry.get("trace", "")
+    if trace_field and "/traces/" in trace_field:
+        return trace_field.split("/traces/")[-1]
+    return ""
+
+
+def get_service_from_group(item):
+    svcs = item.get("affectedServices", [])
+    for s in svcs:
+        name = s.get("service", "")
+        if name:
+            return name
+    return ""
+
+
+def parse_since(value):
+    """Normalize --since to UTC ISO 8601 string for safe comparison with API timestamps."""
+    for fmt in ("%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%dT%H:%M:%S.%f%z"):
+        try:
+            dt = datetime.strptime(value, fmt)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        except ValueError:
+            continue
+    # Bare date like 2026-03-10
+    try:
+        dt = datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        return dt.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    except ValueError:
+        pass
+    print(f"Cannot parse --since value: {value}", file=sys.stderr)
+    sys.exit(1)
+
+
+def build_group_stats_url(project):
+    # API doesn't support custom time ranges; --since is filtered locally
+    return (
+        f"{API_BASE}/projects/{project}/groupStats"
+        f"?timeRange.period=PERIOD_30_DAYS&pageSize=100"
     )
-
-    sub = p.add_subparsers(dest="command")
-    sub.required = True
-
-    s = sub.add_parser("summary", help="List error groups")
-    s.add_argument(
-        "--status",
-        default="OPEN",
-        help="Comma-separated status filter (default: OPEN)",
-    )
-    s.add_argument(
-        "--group-by",
-        choices=["service"],
-        default=None,
-        help="Group results by service",
-    )
-    s.add_argument(
-        "--since",
-        default=None,
-        help="Show errors since timestamp (ISO 8601, e.g. 2026-03-10T12:00:00Z). Useful for post-release monitoring.",
-    )
-
-    t = sub.add_parser("trace", help="Deep-dive into an error group")
-    t.add_argument("group_id", help="Error group ID from summary output")
-
-    args = p.parse_args()
-
-    if not args.project:
-        p.error("--project is required (or set GCP_PROJECT env var in ~/.zshrc.local)")
-
-    {"summary": cmd_summary, "trace": cmd_trace}[args.command](args)
 
 
 if __name__ == "__main__":
