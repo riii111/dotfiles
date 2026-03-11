@@ -12,9 +12,11 @@ Configuration:
 """
 
 import argparse
+import configparser
 import json
 import os
 import re
+import sqlite3
 import subprocess
 import sys
 import urllib.error
@@ -528,6 +530,28 @@ def cmd_trace(args):
 
 
 def get_token():
+    # Fast path: read cached token from gcloud's SQLite cache (~20ms vs ~1.5s)
+    try:
+        gcloud_dir = os.path.expanduser("~/.config/gcloud")
+        cfg = configparser.ConfigParser()
+        cfg.read(os.path.join(gcloud_dir, "configurations", "config_default"))
+        account = cfg.get("core", "account", fallback="")
+        if account:
+            conn = sqlite3.connect(os.path.join(gcloud_dir, "access_tokens.db"))
+            row = conn.execute(
+                "SELECT access_token, token_expiry FROM access_tokens WHERE account_id = ?",
+                (account,),
+            ).fetchone()
+            conn.close()
+            if row:
+                expiry = datetime.strptime(row[1], "%Y-%m-%d %H:%M:%S.%f").replace(
+                    tzinfo=timezone.utc
+                )
+                if expiry > datetime.now(timezone.utc) + timedelta(minutes=5):
+                    return row[0]
+    except Exception:
+        pass
+    # Fallback: gcloud CLI (slow but always works, also refreshes the cache)
     r = subprocess.run(
         ["gcloud", "auth", "print-access-token"],
         capture_output=True,
@@ -573,19 +597,21 @@ class LoggingError(Exception):
 
 def logging_read(project, token, filt, limit=10, freshness="7d"):
     """Raises LoggingError on query failure, returns [] on empty results."""
-    # Convert freshness (e.g. "7d", "1d") to a timestamp filter
+    # REST API has no --freshness equivalent; emulate with timestamp filter
     m = re.match(r"^(\d+)d$", freshness)
     days = int(m.group(1)) if m else 7
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     time_filter = cutoff.strftime("%Y-%m-%dT%H:%M:%SZ")
     full_filter = f'{filt} timestamp>="{time_filter}"'
 
-    body = json.dumps({
-        "resourceNames": [f"projects/{project}"],
-        "filter": full_filter,
-        "orderBy": "timestamp desc",
-        "pageSize": limit,
-    }).encode()
+    body = json.dumps(
+        {
+            "resourceNames": [f"projects/{project}"],
+            "filter": full_filter,
+            "orderBy": "timestamp desc",
+            "pageSize": limit,
+        }
+    ).encode()
 
     req = urllib.request.Request(
         "https://logging.googleapis.com/v2/entries:list",
