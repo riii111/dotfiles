@@ -166,7 +166,9 @@ def _build_summary_data(filtered, since=None):
             "service": get_service_from_group(item) or None,
         }
         if since:
-            entry["isNew"] = item.get("firstSeenTime", "") >= since
+            first = item.get("firstSeenTime", "")
+            entry["isNew"] = first >= since
+            entry["isRegressed"] = first < since
         items.append(entry)
     return items
 
@@ -184,19 +186,25 @@ def _build_service_summary_data(filtered, since=None):
         reverse=True,
     ):
         top = sorted(items, key=lambda g: int(g.get("count", "0")), reverse=True)[:3]
-        services.append(
-            {
-                "service": svc,
-                "groupCount": len(items),
-                "totalCount": sum(int(g.get("count", "0")) for g in items),
-                "oldestFirstSeen": min(g.get("firstSeenTime", "") for g in items),
-                "latestLastSeen": max(g.get("lastSeenTime", "") for g in items),
-                "topErrors": [
-                    g.get("representative", {}).get("message", "").split("\n")[0][:80]
-                    for g in top
-                ],
-            }
-        )
+        entry = {
+            "service": svc,
+            "groupCount": len(items),
+            "totalCount": sum(int(g.get("count", "0")) for g in items),
+            "oldestFirstSeen": min(g.get("firstSeenTime", "") for g in items),
+            "latestLastSeen": max(g.get("lastSeenTime", "") for g in items),
+            "topErrors": [
+                g.get("representative", {}).get("message", "").split("\n")[0][:80]
+                for g in top
+            ],
+        }
+        if since:
+            entry["newCount"] = sum(
+                1 for g in items if g.get("firstSeenTime", "") >= since
+            )
+            entry["regressedCount"] = sum(
+                1 for g in items if g.get("firstSeenTime", "") < since
+            )
+        services.append(entry)
     return services
 
 
@@ -271,9 +279,9 @@ def _print_flat_summary(filtered, since=None):
 
         if since:
             is_new = item.get("firstSeenTime", "") >= since
-            new_mark = "NEW" if is_new else ""
+            mark = "NEW" if is_new else "REGR"
             print(
-                f"| {i} | {status} | {new_mark} | `{gid}` | {msg} "
+                f"| {i} | {status} | {mark} | `{gid}` | {msg} "
                 f"| {count} | {first} | {last} | {svc} |"
             )
         else:
