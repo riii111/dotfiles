@@ -3,7 +3,7 @@
 prod-errors - Production Error Reporting investigation tool.
 
 Usage:
-  prod-errors summary [--status OPEN] [--project PROJECT]
+  prod-errors summary [--status OPEN] [--since TIMESTAMP] [--group-by service]
   prod-errors trace GROUP_ID [--project PROJECT]
 
 Configuration:
@@ -19,6 +19,7 @@ import subprocess
 import sys
 import urllib.error
 import urllib.request
+from collections import defaultdict
 from datetime import datetime, timezone
 
 API_BASE = "https://clouderrorreporting.googleapis.com/v1beta1"
@@ -54,7 +55,6 @@ def api_get(url, token):
 
 
 def api_get_all_pages(base_url, token, items_key):
-    """Fetch all pages from a paginated API endpoint."""
     all_items = []
     url = base_url
     while True:
@@ -69,13 +69,11 @@ def api_get_all_pages(base_url, token, items_key):
 
 
 class LoggingError(Exception):
-    """Raised when Cloud Logging query fails (as opposed to returning 0 results)."""
-
     pass
 
 
 def logging_read(project, filt, limit=10, freshness="7d"):
-    """Read Cloud Logging. Raises LoggingError on failure, returns [] on empty."""
+    """Raises LoggingError on query failure, returns [] on empty results."""
     r = subprocess.run(
         [
             "gcloud",
@@ -103,13 +101,11 @@ def strip_ansi(text):
 
 
 def extract_trace_id(entry):
-    """Extract trace_id from a log entry (multiple possible locations)."""
-    # 1. jsonPayload.trace_id (Ktor/tasks-api style)
+    """trace_id is stored in different locations depending on the service."""
     jp = entry.get("jsonPayload", {})
     tid = jp.get("trace_id", "")
     if tid:
         return tid
-    # 2. Top-level trace field: "projects/{project}/traces/{trace_id}"
     trace_field = entry.get("trace", "")
     if trace_field and "/traces/" in trace_field:
         return trace_field.split("/traces/")[-1]
@@ -117,7 +113,6 @@ def extract_trace_id(entry):
 
 
 def get_service_from_group(item):
-    """Extract service name from Error Reporting group's affectedServices."""
     svcs = item.get("affectedServices", [])
     for s in svcs:
         name = s.get("service", "")
@@ -126,15 +121,20 @@ def get_service_from_group(item):
     return ""
 
 
+def build_group_stats_url(project):
+    # API doesn't support custom time ranges; --since is filtered locally
+    return (
+        f"{API_BASE}/projects/{project}/groupStats"
+        f"?timeRange.period=PERIOD_30_DAYS&pageSize=100"
+    )
+
+
 # ---------- summary ----------
 
 
 def cmd_summary(args):
     token = get_token()
-    base_url = (
-        f"{API_BASE}/projects/{args.project}/groupStats"
-        f"?timeRange.period=PERIOD_30_DAYS&pageSize=100"
-    )
+    base_url = build_group_stats_url(args.project)
     groups = api_get_all_pages(base_url, token, "errorGroupStats")
 
     statuses = {s.strip().upper() for s in args.status.split(",")}
@@ -142,15 +142,32 @@ def cmd_summary(args):
         g for g in groups if g["group"].get("resolutionStatus", "UNKNOWN") in statuses
     ]
 
+    if args.since:
+        filtered = [g for g in filtered if g.get("lastSeenTime", "") >= args.since]
+
     if not filtered:
-        print(f"No errors with status [{args.status}] in the last 30 days.")
+        print(f"No errors with status [{args.status}] in the given time range.")
         return
 
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    period = f"since {args.since}" if args.since else "30 days"
     print(f"## {args.project} - Error Summary ({today})\n")
-    print(f"Status: {args.status} | Period: 30 days | Total: {len(filtered)}\n")
-    print("| # | Status | groupId | Error | Count | First | Last | Service |")
-    print("|---|--------|---------|-------|-------|-------|------|---------|")
+    print(f"Status: {args.status} | Period: {period} | Total: {len(filtered)}\n")
+
+    if args.group_by == "service":
+        _print_service_summary(filtered, args.since)
+    else:
+        _print_flat_summary(filtered, args.since)
+
+
+def _print_flat_summary(filtered, since=None):
+    header = "| # | Status | groupId | Error | Count | First | Last | Service |"
+    if since:
+        header = (
+            "| # | Status | New? | groupId | Error | Count | First | Last | Service |"
+        )
+    print(header)
+    print(re.sub(r"[^|]", "-", header))
 
     for i, item in enumerate(filtered, 1):
         g = item["group"]
@@ -159,14 +176,59 @@ def cmd_summary(args):
         count = item.get("count", "0")
         first = item.get("firstSeenTime", "")[:10]
         last = item.get("lastSeenTime", "")[:10]
-        msg = item.get("representative", {}).get("message", "").split("\n")[0]
-        msg = msg[:80]
+        msg = item.get("representative", {}).get("message", "").split("\n")[0][:80]
         svc = get_service_from_group(item) or "-"
-        print(
-            f"| {i} | {status} | `{gid}` | {msg} | {count} | {first} | {last} | {svc} |"
-        )
+
+        if since:
+            is_new = item.get("firstSeenTime", "") >= since
+            new_mark = "NEW" if is_new else ""
+            print(
+                f"| {i} | {status} | {new_mark} | `{gid}` | {msg} "
+                f"| {count} | {first} | {last} | {svc} |"
+            )
+        else:
+            print(
+                f"| {i} | {status} | `{gid}` | {msg} "
+                f"| {count} | {first} | {last} | {svc} |"
+            )
 
     print("\n> Detail: `prod-errors trace <groupId>`")
+
+
+def _print_service_summary(filtered, since=None):
+    by_service = defaultdict(list)
+    for item in filtered:
+        svc = get_service_from_group(item) or "(unknown)"
+        by_service[svc].append(item)
+
+    sorted_svcs = sorted(
+        by_service.items(),
+        key=lambda kv: sum(int(g.get("count", "0")) for g in kv[1]),
+        reverse=True,
+    )
+
+    print(
+        "| Service | Groups | Total Count | Oldest First | Latest Last | Top Errors |"
+    )
+    print(
+        "|---------|--------|-------------|--------------|-------------|------------|"
+    )
+
+    for svc, items in sorted_svcs:
+        group_count = len(items)
+        total = sum(int(g.get("count", "0")) for g in items)
+        oldest = min(g.get("firstSeenTime", "")[:10] for g in items)
+        latest = max(g.get("lastSeenTime", "")[:10] for g in items)
+        top = sorted(items, key=lambda g: int(g.get("count", "0")), reverse=True)[:3]
+        top_msgs = "; ".join(
+            g.get("representative", {}).get("message", "").split("\n")[0][:40]
+            for g in top
+        )
+        print(f"| {svc} | {group_count} | {total} | {oldest} | {latest} | {top_msgs} |")
+
+    print(
+        f"\n> Flat view: `prod-errors summary --status {','.join(s['group'].get('resolutionStatus', '') for s in filtered[:1])}`"
+    )
 
 
 # ---------- trace ----------
@@ -177,11 +239,7 @@ def cmd_trace(args):
     gid = args.group_id
     project = args.project
 
-    # 1. Find group in Error Reporting (with pagination)
-    base_url = (
-        f"{API_BASE}/projects/{project}/groupStats"
-        f"?timeRange.period=PERIOD_30_DAYS&pageSize=100"
-    )
+    base_url = build_group_stats_url(args.project)
     groups = api_get_all_pages(base_url, token, "errorGroupStats")
     target = next(
         (g for g in groups if g["group"].get("groupId") == gid),
@@ -203,7 +261,6 @@ def cmd_trace(args):
     if known_service:
         print(f"- Service (from Error Reporting): {known_service}")
 
-    # 2. Recent events from Error Reporting
     ev_data = api_get(
         f"{API_BASE}/projects/{project}/events"
         f"?groupId={gid}&timeRange.period=PERIOD_30_DAYS&pageSize=5",
@@ -216,8 +273,7 @@ def cmd_trace(args):
         s = ev.get("serviceContext", {}).get("service", "unknown")
         print(f"  - {t}Z | {s}")
 
-    # 3. Cloud Logging — identify service & trace_id
-    #    Use known_service from Error Reporting to narrow search
+    # Narrow Cloud Logging search using service from Error Reporting when available
     search = first_line[:80].replace('"', '\\"')
     if known_service:
         filt = (
@@ -258,17 +314,15 @@ def cmd_trace(args):
         print("  and look at surrounding logs by timestamp.")
         return
 
-    # 4. Request lifecycle via trace_id
-    #    Try jsonPayload.trace_id first, fall back to top-level trace field
     t_filt = (
-        f'resource.labels.service_name="{service}" '
-        f'jsonPayload.trace_id=~"{trace_id[:12]}"'
+        f'resource.labels.service_name="{service}" jsonPayload.trace_id="{trace_id}"'
     )
     try:
         t_logs = logging_read(project, t_filt, limit=30)
         if not t_logs:
             t_filt = (
-                f'resource.labels.service_name="{service}" trace=~"{trace_id[:12]}"'
+                f'resource.labels.service_name="{service}" '
+                f'trace="projects/{project}/traces/{trace_id}"'
             )
             t_logs = logging_read(project, t_filt, limit=30)
     except LoggingError as e:
@@ -286,7 +340,6 @@ def cmd_trace(args):
             logger = tjp.get("logger", "")
             print(f"  [{ts}] {sev:7s} [{logger}] {tmsg}")
 
-    # 5. Retry check — extract endpoint & error timestamp
     endpoint = None
     error_ts = None
     for tl in t_logs:
@@ -323,7 +376,7 @@ def cmd_trace(args):
     ok = 0
     fail = 0
     first_ok_ts = None
-    for rl in reversed(r_logs):  # chronological order (oldest first)
+    for rl in reversed(r_logs):
         rjp = rl.get("jsonPayload", {})
         raw = rjp.get("message", "") or rl.get("textPayload", "")
         rmsg = strip_ansi(raw)
@@ -360,6 +413,8 @@ def main():
             "Examples:\n"
             "  prod-errors summary\n"
             "  prod-errors summary --status OPEN,ACKNOWLEDGED\n"
+            "  prod-errors summary --group-by service\n"
+            "  prod-errors summary --since 2026-03-10T12:00:00Z\n"
             "  prod-errors trace CNrJvq3nnZqKLA\n"
             "  prod-errors --project my-gcp-project summary\n"
             "\n"
@@ -383,6 +438,17 @@ def main():
         "--status",
         default="OPEN",
         help="Comma-separated status filter (default: OPEN)",
+    )
+    s.add_argument(
+        "--group-by",
+        choices=["service"],
+        default=None,
+        help="Group results by service",
+    )
+    s.add_argument(
+        "--since",
+        default=None,
+        help="Show errors since timestamp (ISO 8601, e.g. 2026-03-10T12:00:00Z). Useful for post-release monitoring.",
     )
 
     t = sub.add_parser("trace", help="Deep-dive into an error group")
