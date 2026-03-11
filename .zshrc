@@ -114,6 +114,15 @@ export MANPAGER='nvim +Man!'
 export DOCKER_HOST="unix://${XDG_CONFIG_HOME}/colima/default/docker.sock"
 
 # ==========================================
+# Homebrew (static: replaces slow `eval "$(brew shellenv)"`)
+# ==========================================
+export HOMEBREW_PREFIX="/opt/homebrew"
+export HOMEBREW_CELLAR="/opt/homebrew/Cellar"
+export HOMEBREW_REPOSITORY="/opt/homebrew"
+export MANPATH="${MANPATH:+$MANPATH:}/opt/homebrew/share/man:"
+export INFOPATH="/opt/homebrew/share/info:${INFOPATH:-}"
+
+# ==========================================
 # PATH Configuration
 # ==========================================
 typeset -U path PATH
@@ -184,13 +193,15 @@ if [[ -o zle ]]; then
   fpath+=~/.zfunc
   autoload -Uz compinit
 
-  _deferred_compinit() {
-    unfunction _deferred_compinit
-    compinit  # no -C: cache benefit is minimal with few completions
-    [[ -s "$HOME/.bun/_bun" ]] && source "$HOME/.bun/_bun"
-  }
-  zmodload zsh/sched
-  sched +0 _deferred_compinit
+  # Auto-detect FPATH changes: full scan only when new completions are added
+  if [[ -f ~/.zcompdump ]] &&
+     ! [[ /opt/homebrew/share/zsh/site-functions -nt ~/.zcompdump ]] &&
+     ! [[ ~/.zfunc -nt ~/.zcompdump ]]; then
+    compinit -C
+  else
+    compinit
+  fi
+  [[ -s "$HOME/.bun/_bun" ]] && source "$HOME/.bun/_bun"
 
   # Completion styles
   zstyle ':completion:*' menu select
@@ -204,43 +215,49 @@ if [[ -o zle ]]; then
 fi
 
 # ==========================================
-# zsh-abbr
+# zsh-abbr (deferred: loads after first prompt)
 # ==========================================
-source /opt/homebrew/share/zsh-abbr/zsh-abbr.zsh
 export LG_CONFIG_FILE="$HOME/.config/lazygit/config.yml"
 
-# Modern CLI Tools (--force: override same-name system commands)
-abbr -S -qq --force cat='bat'
-abbr -S -qq --force ls='eza'
-abbr -S -qq ll='eza -hl'
-abbr -S -qq la='eza -hla'
-abbr -S -qq lt='eza --tree'
-abbr -S -qq llg='eza -hlFg'
+_deferred_abbr_init() {
+  unfunction _deferred_abbr_init
+  source /opt/homebrew/share/zsh-abbr/zsh-abbr.zsh
 
-# Basic
-abbr -S -qq --force vim='nvim'
-abbr -S -qq v='nvim'
-abbr -S -qq nv='nvim'
-abbr -S -qq clr='clear'
-abbr -S -qq --force o='open'
-abbr -S -qq lg='lazygit'
-abbr -S -qq --force mkdir='mkdir -p'
-abbr -S -qq mkd='mkdir -p'
+  # Modern CLI Tools (--force: override same-name system commands)
+  abbr -S -qq --force cat='bat'
+  abbr -S -qq --force ls='eza'
+  abbr -S -qq ll='eza -hl'
+  abbr -S -qq la='eza -hla'
+  abbr -S -qq lt='eza --tree'
+  abbr -S -qq llg='eza -hlFg'
 
-# Docker
-abbr -S -qq --force dc='docker compose'
-abbr -S -qq dcb='docker compose build'
-abbr -S -qq dcbn='docker compose build --no-cache'
-abbr -S -qq dcu='docker compose up -d'
-abbr -S -qq dcub='docker compose up --build -d'
-abbr -S -qq dcd='docker compose down -v'
-abbr -S -qq dcr='docker compose restart'
-abbr -S -qq dps='docker ps'
-abbr -S -qq dpa='docker ps -a'
+  # Basic
+  abbr -S -qq --force vim='nvim'
+  abbr -S -qq v='nvim'
+  abbr -S -qq nv='nvim'
+  abbr -S -qq clr='clear'
+  abbr -S -qq --force o='open'
+  abbr -S -qq lg='lazygit'
+  abbr -S -qq --force mkdir='mkdir -p'
+  abbr -S -qq mkd='mkdir -p'
 
-# Clipboard
-abbr -S -qq cpf='pbcopy <'
-abbr -S -qq paf='pbpaste >'
+  # Docker
+  abbr -S -qq --force dc='docker compose'
+  abbr -S -qq dcb='docker compose build'
+  abbr -S -qq dcbn='docker compose build --no-cache'
+  abbr -S -qq dcu='docker compose up -d'
+  abbr -S -qq dcub='docker compose up --build -d'
+  abbr -S -qq dcd='docker compose down -v'
+  abbr -S -qq dcr='docker compose restart'
+  abbr -S -qq dps='docker ps'
+  abbr -S -qq dpa='docker ps -a'
+
+  # Clipboard
+  abbr -S -qq cpf='pbcopy <'
+  abbr -S -qq paf='pbpaste >'
+}
+zmodload zsh/sched
+sched +0 _deferred_abbr_init
 
 # ==========================================
 # fzf Configuration
