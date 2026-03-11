@@ -121,6 +121,26 @@ def get_service_from_group(item):
     return ""
 
 
+def parse_since(value):
+    """Normalize --since to UTC ISO 8601 string for safe comparison with API timestamps."""
+    for fmt in ("%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%dT%H:%M:%S.%f%z"):
+        try:
+            dt = datetime.strptime(value, fmt)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        except ValueError:
+            continue
+    # Bare date like 2026-03-10
+    try:
+        dt = datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        return dt.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    except ValueError:
+        pass
+    print(f"Cannot parse --since value: {value}", file=sys.stderr)
+    sys.exit(1)
+
+
 def build_group_stats_url(project):
     # API doesn't support custom time ranges; --since is filtered locally
     return (
@@ -181,6 +201,8 @@ def _build_service_summary_data(filtered, since=None):
 
 
 def cmd_summary(args):
+    since = parse_since(args.since) if args.since else None
+
     token = get_token()
     base_url = build_group_stats_url(args.project)
     groups = api_get_all_pages(base_url, token, "errorGroupStats")
@@ -190,19 +212,19 @@ def cmd_summary(args):
         g for g in groups if g["group"].get("resolutionStatus", "UNKNOWN") in statuses
     ]
 
-    if args.since:
-        filtered = [g for g in filtered if g.get("lastSeenTime", "") >= args.since]
+    if since:
+        filtered = [g for g in filtered if g.get("lastSeenTime", "") >= since]
 
     if args.json:
         if args.group_by == "service":
-            data = _build_service_summary_data(filtered, args.since)
+            data = _build_service_summary_data(filtered, since)
         else:
-            data = _build_summary_data(filtered, args.since)
+            data = _build_summary_data(filtered, since)
         result = {
             "project": args.project,
             "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
             "status": args.status,
-            "period": f"since {args.since}" if args.since else "30 days",
+            "period": f"since {since}" if since else "30 days",
             "total": len(filtered),
             "groupBy": args.group_by,
         }
@@ -218,14 +240,14 @@ def cmd_summary(args):
         return
 
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    period = f"since {args.since}" if args.since else "30 days"
+    period = f"since {since}" if since else "30 days"
     print(f"## {args.project} - Error Summary ({today})\n")
     print(f"Status: {args.status} | Period: {period} | Total: {len(filtered)}\n")
 
     if args.group_by == "service":
-        _print_service_summary(filtered, args.since)
+        _print_service_summary(filtered, since)
     else:
-        _print_flat_summary(filtered, args.since)
+        _print_flat_summary(filtered, since)
 
 
 def _print_flat_summary(filtered, since=None):
@@ -294,9 +316,7 @@ def _print_service_summary(filtered, since=None):
         )
         print(f"| {svc} | {group_count} | {total} | {oldest} | {latest} | {top_msgs} |")
 
-    print(
-        f"\n> Flat view: `prod-errors summary --status {','.join(s['group'].get('resolutionStatus', '') for s in filtered[:1])}`"
-    )
+    print("\n> Flat view: `prod-errors summary`")
 
 
 # ---------- trace ----------
