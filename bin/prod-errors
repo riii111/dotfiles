@@ -428,7 +428,7 @@ def cmd_trace(args):
         result["lifecycle"] = lifecycle
 
         if not as_json:
-            print("\n### Request Lifecycle\n")
+            print("\n### Request Lifecycle (trace-level match)\n")
             for entry in lifecycle:
                 ts = entry["timestamp"][:23]
                 sev = entry["severity"]
@@ -512,17 +512,16 @@ def cmd_trace(args):
         print(json.dumps(result, indent=2, ensure_ascii=False))
         return
 
-    print(f"- After error: **{ok}** success / **{fail}** failure on same endpoint")
+    print(f"- After error: **{ok}** ok / **{fail}** fail")
     if ok > 0:
         print(f"- First success: {first_ok_ts}Z")
         print(
-            "- Verdict: **Subsequent success on same endpoint** "
-            "(likely recovered, but may be unrelated request)"
+            "- Verdict: **Likely recovered** (⚠ endpoint-level match, not trace-level)"
         )
     elif fail > 0:
-        print("- Verdict: **No success found** — subsequent requests also failed")
+        print("- Verdict: **Not recovered** (⚠ endpoint-level match, not trace-level)")
     else:
-        print("- Verdict: **No subsequent requests found** on this endpoint")
+        print("- Verdict: **Unknown** (no subsequent requests on this endpoint)")
 
 
 # ---------- helpers ----------
