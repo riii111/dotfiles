@@ -193,14 +193,25 @@ if [[ -o zle ]]; then
   fpath+=~/.zfunc
   autoload -Uz compinit
 
-  # Auto-detect FPATH changes: full scan only when new completions are added
-  if [[ -f ~/.zcompdump ]] &&
-     ! [[ /opt/homebrew/share/zsh/site-functions -nt ~/.zcompdump ]] &&
-     ! [[ ~/.zfunc -nt ~/.zcompdump ]]; then
-    compinit -C
+  # Use compinit -C unless .zshrc, fpath dirs, or ~/.zfunc files are newer than .zcompdump
+  local _compinit_flags=(-C)
+  if [[ ! -f ~/.zcompdump ]] || [[ ~/.zshrc -nt ~/.zcompdump ]]; then
+    _compinit_flags=()
   else
-    compinit
+    for _fp in $fpath; do
+      if [[ "$_fp" -nt ~/.zcompdump ]]; then
+        _compinit_flags=(); break
+      fi
+    done
+    if (( $#_compinit_flags )) && [[ -d ~/.zfunc ]]; then
+      for _f in ~/.zfunc/*(N); do
+        if [[ "$_f" -nt ~/.zcompdump ]]; then
+          _compinit_flags=(); break
+        fi
+      done
+    fi
   fi
+  compinit $_compinit_flags[@]
   [[ -s "$HOME/.bun/_bun" ]] && source "$HOME/.bun/_bun"
 
   # Completion styles
