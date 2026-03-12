@@ -66,40 +66,114 @@ export PS1="%1~ %# "
 
 # Set terminal title for WezTerm right status
 # Format: "repo::ref::flags" (flags: d=dirty, D=detached, w=worktree, R=rebase, M=merge, C=cherry-pick)
+__TERM_TITLE_LAST=""
+
+_find_git_root() {
+  local dir="${PWD:A}"
+
+  while [[ "$dir" != "/" ]]; do
+    [[ -e "$dir/.git" ]] && print -r -- "$dir" && return 0
+    dir="${dir:h}"
+  done
+
+  return 1
+}
+
+_resolve_git_dir() {
+  local root="$1"
+  local git_entry="$root/.git"
+
+  if [[ -d "$git_entry" ]]; then
+    print -r -- "$git_entry"
+    return 0
+  fi
+
+  if [[ -f "$git_entry" ]]; then
+    local git_dir
+    IFS= read -r git_dir < "$git_entry"
+    git_dir="${git_dir#gitdir: }"
+    [[ "$git_dir" = /* ]] || git_dir="$root/$git_dir"
+    print -r -- "${git_dir:A}"
+    return 0
+  fi
+
+  return 1
+}
+
+_print_terminal_title() {
+  local title="$1"
+  [[ "$title" == "$__TERM_TITLE_LAST" ]] && return 0
+  __TERM_TITLE_LAST="$title"
+  printf '\e]2;%s\a' "$title"
+}
+
 _set_terminal_title() {
   local dir="${PWD##*/}"
   dir="${dir:-/}"
 
-  local git_dir
-  git_dir=$(git rev-parse --git-dir 2>/dev/null) || { printf '\e]2;%s\a' "$dir"; return; }
-
-  # Repository name
-  local repo
-  repo=$(basename "$(git rev-parse --show-toplevel 2>/dev/null)")
-
-  # Branch or detached short SHA
-  local ref flags=""
-  ref=$(git symbolic-ref --short HEAD 2>/dev/null) || {
-    ref=$(git rev-parse --short HEAD 2>/dev/null)
-    flags="${flags}D"
+  local repo_root
+  repo_root=$(_find_git_root) || {
+    _print_terminal_title "$dir"
+    return
   }
 
-  # Dirty (includes staged, unstaged, and untracked)
-  [[ -n $(git status --porcelain 2>/dev/null | head -1) ]] && flags="${flags}d"
+  local repo
+  repo="${repo_root:t}"
 
-  # Worktree
-  local common_dir=$(git rev-parse --git-common-dir 2>/dev/null)
-  ! [[ "${git_dir:A}" = "${common_dir:A}" ]] && flags="${flags}w"
+  local status_output
+  status_output=$(command git -C "$repo_root" status --porcelain=v2 --branch 2>/dev/null) || {
+    _print_terminal_title "$dir"
+    return
+  }
 
-  # Rebase / Merge / Cherry-pick
+  local ref=""
+  local oid=""
+  local flags=""
+  local line
+  while IFS= read -r line; do
+    case "$line" in
+      "# branch.head "*)
+        ref="${line#\# branch.head }"
+        ;;
+      "# branch.oid "*)
+        oid="${line#\# branch.oid }"
+        ;;
+      \#*)
+        ;;
+      *)
+        flags="${flags}d"
+        ;;
+    esac
+  done <<< "$status_output"
+
+  if [[ "$ref" == "(detached)" ]]; then
+    ref="${oid[1,7]}"
+    flags="${flags}D"
+  fi
+
+  local git_dir
+  git_dir=$(_resolve_git_dir "$repo_root") || {
+    _print_terminal_title "${repo}::${ref:-unknown}${flags:+::$flags}"
+    return
+  }
+
+  [[ -f "$repo_root/.git" ]] && flags="${flags}w"
   [[ -d "$git_dir/rebase-merge" || -d "$git_dir/rebase-apply" ]] && flags="${flags}R"
   [[ -f "$git_dir/MERGE_HEAD" ]] && flags="${flags}M"
   [[ -f "$git_dir/CHERRY_PICK_HEAD" ]] && flags="${flags}C"
 
-  printf '\e]2;%s\a' "${repo}::${ref}${flags:+::$flags}"
+  _print_terminal_title "${repo}::${ref:-unknown}${flags:+::$flags}"
+}
+
+git() {
+  command git "$@"
+  local status=$?
+  _set_terminal_title
+  return $status
 }
 autoload -Uz add-zsh-hook
-add-zsh-hook precmd _set_terminal_title
+add-zsh-hook chpwd _set_terminal_title
+_set_terminal_title
 
 # ==========================================
 # Environment Variables
@@ -229,7 +303,7 @@ if [[ -o zle ]]; then
 fi
 
 # ==========================================
-# zsh-abbr (deferred: loads after first prompt)
+# zsh-abbr (deferred: loads on first text input)
 # ==========================================
 export LG_CONFIG_FILE="$HOME/.config/lazygit/config.yml"
 
@@ -270,8 +344,15 @@ _deferred_abbr_init() {
   abbr -S -qq cpf='pbcopy <'
   abbr -S -qq paf='pbpaste >'
 }
-zmodload zsh/sched
-sched +0 _deferred_abbr_init
+
+_abbr_on_first_input() {
+  zle -D self-insert
+  unfunction _abbr_on_first_input 2>/dev/null
+  _deferred_abbr_init
+  zle .self-insert
+}
+
+[[ -o zle ]] && zle -N self-insert _abbr_on_first_input
 
 # ==========================================
 # fzf Configuration
