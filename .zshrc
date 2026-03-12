@@ -346,13 +346,16 @@ _deferred_abbr_init() {
 }
 
 _abbr_on_first_input() {
-  zle -D self-insert
+  zle -A _abbr_original_self_insert self-insert
   unfunction _abbr_on_first_input 2>/dev/null
   _deferred_abbr_init
-  zle .self-insert
+  zle _abbr_original_self_insert
 }
 
-[[ -o zle ]] && zle -N self-insert _abbr_on_first_input
+if [[ -o zle ]]; then
+  zle -A .self-insert _abbr_original_self_insert
+  zle -N self-insert _abbr_on_first_input
+fi
 
 # ==========================================
 # fzf Configuration
