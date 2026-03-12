@@ -3,3 +3,6 @@ nvim/lazy-lock.json
 
 # Python
 __pycache__/
+
+# Zsh completion caches
+.zcompdump*
