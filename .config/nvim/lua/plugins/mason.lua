@@ -29,7 +29,6 @@ return {
         -- Formatters
         "stylua",
         "goimports",
-        "sql-formatter",
         "ruff",
         "ktlint",
         -- C/C++
