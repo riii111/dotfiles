@@ -167,9 +167,9 @@ _set_terminal_title() {
 
 git() {
   command git "$@"
-  local status=$?
+  local ret=$?
   _set_terminal_title
-  return $status
+  return $ret
 }
 autoload -Uz add-zsh-hook
 add-zsh-hook chpwd _set_terminal_title
