@@ -168,7 +168,7 @@ _set_terminal_title() {
 git() {
   command git "$@"
   local ret=$?
-  _set_terminal_title
+  (( ${+functions[_set_terminal_title]} )) && _set_terminal_title
   return $ret
 }
 autoload -Uz add-zsh-hook
