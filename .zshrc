@@ -353,7 +353,7 @@ _abbr_on_first_input() {
 }
 
 if [[ -o zle ]]; then
-  zle -A .self-insert _abbr_original_self_insert
+  zle -A self-insert _abbr_original_self_insert
   zle -N self-insert _abbr_on_first_input
 fi
 
