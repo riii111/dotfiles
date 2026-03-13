@@ -345,16 +345,26 @@ _deferred_abbr_init() {
   abbr -S -qq paf='pbpaste >'
 }
 
+typeset -gi _ABBR_INITIALIZED=0
+
+_abbr_arm_first_input() {
+  (( _ABBR_INITIALIZED )) && return
+  zle -A self-insert _abbr_original_self_insert
+  zle -N self-insert _abbr_on_first_input
+}
+
 _abbr_on_first_input() {
+  local keys="$KEYS"
   zle -A _abbr_original_self_insert self-insert
-  unfunction _abbr_on_first_input 2>/dev/null
+  add-zsh-hook -d precmd _abbr_arm_first_input 2>/dev/null
+  _ABBR_INITIALIZED=1
   _deferred_abbr_init
-  zle _abbr_original_self_insert
+  (( ${+functions[_zsh_autosuggest_bind_widgets]} )) && _zsh_autosuggest_bind_widgets
+  zle -U "$keys"
 }
 
 if [[ -o zle ]]; then
-  zle -A self-insert _abbr_original_self_insert
-  zle -N self-insert _abbr_on_first_input
+  add-zsh-hook precmd _abbr_arm_first_input
 fi
 
 # ==========================================
