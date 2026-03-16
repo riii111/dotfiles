@@ -29,23 +29,30 @@ pe summary --json
 
 ### Step 2: 各エラーグループの深掘り
 
-OPEN ステータスの各グループに対して:
+OPEN ステータスの各グループに対して `pe trace <groupId> --json` を実行する。
 
-```bash
-pe trace <groupId> --json
-```
-
-`relatedTo` が付いているグループは同一起因の可能性が高いのでまとめて分析する。
+優先順位:
+- `relatedTo` の子グループは親だけ trace する（子は省略）
+- `lastSeen` が新しい順、`count` が多い順で優先
 
 ### Step 3: 対応 PR/Issue の検索
 
-以下の順で検索し、最初にヒットしたものを使う:
+以下のキーワードで PR と Issue の両方を検索する:
 
-1. サービス名: `gh pr list --search "<service名>" --state all --json number,title,url,state --limit 5`
-2. 例外クラス名: `gh pr list --search "<ExceptionClass>" ...`
+```bash
+gh pr list --search "<keyword>" --state all --json number,title,url,state --limit 5
+gh issue list --search "<keyword>" --state all --json number,title,url,state --limit 5
+```
+
+検索キーワード（順に試す）:
+1. サービス名
+2. 例外クラス名
 3. エラーメッセージの安定した断片（先頭20-30文字程度）
 
-曖昧一致の場合は「関連候補」と明記し、断定しない。
+紐付けルール:
+- タイトルや本文に **サービス名 + 例外クラス** など複数の根拠が揃えば「対応PR/Issue」とする
+- 単一キーワードの一致だけなら「関連候補」に留め、断定しない
+- 該当なしなら「未特定」とする
 
 ### Step 4: 報告生成
 
