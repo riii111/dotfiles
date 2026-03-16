@@ -165,8 +165,7 @@ def _find_related_groups(filtered):
         m = re.search(r"([\w.]+(?:Exception|Error|Throwable))", msg)
         return m.group(1) if m else None
 
-    def _times_overlap(a, b, margin_minutes=5):
-        margin = f"{margin_minutes:02d}:00"
+    def _times_overlap(a, b):
         a_first = a.get("firstSeenTime", "")[:16]
         a_last = a.get("lastSeenTime", "")[:16]
         b_first = b.get("firstSeenTime", "")[:16]
@@ -186,7 +185,8 @@ def _find_related_groups(filtered):
             if j in assigned:
                 continue
             # Must be same service
-            if not _svc(filtered[i]) or _svc(filtered[i]) != _svc(filtered[j]):
+            svc_i = _svc(filtered[i])
+            if not svc_i or svc_i != _svc(filtered[j]):
                 continue
             # Must overlap in time
             if not _times_overlap(filtered[i], filtered[j]):
@@ -911,11 +911,14 @@ class LoggingError(Exception):
     pass
 
 
-def logging_read(project, token, filt, limit=10, freshness="7d"):
+def logging_read(project, token, filt, limit=10, freshness="30d"):
     """Raises LoggingError on query failure, returns [] on empty results."""
     # REST API has no --freshness equivalent; emulate with timestamp filter
-    m    = re.match(r"^(\d+)d$", freshness)
-    days = int(m.group(1)) if m else 7
+    m = re.match(r"^(\d+)d$", freshness)
+    if not m:
+        print(f"Invalid freshness format: '{freshness}' (expected Nd, e.g. 7d, 30d, 90d)", file=sys.stderr)
+        sys.exit(1)
+    days = int(m.group(1))
     cutoff      = datetime.now(timezone.utc) - timedelta(days=days)
     time_filter = cutoff.strftime("%Y-%m-%dT%H:%M:%SZ")
     full_filter = f'{filt} timestamp>="{time_filter}"'
