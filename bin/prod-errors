@@ -770,7 +770,11 @@ def cmd_trace(args):
                     "message": strip_ansi(raw).split("\n")[0][:150],
                 }
             )
-        result["lifecycle"] = lifecycle
+        result["lifecycle"] = {
+            "scope": "latest_event_only",
+            "traceId": trace_id,
+            "entries": lifecycle,
+        }
 
         if not as_json:
             print(f"\n{c_bold('### Request Lifecycle (trace-level match)')}\n")
@@ -841,13 +845,14 @@ def cmd_trace(args):
             fail += 1
 
     if ok > 0:
-        verdict = "recovered"
+        verdict = "endpoint_healthy"
     elif fail > 0:
         verdict = "still_failing"
     else:
         verdict = "no_subsequent_requests"
 
     result["retryCheck"] = {
+        "scope": "endpoint",
         "endpoint": endpoint,
         "errorTimestamp": error_ts,
         "successCount": ok,
