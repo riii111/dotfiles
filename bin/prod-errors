@@ -200,18 +200,29 @@ def _find_related_groups(filtered):
             # Must overlap in time
             if not _times_overlap(filtered[i], filtered[j]):
                 continue
-            # Related only when both messages contain the same exception class.
-            # We search the FULL representative message (multi-line) so that
-            # a stack-trace-only group still picks up the exception class from
-            # its full context. Stack trace lines alone are NOT enough.
+            # Related when:
+            # 1. Both have the same exception class, OR
+            # 2. One is a stack-trace-only group (no exception class in its
+            #    full message) and the other has an exception class.
+            #    Error Reporting often splits a single crash into an exception
+            #    group and a stack-trace-line group that lacks the class name.
             exc_i = _exception_class(_full_msg(filtered[i]))
             exc_j = _exception_class(_full_msg(filtered[j]))
-            is_related = bool(exc_i and exc_j and exc_i == exc_j)
+            line_i = _first_line(filtered[i])
+            line_j = _first_line(filtered[j])
+            stack_i = _is_stack_line(line_i)
+            stack_j = _is_stack_line(line_j)
+            if exc_i and exc_j:
+                is_related = exc_i == exc_j
+            elif stack_i and not exc_i and exc_j:
+                is_related = True
+            elif stack_j and not exc_j and exc_i:
+                is_related = True
+            else:
+                is_related = False
             if is_related:
                 # Primary = non-stack-trace item; if both/neither, the earlier one
-                line_i = _first_line(filtered[i])
-                line_j = _first_line(filtered[j])
-                if _is_stack_line(line_i) and not _is_stack_line(line_j):
+                if stack_i and not stack_j:
                     primary = j
                     secondary = i
                 else:
