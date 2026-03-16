@@ -1,5 +1,5 @@
 ---
-description: Production alert check — run pe (prod-errors) to triage today's alerts, analyze root causes, and produce a duty report.
+description: Production alert check — run pe (prod-errors) to triage alerts, analyze root causes, and produce a duty report.
 argument-hint: [summary|trace <groupId>] (default: full check)
 ---
 
@@ -19,8 +19,10 @@ Parse `$ARGUMENTS`:
 
 ### Step 1: サマリー取得
 
+必ず `--json` で取得する（パース精度のため）。
+
 ```bash
-pe summary
+pe summary --json
 ```
 
 エラーが0件なら「新規アラートなし」と報告して終了。
@@ -30,35 +32,37 @@ pe summary
 OPEN ステータスの各グループに対して:
 
 ```bash
-pe trace <groupId>
+pe trace <groupId> --json
 ```
 
-### Step 3: 分析
+`relatedTo` が付いているグループは同一起因の可能性が高いのでまとめて分析する。
 
-各エラーについて以下を判断する:
+### Step 3: 対応 PR/Issue の検索
 
-1. **既知 or 新規**: 過去に見たエラーパターンか、初見か
-2. **対応状況**: 既に PR / Issue が存在するか（`gh pr list --search "<keyword>"` や `gh issue list --search "<keyword>"` で確認）
-3. **解決済みか**: Last seen が古い場合、再発していないか。trace の Retry Check 結果も参照
-4. **Related マーク**: `→ #N?` が付いているグループは同一起因の可能性が高いのでまとめて分析
+以下の順で検索し、最初にヒットしたものを使う:
+
+1. サービス名: `gh pr list --search "<service名>" --state all --json number,title,url,state --limit 5`
+2. 例外クラス名: `gh pr list --search "<ExceptionClass>" ...`
+3. エラーメッセージの安定した断片（先頭20-30文字程度）
+
+曖昧一致の場合は「関連候補」と明記し、断定しない。
 
 ### Step 4: 報告生成
 
-以下のフォーマットで報告を出力する:
-
 ```
-## 本日のアラート状況（YYYY-MM-DD）
+## アラート状況（YYYY-MM-DD）
 
 ### サマリー
-- OPEN: N件（うち新規: M件）
+- OPEN: N件
 - 対応済み: X件 / 要対応: Y件
 
 ### 各アラートの詳細
 
 #### [エラー名] — [サービス名]
-- **ステータス**: 解決済み / 対応中 / 要エスカレーション
-- **根拠**: （なぜそう判断したか。Last seen, PR有無, trace結果などを具体的に）
-- **対応PR/Issue**: （あれば URL）
+- **判定**: 解決済み / 対応中 / 再発観測なし / 要確認 / 要エスカレーション
+- **信頼度**: high / medium / low
+- **根拠**: （事実ベースで記述。Last seen, PR有無, trace結果, retryCheck verdict など）
+- **対応PR/Issue**: （あれば URL。候補の場合はその旨明記）
 - **アクション**: 不要 / PR レビュー推奨 / チームに共有すべき
 
 ### エスカレーション事項
@@ -67,18 +71,20 @@ pe trace <groupId>
 
 ## Judgment Criteria
 
-以下の基準でステータスを判断する:
+| 条件 | 判定 | 信頼度 |
+|------|------|--------|
+| 対応PRがマージ済み & Last seen が古い | 解決済み | high |
+| 対応PRがOPEN | 対応中 | high |
+| PR/Issueなし & 直近も発生している | 要エスカレーション | high |
+| PR/Issueなし & Last seen が古い（3日以上） | 再発観測なし | medium |
+| 根拠が不十分 | 要確認 | low |
 
-| 条件 | 判断 |
-|------|------|
-| 対応PRがマージ済み & Last seen が古い | 解決済み |
-| 対応PRがOPEN | 対応中（PRレビュー推奨） |
-| PR/Issueなし & 直近も発生している | 要エスカレーション |
-| PR/Issueなし & Last seen が古い（3日以上前） | 解決済み（自然解消の可能性）。ただし根本原因不明なら共有推奨 |
+重要: 「解決済み」は対応PRのマージなど強い根拠がある場合のみ使う。Last seen が古いだけでは「再発観測なし」に留める。
 
 ## Important Notes
 
+- 取得は必ず `--json`、報告だけ自然文にする
+- 根拠不足なら断定せず「要確認」とする
 - `pe` コマンドが使えない場合はユーザーに報告して終了する
 - GCP 認証が切れている場合は `gcloud auth login` を案内する
-- 判断に迷う場合は「要確認」として報告し、ユーザーに判断を委ねる
 - コードの修正は行わない。分析と報告のみ
