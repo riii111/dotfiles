@@ -4,7 +4,7 @@ prod-errors - Production Error Reporting investigation tool.
 
 Usage:
   prod-errors summary [--status OPEN] [--since TIMESTAMP] [--group-by service] [--json]
-  prod-errors trace GROUP_ID [--freshness 30d] [--project PROJECT] [--json]
+  prod-errors trace GROUP_ID [--freshness 30d] [--json]
 
 Configuration:
   Set GCP_PROJECT env var (e.g. in ~/.zshrc.local) or use --project flag.
@@ -97,17 +97,16 @@ def main():
         help="GCP project ID (env: GCP_PROJECT)"
         + (f" [{project_from_env}]" if project_from_env else " [REQUIRED]"),
     )
-    p.add_argument(
+    sub = p.add_subparsers(dest="command")
+    sub.required = True
+
+    s = sub.add_parser("summary", help="List error groups")
+    s.add_argument(
         "--json",
         action="store_true",
         default=False,
         help="Output as JSON instead of Markdown",
     )
-
-    sub = p.add_subparsers(dest="command")
-    sub.required = True
-
-    s = sub.add_parser("summary", help="List error groups")
     s.add_argument(
         "--status",
         default="OPEN",
@@ -127,6 +126,12 @@ def main():
 
     t = sub.add_parser("trace", help="Deep-dive into an error group")
     t.add_argument("group_id", help="Error group ID from summary output")
+    t.add_argument(
+        "--json",
+        action="store_true",
+        default=False,
+        help="Output as JSON instead of Markdown",
+    )
     t.add_argument(
         "--freshness",
         default="30d",
