@@ -22,14 +22,14 @@ Parse `$ARGUMENTS`:
 必ず `--json` で取得する（パース精度のため）。
 
 ```bash
-pe --json summary
+pe summary --json
 ```
 
 エラーが0件なら「新規アラートなし」と報告して終了。
 
 ### Step 2: 各エラーグループの深掘り
 
-OPEN ステータスの各グループに対して `pe --json trace <groupId>` を実行する。
+OPEN ステータスの各グループに対して `pe trace <groupId> --json` を実行する。
 
 優先順位:
 - `relatedTo` の子グループは親だけ trace する（子は省略）
