@@ -27,6 +27,47 @@ from datetime import datetime, timedelta, timezone
 API_BASE = "https://clouderrorreporting.googleapis.com/v1beta1"
 
 
+# ---------- ANSI color helpers ----------
+
+_BOLD   = "\033[1m"
+_DIM    = "\033[2m"
+_RED    = "\033[31m"
+_YELLOW = "\033[33m"
+_GREEN  = "\033[32m"
+_CYAN   = "\033[36m"
+_RESET  = "\033[0m"
+
+
+def _c(*codes):
+    """Return a callable that wraps text in ANSI codes when stdout is a TTY."""
+    open_seq = "".join(codes)
+
+    def _wrap(text):
+        if not sys.stdout.isatty():
+            return str(text)
+        return f"{open_seq}{text}{_RESET}"
+
+    return _wrap
+
+
+def _col_widths(rows, headers):
+    """Compute per-column max widths from headers + plain-text data rows."""
+    widths = [len(h) for h in headers]
+    for row in rows:
+        for i, cell in enumerate(row):
+            if i < len(widths):
+                widths[i] = max(widths[i], len(str(cell)))
+    return widths
+
+
+def _trunc(text, maxlen):
+    """Truncate text to maxlen, appending ellipsis if truncated."""
+    text = str(text)
+    if len(text) <= maxlen:
+        return text
+    return text[: maxlen - 1] + "\u2026"
+
+
 # ---------- main ----------
 
 
@@ -86,6 +127,11 @@ def main():
 
     t = sub.add_parser("trace", help="Deep-dive into an error group")
     t.add_argument("group_id", help="Error group ID from summary output")
+    t.add_argument(
+        "--freshness",
+        default="30d",
+        help="Cloud Logging search window (default: 30d). Format: Nd where N is number of days (e.g. 7d, 30d, 90d)",
+    )
 
     args = p.parse_args()
 
@@ -95,12 +141,88 @@ def main():
     {"summary": cmd_summary, "trace": cmd_trace}[args.command](args)
 
 
+# ---------- related error grouping ----------
+
+
+def _find_related_groups(filtered):
+    """Identify error groups likely from the same root cause.
+
+    Returns a dict mapping 0-based item index to the 1-based row number
+    of the "primary" error in its related cluster (or absent if primary/unrelated).
+    """
+    _STACK_TRACE_RE = re.compile(r"^\s*at\s+")
+
+    def _msg(item):
+        return item.get("representative", {}).get("message", "").split("\n")[0]
+
+    def _svc(item):
+        return get_service_from_group(item) or ""
+
+    def _is_stack_line(msg):
+        return bool(_STACK_TRACE_RE.match(msg))
+
+    def _exception_class(msg):
+        m = re.search(r"([\w.]+(?:Exception|Error|Throwable))", msg)
+        return m.group(1) if m else None
+
+    def _times_overlap(a, b, margin_minutes=5):
+        margin = f"{margin_minutes:02d}:00"
+        a_first = a.get("firstSeenTime", "")[:16]
+        a_last = a.get("lastSeenTime", "")[:16]
+        b_first = b.get("firstSeenTime", "")[:16]
+        b_last = b.get("lastSeenTime", "")[:16]
+        if not all([a_first, a_last, b_first, b_last]):
+            return False
+        return a_first <= b_last and b_first <= a_last
+
+    related = {}
+    n = len(filtered)
+    assigned = set()
+
+    for i in range(n):
+        if i in assigned:
+            continue
+        for j in range(i + 1, n):
+            if j in assigned:
+                continue
+            # Must be same service
+            if not _svc(filtered[i]) or _svc(filtered[i]) != _svc(filtered[j]):
+                continue
+            # Must overlap in time
+            if not _times_overlap(filtered[i], filtered[j]):
+                continue
+            msg_i = _msg(filtered[i])
+            msg_j = _msg(filtered[j])
+            # At least one must be a stack trace line, or share exception class
+            is_related = False
+            if _is_stack_line(msg_i) or _is_stack_line(msg_j):
+                is_related = True
+            else:
+                exc_i = _exception_class(msg_i)
+                exc_j = _exception_class(msg_j)
+                if exc_i and exc_j and exc_i == exc_j:
+                    is_related = True
+            if is_related:
+                # Primary = non-stack-trace item; if both/neither, the earlier one
+                if _is_stack_line(msg_i) and not _is_stack_line(msg_j):
+                    primary = j
+                    secondary = i
+                else:
+                    primary = i
+                    secondary = j
+                related[secondary] = primary + 1  # 1-based row number
+                assigned.add(secondary)
+
+    return related
+
+
 # ---------- summary ----------
 
 
 def _build_summary_data(filtered, since=None):
+    related = _find_related_groups(filtered)
     items = []
-    for item in filtered:
+    for idx, item in enumerate(filtered):
         g = item["group"]
         entry = {
             "groupId": g.get("groupId", ""),
@@ -110,6 +232,7 @@ def _build_summary_data(filtered, since=None):
             "firstSeenTime": item.get("firstSeenTime", ""),
             "lastSeenTime": item.get("lastSeenTime", ""),
             "service": get_service_from_group(item) or None,
+            "relatedTo": related.get(idx),
         }
         if since:
             first = item.get("firstSeenTime", "")
@@ -205,41 +328,142 @@ def cmd_summary(args):
 
 
 def _print_flat_summary(filtered, since=None):
-    header = "| # | Status | groupId | Error | Count | First | Last | Service |"
-    if since:
-        header = (
-            "| # | Status | New? | groupId | Error | Count | First | Last | Service |"
-        )
-    print(header)
-    print(re.sub(r"[^|]", "-", header))
+    is_tty = sys.stdout.isatty()
+    related = _find_related_groups(filtered)
 
+    if not is_tty:
+        # Markdown table output (non-TTY / piped)
+        header = "| # | Status | groupId | Error | Count | First | Last | Service | Related |"
+        if since:
+            header = (
+                "| # | Status | New? | groupId | Error | Count | First | Last | Service | Related |"
+            )
+        print(header)
+        print(re.sub(r"[^|]", "-", header))
+
+        for i, item in enumerate(filtered, 1):
+            g = item["group"]
+            gid = g.get("groupId", "")
+            status = g.get("resolutionStatus", "")
+            count = item.get("count", "0")
+            first = item.get("firstSeenTime", "")[:10]
+            last = item.get("lastSeenTime", "")[:10]
+            msg = item.get("representative", {}).get("message", "").split("\n")[0][:80]
+            svc = get_service_from_group(item) or "-"
+            rel = f"→ #{related[i - 1]}?" if (i - 1) in related else ""
+
+            if since:
+                is_new = item.get("firstSeenTime", "") >= since
+                mark = "NEW" if is_new else "REGR"
+                print(
+                    f"| {i} | {status} | {mark} | `{gid}` | {msg} "
+                    f"| {count} | {first} | {last} | {svc} | {rel} |"
+                )
+            else:
+                print(
+                    f"| {i} | {status} | `{gid}` | {msg} "
+                    f"| {count} | {first} | {last} | {svc} | {rel} |"
+                )
+
+        print("\n> Detail: `prod-errors trace <groupId>`")
+        return
+
+    # TTY: colored + column-aligned table with box-drawing chars
+    c_status_map = {
+        "OPEN":         _c(_RED),
+        "ACKNOWLEDGED": _c(_YELLOW),
+        "RESOLVED":     _c(_GREEN),
+    }
+    c_gid  = _c(_CYAN)
+    c_svc  = _c(_DIM)
+    c_hdr  = _c(_BOLD)
+    c_new  = _c(_RED, _BOLD)
+    c_regr = _c(_YELLOW)
+
+    c_rel  = _c(_DIM)
+
+    # Build plain-text rows first (for column width calculation)
+    plain_rows = []
     for i, item in enumerate(filtered, 1):
-        g = item["group"]
-        gid = g.get("groupId", "")
+        g      = item["group"]
+        gid    = g.get("groupId", "")
         status = g.get("resolutionStatus", "")
-        count = item.get("count", "0")
-        first = item.get("firstSeenTime", "")[:10]
-        last = item.get("lastSeenTime", "")[:10]
-        msg = item.get("representative", {}).get("message", "").split("\n")[0][:80]
-        svc = get_service_from_group(item) or "-"
-
+        count  = item.get("count", "0")
+        first  = item.get("firstSeenTime", "")[:10]
+        last   = item.get("lastSeenTime", "")[:10]
+        msg    = _trunc(
+            item.get("representative", {}).get("message", "").split("\n")[0], 50
+        )
+        svc = _trunc(get_service_from_group(item) or "-", 40)
+        rel = f"→ #{related[i - 1]}?" if (i - 1) in related else ""
         if since:
             is_new = item.get("firstSeenTime", "") >= since
-            mark = "NEW" if is_new else "REGR"
-            print(
-                f"| {i} | {status} | {mark} | `{gid}` | {msg} "
-                f"| {count} | {first} | {last} | {svc} |"
+            mark   = "NEW" if is_new else "REGR"
+            plain_rows.append(
+                (str(i), status, mark, gid, msg, str(count), first, last, svc, rel)
             )
         else:
-            print(
-                f"| {i} | {status} | `{gid}` | {msg} "
-                f"| {count} | {first} | {last} | {svc} |"
+            plain_rows.append(
+                (str(i), status, gid, msg, str(count), first, last, svc, rel)
             )
 
-    print("\n> Detail: `prod-errors trace <groupId>`")
+    if since:
+        headers = ("#", "Status", "New?", "groupId", "Error", "Count", "First", "Last", "Service", "Related")
+    else:
+        headers = ("#", "Status", "groupId", "Error", "Count", "First", "Last", "Service", "Related")
+
+    widths = _col_widths(plain_rows, headers)
+
+    def _render_row(cells, colorize=False):
+        parts = []
+        for idx, (cell, w) in enumerate(zip(cells, widths)):
+            col_name = headers[idx]
+            plain    = str(cell)
+            if col_name == "Count":
+                padded = plain.rjust(w)
+            else:
+                padded = plain.ljust(w)
+
+            if colorize:
+                if col_name == "Status":
+                    col_fn = c_status_map.get(plain, _c())
+                    padded = col_fn(plain.ljust(w))
+                elif col_name == "groupId":
+                    padded = c_gid(plain.ljust(w))
+                elif col_name == "Service":
+                    padded = c_svc(plain.ljust(w))
+                elif col_name == "New?":
+                    if plain == "NEW":
+                        padded = c_new(plain.ljust(w))
+                    else:
+                        padded = c_regr(plain.ljust(w))
+                elif col_name == "Related":
+                    padded = c_rel(plain.ljust(w))
+                elif col_name == "Count":
+                    padded = plain.rjust(w)
+                else:
+                    padded = plain.ljust(w)
+
+            parts.append(padded)
+        return " \u2502 ".join(parts)
+
+    sep = "\u2500" * (sum(widths) + 3 * (len(widths) - 1))
+
+    # Header row
+    colored_hdrs = [c_hdr(h.ljust(w)) for h, w in zip(headers, widths)]
+    print(" \u2502 ".join(colored_hdrs))
+    print(sep)
+
+    for row in plain_rows:
+        print(_render_row(row, colorize=True))
+
+    print(sep)
+    print("\nDetail: prod-errors trace <groupId>")
 
 
 def _print_service_summary(filtered, since=None):
+    is_tty = sys.stdout.isatty()
+
     by_service = defaultdict(list)
     for item in filtered:
         svc = get_service_from_group(item) or "(unknown)"
@@ -251,40 +475,111 @@ def _print_service_summary(filtered, since=None):
         reverse=True,
     )
 
-    print(
-        "| Service | Groups | Total Count | Oldest First | Latest Last | Top Errors |"
-    )
-    print(
-        "|---------|--------|-------------|--------------|-------------|------------|"
-    )
+    if not is_tty:
+        # Original Markdown table output (non-TTY / piped) — unchanged
+        print(
+            "| Service | Groups | Total Count | Oldest First | Latest Last | Top Errors |"
+        )
+        print(
+            "|---------|--------|-------------|--------------|-------------|------------|"
+        )
 
+        for svc, items in sorted_svcs:
+            group_count = len(items)
+            total = sum(int(g.get("count", "0")) for g in items)
+            oldest = min(g.get("firstSeenTime", "")[:10] for g in items)
+            latest = max(g.get("lastSeenTime", "")[:10] for g in items)
+            top = sorted(items, key=lambda g: int(g.get("count", "0")), reverse=True)[:3]
+            top_msgs = "; ".join(
+                g.get("representative", {}).get("message", "").split("\n")[0][:40]
+                for g in top
+            )
+            print(f"| {svc} | {group_count} | {total} | {oldest} | {latest} | {top_msgs} |")
+
+        print("\n> Flat view: `prod-errors summary`")
+        return
+
+    # TTY: colored + column-aligned table with box-drawing chars
+    c_svc_col = _c(_CYAN)
+    c_hdr     = _c(_BOLD)
+    c_dim     = _c(_DIM)
+
+    # Build plain-text rows for column width calculation
+    plain_rows = []
     for svc, items in sorted_svcs:
         group_count = len(items)
-        total = sum(int(g.get("count", "0")) for g in items)
-        oldest = min(g.get("firstSeenTime", "")[:10] for g in items)
-        latest = max(g.get("lastSeenTime", "")[:10] for g in items)
-        top = sorted(items, key=lambda g: int(g.get("count", "0")), reverse=True)[:3]
+        total       = sum(int(g.get("count", "0")) for g in items)
+        oldest      = min(g.get("firstSeenTime", "")[:10] for g in items)
+        latest      = max(g.get("lastSeenTime", "")[:10] for g in items)
+        top         = sorted(
+            items, key=lambda g: int(g.get("count", "0")), reverse=True
+        )[:3]
         top_msgs = "; ".join(
-            g.get("representative", {}).get("message", "").split("\n")[0][:40]
+            _trunc(
+                g.get("representative", {}).get("message", "").split("\n")[0], 40
+            )
             for g in top
         )
-        print(f"| {svc} | {group_count} | {total} | {oldest} | {latest} | {top_msgs} |")
+        svc_trunc = _trunc(svc, 40)
+        plain_rows.append(
+            (svc_trunc, str(group_count), str(total), oldest, latest, top_msgs)
+        )
 
-    print("\n> Flat view: `prod-errors summary`")
+    headers = ("Service", "Groups", "Total", "Oldest First", "Latest Last", "Top Errors")
+    widths  = _col_widths(plain_rows, headers)
+
+    sep = "\u2500" * (sum(widths) + 3 * (len(widths) - 1))
+
+    colored_hdrs = [c_hdr(h.ljust(w)) for h, w in zip(headers, widths)]
+    print(" \u2502 ".join(colored_hdrs))
+    print(sep)
+
+    for row in plain_rows:
+        svc_val, grp_val, tot_val, old_val, lat_val, top_val = row
+        w = widths
+        parts = [
+            c_svc_col(svc_val.ljust(w[0])),
+            grp_val.rjust(w[1]),
+            tot_val.rjust(w[2]),
+            old_val.ljust(w[3]),
+            lat_val.ljust(w[4]),
+            c_dim(top_val.ljust(w[5])),
+        ]
+        print(" \u2502 ".join(parts))
+
+    print(sep)
+    print("\nFlat view: prod-errors summary")
 
 
 # ---------- trace ----------
 
 
 def cmd_trace(args):
-    token = get_token()
-    gid = args.group_id
+    token   = get_token()
+    gid     = args.group_id
     project = args.project
     as_json = args.json
 
+    # Color helpers (all return plain text when stdout is not a TTY)
+    c_bold   = _c(_BOLD)
+    c_cyan   = _c(_CYAN)
+    c_dim    = _c(_DIM)
+    c_green  = _c(_GREEN)
+    c_red    = _c(_RED)
+    c_yellow = _c(_YELLOW)
+
+    sev_color = {
+        "ERROR":    _c(_RED),
+        "CRITICAL": _c(_RED, _BOLD),
+        "WARN":     _c(_YELLOW),
+        "WARNING":  _c(_YELLOW),
+        "INFO":     _c(_DIM),
+        "DEBUG":    _c(_DIM),
+    }
+
     base_url = build_group_stats_url(args.project)
-    groups = api_get_all_pages(base_url, token, "errorGroupStats")
-    target = next(
+    groups   = api_get_all_pages(base_url, token, "errorGroupStats")
+    target   = next(
         (g for g in groups if g["group"].get("groupId") == gid),
         None,
     )
@@ -292,27 +587,27 @@ def cmd_trace(args):
         print(f"Error group {gid} not found.", file=sys.stderr)
         sys.exit(1)
 
-    rep_msg = target.get("representative", {}).get("message", "")
-    first_line = rep_msg.split("\n")[0]
+    rep_msg       = target.get("representative", {}).get("message", "")
+    first_line    = rep_msg.split("\n")[0]
     known_service = get_service_from_group(target)
 
     result = {
-        "groupId": gid,
-        "message": first_line,
-        "count": int(target.get("count", "0")),
+        "groupId":       gid,
+        "message":       first_line,
+        "count":         int(target.get("count", "0")),
         "firstSeenTime": target.get("firstSeenTime", ""),
-        "lastSeenTime": target.get("lastSeenTime", ""),
-        "service": known_service or None,
+        "lastSeenTime":  target.get("lastSeenTime", ""),
+        "service":       known_service or None,
     }
 
     if not as_json:
-        print(f"## Error Group: {gid}\n")
+        print(f"{c_bold('## Error Group:')} {c_cyan(gid)}\n")
         print(f"- Message: {first_line[:120]}")
         print(f"- Count: {target.get('count', '0')}")
         print(f"- First: {target.get('firstSeenTime', '')[:19]}Z")
         print(f"- Last:  {target.get('lastSeenTime', '')[:19]}Z")
         if known_service:
-            print(f"- Service (from Error Reporting): {known_service}")
+            print(f"- Service (from Error Reporting): {c_dim(known_service)}")
 
     ev_data = api_get(
         f"{API_BASE}/projects/{project}/events"
@@ -323,17 +618,17 @@ def cmd_trace(args):
     result["recentEvents"] = [
         {
             "eventTime": ev.get("eventTime", ""),
-            "service": ev.get("serviceContext", {}).get("service", "unknown"),
+            "service":   ev.get("serviceContext", {}).get("service", "unknown"),
         }
         for ev in events
     ]
 
     if not as_json:
-        print(f"\n### Recent Events ({len(events)})\n")
+        print(f"\n{c_bold(f'### Recent Events ({len(events)})')}\n")
         for ev in events:
             t = ev.get("eventTime", "")[:19]
             s = ev.get("serviceContext", {}).get("service", "unknown")
-            print(f"  - {t}Z | {s}")
+            print(f"  - {t}Z | {c_dim(s)}")
 
     # Narrow Cloud Logging search using service from Error Reporting when available
     search = first_line[:80].replace('"', '\\"')
@@ -345,13 +640,13 @@ def cmd_trace(args):
         filt = f'"{search}" severity>=ERROR'
 
     if not as_json:
-        print("\n### Cloud Logging Lookup\n")
+        print(f"\n{c_bold('### Cloud Logging Lookup')}\n")
         print(f"Filter: `{filt}`\n")
 
     result["cloudLogging"] = {"filter": filt}
 
     try:
-        logs = logging_read(project, token, filt, limit=3)
+        logs = logging_read(project, token, filt, limit=3, freshness=args.freshness)
     except LoggingError as e:
         result["cloudLogging"]["error"] = str(e)
         if as_json:
@@ -366,13 +661,13 @@ def cmd_trace(args):
         if as_json:
             print(json.dumps(result, indent=2, ensure_ascii=False))
         else:
-            print("No matching logs in Cloud Logging (7d window).")
+            print(f"No matching logs in Cloud Logging ({args.freshness} window).")
         return
 
     result["cloudLogging"]["matched"] = True
-    entry = logs[0]
+    entry      = logs[0]
     res_labels = entry.get("resource", {}).get("labels", {})
-    service = res_labels.get(
+    service    = res_labels.get(
         "service_name", res_labels.get("configuration_name", "unknown")
     )
     trace_id = extract_trace_id(entry)
@@ -380,7 +675,7 @@ def cmd_trace(args):
     result["cloudLogging"]["traceId"] = trace_id or None
 
     if not as_json:
-        print(f"- Service: **{service}**")
+        print(f"- Service: {c_bold(service)}")
         print(f"- Trace ID: `{trace_id}`")
 
     if not trace_id:
@@ -399,13 +694,13 @@ def cmd_trace(args):
         f'resource.labels.service_name="{service}" jsonPayload.trace_id="{trace_id}"'
     )
     try:
-        t_logs = logging_read(project, token, t_filt, limit=30)
+        t_logs = logging_read(project, token, t_filt, limit=30, freshness=args.freshness)
         if not t_logs:
             t_filt = (
                 f'resource.labels.service_name="{service}" '
                 f'trace="projects/{project}/traces/{trace_id}"'
             )
-            t_logs = logging_read(project, token, t_filt, limit=30)
+            t_logs = logging_read(project, token, t_filt, limit=30, freshness=args.freshness)
     except LoggingError as e:
         result["lifecycle"] = {"error": str(e)}
         if as_json:
@@ -422,27 +717,28 @@ def cmd_trace(args):
             lifecycle.append(
                 {
                     "timestamp": tl.get("timestamp", ""),
-                    "severity": tl.get("severity", ""),
-                    "logger": tjp.get("logger", ""),
-                    "message": strip_ansi(raw).split("\n")[0][:150],
+                    "severity":  tl.get("severity", ""),
+                    "logger":    tjp.get("logger", ""),
+                    "message":   strip_ansi(raw).split("\n")[0][:150],
                 }
             )
         result["lifecycle"] = lifecycle
 
         if not as_json:
-            print("\n### Request Lifecycle (trace-level match)\n")
-            for entry in lifecycle:
-                ts = entry["timestamp"][:23]
-                sev = entry["severity"]
-                logger = entry["logger"]
-                tmsg = entry["message"]
-                print(f"  [{ts}] {sev:7s} [{logger}] {tmsg}")
+            print(f"\n{c_bold('### Request Lifecycle (trace-level match)')}\n")
+            for lc_entry in lifecycle:
+                ts     = lc_entry["timestamp"][:23]
+                sev    = lc_entry["severity"]
+                logger = lc_entry["logger"]
+                tmsg   = lc_entry["message"]
+                col    = sev_color.get(sev, _c())
+                print(f"  [{ts}] {col(f'{sev:7s}')} [{c_dim(logger)}] {tmsg}")
 
     endpoint = None
     error_ts = None
     for tl in t_logs:
-        tjp = tl.get("jsonPayload", {})
-        raw = tjp.get("message", "") or tl.get("textPayload", "")
+        tjp   = tl.get("jsonPayload", {})
+        raw   = tjp.get("message", "") or tl.get("textPayload", "")
         clean = strip_ansi(raw)
         if "500" in clean and (" POST " in clean or " GET " in clean):
             m = re.search(r"- (.+?) in \d+ms", clean)
@@ -456,12 +752,12 @@ def cmd_trace(args):
         if as_json:
             print(json.dumps(result, indent=2, ensure_ascii=False))
         else:
-            print("\n### Retry Check\n")
+            print(f"\n{c_bold('### Retry Check')}\n")
             print("Could not extract endpoint. Manual investigation needed.")
         return
 
     if not as_json:
-        print("\n### Retry Check\n")
+        print(f"\n{c_bold('### Retry Check')}\n")
         print(f"- Endpoint: `{endpoint}`")
         print(f"- Error at: {error_ts[:23]}Z")
 
@@ -480,12 +776,12 @@ def cmd_trace(args):
             print(f"**Retry check query FAILED**: {e}")
         return
 
-    ok = 0
-    fail = 0
+    ok          = 0
+    fail        = 0
     first_ok_ts = None
     for rl in reversed(r_logs):
-        rjp = rl.get("jsonPayload", {})
-        raw = rjp.get("message", "") or rl.get("textPayload", "")
+        rjp  = rl.get("jsonPayload", {})
+        raw  = rjp.get("message", "") or rl.get("textPayload", "")
         rmsg = strip_ansi(raw)
         if "200 OK" in rmsg:
             ok += 1
@@ -502,12 +798,12 @@ def cmd_trace(args):
         verdict = "no_subsequent_requests"
 
     result["retryCheck"] = {
-        "endpoint": endpoint,
-        "errorTimestamp": error_ts,
-        "successCount": ok,
-        "failureCount": fail,
+        "endpoint":              endpoint,
+        "errorTimestamp":        error_ts,
+        "successCount":          ok,
+        "failureCount":          fail,
         "firstSuccessTimestamp": first_ok_ts,
-        "verdict": verdict,
+        "verdict":               verdict,
     }
 
     if as_json:
@@ -518,12 +814,12 @@ def cmd_trace(args):
     if ok > 0:
         print(f"- First success: {first_ok_ts}Z")
         print(
-            "- Verdict: **Likely recovered** (⚠ endpoint-level match, not trace-level)"
+            f"- Verdict: {c_green('Likely recovered')} (endpoint-level match, not trace-level)"
         )
     elif fail > 0:
-        print("- Verdict: **Not recovered** (⚠ endpoint-level match, not trace-level)")
+        print(f"- Verdict: {c_red('Not recovered')} (endpoint-level match, not trace-level)")
     else:
-        print("- Verdict: **Unknown** (no subsequent requests on this endpoint)")
+        print(f"- Verdict: {c_yellow('Unknown')} (no subsequent requests on this endpoint)")
 
 
 # ---------- helpers ----------
@@ -540,7 +836,7 @@ def get_token():
     if any(k.startswith(p) for k in os.environ for p in _CLOUDSDK_SKIP_PREFIXES):
         return _get_token_via_cli()
     try:
-        gcloud_dir = os.path.expanduser("~/.config/gcloud")
+        gcloud_dir  = os.path.expanduser("~/.config/gcloud")
         config_name = os.environ.get("CLOUDSDK_ACTIVE_CONFIG_NAME", "")
         if not config_name:
             ac_path = os.path.join(gcloud_dir, "active_config")
@@ -590,7 +886,7 @@ def api_get(url, token):
             return json.loads(resp.read())
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")[:200]
-        print(f"API error: HTTP {e.code} — {body}", file=sys.stderr)
+        print(f"API error: HTTP {e.code} \u2014 {body}", file=sys.stderr)
         sys.exit(1)
     except urllib.error.URLError as e:
         print(f"API connection error: {e.reason}", file=sys.stderr)
@@ -618,18 +914,18 @@ class LoggingError(Exception):
 def logging_read(project, token, filt, limit=10, freshness="7d"):
     """Raises LoggingError on query failure, returns [] on empty results."""
     # REST API has no --freshness equivalent; emulate with timestamp filter
-    m = re.match(r"^(\d+)d$", freshness)
+    m    = re.match(r"^(\d+)d$", freshness)
     days = int(m.group(1)) if m else 7
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    cutoff      = datetime.now(timezone.utc) - timedelta(days=days)
     time_filter = cutoff.strftime("%Y-%m-%dT%H:%M:%SZ")
     full_filter = f'{filt} timestamp>="{time_filter}"'
 
     body = json.dumps(
         {
             "resourceNames": [f"projects/{project}"],
-            "filter": full_filter,
-            "orderBy": "timestamp desc",
-            "pageSize": limit,
+            "filter":        full_filter,
+            "orderBy":       "timestamp desc",
+            "pageSize":      limit,
         }
     ).encode()
 
@@ -638,7 +934,7 @@ def logging_read(project, token, filt, limit=10, freshness="7d"):
         data=body,
         headers={
             "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
+            "Content-Type":  "application/json",
         },
         method="POST",
     )
@@ -658,7 +954,7 @@ def strip_ansi(text):
 
 def extract_trace_id(entry):
     """trace_id is stored in different locations depending on the service."""
-    jp = entry.get("jsonPayload", {})
+    jp  = entry.get("jsonPayload", {})
     tid = jp.get("trace_id", "")
     if tid:
         return tid
