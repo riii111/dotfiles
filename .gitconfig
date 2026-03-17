@@ -1,14 +1,23 @@
 # ==========================================
-# Git Configuration Enhancements
+# Git Configuration (shared/non-private settings)
 # ==========================================
-# NOTE: Add your personal [user] section separately!
-# This file contains only the enhancement settings.
+# Usage:
+#   Add to ~/.gitconfig:
+#     [include]
+#         path = ~/ghq/github.com/riii111/dotfiles/.gitconfig
+#
+# Keep private settings (user, signingkey, lfs, coderabbit, etc.)
+# in ~/.gitconfig directly.
 
 # ==========================================
 # Core Settings
 # ==========================================
 [core]
+	autocrlf = input
+	eol = lf
+	safecrlf = true
 	pager = delta
+	excludesFile = ~/.config/git/ignore
 
 # ==========================================
 # Delta Configuration (Beautiful Diffs)
@@ -76,6 +85,9 @@
 
 	# Safe force push (use instead of --force)
 	pushf = push --force-with-lease
+
+	# Delete local branches whose remote tracking branch is gone (squash-merge safe)
+	prune-merged = "!git fetch --prune && git branch -v | grep '\\[gone\\]' | awk '{print $1}' | xargs -r git branch -D"
 
 	# History fzf - GitHub Desktop History tab like experience
 	# - ⬆ mark for unpushed commits
