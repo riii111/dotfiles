@@ -67,15 +67,25 @@ export PS1="%1~ %# "
 # Set terminal title for WezTerm right status
 # Format: "repo::ref::flags" (flags: d=dirty, D=detached, w=worktree, R=rebase, M=merge, C=cherry-pick)
 __TERM_TITLE_LAST=""
+__TERM_TITLE_WATCH_KEY=""
+typeset -gF __TERM_TITLE_LAST_WATCH_AT=0
+typeset -gF __TERM_TITLE_WATCH_INTERVAL=0.5
+
+zmodload zsh/datetime 2>/dev/null || true
+zmodload zsh/stat 2>/dev/null || true
 
 _find_git_root() {
   local dir="${PWD:A}"
 
   while [[ "$dir" != "/" ]]; do
-    [[ -e "$dir/.git" ]] && print -r -- "$dir" && return 0
+    if [[ -e "$dir/.git" ]]; then
+      REPLY="$dir"
+      return 0
+    fi
     dir="${dir:h}"
   done
 
+  REPLY=""
   return 1
 }
 
@@ -84,7 +94,7 @@ _resolve_git_dir() {
   local git_entry="$root/.git"
 
   if [[ -d "$git_entry" ]]; then
-    print -r -- "$git_entry"
+    REPLY="$git_entry"
     return 0
   fi
 
@@ -93,10 +103,11 @@ _resolve_git_dir() {
     IFS= read -r git_dir < "$git_entry"
     git_dir="${git_dir#gitdir: }"
     [[ "$git_dir" = /* ]] || git_dir="$root/$git_dir"
-    print -r -- "${git_dir:A}"
+    REPLY="${git_dir:A}"
     return 0
   fi
 
+  REPLY=""
   return 1
 }
 
@@ -107,15 +118,94 @@ _print_terminal_title() {
   printf '\e]2;%s\a' "$title"
 }
 
+_watch_path_signature() {
+  local path="$1"
+  local mode="${2:-meta}"
+
+  if [[ ! -e "$path" ]]; then
+    REPLY="-"
+    return 0
+  fi
+
+  local -A stat
+  zstat -H stat -- "$path" 2>/dev/null || {
+    REPLY="?"
+    return 0
+  }
+
+  if [[ -f "$path" && "$mode" == "content" ]]; then
+    local first_line=""
+    IFS= read -r first_line < "$path" 2>/dev/null || first_line=""
+    REPLY="f:${stat[mtime]}:${stat[size]}:${first_line}"
+    return 0
+  fi
+
+  REPLY="${stat[mode]}:${stat[mtime]}:${stat[size]}"
+}
+
+_build_terminal_title_watch_key() {
+  local root="$1"
+  local git_dir="$2"
+  local repo_kind="repo"
+  [[ -f "$root/.git" ]] && repo_kind="worktree"
+
+  _watch_path_signature "$git_dir/HEAD" content
+  local head_sig="$REPLY"
+  _watch_path_signature "$git_dir/index"
+  local index_sig="$REPLY"
+  _watch_path_signature "$git_dir/MERGE_HEAD"
+  local merge_sig="$REPLY"
+  _watch_path_signature "$git_dir/CHERRY_PICK_HEAD"
+  local cherry_sig="$REPLY"
+  _watch_path_signature "$git_dir/rebase-merge"
+  local rebase_merge_sig="$REPLY"
+  _watch_path_signature "$git_dir/rebase-apply"
+  local rebase_apply_sig="$REPLY"
+
+  REPLY="${root:A}|${git_dir:A}|${repo_kind}|${head_sig}|${index_sig}|${merge_sig}|${cherry_sig}|${rebase_merge_sig}|${rebase_apply_sig}"
+}
+
+_maybe_refresh_terminal_title() {
+  local force="${1:-0}"
+
+  if (( ! force )); then
+    local now="${EPOCHREALTIME:-$SECONDS}"
+    (( now - __TERM_TITLE_LAST_WATCH_AT < __TERM_TITLE_WATCH_INTERVAL )) && return 0
+    __TERM_TITLE_LAST_WATCH_AT="$now"
+  fi
+
+  _find_git_root || {
+    [[ "$__TERM_TITLE_WATCH_KEY" == "pwd:${PWD:A}" ]] || _set_terminal_title
+    return 0
+  }
+  local repo_root="$REPLY"
+
+  _resolve_git_dir "$repo_root" || {
+    local unresolved_key="repo:${repo_root:A}:unresolved"
+    [[ "$__TERM_TITLE_WATCH_KEY" == "$unresolved_key" ]] || _set_terminal_title
+    return 0
+  }
+  local git_dir="$REPLY"
+
+  _build_terminal_title_watch_key "$repo_root" "$git_dir"
+  [[ "$__TERM_TITLE_WATCH_KEY" == "$REPLY" ]] || _set_terminal_title
+}
+
+_maybe_refresh_terminal_title_from_zle() {
+  _maybe_refresh_terminal_title
+}
+
 _set_terminal_title() {
   local dir="${PWD##*/}"
   dir="${dir:-/}"
 
   local repo_root
-  repo_root=$(_find_git_root) || {
+  _find_git_root || {
     _print_terminal_title "$dir"
+    __TERM_TITLE_WATCH_KEY="pwd:${PWD:A}"
     return
   }
+  repo_root="$REPLY"
 
   local repo
   repo="${repo_root:t}"
@@ -123,6 +213,7 @@ _set_terminal_title() {
   local status_output
   status_output=$(command git -C "$repo_root" status --porcelain=v2 --branch 2>/dev/null) || {
     _print_terminal_title "$dir"
+    __TERM_TITLE_WATCH_KEY="repo:${repo_root:A}:status-error"
     return
   }
 
@@ -152,10 +243,12 @@ _set_terminal_title() {
   fi
 
   local git_dir
-  git_dir=$(_resolve_git_dir "$repo_root") || {
+  _resolve_git_dir "$repo_root" || {
     _print_terminal_title "${repo}::${ref:-unknown}${flags:+::$flags}"
+    __TERM_TITLE_WATCH_KEY="repo:${repo_root:A}:unresolved"
     return
   }
+  git_dir="$REPLY"
 
   [[ -f "$repo_root/.git" ]] && flags="${flags}w"
   [[ -d "$git_dir/rebase-merge" || -d "$git_dir/rebase-apply" ]] && flags="${flags}R"
@@ -163,6 +256,8 @@ _set_terminal_title() {
   [[ -f "$git_dir/CHERRY_PICK_HEAD" ]] && flags="${flags}C"
 
   _print_terminal_title "${repo}::${ref:-unknown}${flags:+::$flags}"
+  _build_terminal_title_watch_key "$repo_root" "$git_dir"
+  __TERM_TITLE_WATCH_KEY="$REPLY"
 }
 
 git() {
@@ -171,7 +266,7 @@ git() {
   (( ${+functions[_set_terminal_title]} )) && _set_terminal_title
   return $ret
 }
-autoload -Uz add-zsh-hook
+autoload -Uz add-zsh-hook add-zle-hook-widget
 add-zsh-hook chpwd _set_terminal_title
 _set_terminal_title
 
@@ -258,6 +353,11 @@ export PATH="/opt/homebrew/opt/mysql-client/bin:$PATH"
 # Interactive Shell Only
 # ==========================================
 [[ -o interactive ]] || return
+
+add-zsh-hook precmd _maybe_refresh_terminal_title
+if [[ -o zle ]]; then
+  add-zle-hook-widget line-pre-redraw _maybe_refresh_terminal_title_from_zle
+fi
 
 # ==========================================
 # Completion
