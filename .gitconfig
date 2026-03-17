@@ -86,8 +86,8 @@
 	# Safe force push (use instead of --force)
 	pushf = push --force-with-lease
 
-	# Delete local branches whose remote tracking branch is gone (squash-merge safe)
-	prune-merged = "!git fetch --prune && git branch -v | grep '\\[gone\\]' | awk '{print $1}' | xargs -r git branch -D"
+	# Delete local branches whose remote tracking branch is gone (-d = safe, refuses unmerged)
+	prune-gone = "!git fetch --prune && git for-each-ref --format='%(refname:short)%09%(upstream:track)' refs/heads | awk -F '\\t' '$2 == \"[gone]\" { print $1 }' | xargs -r git branch -d"
 
 	# History fzf - GitHub Desktop History tab like experience
 	# - ⬆ mark for unpushed commits
