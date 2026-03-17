@@ -86,9 +86,10 @@
 	# Safe force push (use instead of --force)
 	pushf = push --force-with-lease
 
-	# Delete local branches whose remote tracking branch is gone (-d = safe, refuses unmerged)
+	# Delete local branches whose remote tracking branch is gone (squash-merge safe)
+	# Uses for-each-ref (not branch -v) to avoid false positives from commit messages
 	# Skips branches checked out in worktrees to avoid noisy errors
-	prune-gone = "!f() { git fetch --prune; wt=$(git worktree list --porcelain 2>/dev/null | sed -n 's|^branch refs/heads/||p'); git for-each-ref --format='%(refname:short)%09%(upstream:track)' refs/heads | awk -F '\\t' '$2 == \"[gone]\" { print $1 }' | while IFS= read -r b; do if echo \"$wt\" | grep -qFx \"$b\"; then echo \"Skipped (worktree): $b\"; else git branch -d \"$b\"; fi; done; }; f"
+	prune-gone = "!f() { git fetch --prune; wt=$(git worktree list --porcelain 2>/dev/null | sed -n 's|^branch refs/heads/||p'); git for-each-ref --format='%(refname:short)%09%(upstream:track)' refs/heads | awk -F '\\t' '$2 == \"[gone]\" { print $1 }' | while IFS= read -r b; do if echo \"$wt\" | grep -qFx \"$b\"; then echo \"Skipped (worktree): $b\"; else git branch -D \"$b\"; fi; done; }; f"
 
 	# History fzf - GitHub Desktop History tab like experience
 	# - ⬆ mark for unpushed commits
