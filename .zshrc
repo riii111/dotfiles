@@ -194,12 +194,13 @@ export HOMEBREW_PREFIX="/opt/homebrew"
 export HOMEBREW_CELLAR="/opt/homebrew/Cellar"
 export HOMEBREW_REPOSITORY="/opt/homebrew"
 export MANPATH="${MANPATH:+$MANPATH:}/opt/homebrew/share/man:"
-export INFOPATH="/opt/homebrew/share/info:${INFOPATH:-}"
+[[ "$INFOPATH" != */opt/homebrew/share/info* ]] && \
+  export INFOPATH="/opt/homebrew/share/info:${INFOPATH:-}"
 
 # ==========================================
 # PATH Configuration
 # ==========================================
-typeset -U path PATH
+typeset -U path PATH fpath FPATH manpath MANPATH
 
 export PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
 export PATH=/opt/homebrew/bin:/opt/homebrew/sbin:$PATH
@@ -345,7 +346,7 @@ _deferred_abbr_init() {
   abbr -S -qq paf='pbpaste >'
 }
 
-typeset -gi _ABBR_INITIALIZED=0
+typeset -gi _ABBR_INITIALIZED=${_ABBR_INITIALIZED:-0}
 
 _abbr_arm_first_input() {
   (( _ABBR_INITIALIZED )) && return
@@ -355,11 +356,21 @@ _abbr_arm_first_input() {
 
 _abbr_on_first_input() {
   local keys="$KEYS"
-  zle -A _abbr_original_self_insert self-insert
+
+  # Restore original self-insert; fall back to builtin if missing
+  if (( ${+widgets[_abbr_original_self_insert]} )); then
+    zle -A _abbr_original_self_insert self-insert
+  else
+    zle -A .self-insert self-insert
+  fi
+
   add-zsh-hook -d precmd _abbr_arm_first_input 2>/dev/null
   _ABBR_INITIALIZED=1
-  _deferred_abbr_init
+
+  # Guard: skip if already loaded (e.g. re-source)
+  (( ${+functions[_deferred_abbr_init]} )) && _deferred_abbr_init
   (( ${+functions[_zsh_autosuggest_bind_widgets]} )) && _zsh_autosuggest_bind_widgets
+
   zle -U "$keys"
 }
 
