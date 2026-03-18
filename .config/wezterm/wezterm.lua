@@ -109,12 +109,58 @@ config.macos_forward_to_ime_modifier_mask = "SHIFT|CTRL"
 ---------------------------------------------------------------
 -- Leader key (for tab switching etc.)
 ---------------------------------------------------------------
-config.leader = { key = ";", mods = "CTRL", timeout_milliseconds = 2000 }
+config.leader = { key = "f", mods = "CTRL", timeout_milliseconds = 2000 }
 
 ---------------------------------------------------------------
 -- Key bindings
 ---------------------------------------------------------------
 config.keys = keymaps
+
+---------------------------------------------------------------
+-- Copy mode: add Y to yank current line (like Neovim)
+---------------------------------------------------------------
+local act = wezterm.action
+local copy_mode = wezterm.gui.default_key_tables().copy_mode
+
+-- Helper: yank with flash (copy, show selection 0.25s, then clear & close)
+local function yank_with_flash(pre_actions)
+	return wezterm.action_callback(function(window, pane)
+		if pre_actions then
+			for _, a in ipairs(pre_actions) do
+				window:perform_action(a, pane)
+			end
+		end
+		window:perform_action(act.CopyTo("ClipboardAndPrimarySelection"), pane)
+		wezterm.time.call_after(0.15, function()
+			window:perform_action(act.CopyMode("ClearSelectionMode"), pane)
+			window:perform_action(act.CopyMode("Close"), pane)
+		end)
+	end)
+end
+
+-- Remove default y binding, then re-add with flash
+for i = #copy_mode, 1, -1 do
+	if copy_mode[i].key == "y" and copy_mode[i].mods ~= "SHIFT" then
+		table.remove(copy_mode, i)
+	end
+end
+table.insert(copy_mode, {
+	key = "y",
+	mods = "NONE",
+	action = yank_with_flash(),
+})
+
+-- Y: select cursor-to-EOL, then yank with flash
+table.insert(copy_mode, {
+	key = "y",
+	mods = "SHIFT",
+	action = yank_with_flash({
+		act.CopyMode({ SetSelectionMode = "Cell" }),
+		act.CopyMode("MoveToEndOfLineContent"),
+	}),
+})
+
+config.key_tables = { copy_mode = copy_mode }
 
 ---------------------------------------------------------------
 -- Color scheme
