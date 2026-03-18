@@ -156,3 +156,6 @@ prefix_rule(pattern=["sudo"], decision="forbidden", justification="Privilege esc
 prefix_rule(pattern=["su"], decision="forbidden", justification="User switching is forbidden")
 prefix_rule(pattern=["chmod", "777"], decision="forbidden", justification="World-writable permissions forbidden")
 prefix_rule(pattern=["chown"], decision="prompt", justification="Change ownership requires confirmation")
+prefix_rule(pattern=["tmux", "list-panes", "-a", "-F", "#{session_name}:#{window_index}.#{pane_index} #{window_name} #{pane_title}"], decision="allow")
+prefix_rule(pattern=["tmux", "list-sessions"], decision="allow")
+prefix_rule(pattern=["tmux", "send-keys", "-t"], decision="allow")
