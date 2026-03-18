@@ -1,6 +1,6 @@
 ---
 description: CoVe loop : branch -> Plan Mode -> write plan -> hand off to /plan-cove-exec
-argument-hint: "branch=<name> | optional extra constraints/instructions (free-form)"
+argument-hint: "[-w] [branch=<name>] [optional constraints (free-form)]. -w: use worktree for parallel work"
 ---
 
 ## HARD GATES (READ FIRST)
@@ -20,19 +20,37 @@ $ARGUMENTS
 1. Run `pwd` to confirm repo root
 2. Run `git status --porcelain` to check if working tree is clean
 3. If not clean: STOP and **use `AskUserQuestion` tool** to ask what to do
+4. **Parse mode from $ARGUMENTS**:
+   - `-w` が含まれる → **worktree モード**
+   - それ以外 → **通常モード**（リポジトリ直下で作業）
 
 ---
 
-# Step 1 — Branch
+# Step 1 — Branch & Workspace
+
+## 通常モード
 - If `branch=<name>` is provided, use it
 - Else: derive a short branch name and **use `AskUserQuestion` tool** to confirm
+- Run: `git checkout -b "<BRANCH_NAME>"`
 
-Run: `git checkout -b "<BRANCH_NAME>"`
+## worktree モード
+- If `branch=<name>` is provided, use it
+- Else: derive a short branch name and **use `AskUserQuestion` tool** to confirm
+- Run: `EnterWorktree` tool (name = branch name の短縮形)
+- worktree 内で: `git checkout -b "<BRANCH_NAME>"`
+- **HARD GATE**: `-B`（強制上書き）は**絶対に使わない**。
+  同名ブランチが既に存在する場合、STOP して **use `AskUserQuestion` tool**。
+  元のワーキングツリーと同じブランチを worktree 内で checkout すると差分が壊れるため。
 
 ---
 
 # Step 2 — Plan Mode & Draft Plan
 Enter Plan Mode (`EnterPlanMode` tool) and write your implementation plan in Japanese.
+
+Plan ファイルのヘッダーに**必ず**以下を記載:
+- **Workspace**: `worktree (.claude/worktrees/xxx)` or `repo-root`
+- **Branch**: ブランチ名
+- **Base**: ベースブランチ名
 
 Collect the information you need:
 - relevant modules / entry points
