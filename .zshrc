@@ -401,6 +401,7 @@ if [[ -o zle ]]; then
   # zsh-autosuggestions
   [[ -f /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh ]] && \
     source /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh
+  unset ZSH_AUTOSUGGEST_USE_ASYNC
 fi
 
 # ==========================================
