@@ -109,7 +109,7 @@ config.macos_forward_to_ime_modifier_mask = "SHIFT|CTRL"
 ---------------------------------------------------------------
 -- Leader key (for tab switching etc.)
 ---------------------------------------------------------------
-config.leader = { key = "f", mods = "CTRL", timeout_milliseconds = 2000 }
+config.leader = { key = "j", mods = "CTRL", timeout_milliseconds = 2000 }
 
 ---------------------------------------------------------------
 -- Key bindings
