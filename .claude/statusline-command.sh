@@ -16,6 +16,7 @@ needs_build() {
 }
 
 if needs_build; then
+  export PATH="/opt/homebrew/bin:/usr/local/go/bin:$PATH"
   go build -o "$BIN" "$DIR" 2>/dev/null || {
     printf '🤖 (build failed)'
     exit 0
