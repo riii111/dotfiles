@@ -11,9 +11,12 @@ import (
 // Line builders (top-level public API)
 // ════════════════════════════════════════════════════════════
 
-// BuildLine1 renders: model | lines changed | branch | cost
+// BuildLine1 renders: model | ctx% | lines changed | branch | cost
 func BuildLine1(in Input, gitBranch string) string {
 	out := "🤖 " + in.Model.DisplayName
+
+	ctxPct := clamp(in.ContextWindow.UsedPercentage)
+	out += sep + fmt.Sprintf("📊 %s%d%%%s", gradientColor(ctxPct), ctxPct, reset)
 
 	if in.Cost.TotalLinesAdded > 0 || in.Cost.TotalLinesRemoved > 0 {
 		out += sep + fmt.Sprintf("✏️  %s+%d/-%d%s", green, in.Cost.TotalLinesAdded, in.Cost.TotalLinesRemoved, reset)
@@ -36,10 +39,9 @@ func BuildLine1(in Input, gitBranch string) string {
 	return out
 }
 
-// BuildLine2 renders: ctx / 5h / 7d usage bars
+// BuildLine2 renders: 5h / 7d rate-limit bars
 func BuildLine2(in Input, now time.Time) string {
 	parts := []string{
-		formatBar("ctx", clamp(in.ContextWindow.UsedPercentage), ResetTime{}, now),
 		formatRateLimit("5h", in.RateLimits.FiveHour, now),
 		formatRateLimit("7d", in.RateLimits.SevenDay, now),
 	}
