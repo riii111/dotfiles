@@ -99,12 +99,12 @@ func formatRateLimit(label string, rl RateLimit, now time.Time) string {
 // ════════════════════════════════════════════════════════════
 
 const (
-	green = "\033[38;2;151;201;195m" // #97C9C3
+	green  = "\033[38;2;151;201;195m" // #97C9C3
 	yellow = "\033[38;2;229;192;123m" // #E5C07B
-	red   = "\033[38;2;224;108;117m" // #E06C75
-	gray  = "\033[38;2;74;88;92m"    // #4A585C
-	dim   = "\033[2m"
-	reset = "\033[0m"
+	red    = "\033[38;2;224;108;117m" // #E06C75
+	gray   = "\033[38;2;74;88;92m"    // #4A585C
+	dim    = "\033[2m"
+	reset  = "\033[0m"
 )
 
 var sep = gray + " │ " + reset
