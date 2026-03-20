@@ -16,7 +16,7 @@ func BuildLine1(in Input, gitBranch string) string {
 	out := "🤖 " + in.Model.DisplayName
 
 	ctxPct := clamp(in.ContextWindow.UsedPercentage)
-	out += sep + fmt.Sprintf("📊 %s%d%%%s", gradientColor(ctxPct), ctxPct, reset)
+	out += sep + fmt.Sprintf("📊 %s%d%%%s", thresholdColor(ctxPct), ctxPct, reset)
 
 	if in.Cost.TotalLinesAdded > 0 || in.Cost.TotalLinesRemoved > 0 {
 		out += sep + fmt.Sprintf("✏️  %s+%d/-%d%s", green, in.Cost.TotalLinesAdded, in.Cost.TotalLinesRemoved, reset)
@@ -78,7 +78,7 @@ func renderBar(pct, width int) string {
 }
 
 func formatBar(label string, pct int, rt ResetTime, now time.Time) string {
-	color := gradientColor(pct)
+	color := thresholdColor(pct)
 	bar := renderBar(pct, 10)
 	s := fmt.Sprintf("%s %s%s %d%%", label, color, bar, pct)
 	if rt.Valid {
@@ -99,21 +99,26 @@ func formatRateLimit(label string, rl RateLimit, now time.Time) string {
 // ════════════════════════════════════════════════════════════
 
 const (
-	green = "\033[38;2;151;201;195m"
-	gray  = "\033[38;2;74;88;92m"
+	green = "\033[38;2;151;201;195m" // #97C9C3
+	yellow = "\033[38;2;229;192;123m" // #E5C07B
+	red   = "\033[38;2;224;108;117m" // #E06C75
+	gray  = "\033[38;2;74;88;92m"    // #4A585C
 	dim   = "\033[2m"
 	reset = "\033[0m"
 )
 
 var sep = gray + " │ " + reset
 
-// gradientColor returns green→yellow→red ANSI escape for 0–100%
-func gradientColor(pct int) string {
-	pct = max(0, min(100, pct))
-	if pct < 50 {
-		return fmt.Sprintf("\033[38;2;%d;200;80m", pct*255/50)
+// thresholdColor returns green/yellow/red based on usage percentage
+func thresholdColor(pct int) string {
+	switch {
+	case pct >= 80:
+		return red
+	case pct >= 50:
+		return yellow
+	default:
+		return green
 	}
-	return fmt.Sprintf("\033[38;2;255;%d;60m", max(0, 200-(pct-50)*4))
 }
 
 // ════════════════════════════════════════════════════════════
