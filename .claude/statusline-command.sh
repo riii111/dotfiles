@@ -27,9 +27,9 @@ IFS=$'\t' read -r MODEL_DISPLAY CTX_PCT LINES_ADD LINES_DEL CWD COST_USD \
     (.worktree.name // "N/A"),
     (.worktree.original_branch // "N/A"),
     (.rate_limits.five_hour.used_percentage // -1 | tostring),
-    ((.rate_limits.five_hour.resets_at // null) | if . then (gsub("\\.[0-9]+"; "") | gsub("[+-][0-9]{2}:[0-9]{2}$"; "Z") | try fromdateiso8601 catch -1) else -1 end | tostring),
+    ((.rate_limits.five_hour.resets_at // null) | if . then (try (if type == "number" then . elif type == "string" then (gsub("\\.[0-9]+"; "") | gsub("[+-][0-9]{2}:[0-9]{2}$"; "Z") | fromdateiso8601) else -1 end) catch -1) else -1 end | tostring),
     (.rate_limits.seven_day.used_percentage // -1 | tostring),
-    ((.rate_limits.seven_day.resets_at // null) | if . then (gsub("\\.[0-9]+"; "") | gsub("[+-][0-9]{2}:[0-9]{2}$"; "Z") | try fromdateiso8601 catch -1) else -1 end | tostring)
+    ((.rate_limits.seven_day.resets_at // null) | if . then (try (if type == "number" then . elif type == "string" then (gsub("\\.[0-9]+"; "") | gsub("[+-][0-9]{2}:[0-9]{2}$"; "Z") | fromdateiso8601) else -1 end) catch -1) else -1 end | tostring)
   ] | @tsv' 2>/dev/null
 )
 
