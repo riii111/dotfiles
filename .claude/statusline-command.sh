@@ -27,9 +27,9 @@ IFS=$'\t' read -r MODEL_DISPLAY CTX_PCT LINES_ADD LINES_DEL CWD COST_USD \
     (.worktree.name // "N/A"),
     (.worktree.original_branch // "N/A"),
     (.rate_limits.five_hour.used_percentage // -1 | tostring),
-    ((.rate_limits.five_hour.resets_at // null) | if . then fromdateiso8601 else -1 end | tostring),
+    ((.rate_limits.five_hour.resets_at // null) | if . then (gsub("\\.[0-9]+"; "") | gsub("[+-][0-9]{2}:[0-9]{2}$"; "Z") | try fromdateiso8601 catch -1) else -1 end | tostring),
     (.rate_limits.seven_day.used_percentage // -1 | tostring),
-    ((.rate_limits.seven_day.resets_at // null) | if . then fromdateiso8601 else -1 end | tostring)
+    ((.rate_limits.seven_day.resets_at // null) | if . then (gsub("\\.[0-9]+"; "") | gsub("[+-][0-9]{2}:[0-9]{2}$"; "Z") | try fromdateiso8601 catch -1) else -1 end | tostring)
   ] | @tsv' 2>/dev/null
 )
 
@@ -41,6 +41,8 @@ is_number() {
 gradient_color() {
   local ipct=0
   is_number "$1" && ipct=$(printf "%.0f" "$1" 2>/dev/null || echo 0)
+  [ "$ipct" -lt 0 ] && ipct=0
+  [ "$ipct" -gt 100 ] && ipct=100
   if [ "$ipct" -lt 50 ]; then
     printf '\e[38;2;%d;200;80m' "$(( ipct * 255 / 50 ))"
   else
@@ -61,8 +63,12 @@ render_bar() {
   local bar="" i=0
   while [ "$i" -lt "$full" ]; do bar+="${BLOCK_CHARS[8]}"; i=$(( i + 1 )); done
   if [ "$full" -lt "$width" ]; then
-    bar+="${BLOCK_CHARS[$frac]}"
-    i=$(( width - full - 1 ))
+    if [ "$frac" -gt 0 ]; then
+      bar+="${BLOCK_CHARS[$frac]}"
+      i=$(( width - full - 1 ))
+    else
+      i=$(( width - full ))
+    fi
     while [ "$i" -gt 0 ]; do bar+=$'\xe2\x96\x91'; i=$(( i - 1 )); done
   fi
   printf '%s' "$bar"
