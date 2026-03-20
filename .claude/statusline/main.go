@@ -34,9 +34,13 @@ func main() {
 // ════════════════════════════════════════════════════════════
 
 type Input struct {
-	Model         struct{ DisplayName string `json:"display_name"` } `json:"model"`
-	ContextWindow struct{ UsedPercentage float64 `json:"used_percentage"` } `json:"context_window"`
-	Cost          struct {
+	Model struct {
+		DisplayName string `json:"display_name"`
+	} `json:"model"`
+	ContextWindow struct {
+		UsedPercentage float64 `json:"used_percentage"`
+	} `json:"context_window"`
+	Cost struct {
 		TotalLinesAdded   int     `json:"total_lines_added"`
 		TotalLinesRemoved int     `json:"total_lines_removed"`
 		TotalCostUSD      float64 `json:"total_cost_usd"`
