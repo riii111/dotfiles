@@ -188,7 +188,7 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "/Users/[[YOUR_USER_NAME]]/.claude/statusline-command.sh"
+    "command": "/Users/[[YOUR_USER_NAME]]/.claude/statusline"
   },
   "alwaysThinkingEnabled": true
 }
