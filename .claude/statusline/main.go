@@ -19,8 +19,8 @@ import (
 func main() {
 	input, err := ParseInput(os.Stdin)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "statusline:", err)
-		os.Exit(1)
+		fmt.Fprintf(os.Stdout, "🤖 Unknown\n%s---%s", dim, reset)
+		return
 	}
 
 	branch := DetectBranch(input.CWD)
