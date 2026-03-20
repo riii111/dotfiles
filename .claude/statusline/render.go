@@ -135,7 +135,12 @@ func timeUntil(target, now time.Time) string {
 	if d <= 0 {
 		return "now"
 	}
-	h, m := int(d.Hours()), int(d.Minutes())%60
+	days := int(d.Hours()) / 24
+	h := int(d.Hours()) % 24
+	m := int(d.Minutes()) % 60
+	if days > 0 {
+		return fmt.Sprintf("%dd%dh", days, h)
+	}
 	if h > 0 {
 		return fmt.Sprintf("%dh%02dm", h, m)
 	}
