@@ -49,37 +49,12 @@ local keys = {
 	{ key = "t", mods = "CMD", action = act.SpawnTab("CurrentPaneDomain") },
 	{ key = "w", mods = "CMD|SHIFT", action = act.CloseCurrentTab({ confirm = true }) },
 
-	-- Tab switching with Leader + number
-	{ key = "1", mods = "LEADER", action = act.ActivateTab(0) },
-	{ key = "2", mods = "LEADER", action = act.ActivateTab(1) },
-	{ key = "3", mods = "LEADER", action = act.ActivateTab(2) },
-	{ key = "4", mods = "LEADER", action = act.ActivateTab(3) },
-	{ key = "5", mods = "LEADER", action = act.ActivateTab(4) },
-	{ key = "6", mods = "LEADER", action = act.ActivateTab(5) },
-	{ key = "7", mods = "LEADER", action = act.ActivateTab(6) },
-	{ key = "8", mods = "LEADER", action = act.ActivateTab(7) },
-	{ key = "9", mods = "LEADER", action = act.ActivateTab(8) },
-
 	---------------------------------------------------------------
 	-- Toggle opacity / blur
 	---------------------------------------------------------------
 	{ key = "o", mods = "CMD|CTRL", action = act.EmitEvent("toggle-opacity") },
 	{ key = "b", mods = "CMD|CTRL", action = act.EmitEvent("toggle-blur") },
 
-	---------------------------------------------------------------
-	-- Copy mode: Leader+v (like Vim visual mode)
-	---------------------------------------------------------------
-	{ key = "v", mods = "LEADER", action = act.ActivateCopyMode },
-
-	---------------------------------------------------------------
-	-- Scrollback pager in Neovim: Leader+V (richer visual mode)
-	---------------------------------------------------------------
-	{ key = "V", mods = "LEADER|SHIFT", action = act.EmitEvent("open-scrollback-in-nvim") },
-
-	---------------------------------------------------------------
-	-- Quick select (like tmux copy mode)
-	---------------------------------------------------------------
-	{ key = "Space", mods = "LEADER", action = act.QuickSelect },
 
 	---------------------------------------------------------------
 	-- Select All: enter CopyMode and select text above cursor
@@ -120,40 +95,6 @@ local keys = {
 	{ key = "|", mods = "ALT|SHIFT", action = act.SendString("\\") },
 
 
-	---------------------------------------------------------------
-	-- Theme switcher (Leader + t)
-	---------------------------------------------------------------
-	{
-		key = "t",
-		mods = "LEADER",
-		action = act.InputSelector({
-			title = "Color Scheme",
-			choices = {
-				{ label = "Kanagawa Dragon" },
-				{ label = "Catppuccin Mocha" },
-				{ label = "Catppuccin Macchiato" },
-				{ label = "Catppuccin Frappe" },
-				{ label = "Catppuccin Latte" },
-				{ label = "duckbones" },
-			},
-			action = wezterm.action_callback(function(window, _, _, label)
-				if label then
-					local schemes = wezterm.get_builtin_color_schemes()
-					schemes["Kanagawa Dragon"] = require("colors.kanagawa_dragon").colors
-					local scheme = schemes[label]
-					local bg = scheme and scheme.background or "#181616"
-					window:set_config_overrides({
-						color_scheme = label,
-						window_background_gradient = { colors = { bg } },
-						window_frame = {
-							active_titlebar_bg = bg,
-							inactive_titlebar_bg = bg,
-						},
-					})
-				end
-			end),
-		}),
-	},
 }
 
 return keys
