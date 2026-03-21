@@ -107,9 +107,31 @@ config.use_ime = true
 config.macos_forward_to_ime_modifier_mask = "SHIFT|CTRL"
 
 ---------------------------------------------------------------
--- Leader key (for tab switching etc.)
+-- Ctrl+S: tmux-aware prefix / leader
+-- In tmux  → pass through as tmux prefix
+-- Outside → activate WezTerm leader key table
 ---------------------------------------------------------------
-config.leader = { key = "j", mods = "CTRL", timeout_milliseconds = 2000 }
+local act = wezterm.action
+
+local function is_tmux(pane)
+	local proc = pane:get_foreground_process_name() or ""
+	return proc:match("tmux$") ~= nil
+end
+
+table.insert(keymaps, {
+	key = "s",
+	mods = "CTRL",
+	action = wezterm.action_callback(function(window, pane)
+		if is_tmux(pane) then
+			window:perform_action(act.SendKey({ key = "s", mods = "CTRL" }), pane)
+		else
+			window:perform_action(
+				act.ActivateKeyTable({ name = "leader", one_shot = true, timeout_milliseconds = 2000 }),
+				pane
+			)
+		end
+	end),
+})
 
 ---------------------------------------------------------------
 -- Key bindings
@@ -119,7 +141,6 @@ config.keys = keymaps
 ---------------------------------------------------------------
 -- Copy mode: add Y to yank current line (like Neovim)
 ---------------------------------------------------------------
-local act = wezterm.action
 local copy_mode = wezterm.gui.default_key_tables().copy_mode
 
 -- Helper: yank with flash (copy, show selection 0.25s, then clear & close)
@@ -160,7 +181,44 @@ table.insert(copy_mode, {
 	}),
 })
 
-config.key_tables = { copy_mode = copy_mode }
+config.key_tables = {
+	copy_mode = copy_mode,
+	leader = {
+		{ key = "v", action = act.ActivateCopyMode },
+		{ key = "V", mods = "SHIFT", action = act.EmitEvent("open-scrollback-in-nvim") },
+		{ key = "Space", action = act.QuickSelect },
+		{
+			key = "t",
+			action = act.InputSelector({
+				title = "Color Scheme",
+				choices = {
+					{ label = "Kanagawa Dragon" },
+					{ label = "Catppuccin Mocha" },
+					{ label = "Catppuccin Macchiato" },
+					{ label = "Catppuccin Frappe" },
+					{ label = "Catppuccin Latte" },
+					{ label = "duckbones" },
+				},
+				action = wezterm.action_callback(function(window, _, _, label)
+					if label then
+						local schemes = wezterm.get_builtin_color_schemes()
+						schemes["Kanagawa Dragon"] = require("colors.kanagawa_dragon").colors
+						local scheme = schemes[label]
+						local bg = scheme and scheme.background or "#181616"
+						window:set_config_overrides({
+							color_scheme = label,
+							window_background_gradient = { colors = { bg } },
+							window_frame = {
+								active_titlebar_bg = bg,
+								inactive_titlebar_bg = bg,
+							},
+						})
+					end
+				end),
+			}),
+		},
+	},
+}
 
 ---------------------------------------------------------------
 -- Color scheme
@@ -177,7 +235,8 @@ config.color_scheme = "Kanagawa Dragon"
 ---------------------------------------------------------------
 config.max_fps = 165
 config.audible_bell = "Disabled"
-config.enable_csi_u_key_encoding = true
+-- csi-u disabled: breaks Ctrl keys in tmux copy-mode
+-- config.enable_csi_u_key_encoding = true
 config.adjust_window_size_when_changing_font_size = false
 config.hide_mouse_cursor_when_typing = true
 
