@@ -231,6 +231,7 @@ _set_terminal_title() {
   local ref=""
   local oid=""
   local flags=""
+  local is_dirty=0
   local line
   while IFS= read -r line; do
     case "$line" in
@@ -243,7 +244,7 @@ _set_terminal_title() {
       \#*)
         ;;
       *)
-        flags="${flags}d"
+        is_dirty=1
         ;;
     esac
   done <<< "$status_output"
@@ -252,6 +253,8 @@ _set_terminal_title() {
     ref="${oid[1,7]}"
     flags="${flags}D"
   fi
+
+  (( is_dirty )) && flags="${flags}d"
 
   [[ -f "$repo_root/.git" ]] && flags="${flags}w"
   [[ -d "$git_dir/rebase-merge" || -d "$git_dir/rebase-apply" ]] && flags="${flags}R"
