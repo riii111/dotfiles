@@ -210,6 +210,17 @@ _set_terminal_title() {
   local repo
   repo="${repo_root:t}"
 
+  local git_dir
+  _resolve_git_dir "$repo_root" || {
+    _print_terminal_title "$dir"
+    __TERM_TITLE_WATCH_KEY="repo:${repo_root:A}:unresolved"
+    return
+  }
+  git_dir="$REPLY"
+
+  _build_terminal_title_watch_key "$repo_root" "$git_dir"
+  local watch_key="$REPLY"
+
   local status_output
   status_output=$(command git -C "$repo_root" status --porcelain=v2 --branch 2>/dev/null) || {
     _print_terminal_title "$dir"
@@ -242,22 +253,13 @@ _set_terminal_title() {
     flags="${flags}D"
   fi
 
-  local git_dir
-  _resolve_git_dir "$repo_root" || {
-    _print_terminal_title "${repo}::${ref:-unknown}${flags:+::$flags}"
-    __TERM_TITLE_WATCH_KEY="repo:${repo_root:A}:unresolved"
-    return
-  }
-  git_dir="$REPLY"
-
   [[ -f "$repo_root/.git" ]] && flags="${flags}w"
   [[ -d "$git_dir/rebase-merge" || -d "$git_dir/rebase-apply" ]] && flags="${flags}R"
   [[ -f "$git_dir/MERGE_HEAD" ]] && flags="${flags}M"
   [[ -f "$git_dir/CHERRY_PICK_HEAD" ]] && flags="${flags}C"
 
   _print_terminal_title "${repo}::${ref:-unknown}${flags:+::$flags}"
-  _build_terminal_title_watch_key "$repo_root" "$git_dir"
-  __TERM_TITLE_WATCH_KEY="$REPLY"
+  __TERM_TITLE_WATCH_KEY="$watch_key"
 }
 
 git() {
