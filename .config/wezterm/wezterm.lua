@@ -20,7 +20,7 @@ config.font_size = 14.0
 ---------------------------------------------------------------
 config.window_background_opacity = 0.35
 config.macos_window_background_blur = 40
-config.window_decorations = "RESIZE"
+config.window_decorations = "RESIZE|MACOS_FORCE_ENABLE_SHADOW"
 config.window_padding = {
 	left = 20,
 	right = 20,
