@@ -1,9 +1,4 @@
 # ==========================================
-# Terminal settings
-# ==========================================
-stty -ixon  # free Ctrl+S for tmux prefix
-
-# ==========================================
 # XDG Base Directory
 # ==========================================
 export XDG_CONFIG_HOME="$HOME/.config"

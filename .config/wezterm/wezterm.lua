@@ -120,11 +120,11 @@ local function is_tmux(pane)
 end
 
 table.insert(keymaps, {
-	key = "s",
+	key = "a",
 	mods = "CTRL",
 	action = wezterm.action_callback(function(window, pane)
 		if is_tmux(pane) then
-			window:perform_action(act.SendKey({ key = "s", mods = "CTRL" }), pane)
+			window:perform_action(act.SendKey({ key = "a", mods = "CTRL" }), pane)
 		else
 			window:perform_action(
 				act.ActivateKeyTable({ name = "leader", one_shot = true, timeout_milliseconds = 2000 }),
