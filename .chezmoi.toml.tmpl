@@ -1,0 +1,8 @@
+sourceDir = "{{ .chezmoi.homeDir }}/ghq/github.com/riii111/dotfiles"
+
+[data]
+{{- if eq .chezmoi.hostname "riii111" }}
+    type = "personal"
+{{- else }}
+    type = "work"
+{{- end }}

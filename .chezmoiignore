@@ -1,0 +1,20 @@
+# Not yet migrated (stow directories)
+bin
+bin-scripts
+blog
+claude
+codex
+config
+zsh
+
+# Repo files that shouldn't be in $HOME
+Brewfile
+README.md
+LICENSE
+.gitignore
+git-info-exclude
+gitconfig-shared
+
+# Auto-generated files
+.config/karabiner/automatic_backups
+.config/karabiner/assets
