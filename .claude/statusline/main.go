@@ -26,7 +26,7 @@ func main() {
 	branch := DetectBranch(input.CWD)
 	now := time.Now()
 
-	fmt.Fprintf(os.Stdout, "%s\n%s", BuildLine1(input, branch), BuildLine2(input, now))
+	fmt.Fprintf(os.Stdout, "%s\n%s\n", BuildLine1(input, branch), BuildLine2(input, now))
 }
 
 // ════════════════════════════════════════════════════════════
