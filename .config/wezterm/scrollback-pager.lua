@@ -2,20 +2,20 @@
 
 vim.o.scrollback = 100000
 vim.o.clipboard = "unnamedplus"
+vim.o.cursorline = true
 
--- Yank flash (built-in, no plugin needed)
--- --clean has no highlight groups, so define one manually
-vim.api.nvim_set_hl(0, "YankFlash", { reverse = true })
+vim.opt.rtp:append(vim.fn.expand("~/.config/nvim"))
+pcall(vim.cmd.colorscheme, "custom-theme-riii111")
+
 vim.api.nvim_create_autocmd("TextYankPost", {
   callback = function()
-    vim.highlight.on_yank({ higroup = "YankFlash", timeout = 200 })
+    vim.highlight.on_yank({ higroup = "IncSearch", timeout = 200 })
   end,
 })
 
 local function do_position()
   vim.cmd("stopinsert")
 
-  -- Scan backward past trailing empty rows to find last content line
   local total = vim.api.nvim_buf_line_count(0)
   local last_content = 1
   for i = total, 1, -1 do
@@ -42,7 +42,6 @@ end
 vim.api.nvim_create_autocmd("TermOpen", {
   once = true,
   callback = function()
-    -- q: return to original tab then close
     vim.keymap.set("n", "q", function()
       local tab_id = vim.g.scrollback_prev_tab
       if tab_id then
@@ -58,7 +57,6 @@ vim.api.nvim_create_autocmd("TermOpen", {
       local marker = vim.g.scrollback_marker
 
       if elapsed >= 3000 then
-        -- Timeout: position best-effort
         vim.schedule(do_position)
         return
       end
@@ -69,7 +67,6 @@ vim.api.nvim_create_autocmd("TermOpen", {
         return
       end
 
-      -- Marker found; wait one extra tick for line count to stabilize
       local total = vim.api.nvim_buf_line_count(0)
       if total ~= prev_lines then
         prev_lines = total

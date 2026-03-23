@@ -3,23 +3,24 @@
 vim.o.clipboard = "unnamedplus"
 vim.o.number = true
 vim.o.relativenumber = true
+vim.o.cursorline = true
 vim.o.ignorecase = true
 vim.o.smartcase = true
 vim.o.hlsearch = true
 vim.o.incsearch = true
 
--- Yank flash
-vim.api.nvim_set_hl(0, "YankFlash", { reverse = true })
+vim.opt.rtp:append(vim.fn.expand("~/.config/nvim"))
+pcall(vim.cmd.colorscheme, "custom-theme-riii111")
+
 vim.api.nvim_create_autocmd("TextYankPost", {
   callback = function()
-    vim.highlight.on_yank({ higroup = "YankFlash", timeout = 200 })
+    vim.highlight.on_yank({ higroup = "IncSearch", timeout = 200 })
   end,
 })
 
--- q to quit (returns to previous tmux window)
 vim.keymap.set("n", "q", "<cmd>quit!<CR>", { nowait = true })
 
--- Position cursor at end of content
+-- Position cursor at last content line
 vim.api.nvim_create_autocmd("VimEnter", {
   once = true,
   callback = function()
