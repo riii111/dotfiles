@@ -32,7 +32,7 @@ end
 vim.api.nvim_create_autocmd("TermOpen", {
   once = true,
   callback = function()
-    -- q: return to original tab then close (early registration so it works during polling)
+    -- q: return to original tab then close
     vim.keymap.set("n", "q", function()
       local tab_id = vim.g.scrollback_prev_tab
       if tab_id then
