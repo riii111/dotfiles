@@ -40,3 +40,5 @@ keybind = shift+enter=text:\x1b\r
 
 -- test edit for lefthook
 # lefthook test
+# test line
+# lefthook test
