@@ -62,15 +62,12 @@ Delta for modern diffs. `|` key toggles split/unified view.
 
 ## Setup
 
-### Install dependencies
-
 ```bash
 brew bundle --file Brewfile
+stow -t ~ zsh tmux nvim wezterm ghostty git lazygit ripgrep gwq mux sqlfluff bin-scripts colima gradle claude codex
 ```
 
-### PATH
-
-Add `~/bin` to PATH for scripts in `bin/`.
+Symlinks are managed by [GNU Stow](https://www.gnu.org/software/stow/). Each top-level directory is a stow package. Add `~/bin` to PATH.
 
 ## Trade-offs
 
