@@ -1,6 +1,6 @@
 {
   "env": {
-    "RIPGREP_CONFIG_PATH": "/Users/[[YOUR_USER_NAME]]/.ripgreprc",
+    "RIPGREP_CONFIG_PATH": "{{ .chezmoi.homeDir }}/.ripgreprc",
     "GIT_OPTIONAL_LOCKS": "0",
     "DISABLE_TELEMETRY": "1",
     "RUST_LOG": "info"
@@ -111,16 +111,18 @@
       "Bash(gcloud logging read*)",
       "Bash(codex exec:*)",
       "Bash(RUST_LOG=off codex exec:*)",
-      "Read(//Users/[[YOUR_USER_NAME]]/ghq/github.com/riii111/dotfiles/**)",
-      "Read(/Users/[[YOUR_USER_NAME]]/.zshrc)",
-      "Read(//Users/[[YOUR_USER_NAME]]/.config/nvim/**)",
-      "Write(//Users/[[YOUR_USER_NAME]]/.config/nvim/**)",
-      "Edit(//Users/[[YOUR_USER_NAME]]/.config/nvim/**)",
+      "Read(//Users/{{ .chezmoi.username }}/ghq/github.com/riii111/dotfiles/**)",
+      "Read(/Users/{{ .chezmoi.username }}/.zshrc)",
+      "Read(//Users/{{ .chezmoi.username }}/.config/nvim/**)",
+      "Write(//Users/{{ .chezmoi.username }}/.config/nvim/**)",
+      "Edit(//Users/{{ .chezmoi.username }}/.config/nvim/**)",
       "Bash(pe *)"
     ],
     "deny": [
+{{- if eq .type "work" }}
       "Bash(git push --force*)",
       "Bash(git push -f *)",
+{{- end }}
       "Bash(terraform apply:*)",
       "Bash(terraform apply)",
       "Bash(terraform destroy:*)",
@@ -151,7 +153,8 @@
     "context7"
   ],
   "enabledPlugins": {
-    "Notion@claude-plugins-official": true
+    "Notion@claude-plugins-official": true,
+    "rust-analyzer-lsp@claude-plugins-official": true
   },
   "hooks": {
     "PreToolUse": [
@@ -160,7 +163,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "read input; if echo \"$input\" | grep -q '\"command\":\"find'; then echo '{\"decision\": \"block\", \"reason\": \"Use fd instead of find! Example: fd --hidden --exclude .git --exclude node_modules --color=never --print0 <pattern>\"}'; elif echo \"$input\" | grep -q '\"command\":\"grep'; then echo '{\"decision\": \"block\", \"reason\": \"Use rg instead of grep! Example: rg --no-heading --color=never --json --trim --max-columns=120 <pattern>\"}'; elif echo \"$input\" | grep -q '\"command\":\"cat'; then echo '{\"decision\": \"block\", \"reason\": \"Use bat instead of cat! Example: bat --plain --paging=never --color=never <file>\"}'; elif echo \"$input\" | grep -q 'gh pr create' && ! echo \"$input\" | grep -q '\\-\\-draft'; then echo '{\"decision\": \"block\", \"reason\": \"gh pr create without --draft is not allowed. Always use --draft flag.\"}'; elif echo \"$input\" | grep -q 'terraform apply'; then echo '{\"decision\": \"block\", \"reason\": \"terraform apply is not allowed directly. Separate it from other commands and let the user approve.\"}'; elif echo \"$input\" | grep -q 'terraform destroy'; then echo '{\"decision\": \"block\", \"reason\": \"terraform destroy is not allowed directly. Separate it from other commands and let the user approve.\"}'; elif echo \"$input\" | grep -q 'npm publish'; then echo '{\"decision\": \"block\", \"reason\": \"npm publish is not allowed directly. Separate it from other commands and let the user approve.\"}'; elif echo \"$input\" | grep -q 'cargo publish'; then echo '{\"decision\": \"block\", \"reason\": \"cargo publish is not allowed directly. Separate it from other commands and let the user approve.\"}'; fi"
+            "command": "read input; if echo \"$input\" | grep -q '\"command\":\"find'; then echo '{\"decision\": \"block\", \"reason\": \"Use fd instead of find! Example: fd --hidden --exclude .git --exclude node_modules --color=never --print0 <pattern>\"}'; elif echo \"$input\" | grep -q '\"command\":\"grep'; then echo '{\"decision\": \"block\", \"reason\": \"Use rg instead of grep! Example: rg --no-heading --color=never --json --trim --max-columns=120 <pattern>\"}'; elif echo \"$input\" | grep -q '\"command\":\"cat'; then echo '{\"decision\": \"block\", \"reason\": \"Use bat instead of cat! Example: bat --plain --paging=never --color=never <file>\"}';{{ if eq .type "work" }} elif echo \"$input\" | grep -q 'gh pr create' && ! echo \"$input\" | grep -q '\\-\\-draft'; then echo '{\"decision\": \"block\", \"reason\": \"gh pr create without --draft is not allowed. Always use --draft flag.\"}';{{ end }} elif echo \"$input\" | grep -q 'terraform apply'; then echo '{\"decision\": \"block\", \"reason\": \"terraform apply is not allowed directly. Separate it from other commands and let the user approve.\"}'; elif echo \"$input\" | grep -q 'terraform destroy'; then echo '{\"decision\": \"block\", \"reason\": \"terraform destroy is not allowed directly. Separate it from other commands and let the user approve.\"}'; elif echo \"$input\" | grep -q 'npm publish'; then echo '{\"decision\": \"block\", \"reason\": \"npm publish is not allowed directly. Separate it from other commands and let the user approve.\"}'; elif echo \"$input\" | grep -q 'cargo publish'; then echo '{\"decision\": \"block\", \"reason\": \"cargo publish is not allowed directly. Separate it from other commands and let the user approve.\"}'; fi"
           }
         ]
       }
@@ -171,7 +174,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/Users/[[YOUR_USER_NAME]]/.claude/hooks/git-worktree-post-add.sh"
+            "command": "{{ .chezmoi.homeDir }}/.claude/hooks/git-worktree-post-add.sh"
           }
         ]
       },
@@ -188,7 +191,7 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "/Users/[[YOUR_USER_NAME]]/.claude/statusline-command.sh"
+    "command": "{{ .chezmoi.homeDir }}/.claude/statusline-command.sh"
   },
   "alwaysThinkingEnabled": true
 }
