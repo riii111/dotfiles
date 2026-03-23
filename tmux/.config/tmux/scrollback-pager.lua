@@ -41,7 +41,9 @@ local function do_position()
   end, { buffer = true, nowait = true })
 end
 
--- Prompt jump: [ / ] to jump between shell prompts (matches "dirname % ")
+-- Prompt highlight & jump
+vim.api.nvim_set_hl(0, "PromptLine", { underline = true, sp = "#565f89" })
+vim.fn.matchadd("PromptLine", "\\S\\+ % .*")
 local PROMPT_PATTERN = "%S+ %% "
 local function jump_prompt(dir)
   local row = vim.api.nvim_win_get_cursor(0)[1]

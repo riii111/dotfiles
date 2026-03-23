@@ -41,7 +41,9 @@ local function do_position()
   end, { buffer = true, nowait = true })
 end
 
--- Prompt jump: [ / ] to jump between shell prompts (matches "dirname % ")
+-- Prompt highlight & jump
+vim.api.nvim_set_hl(0, "PromptLine", { underline = true, sp = "#565f89" })
+vim.fn.matchadd("PromptLine", "\\S\\+ % .*")
 local PROMPT_PATTERN = "%S+ %% "
 local function jump_prompt(dir)
   local row = vim.api.nvim_win_get_cursor(0)[1]
@@ -66,7 +68,7 @@ vim.api.nvim_create_autocmd("TermOpen", {
     vim.keymap.set("n", "q", function()
       local tab_id = vim.g.scrollback_prev_tab
       if tab_id then
-        vim.fn.system("/opt/homebrew/bin/wezterm cli activate-tab --tab-id " .. tab_id)
+        vim.system({ "/opt/homebrew/bin/wezterm", "cli", "activate-tab", "--tab-id", tostring(tab_id) }, { detach = true })
       end
       vim.cmd("quit!")
     end, { buffer = true, nowait = true })
