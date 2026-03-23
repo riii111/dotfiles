@@ -1,5 +1,3 @@
-config
-
 # Repo files that shouldn't be in $HOME
 Brewfile
 README.md
