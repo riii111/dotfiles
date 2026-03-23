@@ -4,6 +4,7 @@ README.md
 LICENSE
 .gitignore
 lefthook.yml
+.lefthook
 
 # Personal machine only
 {{ if ne .type "personal" }}

@@ -39,3 +39,4 @@ term = xterm-ghostty
 keybind = shift+enter=text:\x1b\r
 
 -- test edit for lefthook
+# lefthook test
