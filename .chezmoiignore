@@ -1,7 +1,6 @@
-# Not yet migrated (stow directories)
+# Not yet migrated
 blog
 config
-zsh
 
 # Repo files that shouldn't be in $HOME
 Brewfile
