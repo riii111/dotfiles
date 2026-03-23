@@ -786,18 +786,51 @@ def cmd_trace(args):
                 col = sev_color.get(sev, _c())
                 print(f"  [{ts}] {col(f'{sev:7s}')} [{c_dim(logger)}] {tmsg}")
 
+    # Ktor access log: "200 OK: GET - /api/path in 123ms"
+    _ACCESS_LOG_RE = re.compile(
+        r"(\d{3})\s+[\w ]+:\s+"
+        r"(GET|POST|PUT|PATCH|DELETE)\s+-\s+"
+        r"(.+?)\s+in\s+\d+ms"
+    )
+
     endpoint = None
     error_ts = None
+    http_status = None
+    _err_ts_list = []
+    _access_list = []
+
     for tl in t_logs:
+        ts = tl.get("timestamp", "")
+        sev = tl.get("severity", "")
         tjp = tl.get("jsonPayload", {})
         raw = tjp.get("message", "") or tl.get("textPayload", "")
         clean = strip_ansi(raw)
-        if "500" in clean and (" POST " in clean or " GET " in clean):
-            m = re.search(r"- (.+?) in \d+ms", clean)
-            if m:
-                endpoint = m.group(1).strip()
-            error_ts = tl.get("timestamp", "")
-            break
+
+        if sev in ("ERROR", "CRITICAL"):
+            _err_ts_list.append(ts)
+
+        m = _ACCESS_LOG_RE.search(clean)
+        if m:
+            _access_list.append(
+                {
+                    "timestamp": ts,
+                    "httpStatus": int(m.group(1)),
+                    "endpoint": m.group(3).strip(),
+                }
+            )
+
+    # t_logs is timestamp DESC; fall back to initial error log entry
+    if _err_ts_list:
+        error_ts = _err_ts_list[0]
+    elif logs:
+        error_ts = logs[0].get("timestamp", "")
+
+    # Prefer 5xx; fall back to any access log entry
+    if _access_list:
+        _5xx = [a for a in _access_list if a["httpStatus"] >= 500]
+        chosen = _5xx[0] if _5xx else _access_list[0]
+        endpoint = chosen["endpoint"]
+        http_status = chosen["httpStatus"]
 
     if not endpoint or not error_ts:
         result["retryCheck"] = {"status": "could_not_extract_endpoint"}
@@ -806,6 +839,36 @@ def cmd_trace(args):
         else:
             print(f"\n{c_bold('### Retry Check')}\n")
             print("Could not extract endpoint. Manual investigation needed.")
+        return
+
+    # HTTP 2xx/3xx/4xx with ERROR logs — retry check not meaningful
+    if http_status is not None and http_status < 500:
+        result["retryCheck"] = {
+            "scope": "endpoint",
+            "endpoint": endpoint,
+            "httpStatus": http_status,
+            "errorTimestamp": error_ts,
+            "verdict": "error_within_success_response",
+            "detail": (
+                f"Endpoint returned HTTP {http_status} but ERROR was logged"
+                " internally. Retry check not applicable."
+            ),
+        }
+        if as_json:
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+        else:
+            print(f"\n{c_bold('### Retry Check')}\n")
+            print(f"- Endpoint: `{endpoint}` (HTTP {http_status})")
+            print(f"- Error at: {error_ts[:23]}Z")
+            print(f"- Verdict: {c_yellow('Error within success response')}")
+            print(
+                f"  Endpoint returned HTTP {http_status} but ERROR was"
+                " logged internally."
+            )
+            print(
+                "  Retry check not applicable — the endpoint does not"
+                " fail at HTTP level."
+            )
         return
 
     if not as_json:
