@@ -1,6 +1,7 @@
 pre-commit:
   commands:
     chezmoi-sync:
+      skip_empty: false
       run: |
         # Sync edited files (destination → source)
         chezmoi re-add

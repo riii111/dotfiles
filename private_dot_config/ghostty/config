@@ -38,3 +38,4 @@ keybind = alt+shift+|=text:\u{005c}
 term = xterm-ghostty
 keybind = shift+enter=text:\x1b\r
 
+-- test edit for lefthook
