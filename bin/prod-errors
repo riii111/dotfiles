@@ -739,7 +739,7 @@ def cmd_trace(args):
     )
     try:
         t_logs = logging_read(
-            project, token, t_filt, limit=30, freshness=args.freshness
+            project, token, t_filt, limit=50, freshness=args.freshness
         )
         if not t_logs:
             t_filt = (
@@ -747,7 +747,7 @@ def cmd_trace(args):
                 f'trace="projects/{project}/traces/{trace_id}"'
             )
             t_logs = logging_read(
-                project, token, t_filt, limit=30, freshness=args.freshness
+                project, token, t_filt, limit=50, freshness=args.freshness
             )
     except LoggingError as e:
         result["lifecycle"] = {"error": str(e)}
