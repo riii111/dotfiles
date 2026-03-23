@@ -21,8 +21,9 @@ wezterm.on("open-scrollback-in-nvim", function(window, pane)
 
 	local marker = os.tmpname() .. "_done"
 	local cursor = pane:get_cursor_position()
-	local tab_id = window:active_tab():tab_id()
 	local pager = wezterm.config_dir .. "/scrollback-pager.lua"
+
+	local tab_id = window:active_tab():tab_id()
 	window:perform_action(
 		act.SpawnCommandInNewTab({
 			args = {
