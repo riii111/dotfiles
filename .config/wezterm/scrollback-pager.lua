@@ -1,6 +1,16 @@
 -- Nvim config for WezTerm scrollback pager
 
 vim.o.scrollback = 100000
+vim.o.clipboard = "unnamedplus"
+
+-- Yank flash (built-in, no plugin needed)
+-- --clean has no highlight groups, so define one manually
+vim.api.nvim_set_hl(0, "YankFlash", { reverse = true })
+vim.api.nvim_create_autocmd("TextYankPost", {
+  callback = function()
+    vim.highlight.on_yank({ higroup = "YankFlash", timeout = 200 })
+  end,
+})
 
 local function do_position()
   vim.cmd("stopinsert")
