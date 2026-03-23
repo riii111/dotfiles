@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 # Snapshot unstaged files before re-add
 before=$(git diff --name-only)
