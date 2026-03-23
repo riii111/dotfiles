@@ -558,6 +558,7 @@ cc-impl() {
   claude "$@"
 }
 
+{{ if eq .type "work" }}
 # ==========================================
 # Flyway Migration Search
 # ==========================================
@@ -636,6 +637,7 @@ HELP
     echo "No matches for '$version' in any deploy-stg branch" >&2
   fi
 }
+{{ end }}
 
 # ==========================================
 # Machine-specific config
