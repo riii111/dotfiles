@@ -185,6 +185,7 @@ table.insert(copy_mode, {
 config.key_tables = {
 	copy_mode = copy_mode,
 	leader = {
+		{ key = "f", action = act.Search("CurrentSelectionOrEmptyString") },
 		{ key = "v", action = act.ActivateCopyMode },
 		{ key = "V", mods = "SHIFT", action = act.EmitEvent("open-scrollback-in-nvim") },
 		{ key = "Space", action = act.QuickSelect },
