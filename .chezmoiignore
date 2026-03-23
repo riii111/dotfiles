@@ -1,5 +1,3 @@
-# Not yet migrated
-blog
 config
 
 # Repo files that shouldn't be in $HOME

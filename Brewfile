@@ -1,6 +1,7 @@
 tap "olets/tap"
 brew "apr-util"
 brew "bat"
+brew "chezmoi"
 brew "glib"
 brew "cmake"
 brew "csvlens"

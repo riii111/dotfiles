@@ -1,9 +1,19 @@
 # dotfiles
 
-Dev environment for macOS.
+Dev environment for macOS, managed by [chezmoi](https://www.chezmoi.io/).
 
 <img width="720" alt="after-2" src="https://github.com/user-attachments/assets/ab112ea6-e819-46de-9cc1-eb0961824efe" />
 
+
+## Setup
+
+```bash
+# Install chezmoi and apply dotfiles in one command
+sh -c "$(curl -fsLS get.chezmoi.io)" -- init --apply riii111
+
+# Install packages
+brew bundle --file ~/ghq/github.com/riii111/dotfiles/Brewfile
+```
 
 ## Features
 
@@ -51,7 +61,7 @@ Delta for modern diffs. `|` key toggles split/unified view.
 
 - PreToolUse hook: find/grep/cat → fd/rg/bat
 - Permission policy: build/test/read-only git auto-allowed, rm requires confirm
-- Command recipes: `/rust-check`, `/full-check`, etc.
+- Machine-specific settings via chezmoi template (work/personal)
 - Context7 MCP
 
 #### Codex CLI
@@ -59,15 +69,6 @@ Delta for modern diffs. `|` key toggles split/unified view.
 - GPT-5 custom prompt (skim/focus/dive for inference control)
 - `model_reasoning_effort = "high"`
 - Context7 MCP
-
-## Setup
-
-```bash
-brew bundle --file Brewfile
-stow -t ~ zsh tmux nvim wezterm ghostty git lazygit ripgrep gwq mux sqlfluff bin-scripts colima gradle claude codex
-```
-
-Symlinks are managed by [GNU Stow](https://www.gnu.org/software/stow/). Each top-level directory is a stow package. Add `~/bin` to PATH.
 
 ## Trade-offs
 
