@@ -1,6 +1,4 @@
 # Not yet migrated (stow directories)
-bin
-bin-scripts
 blog
 claude
 codex
@@ -14,6 +12,12 @@ LICENSE
 .gitignore
 git-info-exclude
 gitconfig-shared
+
+# Personal machine only
+{{ if ne .type "personal" }}
+.local/bin/nodex
+.config/mux/nodex
+{{ end }}
 
 # Auto-generated files
 .config/karabiner/automatic_backups
