@@ -32,7 +32,33 @@ local function do_position()
   local win_height = vim.api.nvim_win_get_height(0)
   local topline = math.max(1, last_content - win_height + 1)
   vim.fn.winrestview({ topline = topline, lnum = last_content, col = 0 })
+
+  -- G stops at last content line, not empty tail region
+  vim.b.scrollback_last_content = last_content
+  vim.keymap.set("n", "G", function()
+    local lc = vim.b.scrollback_last_content or vim.api.nvim_buf_line_count(0)
+    vim.api.nvim_win_set_cursor(0, { lc, 0 })
+  end, { buffer = true, nowait = true })
 end
+
+-- Prompt jump: [ / ] to jump between shell prompts (matches "dirname % ")
+local PROMPT_PATTERN = "%S+ %% "
+local function jump_prompt(dir)
+  local row = vim.api.nvim_win_get_cursor(0)[1]
+  local total = vim.api.nvim_buf_line_count(0)
+  local step = dir == "prev" and -1 or 1
+  local i = row + step
+  while i >= 1 and i <= total do
+    local line = vim.api.nvim_buf_get_lines(0, i - 1, i, false)[1]
+    if line:match(PROMPT_PATTERN) then
+      vim.api.nvim_win_set_cursor(0, { i, 0 })
+      return
+    end
+    i = i + step
+  end
+end
+vim.keymap.set("n", "[p", function() jump_prompt("prev") end)
+vim.keymap.set("n", "]p", function() jump_prompt("next") end)
 
 vim.api.nvim_create_autocmd("TermOpen", {
   once = true,
