@@ -1,5 +1,5 @@
 # Neovim
-nvim/lazy-lock.json
+nvim/.config/nvim/lazy-lock.json
 
 # Python
 __pycache__/
