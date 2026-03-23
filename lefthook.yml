@@ -1,0 +1,18 @@
+pre-commit:
+  commands:
+    chezmoi-sync:
+      run: |
+        # Sync edited files (destination → source)
+        chezmoi re-add
+
+        # Detect deleted managed files
+        deleted=$(chezmoi status | awk '/^DA / {print $2}')
+        if [ -n "$deleted" ]; then
+          echo "⚠ Managed files deleted from destination:"
+          echo "$deleted" | sed 's/^/  /'
+          echo "Run: chezmoi forget <file> to remove from source"
+          exit 1
+        fi
+
+        # Stage any changes from re-add
+        git add -A

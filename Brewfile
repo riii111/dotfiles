@@ -26,6 +26,7 @@ brew "httpd"
 brew "jq"
 brew "k6"
 brew "lazygit"
+brew "lefthook"
 brew "libpq", link: true
 brew "libslirp"
 brew "llvm"

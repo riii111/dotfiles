@@ -25,3 +25,4 @@ local ok, _ = pcall(vim.cmd.colorscheme, "custom-theme-riii111")
 if not ok then
 	vim.cmd.colorscheme("custom-theme-riii111")
 end
+

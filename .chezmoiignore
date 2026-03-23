@@ -3,6 +3,7 @@ Brewfile
 README.md
 LICENSE
 .gitignore
+lefthook.yml
 
 # Personal machine only
 {{ if ne .type "personal" }}
