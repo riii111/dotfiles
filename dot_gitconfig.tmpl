@@ -19,12 +19,7 @@
 [commit]
 	gpgsign = false
 
-# Route riii111 repos to personal SSH key
-[url "git@github.com-riii111:riii111/"]
-	insteadOf = git@github.com:riii111/
-	insteadOf = https://github.com/riii111/
-
-# Override user for personal repos
+# Override user/SSH for personal repos
 [includeIf "gitdir:~/ghq/github.com/riii111/"]
 	path = ~/.gitconfig-riii111
 {{ end }}
