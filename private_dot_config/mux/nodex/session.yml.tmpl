@@ -1,5 +1,5 @@
 session_name: nodex
-start_directory: /Users/{{ .chezmoi.username }}/ghq/github.com/{{ .side_work_org }}/REDACTED-PROJECT-platform
+start_directory: /Users/{{ .chezmoi.username }}/ghq/github.com/{{ .side_work_org }}/{{ .side_work_project }}-platform
 
 options:
   status-left: "[nodex] Ctrl+b w:list | f:follow | ':number | z:zoom | [:scroll | d:detach "
@@ -21,25 +21,25 @@ windows:
           - /Users/{{ .chezmoi.username }}/ghq/github.com/riii111/dotfiles/.config/mux/core/mux-monitor nodex
 
   - window_name: studio-api
-    start_directory: /Users/{{ .chezmoi.username }}/ghq/github.com/{{ .side_work_org }}/REDACTED-PROJECT-platform/backend
+    start_directory: /Users/{{ .chezmoi.username }}/ghq/github.com/{{ .side_work_org }}/{{ .side_work_project }}-platform/backend
     panes:
       - shell_command:
           - echo "=== studio-api ===" && echo "Waiting for start command..."
 
   - window_name: studio-fe
-    start_directory: /Users/{{ .chezmoi.username }}/ghq/github.com/{{ .side_work_org }}/REDACTED-PROJECT-platform/frontend
+    start_directory: /Users/{{ .chezmoi.username }}/ghq/github.com/{{ .side_work_org }}/{{ .side_work_project }}-platform/frontend
     panes:
       - shell_command:
           - echo "=== studio-fe ===" && echo "Waiting for start command..."
 
-  - window_name: REDACTED-PROJECT-agent
-    start_directory: /Users/{{ .chezmoi.username }}/ghq/github.com/{{ .side_work_org }}/REDACTED-PROJECT-agent
+  - window_name: {{ .side_work_project }}-agent
+    start_directory: /Users/{{ .chezmoi.username }}/ghq/github.com/{{ .side_work_org }}/{{ .side_work_project }}-agent
     panes:
       - shell_command:
-          - echo "=== REDACTED-PROJECT-agent ===" && echo "Waiting for start command..."
+          - echo "=== {{ .side_work_project }}-agent ===" && echo "Waiting for start command..."
 
   - window_name: docker
-    start_directory: /Users/{{ .chezmoi.username }}/ghq/github.com/{{ .side_work_org }}/REDACTED-PROJECT-platform
+    start_directory: /Users/{{ .chezmoi.username }}/ghq/github.com/{{ .side_work_org }}/{{ .side_work_project }}-platform
     panes:
       - shell_command:
           - echo "=== Docker Services ===" && echo "Waiting for start command..."

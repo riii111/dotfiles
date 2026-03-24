@@ -2,7 +2,7 @@
 
 project:
   name: nodex
-  root: ~/ghq/github.com/{{ .side_work_org }}/REDACTED-PROJECT-platform
+  root: ~/ghq/github.com/{{ .side_work_org }}/{{ .side_work_project }}-platform
   session_name: nodex
 
 docker:
@@ -27,8 +27,8 @@ services:
     group: studio
 
   # Agent (Rust) - external repo
-  - name: REDACTED-PROJECT-agent
-    dir: ~/ghq/github.com/{{ .side_work_org }}/REDACTED-PROJECT-agent
+  - name: {{ .side_work_project }}-agent
+    dir: ~/ghq/github.com/{{ .side_work_org }}/{{ .side_work_project }}-agent
     command: bacon -j run
     group: agent
     external: true
