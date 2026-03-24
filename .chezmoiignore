@@ -20,3 +20,9 @@ lefthook.yml
 # Auto-generated files
 .config/karabiner/automatic_backups
 .config/karabiner/assets
+
+# Machine-specific (trust levels differ per machine)
+.codex/config.toml
+
+# Machine-specific runtime data (not for sharing)
+.config/colima

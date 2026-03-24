@@ -193,5 +193,8 @@
     "type": "command",
     "command": "{{ .chezmoi.homeDir }}/.claude/statusline-command.sh"
   },
-  "alwaysThinkingEnabled": true
+  "alwaysThinkingEnabled": true,
+  "model": "opus[1m]",
+  "effortLevel": "medium",
+  "skipDangerousModePermissionPrompt": {{ if eq .type "personal" }}true{{ else }}false{{ end }}
 }
