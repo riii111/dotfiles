@@ -8,10 +8,9 @@ Dev environment for macOS, managed by [chezmoi](https://www.chezmoi.io/).
 ## Setup
 
 ```bash
-# Install chezmoi and apply dotfiles in one command
-sh -c "$(curl -fsLS get.chezmoi.io)" -- init --apply riii111
-
-# Install packages
+brew install chezmoi
+chezmoi init --source ~/ghq/github.com/riii111/dotfiles
+chezmoi apply
 brew bundle --file ~/ghq/github.com/riii111/dotfiles/Brewfile
 ```
 
