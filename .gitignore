@@ -6,3 +6,6 @@ __pycache__/
 
 # Zsh completion caches
 .zcompdump*
+
+# Built binaries
+dot_claude/statusline/executable_statusline-go

@@ -7,18 +7,18 @@
 # User Settings (machine-specific)
 # ==========================================
 [user]
+	email = {{ .git_email }}
+	name = {{ .git_name }}
 {{ if eq .type "personal" }}
-	email = ryo.ichinose@nodex.inc
-	name = riii111
-	signingkey = 059E3467BC399937
-{{ else }}
-	email = TODO_WORK_EMAIL
-	name = TODO_WORK_NAME
-	signingkey = TODO_WORK_SIGNING_KEY
-{{ end }}
+	signingkey = {{ .git_signingkey }}
 
 [commit]
 	gpgsign = true
+{{ else }}
+
+[commit]
+	gpgsign = false
+{{ end }}
 
 # ==========================================
 # LFS
