@@ -273,5 +273,8 @@ wezterm.on("window-focus-changed", function(window, pane)
 end)
 
 wezterm.on("window-config-reloaded", function(window, pane)
-	render_right_status(window, pane)
+	pane = pane or window:active_pane()
+	if pane then
+		render_right_status(window, pane)
+	end
 end)
