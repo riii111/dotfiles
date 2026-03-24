@@ -6,6 +6,8 @@ sourceDir = "{{ .chezmoi.homeDir }}/ghq/github.com/riii111/dotfiles"
     git_email = "riii111.jp@gmail.com"
     git_name = "riii111"
     git_signingkey = "059E3467BC399937"
+    side_work_org = {{ promptStringOnce . "side_work_org" "GitHub org name for side work" | quote }}
+    side_work_project = {{ promptStringOnce . "side_work_project" "Project name for side work" | quote }}
 {{- else }}
     type = "work"
     git_email = {{ promptStringOnce . "git_email" "Git email for this machine" | quote }}
@@ -13,4 +15,5 @@ sourceDir = "{{ .chezmoi.homeDir }}/ghq/github.com/riii111/dotfiles"
     gh_work_org = {{ promptStringOnce . "gh_work_org" "GitHub org name for work" | quote }}
     gh_work_user = {{ promptStringOnce . "gh_work_user" "GitHub username for work" | quote }}
     gcp_project = {{ promptStringOnce . "gcp_project" "GCP project for prod-errors" | quote }}
+    work_project = {{ promptStringOnce . "work_project" "Main project name for work" | quote }}
 {{- end }}

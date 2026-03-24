@@ -1,0 +1,45 @@
+session_name: nodex
+start_directory: /Users/{{ .chezmoi.username }}/ghq/github.com/{{ .side_work_org }}/REDACTED-PROJECT-platform
+
+options:
+  status-left: "[nodex] Ctrl+b w:list | f:follow | ':number | z:zoom | [:scroll | d:detach "
+  status-left-length: 80
+  status-right: ""
+  remain-on-exit: on
+  automatic-rename: off
+
+windows:
+  # Window 0: Dashboard (launcher + monitor)
+  - window_name: dashboard
+    layout: main-vertical
+    options:
+      main-pane-width: 50%
+    panes:
+      - shell_command:
+          - /Users/{{ .chezmoi.username }}/ghq/github.com/riii111/dotfiles/.config/mux/core/mux-launcher nodex
+      - shell_command:
+          - /Users/{{ .chezmoi.username }}/ghq/github.com/riii111/dotfiles/.config/mux/core/mux-monitor nodex
+
+  - window_name: studio-api
+    start_directory: /Users/{{ .chezmoi.username }}/ghq/github.com/{{ .side_work_org }}/REDACTED-PROJECT-platform/backend
+    panes:
+      - shell_command:
+          - echo "=== studio-api ===" && echo "Waiting for start command..."
+
+  - window_name: studio-fe
+    start_directory: /Users/{{ .chezmoi.username }}/ghq/github.com/{{ .side_work_org }}/REDACTED-PROJECT-platform/frontend
+    panes:
+      - shell_command:
+          - echo "=== studio-fe ===" && echo "Waiting for start command..."
+
+  - window_name: REDACTED-PROJECT-agent
+    start_directory: /Users/{{ .chezmoi.username }}/ghq/github.com/{{ .side_work_org }}/REDACTED-PROJECT-agent
+    panes:
+      - shell_command:
+          - echo "=== REDACTED-PROJECT-agent ===" && echo "Waiting for start command..."
+
+  - window_name: docker
+    start_directory: /Users/{{ .chezmoi.username }}/ghq/github.com/{{ .side_work_org }}/REDACTED-PROJECT-platform
+    panes:
+      - shell_command:
+          - echo "=== Docker Services ===" && echo "Waiting for start command..."

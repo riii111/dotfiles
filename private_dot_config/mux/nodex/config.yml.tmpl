@@ -1,0 +1,50 @@
+# nodex mux configuration
+
+project:
+  name: nodex
+  root: ~/ghq/github.com/{{ .side_work_org }}/REDACTED-PROJECT-platform
+  session_name: nodex
+
+docker:
+  enabled: true
+  compose_file: compose.yaml
+  wait_timeout: 90
+
+services:
+  # Studio Backend (Rust)
+  - name: studio-api
+    dir: backend
+    command: bacon webserver
+    port: 8000
+    group: studio
+
+  # Studio Frontend (React/Vite)
+  - name: studio-fe
+    dir: frontend
+    runtime: npm
+    command: run dev
+    port: 4200
+    group: studio
+
+  # Agent (Rust) - external repo
+  - name: REDACTED-PROJECT-agent
+    dir: ~/ghq/github.com/{{ .side_work_org }}/REDACTED-PROJECT-agent
+    command: bacon -j run
+    group: agent
+    external: true
+
+phases:
+  - name: Docker
+    type: docker
+
+  - name: Studio
+    groups: [studio]
+    # wait_ports: [8000]  # 削除: Agent は studio-api に依存しない
+
+  - name: Agent
+    groups: [agent]
+
+options:
+  log_keep_sessions: 3
+  popup_width: 80%
+  popup_height: 80%
