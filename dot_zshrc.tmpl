@@ -359,7 +359,8 @@ export PATH="/opt/homebrew/opt/mysql-client/bin:$PATH"
 # ==========================================
 [[ -o interactive ]] || return
 
-add-zsh-hook precmd _maybe_refresh_terminal_title
+# Reassert title on every prompt so external OSC2 writers cannot leave stale git flags behind.
+add-zsh-hook precmd _set_terminal_title
 if [[ -o zle ]]; then
   add-zle-hook-widget line-pre-redraw _maybe_refresh_terminal_title_from_zle
 fi
