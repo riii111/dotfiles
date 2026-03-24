@@ -152,7 +152,7 @@ local function get_git_info(cwd)
 		return nil
 	end
 
-	local now = wezterm.time.now()
+	local now = os.time()
 	prune_git_info_cache(now)
 
 	local cached = git_info_cache[cwd]
@@ -214,10 +214,17 @@ printf 'flags=%s\n' "$flags"
 	return info
 end
 
-wezterm.on("update-status", function(window, pane)
+local function render_right_status(window, pane)
 	local segments = {}
-	local cwd = cwd_to_path(pane:get_current_working_dir())
-	local git_info = get_git_info(cwd)
+	local git_info = nil
+	local ok, err = pcall(function()
+		local cwd = cwd_to_path(pane:get_current_working_dir())
+		git_info = get_git_info(cwd)
+	end)
+
+	if not ok then
+		wezterm.log_error("right-status: " .. tostring(err))
+	end
 
 	if git_info then
 		table.insert(segments, { Foreground = { Color = "#c0caf5" } })
@@ -255,4 +262,16 @@ wezterm.on("update-status", function(window, pane)
 	table.insert(segments, { Text = " " .. wezterm.strftime("%a %b %e %H:%M") .. "  " })
 
 	window:set_right_status(wezterm.format(segments))
+end
+
+wezterm.on("update-right-status", function(window, pane)
+	render_right_status(window, pane)
+end)
+
+wezterm.on("window-focus-changed", function(window, pane)
+	render_right_status(window, pane)
+end)
+
+wezterm.on("window-config-reloaded", function(window, pane)
+	render_right_status(window, pane)
 end)
