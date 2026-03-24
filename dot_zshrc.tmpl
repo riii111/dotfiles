@@ -345,8 +345,6 @@ cc-impl() {
   if [[ -n "$TMUX" ]]; then
     tmux select-pane -T impl
   else
-    # Clear git info title before tmux takes over the pane
-    printf '\e]2;claude\a'
     tmux new-session -s "$session" -n dev \; select-pane -T impl \; send-keys "cc-impl $session $*" Enter
     return
   fi

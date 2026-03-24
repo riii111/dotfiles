@@ -107,11 +107,26 @@ end)
 -- Right status: repo, git ref, flags, time
 local SEP = "\u{e0b3}"
 local git_info_cache = {}
+local git_info_cache_last_gc = 0
 
 local FLAG_BADGES = {
 	R = { text = " REBASE", color = "#ff9e64" },
 	C = { text = " PICK", color = "#ff9e64" },
 }
+
+local function prune_git_info_cache(now)
+	if now - git_info_cache_last_gc < 300 then
+		return
+	end
+
+	for cwd, entry in pairs(git_info_cache) do
+		if now - entry.at > 60 then
+			git_info_cache[cwd] = nil
+		end
+	end
+
+	git_info_cache_last_gc = now
+end
 
 local function cwd_to_path(cwd_uri)
 	if not cwd_uri then
@@ -137,8 +152,11 @@ local function get_git_info(cwd)
 		return nil
 	end
 
+	local now = wezterm.time.now()
+	prune_git_info_cache(now)
+
 	local cached = git_info_cache[cwd]
-	if cached and wezterm.time.now() - cached.at < 1.0 then
+	if cached and now - cached.at < 1.0 then
 		return cached.info
 	end
 
@@ -176,7 +194,7 @@ printf 'flags=%s\n' "$flags"
 	})
 
 	if not success then
-		git_info_cache[cwd] = { at = wezterm.time.now(), info = nil }
+		git_info_cache[cwd] = { at = now, info = nil }
 		return nil
 	end
 
@@ -192,7 +210,7 @@ printf 'flags=%s\n' "$flags"
 		info = nil
 	end
 
-	git_info_cache[cwd] = { at = wezterm.time.now(), info = info }
+	git_info_cache[cwd] = { at = now, info = info }
 	return info
 end
 
