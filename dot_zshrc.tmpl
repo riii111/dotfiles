@@ -640,6 +640,117 @@ HELP
 {{ end }}
 
 # ==========================================
-# Machine-specific config
+# Runtime tools
 # ==========================================
-[[ -f ~/.zshrc.local ]] && source ~/.zshrc.local
+# direnv
+eval "$(direnv hook zsh)"
+
+# asdf (lazy load)
+export PATH="$HOME/.asdf/shims:$HOME/.asdf/bin:$PATH"
+ASDF_SCRIPT="${HOMEBREW_PREFIX:-/opt/homebrew}/opt/asdf/libexec/asdf.sh"
+
+if [[ -f "$ASDF_SCRIPT" ]]; then
+  asdf() {
+    unfunction asdf
+    . "$ASDF_SCRIPT"
+    asdf "$@"
+  }
+fi
+
+# deno
+[[ -f "$HOME/.deno/env" ]] && . "$HOME/.deno/env"
+
+{{ if eq .type "work" }}
+# ==========================================
+# Work: Rancher Desktop
+# ==========================================
+export PATH="$HOME/.rd/bin:$PATH"
+
+# ==========================================
+# Work: gh account routing by ghq namespace
+# ==========================================
+autoload -U add-zsh-hook
+__GH_TARGET_USER=""
+
+_detect_gh_target_user() {
+  case "$PWD/" in
+    "$GHQ_ROOT/github.com/riii111/"*)
+      __GH_TARGET_USER="riii111"
+      ;;
+    "$GHQ_ROOT/github.com/{{ .gh_work_org }}/"*)
+      __GH_TARGET_USER="{{ .gh_work_user }}"
+      ;;
+    *)
+      __GH_TARGET_USER=""
+      ;;
+  esac
+}
+
+_gh_active_user() {
+  awk '
+    $1 == "github.com:" { in_host = 1; next }
+    in_host && $1 == "user:" { print $2; exit }
+    in_host && /^[^[:space:]]/ { exit }
+  ' "$HOME/.config/gh/hosts.yml" 2>/dev/null
+}
+
+_gh_acquire_lock() {
+  local lock_dir="${TMPDIR:-/tmp}/gh-auth-switch.lock"
+  local waited=0
+
+  while ! mkdir "$lock_dir" 2>/dev/null; do
+    sleep 0.05
+    (( waited += 1 ))
+    if (( waited >= 200 )); then
+      echo "Error: timed out waiting for gh auth lock" >&2
+      return 1
+    fi
+  done
+
+  print -r -- "$lock_dir"
+}
+
+_gh_release_lock() {
+  [[ -n "$1" ]] && rmdir "$1" 2>/dev/null
+}
+
+_gh_run_with_target_user() {
+  local target_user="$1"
+  shift
+
+  local lock_dir
+  lock_dir=$(_gh_acquire_lock) || return 1
+
+  {
+    local active_user
+    active_user=$(_gh_active_user)
+
+    if [[ "$active_user" != "$target_user" ]]; then
+      command gh auth switch --hostname github.com --user "$target_user" >/dev/null || return 1
+    fi
+
+    command gh "$@"
+  } always {
+    _gh_release_lock "$lock_dir"
+  }
+}
+
+gh() {
+  _detect_gh_target_user
+
+  if [[ -z "$__GH_TARGET_USER" ]]; then
+    command gh "$@"
+    return $?
+  fi
+
+  _gh_run_with_target_user "$__GH_TARGET_USER" "$@"
+}
+
+add-zsh-hook chpwd _detect_gh_target_user
+_detect_gh_target_user
+
+# ==========================================
+# Work: prod-errors default project
+# ==========================================
+export GCP_PROJECT="{{ .gcp_project }}"
+{{ end }}

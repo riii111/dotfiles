@@ -10,4 +10,7 @@ sourceDir = "{{ .chezmoi.homeDir }}/ghq/github.com/riii111/dotfiles"
     type = "work"
     git_email = {{ promptStringOnce . "git_email" "Git email for this machine" | quote }}
     git_name = {{ promptStringOnce . "git_name" "Git name for this machine" | quote }}
+    gh_work_org = {{ promptStringOnce . "gh_work_org" "GitHub org name for work" | quote }}
+    gh_work_user = {{ promptStringOnce . "gh_work_user" "GitHub username for work" | quote }}
+    gcp_project = {{ promptStringOnce . "gcp_project" "GCP project for prod-errors" | quote }}
 {{- end }}

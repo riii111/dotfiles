@@ -12,6 +12,11 @@ lefthook.yml
 .config/mux/nodex
 {{ end }}
 
+# Work machine only
+{{ if ne .type "work" }}
+.gitconfig-riii111
+{{ end }}
+
 # Auto-generated files
 .config/karabiner/automatic_backups
 .config/karabiner/assets
