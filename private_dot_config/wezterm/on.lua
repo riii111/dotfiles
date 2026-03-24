@@ -105,60 +105,127 @@ wezterm.on("format-tab-title", function(tab)
 end)
 
 -- Right status: repo, git ref, flags, time
--- Parsed from zsh precmd title: "repo::ref::flags"
--- Flags: d=dirty, D=detached, w=worktree, R=rebase, M=merge, C=cherry-pick
 local SEP = "\u{e0b3}"
+local git_info_cache = {}
 
 local FLAG_BADGES = {
 	R = { text = " REBASE", color = "#ff9e64" },
-	M = { text = " MERGE", color = "#ff9e64" },
 	C = { text = " PICK", color = "#ff9e64" },
 }
 
-wezterm.on("update-status", function(window, pane)
-	local title = pane:get_title()
+local function cwd_to_path(cwd_uri)
+	if not cwd_uri then
+		return nil
+	end
 
-	local segments = {}
+	if type(cwd_uri) == "table" or type(cwd_uri) == "userdata" then
+		return cwd_uri.file_path or cwd_uri.path
+	end
 
-	-- Only show git info when title matches our "repo::ref" format
-	if title:find("::") then
-		local parts = {}
-		for part in title:gmatch("[^:]+") do
-			table.insert(parts, part)
+	local cwd = tostring(cwd_uri)
+	if cwd:match("^file://") then
+		cwd = cwd:gsub("^file://[^/]*", "")
+		cwd = cwd:gsub("%%(%x%x)", function(hex)
+			return string.char(tonumber(hex, 16))
+		end)
+	end
+	return cwd
+end
+
+local function get_git_info(cwd)
+	if not cwd or #cwd == 0 then
+		return nil
+	end
+
+	local cached = git_info_cache[cwd]
+	if cached and wezterm.time.now() - cached.at < 1.0 then
+		return cached.info
+	end
+
+	local success, stdout = wezterm.run_child_process({
+		"/bin/sh",
+		"-lc",
+		[[
+cwd="$1"
+
+root=$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null) || exit 1
+git_dir=$(git -C "$cwd" rev-parse --git-dir 2>/dev/null) || exit 1
+common_dir=$(git -C "$cwd" rev-parse --git-common-dir 2>/dev/null) || exit 1
+ref=$(git -C "$cwd" symbolic-ref --short HEAD 2>/dev/null) && detached=0 || {
+  ref=$(git -C "$cwd" rev-parse --short HEAD 2>/dev/null) || exit 1
+  detached=1
+}
+dirty=$(git -C "$cwd" status --porcelain 2>/dev/null | head -n 1)
+
+[ "${git_dir#/}" = "$git_dir" ] && git_dir="$root/$git_dir"
+[ "${common_dir#/}" = "$common_dir" ] && common_dir="$root/$common_dir"
+
+flags=""
+[ "$detached" = 1 ] && flags="${flags}D"
+[ -n "$dirty" ] && flags="${flags}d"
+[ "$(realpath "$git_dir")" != "$(realpath "$common_dir")" ] && flags="${flags}w"
+{ [ -d "$git_dir/rebase-merge" ] || [ -d "$git_dir/rebase-apply" ]; } && flags="${flags}R"
+[ -f "$git_dir/CHERRY_PICK_HEAD" ] && flags="${flags}C"
+
+printf 'repo=%s\n' "${root##*/}"
+printf 'ref=%s\n' "$ref"
+printf 'flags=%s\n' "$flags"
+]],
+		"sh",
+		cwd,
+	})
+
+	if not success then
+		git_info_cache[cwd] = { at = wezterm.time.now(), info = nil }
+		return nil
+	end
+
+	local info = { repo = nil, ref = nil, flags = "" }
+	for line in stdout:gmatch("[^\r\n]+") do
+		local key, value = line:match("^(%w+)=(.*)$")
+		if key and value then
+			info[key] = value
 		end
-		local dir = parts[1] or title
-		local ref = parts[2]
-		local flags = parts[3] or ""
+	end
 
+	if not info.repo or not info.ref then
+		info = nil
+	end
+
+	git_info_cache[cwd] = { at = wezterm.time.now(), info = info }
+	return info
+end
+
+wezterm.on("update-status", function(window, pane)
+	local segments = {}
+	local cwd = cwd_to_path(pane:get_current_working_dir())
+	local git_info = get_git_info(cwd)
+
+	if git_info then
 		table.insert(segments, { Foreground = { Color = "#c0caf5" } })
-		table.insert(segments, { Text = "  " .. dir })
+		table.insert(segments, { Text = "  " .. git_info.repo })
 
-		if ref and #ref > 0 then
-			table.insert(segments, { Foreground = { Color = "#565f89" } })
-			table.insert(segments, { Text = "  " .. SEP .. "  " })
+		table.insert(segments, { Foreground = { Color = "#565f89" } })
+		table.insert(segments, { Text = "  " .. SEP .. "  " })
 
-			-- Worktree badge
-			if flags:find("w") then
-				table.insert(segments, { Foreground = { Color = "#9ece6a" } })
-				table.insert(segments, { Text = "󰙅 " })
-			end
+		if git_info.flags:find("w") then
+			table.insert(segments, { Foreground = { Color = "#9ece6a" } })
+			table.insert(segments, { Text = "󰙅 " })
+		end
 
-			local is_detached = flags:find("D")
-			table.insert(segments, { Foreground = { Color = is_detached and "#ff9e64" or "#7dcfff" } })
-			table.insert(segments, { Text = " " .. ref })
+		local is_detached = git_info.flags:find("D")
+		table.insert(segments, { Foreground = { Color = is_detached and "#ff9e64" or "#7dcfff" } })
+		table.insert(segments, { Text = " " .. git_info.ref })
 
-			-- Dirty indicator
-			if flags:find("d") then
-				table.insert(segments, { Foreground = { Color = "#e6c384" } })
-				table.insert(segments, { Text = " *" })
-			end
+		if git_info.flags:find("d") then
+			table.insert(segments, { Foreground = { Color = "#e6c384" } })
+			table.insert(segments, { Text = " *" })
+		end
 
-			-- Rebase / Merge / Cherry-pick badge
-			for flag, badge in pairs(FLAG_BADGES) do
-				if flags:find(flag) then
-					table.insert(segments, { Foreground = { Color = badge.color } })
-					table.insert(segments, { Text = badge.text })
-				end
+		for flag, badge in pairs(FLAG_BADGES) do
+			if git_info.flags:find(flag) then
+				table.insert(segments, { Foreground = { Color = badge.color } })
+				table.insert(segments, { Text = badge.text })
 			end
 		end
 	end
