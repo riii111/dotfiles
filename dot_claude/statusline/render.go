@@ -60,11 +60,11 @@ func ringChar(pct int) rune {
 
 func formatRingRate(label string, rl RateLimit) string {
 	if rl.UsedPercentage == nil || *rl.UsedPercentage < 0 {
-		return fmt.Sprintf("%s%s-%s", label, dim, reset)
+		return fmt.Sprintf("%s %s-%s", label, dim, reset)
 	}
 	pct := clamp(*rl.UsedPercentage)
 	color := thresholdColor(pct)
-	return fmt.Sprintf("%s%s%c%d%%%s", label, color, ringChar(pct), pct, reset)
+	return fmt.Sprintf("%s %s%c%d%%%s", label, color, ringChar(pct), pct, reset)
 }
 
 // formatRingRateLimits renders "5h◔30% 7d◑15%" as a single compact segment.
