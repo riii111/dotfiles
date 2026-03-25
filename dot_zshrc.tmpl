@@ -433,11 +433,7 @@ HELP
 
 # direnv
 eval "$(direnv hook zsh)"
-{{ end }}
 
-# ==========================================
-# Runtime tools
-# ==========================================
 # asdf (lazy load)
 export PATH="$HOME/.asdf/shims:$HOME/.asdf/bin:$PATH"
 ASDF_SCRIPT="${HOMEBREW_PREFIX:-/opt/homebrew}/opt/asdf/libexec/asdf.sh"
@@ -449,7 +445,11 @@ if [[ -f "$ASDF_SCRIPT" ]]; then
     asdf "$@"
   }
 fi
+{{ end }}
 
+# ==========================================
+# Runtime tools
+# ==========================================
 # deno
 [[ -f "$HOME/.deno/env" ]] && . "$HOME/.deno/env"
 
