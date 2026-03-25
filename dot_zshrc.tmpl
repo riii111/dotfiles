@@ -430,14 +430,14 @@ HELP
     echo "No matches for '$version' in any deploy-stg branch" >&2
   fi
 }
+
+# direnv
+eval "$(direnv hook zsh)"
 {{ end }}
 
 # ==========================================
 # Runtime tools
 # ==========================================
-# direnv
-eval "$(direnv hook zsh)"
-
 # asdf (lazy load)
 export PATH="$HOME/.asdf/shims:$HOME/.asdf/bin:$PATH"
 ASDF_SCRIPT="${HOMEBREW_PREFIX:-/opt/homebrew}/opt/asdf/libexec/asdf.sh"
