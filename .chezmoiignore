@@ -13,6 +13,7 @@ LICENSE
 # Work machine only
 {{ if ne .type "work" }}
 .gitconfig-riii111
+.claude/skills/deploy-preflight
 {{ end }}
 
 # Auto-generated files

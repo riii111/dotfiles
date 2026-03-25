@@ -1,0 +1,4 @@
+post-merge:
+  commands:
+    chezmoi-apply:
+      run: chezmoi apply --force
