@@ -16,16 +16,17 @@ import (
 // Line builders (top-level public API)
 // ════════════════════════════════════════════════════════════
 
-// BuildLine1 renders: model | ctx% | branch | lines changed | cost
-// Segments are ordered by priority; low-priority ones are dropped when narrow.
-func BuildLine1(in Input, gitBranch string, maxWidth int) string {
-	// Segments in priority order (highest first)
+// BuildStatusLine renders a single-line statusline.
+// Segments in priority order; low-priority ones are dropped when narrow.
+func BuildStatusLine(in Input, gitBranch string, now time.Time, maxWidth int) string {
 	var segs []string
 
 	segs = append(segs, "🤖 "+in.Model.DisplayName)
 
 	ctxPct := clamp(in.ContextWindow.UsedPercentage)
 	segs = append(segs, fmt.Sprintf("📊 %s%d%%%s", thresholdColor(ctxPct), ctxPct, reset))
+
+	segs = append(segs, formatRingRateLimits(in.RateLimits, now))
 
 	switch {
 	case in.Worktree.Name != "":
@@ -42,66 +43,41 @@ func BuildLine1(in Input, gitBranch string, maxWidth int) string {
 		segs = append(segs, fmt.Sprintf("✏️  %s+%d/-%d%s", green, in.Cost.TotalLinesAdded, in.Cost.TotalLinesRemoved, reset))
 	}
 
-	if in.Cost.TotalCostUSD > 0 {
-		segs = append(segs, fmt.Sprintf("💰 $%.2f", in.Cost.TotalCostUSD))
-	}
-
-	return joinSegments(segs, maxWidth)
-}
-
-// BuildLine2 renders: 5h / 7d rate-limit bars
-func BuildLine2(in Input, now time.Time, maxWidth int) string {
-	segs := []string{
-		formatRateLimit("5h", in.RateLimits.FiveHour, now),
-		formatRateLimit("7d", in.RateLimits.SevenDay, now),
-	}
 	return joinSegments(segs, maxWidth)
 }
 
 // ════════════════════════════════════════════════════════════
-// Bar rendering
+// Ring Meter rendering
 // ════════════════════════════════════════════════════════════
 
-var blockChars = [9]rune{' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉', '█'}
+// ringChars maps usage percentage to a pie-segment circle.
+// ○ = 0%, ◔ = ~25%, ◑ = ~50%, ◕ = ~75%, ● = ~100%
+var ringChars = [5]rune{'○', '◔', '◑', '◕', '●'}
 
-func renderBar(pct, width int) string {
-	pct = max(0, min(100, pct))
-	filledX100 := pct * width
-	full := filledX100 / 100
-	frac := (filledX100 - full*100) * 8 / 100
-
-	var b strings.Builder
-	for range full {
-		b.WriteRune(blockChars[8])
-	}
-	if full < width {
-		empty := width - full
-		if frac > 0 {
-			b.WriteRune(blockChars[frac])
-			empty--
-		}
-		for range empty {
-			b.WriteRune('░')
-		}
-	}
-	return b.String()
+func ringChar(pct int) rune {
+	idx := (pct + 12) / 25 // 0-12→0, 13-37→1, 38-62→2, 63-87→3, 88-100→4
+	return ringChars[min(idx, 4)]
 }
 
-func formatBar(label string, pct int, rt ResetTime, now time.Time) string {
-	color := thresholdColor(pct)
-	bar := renderBar(pct, 10)
-	s := fmt.Sprintf("%s %s%s %d%%", label, color, bar, pct)
-	if rt.Valid {
-		s += " (" + timeUntil(rt.Time, now) + ")"
-	}
-	return s + reset
-}
-
-func formatRateLimit(label string, rl RateLimit, now time.Time) string {
+func formatRingRate(label string, rl RateLimit, now time.Time) string {
 	if rl.UsedPercentage == nil || *rl.UsedPercentage < 0 {
-		return fmt.Sprintf("%s %s---%s", label, dim, reset)
+		return fmt.Sprintf("%s%s-%s", label, dim, reset)
 	}
-	return formatBar(label, clamp(*rl.UsedPercentage), rl.ResetsAt, now)
+	pct := clamp(*rl.UsedPercentage)
+	color := thresholdColor(pct)
+	s := fmt.Sprintf("%s%s%c%d%%%s", label, color, ringChar(pct), pct, reset)
+	if rl.ResetsAt.Valid {
+		s = fmt.Sprintf("%s%s%c%d%%(%s)%s", label, color, ringChar(pct), pct, timeUntil(rl.ResetsAt.Time, now), reset)
+	}
+	return s
+}
+
+// formatRingRateLimits renders "5h◔30% 7d◑15%" as a single compact segment.
+func formatRingRateLimits(rl struct {
+	FiveHour RateLimit `json:"five_hour"`
+	SevenDay RateLimit `json:"seven_day"`
+}, now time.Time) string {
+	return formatRingRate("5h", rl.FiveHour, now) + " " + formatRingRate("7d", rl.SevenDay, now)
 }
 
 // ════════════════════════════════════════════════════════════
