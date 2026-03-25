@@ -3,49 +3,59 @@ package main
 import (
 	"fmt"
 	"math"
+	"os"
+	"strconv"
 	"strings"
 	"time"
+	"unicode"
+
+	"golang.org/x/sys/unix"
 )
 
 // ════════════════════════════════════════════════════════════
 // Line builders (top-level public API)
 // ════════════════════════════════════════════════════════════
 
-// BuildLine1 renders: model | ctx% | lines changed | branch | cost
-func BuildLine1(in Input, gitBranch string) string {
-	out := "🤖 " + in.Model.DisplayName
+// BuildLine1 renders: model | ctx% | branch | lines changed | cost
+// Segments are ordered by priority; low-priority ones are dropped when narrow.
+func BuildLine1(in Input, gitBranch string, maxWidth int) string {
+	// Segments in priority order (highest first)
+	var segs []string
+
+	segs = append(segs, "🤖 "+in.Model.DisplayName)
 
 	ctxPct := clamp(in.ContextWindow.UsedPercentage)
-	out += sep + fmt.Sprintf("📊 %s%d%%%s", thresholdColor(ctxPct), ctxPct, reset)
-
-	if in.Cost.TotalLinesAdded > 0 || in.Cost.TotalLinesRemoved > 0 {
-		out += sep + fmt.Sprintf("✏️  %s+%d/-%d%s", green, in.Cost.TotalLinesAdded, in.Cost.TotalLinesRemoved, reset)
-	}
+	segs = append(segs, fmt.Sprintf("📊 %s%d%%%s", thresholdColor(ctxPct), ctxPct, reset))
 
 	switch {
 	case in.Worktree.Name != "":
-		out += sep + "🌳 " + in.Worktree.Name
+		wt := "🌳 " + in.Worktree.Name
 		if in.Worktree.OriginalBranch != "" {
-			out += " ← " + in.Worktree.OriginalBranch
+			wt += " ← " + in.Worktree.OriginalBranch
 		}
+		segs = append(segs, wt)
 	case gitBranch != "":
-		out += sep + "🔀 " + gitBranch
+		segs = append(segs, "🔀 "+gitBranch)
+	}
+
+	if in.Cost.TotalLinesAdded > 0 || in.Cost.TotalLinesRemoved > 0 {
+		segs = append(segs, fmt.Sprintf("✏️  %s+%d/-%d%s", green, in.Cost.TotalLinesAdded, in.Cost.TotalLinesRemoved, reset))
 	}
 
 	if in.Cost.TotalCostUSD > 0 {
-		out += sep + fmt.Sprintf("💰 $%.2f", in.Cost.TotalCostUSD)
+		segs = append(segs, fmt.Sprintf("💰 $%.2f", in.Cost.TotalCostUSD))
 	}
 
-	return out
+	return joinSegments(segs, maxWidth)
 }
 
 // BuildLine2 renders: 5h / 7d rate-limit bars
-func BuildLine2(in Input, now time.Time) string {
-	parts := []string{
+func BuildLine2(in Input, now time.Time, maxWidth int) string {
+	segs := []string{
 		formatRateLimit("5h", in.RateLimits.FiveHour, now),
 		formatRateLimit("7d", in.RateLimits.SevenDay, now),
 	}
-	return strings.Join(parts, sep)
+	return joinSegments(segs, maxWidth)
 }
 
 // ════════════════════════════════════════════════════════════
@@ -119,6 +129,106 @@ func thresholdColor(pct int) string {
 	default:
 		return green
 	}
+}
+
+// ════════════════════════════════════════════════════════════
+// Terminal width
+// ════════════════════════════════════════════════════════════
+
+func TermWidth() int {
+	if s, ok := os.LookupEnv("COLUMNS"); ok {
+		if v, err := strconv.Atoi(s); err == nil && v > 0 {
+			return v
+		}
+	}
+	if ws, err := unix.IoctlGetWinsize(int(os.Stdout.Fd()), unix.TIOCGWINSZ); err == nil && ws.Col > 0 {
+		return int(ws.Col)
+	}
+	return 0 // unknown — no truncation
+}
+
+// ════════════════════════════════════════════════════════════
+// Visible width (ANSI-stripped, East Asian Width aware)
+// ════════════════════════════════════════════════════════════
+
+func visibleWidth(s string) int {
+	w := 0
+	for _, r := range stripANSI(s) {
+		w += runeWidth(r)
+	}
+	return w
+}
+
+func stripANSI(s string) string {
+	var b strings.Builder
+	inEsc := false
+	for _, r := range s {
+		if inEsc {
+			if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') {
+				inEsc = false
+			}
+			continue
+		}
+		if r == '\033' {
+			inEsc = true
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
+func runeWidth(r rune) int {
+	if r < 0x20 {
+		return 0
+	}
+	// Emoji: most common ranges
+	if r >= 0x1F300 && r <= 0x1FAFF {
+		return 2
+	}
+	// Variation selectors / ZWJ
+	if r == 0xFE0F || r == 0x200D {
+		return 0
+	}
+	// CJK / fullwidth
+	if unicode.Is(unicode.Han, r) || unicode.Is(unicode.Hangul, r) || unicode.Is(unicode.Katakana, r) || unicode.Is(unicode.Hiragana, r) {
+		return 2
+	}
+	// Unicode East Asian Fullwidth/Wide block indicators
+	if (r >= 0xFF01 && r <= 0xFF60) || (r >= 0xFFE0 && r <= 0xFFE6) {
+		return 2
+	}
+	return 1
+}
+
+// ════════════════════════════════════════════════════════════
+// Segment joining with width budget
+// ════════════════════════════════════════════════════════════
+
+const sepWidth = 3 // " │ "
+
+func joinSegments(segments []string, maxWidth int) string {
+	if maxWidth <= 0 {
+		return strings.Join(segments, sep)
+	}
+	var kept []string
+	used := 0
+	for _, s := range segments {
+		w := visibleWidth(s)
+		need := w
+		if len(kept) > 0 {
+			need += sepWidth
+		}
+		if used+need > maxWidth {
+			break
+		}
+		kept = append(kept, s)
+		used += need
+	}
+	if len(kept) == 0 && len(segments) > 0 {
+		kept = segments[:1] // always show at least model
+	}
+	return strings.Join(kept, sep)
 }
 
 // ════════════════════════════════════════════════════════════

@@ -25,8 +25,9 @@ func main() {
 
 	branch := DetectBranch(input.CWD)
 	now := time.Now()
+	width := TermWidth()
 
-	fmt.Fprintf(os.Stdout, "%s\n%s\n", BuildLine1(input, branch), BuildLine2(input, now))
+	fmt.Fprintf(os.Stdout, "%s\n%s\n", BuildLine1(input, branch, width), BuildLine2(input, now, width))
 }
 
 // ════════════════════════════════════════════════════════════
