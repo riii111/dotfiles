@@ -6,7 +6,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 	"unicode"
 
 	"golang.org/x/sys/unix"
@@ -18,7 +17,7 @@ import (
 
 // BuildStatusLine renders a single-line statusline.
 // Segments in priority order; low-priority ones are dropped when narrow.
-func BuildStatusLine(in Input, gitBranch string, now time.Time, maxWidth int) string {
+func BuildStatusLine(in Input, gitBranch string, maxWidth int) string {
 	var segs []string
 
 	segs = append(segs, "🤖 "+in.Model.DisplayName)
@@ -26,7 +25,7 @@ func BuildStatusLine(in Input, gitBranch string, now time.Time, maxWidth int) st
 	ctxPct := clamp(in.ContextWindow.UsedPercentage)
 	segs = append(segs, fmt.Sprintf("📊 %s%d%%%s", thresholdColor(ctxPct), ctxPct, reset))
 
-	segs = append(segs, formatRingRateLimits(in.RateLimits, now))
+	segs = append(segs, formatRingRateLimits(in.RateLimits))
 
 	switch {
 	case in.Worktree.Name != "":
@@ -40,7 +39,7 @@ func BuildStatusLine(in Input, gitBranch string, now time.Time, maxWidth int) st
 	}
 
 	if in.Cost.TotalLinesAdded > 0 || in.Cost.TotalLinesRemoved > 0 {
-		segs = append(segs, fmt.Sprintf("✏️  %s+%d/-%d%s", green, in.Cost.TotalLinesAdded, in.Cost.TotalLinesRemoved, reset))
+		segs = append(segs, fmt.Sprintf("%s+%d/-%d%s", green, in.Cost.TotalLinesAdded, in.Cost.TotalLinesRemoved, reset))
 	}
 
 	return joinSegments(segs, maxWidth)
@@ -59,25 +58,21 @@ func ringChar(pct int) rune {
 	return ringChars[min(idx, 4)]
 }
 
-func formatRingRate(label string, rl RateLimit, now time.Time) string {
+func formatRingRate(label string, rl RateLimit) string {
 	if rl.UsedPercentage == nil || *rl.UsedPercentage < 0 {
 		return fmt.Sprintf("%s%s-%s", label, dim, reset)
 	}
 	pct := clamp(*rl.UsedPercentage)
 	color := thresholdColor(pct)
-	s := fmt.Sprintf("%s%s%c%d%%%s", label, color, ringChar(pct), pct, reset)
-	if rl.ResetsAt.Valid {
-		s = fmt.Sprintf("%s%s%c%d%%(%s)%s", label, color, ringChar(pct), pct, timeUntil(rl.ResetsAt.Time, now), reset)
-	}
-	return s
+	return fmt.Sprintf("%s%s%c%d%%%s", label, color, ringChar(pct), pct, reset)
 }
 
 // formatRingRateLimits renders "5h◔30% 7d◑15%" as a single compact segment.
 func formatRingRateLimits(rl struct {
 	FiveHour RateLimit `json:"five_hour"`
 	SevenDay RateLimit `json:"seven_day"`
-}, now time.Time) string {
-	return formatRingRate("5h", rl.FiveHour, now) + " " + formatRingRate("7d", rl.SevenDay, now)
+}) string {
+	return formatRingRate("5h", rl.FiveHour) + " " + formatRingRate("7d", rl.SevenDay)
 }
 
 // ════════════════════════════════════════════════════════════
@@ -216,19 +211,3 @@ func clamp(f float64) int {
 	return max(0, min(100, v))
 }
 
-func timeUntil(target, now time.Time) string {
-	d := target.Sub(now)
-	if d <= 0 {
-		return "now"
-	}
-	days := int(d.Hours()) / 24
-	h := int(d.Hours()) % 24
-	m := int(d.Minutes()) % 60
-	if days > 0 {
-		return fmt.Sprintf("%dd%dh", days, h)
-	}
-	if h > 0 {
-		return fmt.Sprintf("%dh%02dm", h, m)
-	}
-	return fmt.Sprintf("%dm", m)
-}

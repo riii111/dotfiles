@@ -5,14 +5,15 @@ set -euo pipefail
 SELF="$(python3 -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "${BASH_SOURCE[0]}")"
 DIR="$(cd "$(dirname "$SELF")/statusline" && pwd)"
 BIN="$DIR/statusline-go"
+HASH_FILE="$DIR/.src-hash"
 
-# Rebuild if binary is missing or older than any .go / go.mod
+# Rebuild if binary missing or source content changed
 needs_build() {
   [ ! -x "$BIN" ] && return 0
-  for src in "$DIR"/*.go "$DIR"/go.mod; do
-    [ "$src" -nt "$BIN" ] && return 0
-  done
-  return 1
+  [ ! -f "$HASH_FILE" ] && return 0
+  local cur
+  cur=$(cat "$DIR"/*.go "$DIR"/go.mod 2>/dev/null | shasum -a 256 | cut -d' ' -f1)
+  [ "$cur" != "$(head -1 "$HASH_FILE")" ]
 }
 
 if needs_build; then
@@ -21,6 +22,7 @@ if needs_build; then
     printf '🤖 (build failed)'
     exit 0
   }
+  cat "$DIR"/*.go "$DIR"/go.mod 2>/dev/null | shasum -a 256 | cut -d' ' -f1 > "$HASH_FILE"
 fi
 
 exec "$BIN"

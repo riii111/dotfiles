@@ -24,10 +24,9 @@ func main() {
 	}
 
 	branch := DetectBranch(input.CWD)
-	now := time.Now()
 	width := TermWidth()
 
-	fmt.Fprintln(os.Stdout, BuildStatusLine(input, branch, now, width))
+	fmt.Fprintln(os.Stdout, BuildStatusLine(input, branch, width))
 }
 
 // ════════════════════════════════════════════════════════════
