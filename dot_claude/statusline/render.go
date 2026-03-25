@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	"golang.org/x/sys/unix"
@@ -25,7 +26,7 @@ func BuildStatusLine(in Input, gitBranch string, maxWidth int) string {
 	ctxPct := clamp(in.ContextWindow.UsedPercentage)
 	segs = append(segs, fmt.Sprintf("📊 %s%d%%%s", thresholdColor(ctxPct), ctxPct, reset))
 
-	segs = append(segs, formatRingRateLimits(in.RateLimits))
+	segs = append(segs, formatRingRateLimits(in.RateLimits, time.Now()))
 
 	switch {
 	case in.Worktree.Name != "":
@@ -58,21 +59,24 @@ func ringChar(pct int) rune {
 	return ringChars[min(idx, 4)]
 }
 
-func formatRingRate(label string, rl RateLimit) string {
+func formatRingRate(label string, rl RateLimit, now time.Time) string {
 	if rl.UsedPercentage == nil || *rl.UsedPercentage < 0 {
 		return fmt.Sprintf("%s %s-%s", label, dim, reset)
 	}
 	pct := clamp(*rl.UsedPercentage)
 	color := thresholdColor(pct)
-	return fmt.Sprintf("%s %s%c %d%%%s", label, color, ringChar(pct), pct, reset)
+	s := fmt.Sprintf("%s %s%c %d%%", label, color, ringChar(pct), pct)
+	if rl.ResetsAt.Valid {
+		s += "(" + timeUntil(rl.ResetsAt.Time, now) + ")"
+	}
+	return s + reset
 }
 
-// formatRingRateLimits renders "5h◔30% 7d◑15%" as a single compact segment.
 func formatRingRateLimits(rl struct {
 	FiveHour RateLimit `json:"five_hour"`
 	SevenDay RateLimit `json:"seven_day"`
-}) string {
-	return formatRingRate("5h", rl.FiveHour) + " " + formatRingRate("7d", rl.SevenDay)
+}, now time.Time) string {
+	return formatRingRate("5h", rl.FiveHour, now) + " " + formatRingRate("7d", rl.SevenDay, now)
 }
 
 // ════════════════════════════════════════════════════════════
@@ -209,5 +213,22 @@ func joinSegments(segments []string, maxWidth int) string {
 func clamp(f float64) int {
 	v := int(math.Round(f))
 	return max(0, min(100, v))
+}
+
+func timeUntil(target, now time.Time) string {
+	d := target.Sub(now)
+	if d <= 0 {
+		return "now"
+	}
+	days := int(d.Hours()) / 24
+	h := int(d.Hours()) % 24
+	m := int(d.Minutes()) % 60
+	if days > 0 {
+		return fmt.Sprintf("%dd%dh", days, h)
+	}
+	if h > 0 {
+		return fmt.Sprintf("%dh%02dm", h, m)
+	}
+	return fmt.Sprintf("%dm", m)
 }
 
