@@ -1,4 +1,0 @@
-pre-commit:
-  scripts:
-    "chezmoi-sync.sh":
-      runner: bash
