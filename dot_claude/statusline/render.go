@@ -64,7 +64,7 @@ func formatRingRate(label string, rl RateLimit) string {
 	}
 	pct := clamp(*rl.UsedPercentage)
 	color := thresholdColor(pct)
-	return fmt.Sprintf("%s %s%c%d%%%s", label, color, ringChar(pct), pct, reset)
+	return fmt.Sprintf("%s %s%c %d%%%s", label, color, ringChar(pct), pct, reset)
 }
 
 // formatRingRateLimits renders "5h◔30% 7d◑15%" as a single compact segment.
