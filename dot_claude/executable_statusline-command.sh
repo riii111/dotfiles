@@ -7,9 +7,12 @@ DIR="$(cd "$(dirname "$SELF")/statusline" && pwd)"
 BIN="$DIR/statusline-go"
 HASH_FILE="$DIR/.src-hash"
 
-# Rebuild if binary missing or source content changed
+# Rebuild if binary missing, source newer than binary, or content hash changed
 needs_build() {
   [ ! -x "$BIN" ] && return 0
+  for src in "$DIR"/*.go "$DIR"/go.mod; do
+    [ "$src" -nt "$BIN" ] && return 0
+  done
   [ ! -f "$HASH_FILE" ] && return 0
   local cur
   cur=$(cat "$DIR"/*.go "$DIR"/go.mod 2>/dev/null | shasum -a 256 | cut -d' ' -f1)
