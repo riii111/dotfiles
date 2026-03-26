@@ -35,10 +35,11 @@ local function do_position()
 
   -- G stops at last content line, not empty tail region
   vim.b.scrollback_last_content = last_content
-  vim.keymap.set("n", "G", function()
+  local function goto_last_content()
     local lc = vim.b.scrollback_last_content or vim.api.nvim_buf_line_count(0)
     vim.api.nvim_win_set_cursor(0, { lc, 0 })
-  end, { buffer = true, nowait = true })
+  end
+  vim.keymap.set({ "n", "o" }, "G", goto_last_content, { buffer = true, nowait = true })
 end
 
 -- Prompt highlight & jump
