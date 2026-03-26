@@ -144,7 +144,9 @@ config.keys = keymaps
 ---------------------------------------------------------------
 local copy_mode = wezterm.gui.default_key_tables().copy_mode
 
--- Helper: yank with flash (copy, show selection 0.25s, then clear & close)
+-- Helper: yank with flash (copy, show selection briefly, then clear & close)
+-- Uses get_selection_text_for_pane to strip trailing blank lines before copying,
+-- which avoids the issue where vGy copies trailing empty lines from scrollback.
 local function yank_with_flash(pre_actions)
 	return wezterm.action_callback(function(window, pane)
 		if pre_actions then
@@ -152,7 +154,13 @@ local function yank_with_flash(pre_actions)
 				window:perform_action(a, pane)
 			end
 		end
-		window:perform_action(act.CopyTo("ClipboardAndPrimarySelection"), pane)
+		local text = window:get_selection_text_for_pane(pane)
+		if text and text ~= "" then
+			text = text:gsub("[\n \t]+$", "")
+			window:copy_to_clipboard(text, "ClipboardAndPrimarySelection")
+		else
+			window:perform_action(act.CopyTo("ClipboardAndPrimarySelection"), pane)
+		end
 		wezterm.time.call_after(0.15, function()
 			window:perform_action(act.CopyMode("ClearSelectionMode"), pane)
 			window:perform_action(act.CopyMode("Close"), pane)
