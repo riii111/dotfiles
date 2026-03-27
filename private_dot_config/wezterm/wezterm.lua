@@ -244,7 +244,7 @@ config.color_scheme = "Kanagawa Dragon"
 -- Misc
 ---------------------------------------------------------------
 config.max_fps = 165
-config.status_update_interval = 1000
+config.status_update_interval = 5000
 config.audible_bell = "Disabled"
 -- csi-u disabled: breaks Ctrl keys in tmux copy-mode
 -- config.enable_csi_u_key_encoding = true

@@ -156,13 +156,13 @@ local function get_git_info(cwd)
 	prune_git_info_cache(now)
 
 	local cached = git_info_cache[cwd]
-	if cached and now - cached.at < 1.0 then
+	if cached and now - cached.at < 5 then
 		return cached.info
 	end
 
 	local success, stdout = wezterm.run_child_process({
 		"/bin/sh",
-		"-lc",
+		"-c",
 		[[
 cwd="$1"
 
@@ -173,14 +173,21 @@ ref=$(git -C "$cwd" symbolic-ref --short HEAD 2>/dev/null) && detached=0 || {
   ref=$(git -C "$cwd" rev-parse --short HEAD 2>/dev/null) || exit 1
   detached=1
 }
-dirty=$(git -C "$cwd" status --porcelain 2>/dev/null | head -n 1)
+
+# Dirty detection: avoid git status --porcelain (full working-tree scan)
+# which can block WezTerm's synchronous run_child_process for seconds.
+# git diff --quiet short-circuits on first diff and uses the stat cache.
+dirty=0
+git -C "$cwd" diff --quiet 2>/dev/null || dirty=1
+[ "$dirty" = 0 ] && { git -C "$cwd" diff --quiet --cached 2>/dev/null || dirty=1; }
+[ "$dirty" = 0 ] && [ -n "$(git -C "$cwd" ls-files --others --exclude-standard --directory --no-empty-directory 2>/dev/null | head -n 1)" ] && dirty=1
 
 [ "${git_dir#/}" = "$git_dir" ] && git_dir="$root/$git_dir"
 [ "${common_dir#/}" = "$common_dir" ] && common_dir="$root/$common_dir"
 
 flags=""
 [ "$detached" = 1 ] && flags="${flags}D"
-[ -n "$dirty" ] && flags="${flags}d"
+[ "$dirty" = 1 ] && flags="${flags}d"
 [ "$(realpath "$git_dir")" != "$(realpath "$common_dir")" ] && flags="${flags}w"
 { [ -d "$git_dir/rebase-merge" ] || [ -d "$git_dir/rebase-apply" ]; } && flags="${flags}R"
 [ -f "$git_dir/CHERRY_PICK_HEAD" ] && flags="${flags}C"
