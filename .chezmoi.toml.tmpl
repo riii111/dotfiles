@@ -3,7 +3,7 @@ sourceDir = "{{ .chezmoi.homeDir }}/ghq/github.com/riii111/dotfiles"
 [data]
 {{- if eq .chezmoi.hostname "riii111" }}
     type = "personal"
-    git_email = "riii111.jp@gmail.com"
+    git_email = {{ promptStringOnce . "git_email" "Git email for this machine" | quote }}
     git_name = "riii111"
     git_signingkey = "059E3467BC399937"
     side_work_org = {{ promptStringOnce . "side_work_org" "GitHub org name for side work" | quote }}
