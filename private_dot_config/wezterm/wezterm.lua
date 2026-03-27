@@ -107,7 +107,7 @@ config.use_ime = true
 config.macos_forward_to_ime_modifier_mask = "SHIFT|CTRL"
 
 ---------------------------------------------------------------
--- Ctrl+S: tmux-aware prefix / leader
+-- Ctrl+Space: tmux-aware prefix / leader
 -- In tmux  → pass through as tmux prefix
 -- Outside → activate WezTerm leader key table
 ---------------------------------------------------------------
@@ -120,11 +120,11 @@ local function is_tmux(pane)
 end
 
 table.insert(keymaps, {
-	key = "a",
+	key = "Space",
 	mods = "CTRL",
 	action = wezterm.action_callback(function(window, pane)
 		if is_tmux(pane) then
-			window:perform_action(act.SendKey({ key = "a", mods = "CTRL" }), pane)
+			window:perform_action(act.SendKey({ key = "Space", mods = "CTRL" }), pane)
 		else
 			window:perform_action(
 				act.ActivateKeyTable({ name = "leader", one_shot = true, timeout_milliseconds = 2000 }),
