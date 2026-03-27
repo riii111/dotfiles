@@ -6,6 +6,9 @@ export XDG_DATA_HOME="$HOME/.local/share"
 export XDG_CACHE_HOME="$HOME/.cache"
 export XDG_STATE_HOME="$HOME/.local/state"
 
+# Disable XON/XOFF flow control so Ctrl+Q/Ctrl+S are available for keybindings
+stty -ixon
+
 # ==========================================
 # Zsh Startup Caching Mechanism
 # ==========================================
