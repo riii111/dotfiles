@@ -18,19 +18,15 @@ _format_and_notify() {
   local cmd="$1" add_pattern="$2" ok_msg="$3" ng_msg="$4" workdir="$5"
 
   (cd "$workdir" && eval "$cmd")
-  local status=$?
+  local exit_code=$?
 
-  if [[ $status -eq 0 ]]; then
+  if [[ $exit_code -eq 0 ]]; then
     if [[ -n "$add_pattern" ]]; then
       # shellcheck disable=SC2086
       git add $(echo "$staged_files" | grep -E "$add_pattern") || true
     fi
-    command -v osascript &>/dev/null && \
-      osascript -e "display notification \"${ok_msg}\" with title \"git pre-commit\""
     echo "✅ ${ok_msg}"
   else
-    command -v osascript &>/dev/null && \
-      osascript -e "display notification \"${ng_msg}\" with title \"git pre-commit\" sound name \"Basso\""
     echo "❌ ${ng_msg}"
     exit 1
   fi
