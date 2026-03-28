@@ -1,0 +1,78 @@
+#!/usr/bin/env python3
+"""Display local branch hierarchy as a tree, rooted at main/master."""
+
+import subprocess
+import sys
+
+
+def run(cmd):
+    return subprocess.check_output(cmd, stderr=subprocess.DEVNULL).decode().strip()
+
+
+def main():
+    # Detect default branch
+    for candidate in ("main", "master"):
+        try:
+            run(["git", "rev-parse", "--verify", candidate])
+            root = candidate
+            break
+        except subprocess.CalledProcessError:
+            continue
+    else:
+        print("error: neither main nor master branch found", file=sys.stderr)
+        sys.exit(1)
+
+    branches = run(["git", "branch", "--format=%(refname:short)"]).split("\n")
+    branches = [b for b in branches if b and b != root]
+
+    current = run(["git", "branch", "--show-current"])
+
+    info = {}
+    for b in branches:
+        short = run(["git", "rev-parse", "--short", b])
+        info[b] = short
+
+    # Build parent-child tree by finding closest ancestor branch
+    tree = {root: []}
+    parents = {}
+
+    for b in sorted(branches):
+        best_parent = root
+        best_dist = float("inf")
+        for cand in [root] + [x for x in branches if x != b]:
+            try:
+                mb = run(["git", "merge-base", cand, b])
+                tip = run(["git", "rev-parse", cand])
+                if mb == tip:
+                    dist = int(run(["git", "rev-list", "--count", f"{cand}..{b}"]))
+                    if dist < best_dist:
+                        best_dist = dist
+                        best_parent = cand
+            except subprocess.CalledProcessError:
+                continue
+        parents[b] = best_parent
+        tree.setdefault(best_parent, []).append(b)
+
+    def print_tree(node, prefix="", is_last=True, is_root=True):
+        if is_root:
+            line = f"  {node}"
+        else:
+            marker = "└── " if is_last else "├── "
+            star = " ★" if node == current else ""
+            line = f"  {prefix}{marker}{node} ({info[node]}){star}"
+        print(line)
+        children = tree.get(node, [])
+        for i, child in enumerate(children):
+            last = i == len(children) - 1
+            new_prefix = prefix + ("    " if is_last else "│   ")
+            if is_root:
+                new_prefix = ""
+            print_tree(child, new_prefix, last, False)
+
+    print()
+    print_tree(root)
+    print()
+
+
+if __name__ == "__main__":
+    main()
