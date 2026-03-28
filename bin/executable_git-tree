@@ -5,6 +5,12 @@ import subprocess
 import sys
 
 
+# ANSI color helpers
+GREEN = "\033[1;32m"
+CYAN = "\033[36m"
+RESET = "\033[0m"
+
+
 def run(cmd):
     return subprocess.check_output(cmd, stderr=subprocess.DEVNULL).decode().strip()
 
@@ -27,14 +33,25 @@ def main():
 
     current = run(["git", "branch", "--show-current"])
 
-    info = {}
-    for b in branches:
-        short = run(["git", "rev-parse", "--short", b])
-        info[b] = short
+    # Gather worktree info: branch -> worktree path
+    worktrees = {}
+    try:
+        wt_output = run(["git", "worktree", "list", "--porcelain"])
+        wt_path = None
+        for line in wt_output.split("\n"):
+            if line.startswith("worktree "):
+                wt_path = line[len("worktree "):]
+            elif line.startswith("branch refs/heads/"):
+                branch_name = line[len("branch refs/heads/"):]
+                if wt_path:
+                    worktrees[branch_name] = wt_path
+    except subprocess.CalledProcessError:
+        pass
 
     # Build parent-child tree by finding closest ancestor branch
     tree = {root: []}
     parents = {}
+    commit_counts = {}
 
     for b in sorted(branches):
         best_parent = root
@@ -51,15 +68,45 @@ def main():
             except subprocess.CalledProcessError:
                 continue
         parents[b] = best_parent
+        # Always compute commit count from chosen parent
+        try:
+            commit_counts[b] = int(
+                run(["git", "rev-list", "--count", f"{best_parent}..{b}"])
+            )
+        except subprocess.CalledProcessError:
+            commit_counts[b] = 0
         tree.setdefault(best_parent, []).append(b)
+
+    def colorize(text, color):
+        return f"{color}{text}{RESET}"
+
+    def format_node(node, is_root=False):
+        is_current = node == current
+        is_worktree = node in worktrees and not is_current
+
+        parts = [node]
+        if not is_root:
+            parts.append(f"(+{commit_counts[node]})")
+        if is_worktree:
+            wt_path = worktrees[node]
+            wt_name = wt_path.rsplit("/", 1)[-1]
+            parts.append(f"● {wt_name}")
+        if is_current:
+            parts.append("★")
+
+        label = " ".join(parts)
+        if is_current:
+            return colorize(label, GREEN)
+        elif is_worktree:
+            return colorize(label, CYAN)
+        return label
 
     def print_tree(node, prefix="", is_last=True, is_root=True):
         if is_root:
-            line = f"  {node}"
+            line = f"  {format_node(node, is_root=True)}"
         else:
             marker = "└── " if is_last else "├── "
-            star = " ★" if node == current else ""
-            line = f"  {prefix}{marker}{node} ({info[node]}){star}"
+            line = f"  {prefix}{marker}{format_node(node)}"
         print(line)
         children = tree.get(node, [])
         for i, child in enumerate(children):
