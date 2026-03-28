@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """Display local branch hierarchy as a tree, rooted at main/master."""
 
+import os
 import subprocess
 import sys
 
 
-# ANSI color helpers
-GREEN = "\033[1;32m"
-CYAN = "\033[36m"
-RESET = "\033[0m"
+# ANSI color helpers — disabled when piped or NO_COLOR is set
+_use_color = sys.stdout.isatty() and "NO_COLOR" not in os.environ
+GREEN = "\033[1;32m" if _use_color else ""
+CYAN = "\033[36m" if _use_color else ""
+RESET = "\033[0m" if _use_color else ""
 
 
 def run(cmd):
