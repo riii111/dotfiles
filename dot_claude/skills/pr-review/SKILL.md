@@ -133,7 +133,9 @@ subagentを使って並列レビューを行う。
 
 #### 3-2. subagent起動
 
-各subagentを **並列に** 起動する。各subagentは `claude --print` で実行し、結果をstdoutで受け取る。
+各subagentを **並列に** 起動する。**Agent ツール** (`run_in_background: true`) を使い、各agentのプロンプト内でworktreeの絶対パスを明示すること。
+
+> **注意**: `claude --print --cwd` は存在しない。Bash経由の `claude --print` もstderrが消失しやすく失敗時のデバッグが困難なため、Agent ツールを使うこと。
 
 各subagentに渡す情報:
 1. 担当セクションの内容（review_criteria.md から該当部分を抽出）
@@ -141,12 +143,17 @@ subagentを使って並列レビューを行う。
 3. PRのコンテキスト情報（タイトル、説明、ベースブランチ、ユーザー提供の追加コンテキスト）
 4. 外部ツールの結果（Phase 2の結果がある場合。重複指摘を避けるための参考情報）
 5. 出力フォーマットの指示（下記参照）
+6. **worktreeの絶対パス**（「すべてのファイル読み取りはこのパスを使え」と明示）
 
-subagent起動コマンドの例:
+subagent起動の例（Agent ツール使用）:
 
-```bash
-claude --print \
-  -p "あなたはPRレビューの担当者です。
+```
+Agent(
+  description: "Review: [担当観点]",
+  run_in_background: true,
+  prompt: """
+あなたはPRレビューの担当者です。worktreeは ${WORKTREE_DIR} にあります。
+すべてのファイル読み取りはこのパスを使ってください。
 
 ## あなたの担当観点
 ${ASSIGNED_SECTIONS}
@@ -160,6 +167,9 @@ ${PR_CONTEXT}
 ## 外部ツール結果（参考・重複指摘は避けること）
 ${EXTERNAL_RESULTS}
 
+## 調査対象ファイル（worktree上のパス）
+${CHANGED_FILES}
+
 ## 指示
 1. worktree上のコードを実際に読み、PRの変更内容を調査せよ
 2. 担当観点に基づいて問題点を洗い出せ
@@ -167,7 +177,7 @@ ${EXTERNAL_RESULTS}
 4. 以下のフォーマットで各指摘を出力せよ。調査した内容に基づき、根拠を手厚く書くこと
 
 ### [severity番号]. [指摘タイトル] [[severity] / [観点カテゴリ]]
-\`ファイルパス:L行番号(-L終了行)\`
+`ファイルパス:L行番号(-L終了行)`
 
 指摘の概要（1-2文）
 
@@ -186,8 +196,8 @@ severityは以下の3段階:
 - Nit: 軽微な改善提案、スタイル、命名
 
 指摘がなければ「担当観点において問題は検出されませんでした」と出力。
-" \
-  --cwd "$WORKTREE_DIR"
+"""
+)
 ```
 
 重要: 各subagentは必ずworktree上のコードを実際に読んで調査すること。

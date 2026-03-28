@@ -18,7 +18,8 @@ REPO_NAME="$(basename "$REPO_ROOT")"
 PR_BRANCH="$(gh pr view "$PR_NUMBER" --json headRefName --jq '.headRefName')"
 BASE_BRANCH="$(gh pr view "$PR_NUMBER" --json baseRefName --jq '.baseRefName')"
 
-WORKTREE_DIR="${REPO_ROOT}/../${REPO_NAME}-pr-${PR_NUMBER}"
+# Normalize to absolute path (avoid ../ which causes agent path-resolution mistakes)
+WORKTREE_DIR="$(cd "${REPO_ROOT}/.." && pwd)/${REPO_NAME}-pr-${PR_NUMBER}"
 REVIEW_DIR="${REPO_ROOT}/reviews/$(echo "$PR_BRANCH" | tr '/' '-')"
 
 # Worktree作成（既存なら再利用）
