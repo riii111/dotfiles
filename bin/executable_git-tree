@@ -4,6 +4,7 @@
 import os
 import subprocess
 import sys
+from functools import lru_cache
 
 
 # ANSI color helpers — disabled when piped or NO_COLOR is set
@@ -13,8 +14,55 @@ CYAN = "\033[36m" if _use_color else ""
 RESET = "\033[0m" if _use_color else ""
 
 
+@lru_cache(maxsize=None)
+def _run_cached(cmd):
+    return (
+        subprocess.check_output(list(cmd), stderr=subprocess.DEVNULL).decode().strip()
+    )
+
+
+@lru_cache(maxsize=None)
+def _check_cached(cmd):
+    return (
+        subprocess.run(
+            list(cmd),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        ).returncode
+        == 0
+    )
+
+
 def run(cmd):
-    return subprocess.check_output(cmd, stderr=subprocess.DEVNULL).decode().strip()
+    return _run_cached(tuple(cmd))
+
+
+def try_run(cmd):
+    try:
+        return run(cmd)
+    except subprocess.CalledProcessError:
+        return None
+
+
+def count_commits(start, end, first_parent=False):
+    cmd = ["git", "rev-list", "--count"]
+    if first_parent:
+        cmd.append("--first-parent")
+    cmd.append(f"{start}..{end}")
+    output = try_run(cmd)
+    return int(output) if output is not None else None
+
+
+def is_ancestor(ancestor, descendant):
+    return _check_cached(("git", "merge-base", "--is-ancestor", ancestor, descendant))
+
+
+def branch_birth_time(branch):
+    output = try_run(["git", "reflog", "show", "--format=%ct", branch])
+    if not output:
+        return None
+    return int(output.splitlines()[-1])
 
 
 def main():
@@ -34,6 +82,8 @@ def main():
     branches = [b for b in branches if b and b != root]
 
     current = run(["git", "branch", "--show-current"])
+    birth_times = {branch: branch_birth_time(branch) for branch in [root] + branches}
+    root_distances = {branch: count_commits(root, branch) or 0 for branch in branches}
 
     # Gather worktree info: branch -> worktree path
     worktrees = {}
@@ -42,42 +92,92 @@ def main():
         wt_path = None
         for line in wt_output.split("\n"):
             if line.startswith("worktree "):
-                wt_path = line[len("worktree "):]
+                wt_path = line[len("worktree ") :]
             elif line.startswith("branch refs/heads/"):
-                branch_name = line[len("branch refs/heads/"):]
+                branch_name = line[len("branch refs/heads/") :]
                 if wt_path:
                     worktrees[branch_name] = wt_path
     except subprocess.CalledProcessError:
         pass
 
-    # Build parent-child tree by finding closest ancestor branch
+    def parent_candidate(candidate, branch):
+        branch_point = try_run(["git", "merge-base", "--fork-point", candidate, branch])
+        mode = "fork-point"
+
+        if branch_point is None:
+            tip = try_run(["git", "rev-parse", candidate])
+            merge_base = try_run(["git", "merge-base", candidate, branch])
+            if tip is None or merge_base != tip:
+                return None
+            branch_point = tip
+            mode = "ancestor-tip"
+
+        distance = count_commits(branch_point, branch)
+        if distance is None or distance <= 0:
+            return None
+
+        first_parent_distance = count_commits(branch_point, branch, first_parent=True)
+        if first_parent_distance is None:
+            return None
+
+        candidate_distance = count_commits(branch_point, candidate, first_parent=True)
+        if candidate_distance is None:
+            return None
+
+        branch_depth = count_commits(root, branch_point) or 0
+        return {
+            "mode": mode,
+            "distance": distance,
+            "first_parent_distance": first_parent_distance,
+            "candidate_distance": candidate_distance,
+            "branch_depth": branch_depth,
+        }
+
+    # Build parent-child tree by finding the most likely branch point
     tree = {root: []}
     parents = {}
     commit_counts = {}
+    mode_rank = {"fork-point": 0, "ancestor-tip": 1}
+    ordered_branches = sorted(
+        branches,
+        key=lambda branch: (
+            birth_times[branch] is None,
+            birth_times[branch] or float("inf"),
+            root_distances[branch],
+            branch,
+        ),
+    )
+    placed_branches = []
 
-    for b in sorted(branches):
-        best_parent = root
-        best_dist = float("inf")
-        for cand in [root] + [x for x in branches if x != b]:
-            try:
-                mb = run(["git", "merge-base", cand, b])
-                tip = run(["git", "rev-parse", cand])
-                if mb == tip:
-                    dist = int(run(["git", "rev-list", "--count", f"{cand}..{b}"]))
-                    if dist < best_dist:
-                        best_dist = dist
-                        best_parent = cand
-            except subprocess.CalledProcessError:
+    for b in ordered_branches:
+        candidates = []
+        for cand in [root] + placed_branches:
+            if is_ancestor(b, cand):
                 continue
-        parents[b] = best_parent
-        # Always compute commit count from chosen parent
-        try:
-            commit_counts[b] = int(
-                run(["git", "rev-list", "--count", f"{best_parent}..{b}"])
+            candidate = parent_candidate(cand, b)
+            if candidate is not None:
+                candidates.append((cand, candidate))
+
+        if candidates:
+            best_parent, best = min(
+                candidates,
+                key=lambda item: (
+                    mode_rank[item[1]["mode"]],
+                    item[1]["first_parent_distance"],
+                    item[1]["candidate_distance"],
+                    item[1]["distance"],
+                    -item[1]["branch_depth"],
+                    item[0],
+                ),
             )
-        except subprocess.CalledProcessError:
-            commit_counts[b] = 0
+            commit_counts[b] = best["distance"]
+        else:
+            best_parent = root
+            commit_counts[b] = count_commits(root, b) or 0
+
+        parents[b] = best_parent
         tree.setdefault(best_parent, []).append(b)
+        placed_branches.append(b)
 
     def colorize(text, color):
         return f"{color}{text}{RESET}"
