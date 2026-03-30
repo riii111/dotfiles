@@ -236,7 +236,7 @@ local function setup_keymaps()
 						else
 							base = choice
 						end
-						local diff_range = "HEAD.." .. base
+						local diff_range = base .. "..HEAD"
 						local diff_check = vim.fn.system({ "git", "diff", "--quiet", "--exit-code", diff_range })
 						if vim.v.shell_error == 0 then
 							vim.notify("No diff from " .. base, vim.log.levels.INFO)
