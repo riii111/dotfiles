@@ -1,0 +1,95 @@
+{
+  "$schema": "https://opencode.ai/opencode.schema.json",
+  "instructions": ["~/.config/opencode/AGENTS.md"],
+  "provider": {
+    "openai": {
+      "models": {
+        "gpt-5.2-codex": {
+          "options": {
+            "reasoningEffort": "high",
+            "textVerbosity": "medium",
+            "reasoningSummary": "auto"
+          },
+          "variants": {
+            "fast": { "reasoningEffort": "low" },
+            "deep": { "reasoningEffort": "high" }
+          }
+        }
+      }
+    }
+  },
+  "permission": {
+    "read": {
+      "*": "allow",
+      "*.env": "ask",
+      "*.env.*": "allow",
+      ".aws/*": "deny",
+      ".ssh/*": "deny"
+    },
+    "edit": {
+      "*": "ask",
+      ".aws/*": "deny",
+      ".ssh/*": "deny"
+    },
+    "glob": "allow",
+    "grep": "allow",
+    "bash": {
+      "*": "ask",
+      "cargo *": "allow",
+      "go *": "allow",
+      "golangci-lint *": "allow",
+      "goimports *": "allow",
+      "npm *": "allow",
+      "yarn *": "allow",
+      "bun *": "allow",
+      "git status": "allow",
+      "git status *": "allow",
+      "git pull *": "allow",
+      "git add *": "allow",
+      "git commit *": "allow",
+      "git log *": "allow",
+      "git show *": "allow",
+      "git diff *": "allow",
+      "gh auth *": "allow",
+      "gh pr view *": "allow",
+      "gh pr list *": "allow",
+      "gh pr checkout *": "allow",
+      "gh pr checks *": "allow",
+      "gh pr diff *": "allow",
+      "gh pr status *": "allow",
+      "gh issue view *": "allow",
+      "gh issue list *": "allow",
+      "gh issue status *": "allow",
+      "gh repo view *": "allow",
+      "gh run list *": "allow",
+      "gh run view *": "allow",
+      "gh run watch *": "allow",
+      "gh workflow list *": "allow",
+      "gh workflow view *": "allow",
+      "gh release list *": "allow",
+      "gh release view *": "allow",
+      "rg *": "allow",
+      "fd *": "allow",
+      "bat *": "allow",
+      "eza *": "allow",
+      "ls *": "allow",
+      "head *": "allow",
+      "tail *": "allow",
+      "make *": "allow",
+      "mise *": "allow",
+      "sudo *": "deny",
+      "rm *": "ask"
+    },
+    "webfetch": "allow",
+    "websearch": "allow",
+    "task": "allow",
+    "skill": "allow"
+  },
+  "mcp": {
+    "context7": {
+      "type": "local",
+      "command": ["npx", "-y", "@upstash/context7-mcp"],
+      "enabled": true
+    }
+  }
+}
