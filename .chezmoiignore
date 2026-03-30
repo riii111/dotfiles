@@ -16,6 +16,10 @@ LICENSE
 .claude/skills/deploy-preflight
 {{ end }}
 
+# Build artifacts (auto-built by statusline-command.sh)
+.claude/statusline/statusline-go
+.claude/statusline/.src-hash
+
 # Auto-generated files
 .config/karabiner/automatic_backups
 .config/karabiner/assets
