@@ -96,7 +96,7 @@ vim.api.nvim_create_autocmd({ "FileChangedShellPost" }, {
 
 -- Fix LSP diagnostics UI not updating after publishDiagnostics (Neovim issue #30385)
 vim.lsp.handlers["textDocument/publishDiagnostics"] = function(err, result, ctx, config)
-  require("vim.lsp.diagnostic").on_publish_diagnostics(err, result, ctx, config)
+  vim.lsp.diagnostic.on_publish_diagnostics(err, result, ctx, config)
   vim.schedule(function()
     vim.diagnostic.show()
   end)
