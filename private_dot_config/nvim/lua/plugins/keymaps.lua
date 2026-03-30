@@ -236,11 +236,21 @@ local function setup_keymaps()
 						else
 							base = choice
 						end
+						local diff_range = "HEAD.." .. base
+						local diff_check = vim.fn.system({ "git", "diff", "--quiet", "--exit-code", diff_range })
 						if vim.v.shell_error == 0 then
 							vim.notify("No diff from " .. base, vim.log.levels.INFO)
 							return
 						end
-						local cmd = "git diff " .. base .. "...HEAD | difit"
+						if vim.v.shell_error ~= 1 then
+							local msg = vim.trim(diff_check)
+							if msg == "" then
+								msg = "Failed to diff against " .. base
+							end
+							vim.notify(msg, vim.log.levels.ERROR)
+							return
+						end
+						local cmd = "git diff " .. vim.fn.shellescape(diff_range) .. " | difit"
 						vim.fn.jobstart(cmd, { cwd = vim.fn.getcwd(), detach = true })
 					end)
 				end,
