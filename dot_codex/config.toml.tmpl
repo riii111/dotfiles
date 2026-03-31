@@ -72,4 +72,6 @@ trust_level = "trusted"
 {{ else }}
 [projects."{{ .chezmoi.homeDir }}/ghq/github.com/{{ .gh_work_org }}/{{ .work_project }}"]
 trust_level = "trusted"
+[projects."{{ .chezmoi.homeDir }}/ghq/github.com/{{ .gh_work_org }}/{{ .work_project }}-infrastructure"]
+trust_level = "trusted"
 {{ end }}

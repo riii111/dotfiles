@@ -67,6 +67,7 @@ prefix_rule(pattern=["git", "ls-files"], decision="allow", justification="List t
 
 # --- Git (write operations) ---
 prefix_rule(pattern=["git", "add"], decision="allow", justification="Stage changes")
+prefix_rule(pattern=["git", "apply"], decision="allow", justification="Apply a patch to the working tree")
 prefix_rule(pattern=["git", "commit"], decision="allow", justification="Commit changes")
 prefix_rule(pattern=["git", "cherry-pick"], decision="allow", justification="Apply a specific commit onto the current branch")
 prefix_rule(pattern=["git", "switch"], decision="allow", justification="Switch branches")
