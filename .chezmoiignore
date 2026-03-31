@@ -14,6 +14,7 @@ LICENSE
 {{ if ne .type "work" }}
 .gitconfig-riii111
 .claude/skills/deploy-preflight
+.config/mux/c1
 {{ end }}
 
 # Build artifacts (auto-built by statusline-command.sh)
