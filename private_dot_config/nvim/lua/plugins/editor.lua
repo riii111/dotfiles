@@ -58,6 +58,7 @@ return {
 	{
 		"nvim-treesitter/nvim-treesitter-textobjects",
 		branch = "main",
+		enabled = false,
 		event = "VeryLazy",
 		dependencies = { "nvim-treesitter/nvim-treesitter" },
 	},
