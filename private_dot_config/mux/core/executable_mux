@@ -27,7 +27,7 @@ ${BOLD}Commands:${NC}
     bye                 Graceful shutdown (stop all → kill session)
     re                  bye + hello (restart entire session)
     attach              Attach to existing session
-    detach              Detach from session (Ctrl+b d)
+    detach              Detach from session (Ctrl+q d)
     kill                Kill session immediately
     status              Show status of all services
     up [--all|docker|service|group]      Start service(s)
@@ -54,10 +54,10 @@ ${BOLD}Examples:${NC}
     ${project_name} exec local-db --shell  # Enter with bash
 
 ${BOLD}Keybindings (in tmux session):${NC}
-    Ctrl+b f           Follow current window's log in nvim
-    Ctrl+b m           Toggle dashboard mode (all/bad)
-    Ctrl+b w           List windows
-    Ctrl+b d           Detach from session
+    Ctrl+q f           Follow current window's log in nvim
+    Ctrl+q m           Toggle dashboard mode (all/bad)
+    Ctrl+q w           List windows
+    Ctrl+q d           Detach from session
 
 EOF
 }
@@ -79,7 +79,7 @@ session_name: ${SESSION_NAME}
 start_directory: ${PROJECT_ROOT}
 
 options:
-  status-left: "[${PROJECT_NAME}] Ctrl+b w:list | f:follow | ':number | z:zoom | [:scroll | d:detach "
+  status-left: "[${PROJECT_NAME}] Ctrl+q w:list | f:follow | ':number | z:zoom | [:scroll | d:detach "
   status-left-length: 80
   status-right: ""
   remain-on-exit: on
@@ -280,7 +280,7 @@ start_session() {
         start_all "$start_profile"
         echo -e "Attaching to session..."
         sleep 1
-        tmux attach-session -t "$SESSION_NAME"
+        attach_or_switch_session
         return
     fi
 
@@ -299,11 +299,11 @@ start_session() {
     # Hide window list by overriding status-format[0]
     tmux set-option -t "$SESSION_NAME" status-format[0] '#[align=left]#{T;=/#{status-left-length}:status-left}#[align=right]#{T;=/#{status-right-length}:status-right}'
 
-    # Setup dashboard mode toggle (Ctrl+b m)
+    # Setup dashboard mode toggle (Ctrl+q m)
     tmux set-option -t "$SESSION_NAME" @mux_dash_mode all
     tmux bind-key -T prefix m run-shell 'mode=$(tmux show-option -qv @mux_dash_mode); if [ "$mode" = "all" ]; then tmux set-option @mux_dash_mode bad; else tmux set-option @mux_dash_mode all; fi'
 
-    # Follow current window's log (Ctrl+b f)
+    # Follow current window's log (Ctrl+q f)
     tmux bind-key -T prefix f run-shell "${PROJECT_NAME} follow \"#{window_name}\""
 
     # Setup logging
@@ -316,7 +316,7 @@ start_session() {
     echo -e "${GREEN}Session ready!${NC}"
     echo -e "Attaching to session..."
     sleep 1
-    tmux attach-session -t "$SESSION_NAME"
+    attach_or_switch_session
 }
 
 #######################################
@@ -423,7 +423,7 @@ main() {
             ;;
         attach)
             if session_exists; then
-                tmux attach-session -t "$SESSION_NAME"
+                attach_or_switch_session
             else
                 echo -e "${RED}Session not running${NC}"
                 exit 1

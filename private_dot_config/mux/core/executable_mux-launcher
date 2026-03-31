@@ -20,7 +20,7 @@ display_services() {
     printf "${BOLD}${CYAN}║%*s%s%*s║${NC}\n" $padding "" "$title" $((box_width - padding - ${#title})) ""
     echo -e "${BOLD}${CYAN}╚══════════════════════════════════════════════╝${NC}"
     echo
-    echo -e "${DIM}Navigate: ${NC}${BOLD}Ctrl+b w${NC}${DIM} (list) ${NC}${BOLD}Ctrl+b '${NC}${DIM} (number) ${NC}${BOLD}Ctrl+b m${NC}${DIM} (toggle)${NC}"
+    echo -e "${DIM}Navigate: ${NC}${BOLD}Ctrl+q w${NC}${DIM} (list) ${NC}${BOLD}Ctrl+q '${NC}${DIM} (number) ${NC}${BOLD}Ctrl+q m${NC}${DIM} (toggle)${NC}"
     echo
 
     # Docker info (if enabled)

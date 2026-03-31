@@ -160,7 +160,7 @@ render() {
     output+="${YELLOW}WARN:${warn_count}${NC} "
     output+="${RED}DEAD:${dead_count}${NC}  "
     output+="${DIM}[${mode}]${NC}  "
-    output+="${DIM}Ctrl+b m: toggle${NC}"
+    output+="${DIM}Ctrl+q m: toggle${NC}"
     output+=$'\n\n'
 
     # Docker status (displayed first if enabled)

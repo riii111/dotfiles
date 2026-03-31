@@ -265,6 +265,14 @@ session_exists() {
     tmux has-session -t "$SESSION_NAME" 2>/dev/null
 }
 
+attach_or_switch_session() {
+    if [[ -n "${TMUX:-}" ]]; then
+        tmux switch-client -t "$SESSION_NAME"
+    else
+        tmux attach-session -t "$SESSION_NAME"
+    fi
+}
+
 is_window_ready() {
     local window="$1"
     tmux list-panes -t "${SESSION_NAME}:${window}" &>/dev/null
@@ -810,7 +818,7 @@ show_status() {
 
     echo
     echo -e "${BOLD}Legend:${NC} ${GREEN}●${NC} running  ${RED}○${NC} stopped"
-    echo -e "${DIM}Navigate: Ctrl+b w (list) | Ctrl+b ' (enter number)${NC}"
+    echo -e "${DIM}Navigate: Ctrl+q w (list) | Ctrl+q ' (enter number)${NC}"
 }
 
 list_services() {
@@ -845,9 +853,12 @@ focus_logs() {
         return 1
     fi
 
+    if [[ -n "${TMUX:-}" ]]; then
+        tmux switch-client -t "$SESSION_NAME"
+    fi
     tmux select-window -t "${SESSION_NAME}:${service}"
 
-    [[ -z "${TMUX:-}" ]] && tmux attach-session -t "$SESSION_NAME"
+    [[ -z "${TMUX:-}" ]] && attach_or_switch_session
 }
 
 follow_service() {
