@@ -30,9 +30,9 @@ ${BOLD}Commands:${NC}
     detach              Detach from session (Ctrl+b d)
     kill                Kill session immediately
     status              Show status of all services
-    start [--all|docker|service]   Start service(s)
-    stop [--all|docker|service]    Stop service(s)
-    restart <docker|service>       Restart service(s)
+    start [--all|docker|service|group]   Start service(s)
+    stop [--all|docker|service|group]    Stop service(s)
+    restart <docker|service|group>       Restart service(s)
     logs <service>      Focus on specific service window
     follow <service>    Follow service log in nvim (popup)
     list                List all available services
@@ -43,10 +43,12 @@ ${BOLD}Examples:${NC}
     ${project_name} hello --co-core # Start session + CO CORE + frontend + BFF
     ${project_name} bye             # Graceful shutdown
     ${project_name} attach          # Attach only (no start)
-    ${project_name} start studio-api # Start specific service
+    ${project_name} start co-core   # Start CO CORE services
+    ${project_name} stop co-core    # Stop CO CORE services
+    ${project_name} restart co-core # Restart CO CORE services
     ${project_name} restart docker  # Restart docker services
     ${project_name} status          # Show all status
-    ${project_name} logs studio-api # Focus on service window
+    ${project_name} logs app-api    # Focus on service window
     ${project_name} exec local-db   # Enter container (default cmd)
     ${project_name} exec local-db --shell  # Enter with bash
 
