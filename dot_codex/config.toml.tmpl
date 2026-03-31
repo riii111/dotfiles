@@ -35,7 +35,8 @@ fast_mode = true
 # Global Sandbox
 # =============================================================================
 [sandbox_workspace_write]
-network_access = false
+writable_roots = ["{{ .chezmoi.homeDir }}/.config/gcloud"]
+network_access = true
 exclude_slash_tmp = false
 exclude_tmpdir_env_var = false
 
@@ -79,17 +80,6 @@ model_provider = "openai"
 model_reasoning_effort = "medium"
 service_tier = "fast"
 web_search = "cached"
-approval_policy = { granular = {
-  sandbox_approval = true,
-  rules = true,
-  mcp_elicitations = false,
-  request_permissions = false,
-  skill_approval = false,
-} }
-
-[profiles.alert_check.sandbox_workspace_write]
-network_access = true
-writable_roots = ["{{ .chezmoi.homeDir }}/.config/gcloud"]
 
 # =============================================================================
 # MCP Servers

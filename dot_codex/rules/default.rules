@@ -115,6 +115,10 @@ prefix_rule(pattern=["gcloud", "run", "jobs", "list"], decision="allow", justifi
 prefix_rule(pattern=["gcloud", "run", "jobs", "describe"], decision="allow", justification="Describe Cloud Run job")
 prefix_rule(pattern=["gcloud", "run", "jobs", "executions", "describe"], decision="allow", justification="Describe Cloud Run job execution")
 prefix_rule(pattern=["gcloud", "logging", "read"], decision="allow", justification="Read Cloud Logging entries")
+prefix_rule(pattern=["gcloud", "auth", "list"], decision="allow", justification="List active gcloud credentials")
+prefix_rule(pattern=["gcloud", "auth", "print-access-token"], decision="allow", justification="Print access token for authenticated gcloud calls")
+prefix_rule(pattern=["gcloud", "config", "list"], decision="allow", justification="List gcloud config values")
+prefix_rule(pattern=["gcloud", "config", "configurations", "list"], decision="allow", justification="List gcloud configurations")
 
 # --- Other safe commands ---
 prefix_rule(pattern=["pe"], decision="allow", justification="Run prod-errors alert triage")
