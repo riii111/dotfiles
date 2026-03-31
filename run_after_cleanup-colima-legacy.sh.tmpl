@@ -1,0 +1,42 @@
+#!/bin/sh
+
+set -eu
+
+legacy_dir="{{ joinPath .chezmoi.homeDir ".colima" }}"
+xdg_dir="{{ joinPath .chezmoi.homeDir ".config" "colima" }}"
+backup_root="{{ joinPath .chezmoi.homeDir ".config" }}"
+
+if [ ! -e "$legacy_dir" ]; then
+  exit 0
+fi
+
+mkdir -p "$backup_root"
+
+if [ ! -e "$xdg_dir" ]; then
+  mv "$legacy_dir" "$xdg_dir"
+  exit 0
+fi
+
+has_extra_content=0
+if [ -d "$legacy_dir" ]; then
+  while IFS= read -r entry; do
+    case "$entry" in
+      _templates|_templates/default.yaml)
+        ;;
+      *)
+        has_extra_content=1
+        break
+        ;;
+    esac
+  done <<EOF
+$(find "$legacy_dir" -mindepth 1 -maxdepth 2 -print | sed "s#^$legacy_dir/##" | sort)
+EOF
+fi
+
+if [ "$has_extra_content" -eq 1 ]; then
+  backup_dir="$backup_root/colima-legacy-backup-$(date +%Y%m%d%H%M%S)"
+  mv "$legacy_dir" "$backup_dir"
+  exit 0
+fi
+
+rm -rf "$legacy_dir"

@@ -25,4 +25,7 @@ LICENSE
 .config/karabiner/assets
 
 # Machine-specific runtime data (not for sharing)
-.config/colima
+.config/colima/**
+!.config/colima/
+!.config/colima/_templates/
+!.config/colima/_templates/default.yaml
