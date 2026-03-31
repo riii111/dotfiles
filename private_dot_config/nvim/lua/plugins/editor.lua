@@ -4,9 +4,8 @@ return {
 		"nvim-treesitter/nvim-treesitter",
 		branch = "main",
 		build = ":TSUpdate",
-		event = { "BufReadPre", "BufNewFile" },
+		lazy = false,
 		opts = {
-			sync_install = false,
 			ensure_installed = {
 				"bash",
 				"c",
@@ -36,28 +35,31 @@ return {
 				"gosum",
 				"rust",
 			},
-			highlight = { enable = true },
-			indent = {
-				enable = true,
-				disable = { "rust" }, -- cannot correctly handle Rust macro calls
-			},
 		},
 		config = function(_, opts)
-			require("nvim-treesitter.configs").setup(opts)
+			local treesitter = require("nvim-treesitter")
+
+			treesitter.setup()
+
+			vim.treesitter.language.register("markdown", "octo")
+
+			vim.api.nvim_create_autocmd("FileType", {
+				callback = function(args)
+					local ok = pcall(vim.treesitter.start)
+					if ok and vim.bo[args.buf].filetype ~= "rust" then
+						vim.bo[args.buf].indentexpr = 'v:lua.require"nvim-treesitter".indentexpr()'
+					end
+				end,
+			})
 		end,
 	},
 
 	-- Treesitter textobjects
 	{
 		"nvim-treesitter/nvim-treesitter-textobjects",
+		branch = "main",
 		event = "VeryLazy",
-		enabled = true,
-		config = function()
-			if vim.g.lazy_load_treesitter then
-				local plugin = require("lazy.core.config").spec.plugins["nvim-treesitter"]
-				require("lazy.core.loader").load(plugin, { event = "VeryLazy" })
-			end
-		end,
+		dependencies = { "nvim-treesitter/nvim-treesitter" },
 	},
 
 	-- Auto pairs
@@ -191,7 +193,6 @@ return {
 		dependencies = { "nvim-treesitter/nvim-treesitter", "nvim-tree/nvim-web-devicons" },
 		ft = { "octo" },
 		config = function(_, opts)
-			vim.treesitter.language.register("markdown", "octo")
 			require("render-markdown").setup(opts)
 		end,
 		opts = {
