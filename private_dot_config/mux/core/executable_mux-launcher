@@ -56,6 +56,7 @@ display_services() {
     echo -e "${BOLD}Commands:${NC}"
     echo -e "  ${GREEN}${PROJECT_NAME} hello${NC}           Start all + attach"
     echo -e "  ${GREEN}${PROJECT_NAME} hello --core${NC}    Start CO CORE + frontend + BFF"
+    echo -e "  ${GREEN}${PROJECT_NAME} hello --docker${NC}  Start docker only"
     echo -e "  ${GREEN}${PROJECT_NAME} bye${NC}             Graceful shutdown"
     echo -e "  ${GREEN}${PROJECT_NAME} re${NC}              Restart session"
     echo -e "  ${GREEN}${PROJECT_NAME} status${NC}          Show all status"

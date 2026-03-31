@@ -23,7 +23,7 @@ ${BOLD}Usage:${NC}
     ${project_name} <command> [options]
 
 ${BOLD}Commands:${NC}
-    hello [--core]      Start session + services + attach
+    hello [--core|--docker] Start session + services + attach
     bye                 Graceful shutdown (stop all → kill session)
     re                  bye + hello (restart entire session)
     attach              Attach to existing session
@@ -41,6 +41,7 @@ ${BOLD}Commands:${NC}
 ${BOLD}Examples:${NC}
     ${project_name} hello           # Start session + all services
     ${project_name} hello --core    # Start session + CO CORE + frontend + BFF
+    ${project_name} hello --docker  # Start session + docker only
     ${project_name} bye             # Graceful shutdown
     ${project_name} attach          # Attach only (no start)
     ${project_name} up co-core      # Start CO CORE services
@@ -132,7 +133,9 @@ EOF
 start_all() {
     local start_profile="${1:-all}"
 
-    if [[ "$start_profile" == "co-core" ]]; then
+    if [[ "$start_profile" == "docker" ]]; then
+        echo -e "${BOLD}Starting services (profile: docker only)...${NC}"
+    elif [[ "$start_profile" == "co-core" ]]; then
         echo -e "${BOLD}Starting services (profile: CO CORE)...${NC}"
     else
         echo -e "${BOLD}Starting all services...${NC}"
@@ -152,6 +155,12 @@ start_all() {
             return 1
         fi
         echo
+    fi
+
+    if [[ "$start_profile" == "docker" ]]; then
+        echo -e "${GREEN}Docker started${NC}"
+        echo -e "Use '${BOLD}${PROJECT_NAME} status${NC}' to check status"
+        return 0
     fi
 
     # Get phases from config
@@ -387,9 +396,12 @@ main() {
                 --core)
                     start_profile="co-core"
                     ;;
+                --docker)
+                    start_profile="docker"
+                    ;;
                 *)
                     echo -e "${RED}Error: Unknown hello option: ${arg}${NC}"
-                    echo "Usage: ${PROJECT_NAME} hello [--core]"
+                    echo "Usage: ${PROJECT_NAME} hello [--core|--docker]"
                     exit 1
                     ;;
             esac
