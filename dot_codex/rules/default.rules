@@ -9,7 +9,7 @@
 # ALLOW: Safe read-only and build commands
 # -----------------------------------------------------------------------------
 
-# --- Cargo (Rust) ---
+# --- Rust ---
 prefix_rule(pattern=["cargo", "build"], decision="allow", justification="Rust build")
 prefix_rule(pattern=["cargo", "check"], decision="allow", justification="Rust type check")
 prefix_rule(pattern=["cargo", "clippy"], decision="allow", justification="Rust linter")
@@ -30,10 +30,13 @@ prefix_rule(pattern=["goimports"], decision="allow", justification="Go imports f
 # --- Node.js ---
 prefix_rule(pattern=["npm", "run"], decision="allow", justification="npm scripts")
 prefix_rule(pattern=["npm", "test"], decision="allow", justification="npm test")
-prefix_rule(pattern=["npm", "install"], decision="allow", justification="npm install")
-prefix_rule(pattern=["yarn"], decision="allow", justification="Yarn package manager")
-prefix_rule(pattern=["pnpm"], decision="allow", justification="pnpm package manager")
-prefix_rule(pattern=["bun"], decision="allow", justification="Bun runtime")
+
+# --- Terraform ---
+prefix_rule(pattern=["terraform", "fmt"], decision="allow", justification="Format Terraform files")
+prefix_rule(pattern=["terraform", "validate"], decision="allow", justification="Validate Terraform configuration")
+prefix_rule(pattern=["terraform", "show"], decision="allow", justification="Show Terraform state or plan")
+prefix_rule(pattern=["terraform", "output"], decision="allow", justification="Show Terraform outputs")
+prefix_rule(pattern=["terraform", "state", "list"], decision="allow", justification="List Terraform state resources")
 
 # --- Make ---
 prefix_rule(pattern=["make", "test-unit"], decision="allow", justification="Unit tests")
@@ -53,20 +56,18 @@ prefix_rule(pattern=["git", "tag"], decision="allow", justification="List/manage
 prefix_rule(pattern=["git", "remote"], decision="allow", justification="Manage remotes")
 prefix_rule(pattern=["git", "fetch"], decision="allow", justification="Fetch from remote")
 prefix_rule(pattern=["git", "cherry"], decision="allow", justification="Find commits not merged")
+prefix_rule(pattern=["git", "merge-tree"], decision="allow", justification="Inspect merge result without mutating history")
 prefix_rule(pattern=["git", "stash"], decision="allow", justification="Stash changes")
 prefix_rule(pattern=["git", "rev-parse"], decision="allow", justification="Parse git refs")
 prefix_rule(pattern=["git", "ls-files"], decision="allow", justification="List tracked files")
 prefix_rule(pattern=["git", "config"], decision="allow", justification="Show git config")
 
 # --- Git (write operations) ---
-prefix_rule(pattern=["git", "checkout"], decision="allow", justification="Switch branches/restore files")
-prefix_rule(pattern=["git", "switch"], decision="allow", justification="Switch branches")
 prefix_rule(pattern=["git", "add"], decision="allow", justification="Stage changes")
 prefix_rule(pattern=["git", "commit"], decision="allow", justification="Commit changes")
-prefix_rule(pattern=["git", "pull"], decision="allow", justification="Pull from remote")
-prefix_rule(pattern=["git", "push"], decision="allow", justification="Push to remote")
-prefix_rule(pattern=["git", "merge"], decision="allow", justification="Merge branches")
-prefix_rule(pattern=["git", "rebase"], decision="allow", justification="Rebase commits")
+prefix_rule(pattern=["git", "cherry-pick"], decision="allow", justification="Apply a specific commit onto the current branch")
+prefix_rule(pattern=["git", "switch"], decision="allow", justification="Switch branches")
+prefix_rule(pattern=["git", "pull"], decision="allow", justification="Update local branch from remote")
 
 # --- File search/view tools ---
 prefix_rule(pattern=["rg"], decision="allow", justification="ripgrep search")
@@ -105,6 +106,13 @@ prefix_rule(pattern=["gh", "release", "list"], decision="allow", justification="
 prefix_rule(pattern=["gh", "release", "view"], decision="allow", justification="View release")
 prefix_rule(pattern=["gh", "api"], decision="allow", justification="GitHub API calls")
 
+# --- gCloud CLI (read operations) ---
+prefix_rule(pattern=["gcloud", "storage", "ls"], decision="allow", justification="List GCS buckets or objects")
+prefix_rule(pattern=["gcloud", "run", "jobs", "list"], decision="allow", justification="List Cloud Run jobs")
+prefix_rule(pattern=["gcloud", "run", "jobs", "describe"], decision="allow", justification="Describe Cloud Run job")
+prefix_rule(pattern=["gcloud", "run", "jobs", "executions", "describe"], decision="allow", justification="Describe Cloud Run job execution")
+prefix_rule(pattern=["gcloud", "logging", "read"], decision="allow", justification="Read Cloud Logging entries")
+
 # --- Other safe commands ---
 prefix_rule(pattern=["echo"], decision="allow", justification="Print text")
 prefix_rule(pattern=["date"], decision="allow", justification="Show date/time")
@@ -118,7 +126,6 @@ prefix_rule(pattern=["df"], decision="allow", justification="Disk usage")
 prefix_rule(pattern=["du"], decision="allow", justification="Directory usage")
 prefix_rule(pattern=["ps"], decision="allow", justification="Process list")
 prefix_rule(pattern=["top", "-l", "1"], decision="allow", justification="One-shot top")
-prefix_rule(pattern=["curl", "-s"], decision="allow", justification="Silent HTTP request")
 prefix_rule(pattern=["jq"], decision="allow", justification="JSON processor")
 prefix_rule(pattern=["yq"], decision="allow", justification="YAML processor")
 prefix_rule(pattern=["sort"], decision="allow", justification="Sort lines")
@@ -145,17 +152,39 @@ prefix_rule(pattern=["mv"], decision="allow", justification="Move files")
 # PROMPT: Potentially destructive commands (require confirmation)
 # -----------------------------------------------------------------------------
 
+prefix_rule(pattern=["git", "checkout"], decision="prompt", justification="May rewrite working tree or index")
+prefix_rule(pattern=["git", "push"], decision="prompt", justification="Updates remote state")
+prefix_rule(pattern=["git", "merge"], decision="prompt", justification="Changes history state")
+prefix_rule(pattern=["git", "rebase"], decision="prompt", justification="Rewrites history state")
+prefix_rule(pattern=["npm", "install"], decision="prompt", justification="Downloads packages and may run install scripts")
+prefix_rule(pattern=["yarn"], decision="prompt", justification="Package manager commands require confirmation")
+prefix_rule(pattern=["pnpm"], decision="prompt", justification="Package manager commands require confirmation")
+prefix_rule(pattern=["bun"], decision="prompt", justification="Package manager commands require confirmation")
+prefix_rule(pattern=["curl"], decision="prompt", justification="Network access requires confirmation")
+prefix_rule(pattern=["terraform", "init"], decision="prompt", justification="Downloads providers and configures backend")
+prefix_rule(pattern=["terraform", "plan"], decision="prompt", justification="May refresh remote state and access provider APIs")
+prefix_rule(pattern=["gcloud", "storage", "cat"], decision="prompt", justification="May read sensitive object contents")
+prefix_rule(pattern=["gcloud", "secrets", "list"], decision="prompt", justification="May expose sensitive secret metadata")
+prefix_rule(pattern=["gcloud", "secrets", "versions", "access"], decision="prompt", justification="Reads secret values")
+prefix_rule(pattern=["tmux", "send-keys", "-t"], decision="prompt", justification="Injects input into an existing terminal session")
 prefix_rule(pattern=["rm"], decision="prompt", justification="Remove files - confirm before execution")
 prefix_rule(pattern=["rmdir"], decision="prompt", justification="Remove directory - confirm before execution")
+prefix_rule(pattern=["chown"], decision="prompt", justification="Change ownership requires confirmation")
 
 # -----------------------------------------------------------------------------
 # FORBIDDEN: Dangerous commands
 # -----------------------------------------------------------------------------
 
+prefix_rule(pattern=["git", "push", "--force"], decision="forbidden", justification="Force push is forbidden")
+prefix_rule(pattern=["git", "push", "-f"], decision="forbidden", justification="Force push is forbidden")
+prefix_rule(pattern=["git", "push", "--force-with-lease"], decision="prompt", justification="Force push with lease updates remote history")
+prefix_rule(pattern=["git", "reset", "--hard"], decision="forbidden", justification="Hard reset is forbidden")
+prefix_rule(pattern=["terraform", "apply"], decision="forbidden", justification="Terraform apply is forbidden")
+prefix_rule(pattern=["terraform", "destroy"], decision="forbidden", justification="Terraform destroy is forbidden")
 prefix_rule(pattern=["sudo"], decision="forbidden", justification="Privilege escalation is forbidden")
 prefix_rule(pattern=["su"], decision="forbidden", justification="User switching is forbidden")
 prefix_rule(pattern=["chmod", "777"], decision="forbidden", justification="World-writable permissions forbidden")
-prefix_rule(pattern=["chown"], decision="prompt", justification="Change ownership requires confirmation")
+
+# --- tmux helpers ---
 prefix_rule(pattern=["tmux", "list-panes", "-a", "-F", "#{session_name}:#{window_index}.#{pane_index} #{window_name} #{pane_title}"], decision="allow")
 prefix_rule(pattern=["tmux", "list-sessions"], decision="allow")
-prefix_rule(pattern=["tmux", "send-keys", "-t"], decision="allow")
