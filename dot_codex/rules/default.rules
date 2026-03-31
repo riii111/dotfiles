@@ -117,6 +117,7 @@ prefix_rule(pattern=["gcloud", "run", "jobs", "executions", "describe"], decisio
 prefix_rule(pattern=["gcloud", "logging", "read"], decision="allow", justification="Read Cloud Logging entries")
 
 # --- Other safe commands ---
+prefix_rule(pattern=["pe"], decision="allow", justification="Run prod-errors alert triage")
 prefix_rule(pattern=["echo"], decision="allow", justification="Print text")
 prefix_rule(pattern=["date"], decision="allow", justification="Show date/time")
 prefix_rule(pattern=["env"], decision="allow", justification="Show environment")

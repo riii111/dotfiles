@@ -1,3 +1,6 @@
+# =============================================================================
+# Global Defaults
+# =============================================================================
 model = "gpt-5.4-mini"
 model_provider = "openai"
 model_reasoning_effort = "medium"
@@ -7,7 +10,11 @@ web_search = "cached"
 personality = "pragmatic"
 service_tier = "fast"
 project_doc_max_bytes = 65536
+profile = "default"
 
+# =============================================================================
+# Global Approval Policy
+# =============================================================================
 approval_policy = { granular = {
   sandbox_approval = true,
   rules = true,
@@ -18,18 +25,30 @@ approval_policy = { granular = {
 
 sandbox_mode = "workspace-write"
 
+# =============================================================================
+# Global Features
+# =============================================================================
 [features]
 fast_mode = true
 
+# =============================================================================
+# Global Sandbox
+# =============================================================================
 [sandbox_workspace_write]
 network_access = false
 exclude_slash_tmp = false
 exclude_tmpdir_env_var = false
 
+# =============================================================================
+# Shell Environment
+# =============================================================================
 [shell_environment_policy]
 inherit = "core"
 experimental_use_profile = true
 
+# =============================================================================
+# Safe Web Network
+# =============================================================================
 [permissions.safe_web.network]
 enabled = true
 mode = "limited"
@@ -44,13 +63,37 @@ allowed_domains = [
 ]
 denied_domains = []
 
-[profiles.implement]
-model = "gpt-5.4-mini"
+# =============================================================================
+# Profiles
+# =============================================================================
+[profiles.default]
+model = "gpt-5.4"
+model_provider = "openai"
+model_reasoning_effort = "high"
+service_tier = "fast"
+web_search = "cached"
+
+[profiles.alert_check]
+model = "gpt-5.4"
 model_provider = "openai"
 model_reasoning_effort = "medium"
 service_tier = "fast"
 web_search = "cached"
+approval_policy = { granular = {
+  sandbox_approval = true,
+  rules = true,
+  mcp_elicitations = false,
+  request_permissions = false,
+  skill_approval = false,
+} }
 
+[profiles.alert_check.sandbox_workspace_write]
+network_access = true
+writable_roots = ["{{ .chezmoi.homeDir }}/.config/gcloud"]
+
+# =============================================================================
+# MCP Servers
+# =============================================================================
 [mcp_servers.context7]
 command = "npx"
 args = ["-y", "@upstash/context7-mcp"]
@@ -58,6 +101,9 @@ args = ["-y", "@upstash/context7-mcp"]
 [mcp_servers.notion]
 url = "https://mcp.notion.com/mcp"
 
+# =============================================================================
+# Trusted Projects
+# =============================================================================
 [projects."{{ .chezmoi.homeDir }}/ghq/github.com/riii111/dotfiles"]
 trust_level = "trusted"
 

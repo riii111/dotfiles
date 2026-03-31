@@ -31,4 +31,3 @@ description: Production alert triage using `pe`, `gh`, and `gcloud`.
 - 根拠
 - 対応 PR / Issue
 - 必要なアクション
-
