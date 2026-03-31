@@ -1,0 +1,128 @@
+session_name: c1
+start_directory: /Users/{{ .chezmoi.username }}/ghq/github.com/{{ .gh_work_org }}/{{ .work_project }}
+
+options:
+  status-left: "[c1] Ctrl+b w:list | f:follow | ':number | z:zoom | [:scroll | d:detach "
+  status-left-length: 80
+  status-right: ""
+  remain-on-exit: on
+  automatic-rename: off
+
+windows:
+  - window_name: dashboard
+    layout: main-vertical
+    options:
+      main-pane-width: 50%
+    panes:
+      - shell_command:
+          - /Users/{{ .chezmoi.username }}/.config/mux/core/mux-launcher c1
+      - shell_command:
+          - /Users/{{ .chezmoi.username }}/.config/mux/core/mux-monitor c1
+
+  - window_name: app-api
+    start_directory: /Users/{{ .chezmoi.username }}/ghq/github.com/{{ .gh_work_org }}/{{ .work_project }}/backend
+    panes:
+      - shell_command:
+          - echo "=== app-api ===" && echo "Waiting for start command..."
+
+  - window_name: tasks-api
+    start_directory: /Users/{{ .chezmoi.username }}/ghq/github.com/{{ .gh_work_org }}/{{ .work_project }}/backend
+    panes:
+      - shell_command:
+          - echo "=== tasks-api ===" && echo "Waiting for start command..."
+
+  - window_name: mail-api
+    start_directory: /Users/{{ .chezmoi.username }}/ghq/github.com/{{ .gh_work_org }}/{{ .work_project }}/backend
+    panes:
+      - shell_command:
+          - echo "=== mail-api ===" && echo "Waiting for start command..."
+
+  - window_name: search-api
+    start_directory: /Users/{{ .chezmoi.username }}/ghq/github.com/{{ .gh_work_org }}/{{ .work_project }}/backend
+    panes:
+      - shell_command:
+          - echo "=== search-api ===" && echo "Waiting for start command..."
+
+  - window_name: private-file-proxy
+    start_directory: /Users/{{ .chezmoi.username }}/ghq/github.com/{{ .gh_work_org }}/{{ .work_project }}/backend
+    panes:
+      - shell_command:
+          - echo "=== private-file-proxy ===" && echo "Waiting for start command..."
+
+  - window_name: center-api
+    start_directory: /Users/{{ .chezmoi.username }}/ghq/github.com/{{ .gh_work_org }}/{{ .work_project }}/backend
+    panes:
+      - shell_command:
+          - echo "=== center-api ===" && echo "Waiting for start command..."
+
+  - window_name: entry-api
+    start_directory: /Users/{{ .chezmoi.username }}/ghq/github.com/{{ .gh_work_org }}/{{ .work_project }}/backend
+    panes:
+      - shell_command:
+          - echo "=== entry-api ===" && echo "Waiting for start command..."
+
+  - window_name: gmo-api
+    start_directory: /Users/{{ .chezmoi.username }}/ghq/github.com/{{ .gh_work_org }}/{{ .work_project }}/backend
+    panes:
+      - shell_command:
+          - echo "=== gmo-api ===" && echo "Waiting for start command..."
+
+  - window_name: cloud-sign-api
+    start_directory: /Users/{{ .chezmoi.username }}/ghq/github.com/{{ .gh_work_org }}/{{ .work_project }}/backend
+    panes:
+      - shell_command:
+          - echo "=== cloud-sign-api ===" && echo "Waiting for start command..."
+
+  - window_name: integration-api
+    start_directory: /Users/{{ .chezmoi.username }}/ghq/github.com/{{ .gh_work_org }}/{{ .work_project }}/backend
+    panes:
+      - shell_command:
+          - echo "=== integration-api ===" && echo "Waiting for start command..."
+
+  - window_name: lk-api
+    start_directory: /Users/{{ .chezmoi.username }}/ghq/github.com/{{ .gh_work_org }}/{{ .work_project }}/backend
+    panes:
+      - shell_command:
+          - echo "=== lk-api ===" && echo "Waiting for start command..."
+
+  - window_name: ops-api
+    start_directory: /Users/{{ .chezmoi.username }}/ghq/github.com/{{ .gh_work_org }}/{{ .work_project }}/backend
+    panes:
+      - shell_command:
+          - echo "=== ops-api ===" && echo "Waiting for start command..."
+
+  - window_name: contract-llm-api
+    start_directory: /Users/{{ .chezmoi.username }}/ghq/github.com/{{ .gh_work_org }}/{{ .work_project }}/backend
+    panes:
+      - shell_command:
+          - echo "=== contract-llm-api ===" && echo "Waiting for start command..."
+
+  - window_name: frontend-server
+    start_directory: /Users/{{ .chezmoi.username }}/ghq/github.com/{{ .gh_work_org }}/{{ .work_project }}/frontend/server
+    panes:
+      - shell_command:
+          - echo "=== frontend-server ===" && echo "Waiting for start command..."
+
+  - window_name: ops-frontend-server
+    start_directory: /Users/{{ .chezmoi.username }}/ghq/github.com/{{ .gh_work_org }}/{{ .work_project }}/ops-frontend/server
+    panes:
+      - shell_command:
+          - echo "=== ops-frontend-server ===" && echo "Waiting for start command..."
+
+  - window_name: frontend
+    start_directory: /Users/{{ .chezmoi.username }}/ghq/github.com/{{ .gh_work_org }}/{{ .work_project }}/frontend
+    panes:
+      - shell_command:
+          - echo "=== frontend ===" && echo "Waiting for start command..."
+
+  - window_name: ops-frontend
+    start_directory: /Users/{{ .chezmoi.username }}/ghq/github.com/{{ .gh_work_org }}/{{ .work_project }}/ops-frontend
+    panes:
+      - shell_command:
+          - echo "=== ops-frontend ===" && echo "Waiting for start command..."
+
+  - window_name: docker
+    start_directory: /Users/{{ .chezmoi.username }}/ghq/github.com/{{ .gh_work_org }}/{{ .work_project }}/backend
+    panes:
+      - shell_command:
+          - echo "=== Docker Services ===" && echo "Waiting for start command..."

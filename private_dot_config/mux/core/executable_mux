@@ -23,7 +23,7 @@ ${BOLD}Usage:${NC}
     ${project_name} <command> [options]
 
 ${BOLD}Commands:${NC}
-    hello               Start session + all services + attach
+    hello [--co-core]   Start session + services + attach
     bye                 Graceful shutdown (stop all → kill session)
     re                  bye + hello (restart entire session)
     attach              Attach to existing session
@@ -40,6 +40,7 @@ ${BOLD}Commands:${NC}
 
 ${BOLD}Examples:${NC}
     ${project_name} hello           # Start session + all services
+    ${project_name} hello --co-core # Start session + CO CORE + frontend + BFF
     ${project_name} bye             # Graceful shutdown
     ${project_name} attach          # Attach only (no start)
     ${project_name} start studio-api # Start specific service
@@ -127,7 +128,13 @@ EOF
 # Start all services
 #######################################
 start_all() {
-    echo -e "${BOLD}Starting all services...${NC}"
+    local start_profile="${1:-all}"
+
+    if [[ "$start_profile" == "co-core" ]]; then
+        echo -e "${BOLD}Starting services (profile: CO CORE)...${NC}"
+    else
+        echo -e "${BOLD}Starting all services...${NC}"
+    fi
     echo
 
     # Run prechecks
@@ -189,9 +196,18 @@ start_all() {
 
             if [[ -n "$groups" ]]; then
                 for group in $groups; do
+                    local effective_group="$group"
+
+                    if [[ "$start_profile" == "co-core" && "$group" == "be" ]]; then
+                        effective_group="co-core"
+                    fi
+
                     # Get services in this group
                     local group_services
-                    group_services=$(parse_yaml_allow_null "$CONFIG_FILE" ".services[] | select(.group == \"$group\") | .name")
+                    if ! group_services=$(resolve_group_alias "$effective_group"); then
+                        echo -e "${RED}Error: Unknown group '${effective_group}'${NC}"
+                        return 1
+                    fi
 
                     for service in $group_services; do
                         start_service "$service"
@@ -246,9 +262,11 @@ stop_all() {
 # Start tmuxp session
 #######################################
 start_session() {
+    local start_profile="${1:-all}"
+
     if session_exists; then
         echo -e "${YELLOW}Session already exists. Starting services...${NC}"
-        start_all
+        start_all "$start_profile"
         echo -e "Attaching to session..."
         sleep 1
         tmux attach-session -t "$SESSION_NAME"
@@ -281,7 +299,7 @@ start_session() {
     init_log_dir
     setup_pipe_pane
 
-    start_all
+    start_all "$start_profile"
 
     echo
     echo -e "${GREEN}Session ready!${NC}"
@@ -360,7 +378,20 @@ main() {
     case "$cmd" in
         hello)
             acquire_lock "$project" || exit 1
-            start_session
+            local start_profile="all"
+            case "${arg:-}" in
+                "")
+                    ;;
+                --co-core)
+                    start_profile="co-core"
+                    ;;
+                *)
+                    echo -e "${RED}Error: Unknown hello option: ${arg}${NC}"
+                    echo "Usage: ${PROJECT_NAME} hello [--co-core]"
+                    exit 1
+                    ;;
+            esac
+            start_session "$start_profile"
             ;;
         bye)
             acquire_lock "$project" || exit 1

@@ -1,0 +1,161 @@
+# Contract One mux configuration
+
+project:
+  name: c1
+  root: ~/ghq/github.com/{{ .gh_work_org }}/{{ .work_project }}
+  session_name: c1
+
+docker:
+  enabled: true
+  dir: backend
+  compose_file: docker-compose.yml
+  wait_timeout: 60
+
+prechecks:
+  - name: Google Cloud Auth
+    command: gcloud auth application-default print-access-token
+    on_fail: warn
+    hint: "gcloud auth login && gcloud auth application-default login"
+
+phases:
+  - name: Docker
+    type: docker
+
+  - name: Share Build
+    type: command
+    command: direnv exec . ./gradlew --no-daemon :share:build -x test
+    dir: backend
+    on_fail: abort
+
+  - name: Backend
+    groups: [be]
+    wait_ports: [8080, 8099]
+
+  - name: BFF
+    groups: [bff]
+    wait_ports: [9000, 9003]
+
+  - name: Frontend
+    groups: [fe]
+
+group_aliases:
+  be:
+    - app-api
+    - tasks-api
+    - mail-api
+    - search-api
+    - private-file-proxy
+    - center-api
+    - entry-api
+    - gmo-api
+    - cloud-sign-api
+    - integration-api
+    - lk-api
+    - ops-api
+    - contract-llm-api
+  co-core:
+    - app-api
+    - search-api
+    - tasks-api
+    - private-file-proxy
+  bff:
+    - frontend-server
+    - ops-frontend-server
+  fe:
+    - frontend
+    - ops-frontend
+
+services:
+  - name: app-api
+    dir: backend
+    command: ./gradlew --no-daemon :app-api:run
+    group: be
+
+  - name: tasks-api
+    dir: backend
+    command: ./gradlew --no-daemon :tasks-api:run
+    group: be
+
+  - name: mail-api
+    dir: backend
+    command: ./gradlew --no-daemon :mail-api:run
+    group: be
+
+  - name: search-api
+    dir: backend
+    command: ./gradlew --no-daemon :search-api:run
+    group: be
+
+  - name: private-file-proxy
+    dir: backend
+    command: ./gradlew --no-daemon :private-file-proxy:run
+    group: be
+
+  - name: center-api
+    dir: backend
+    command: ./gradlew --no-daemon :center-api:run
+    group: be
+
+  - name: entry-api
+    dir: backend
+    command: ./gradlew --no-daemon :entry-api:run
+    group: be
+
+  - name: gmo-api
+    dir: backend
+    command: ./gradlew --no-daemon :gmo-api:run
+    group: be
+
+  - name: cloud-sign-api
+    dir: backend
+    command: ./gradlew --no-daemon :cloud-sign-api:run
+    group: be
+
+  - name: integration-api
+    dir: backend
+    command: ./gradlew --no-daemon :integration-api:run
+    group: be
+
+  - name: lk-api
+    dir: backend
+    command: ./gradlew --no-daemon :lk-api:run
+    group: be
+
+  - name: ops-api
+    dir: backend
+    command: ./gradlew --no-daemon :ops-api:run
+    group: be
+
+  - name: contract-llm-api
+    dir: backend
+    command: ./gradlew --no-daemon :contract-llm-api:run
+    group: be
+
+  - name: frontend-server
+    dir: frontend/server
+    runtime: npm
+    command: start
+    group: bff
+
+  - name: ops-frontend-server
+    dir: ops-frontend/server
+    runtime: npm
+    command: start
+    group: bff
+
+  - name: frontend
+    dir: frontend
+    runtime: npm
+    command: start
+    group: fe
+
+  - name: ops-frontend
+    dir: ops-frontend
+    runtime: npm
+    command: start
+    group: fe
+
+options:
+  log_keep_sessions: 3
+  popup_width: 80%
+  popup_height: 80%

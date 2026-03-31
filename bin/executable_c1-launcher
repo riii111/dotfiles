@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+#
+# c1-launcher - Display service list for dashboard panes
+# Usage: c1-launcher <fe|be>
+#
+
+set -euo pipefail
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+MAGENTA='\033[0;35m'
+NC='\033[0m'
+BOLD='\033[1m'
+DIM='\033[2m'
+
+display_fe() {
+    clear
+    echo
+    echo -e "${BOLD}${CYAN}╔══════════════════════════════════════════════╗${NC}"
+    echo -e "${BOLD}${CYAN}║        FRONTEND SERVICES (Node.js)           ║${NC}"
+    echo -e "${BOLD}${CYAN}╚══════════════════════════════════════════════╝${NC}"
+    echo
+    echo -e "${DIM}Navigate: ${NC}${BOLD}Ctrl+b w${NC}${DIM} (list) ${NC}${BOLD}Ctrl+b '${NC}${DIM} (number)${NC}"
+    echo
+    echo -e "${BOLD}Services:${NC} frontend, frontend-server, ops-frontend, ops-frontend-server"
+    echo
+    echo -e "${DIM}────────────────────────────────────────────────${NC}"
+    echo -e "${BOLD}Commands:${NC}"
+    echo -e "  ${GREEN}c1 hello${NC}              Start all + attach"
+    echo -e "  ${GREEN}c1 bye${NC}                Graceful shutdown"
+    echo -e "  ${GREEN}c1 start <service>${NC}    Start a service"
+    echo -e "  ${GREEN}c1 restart <service>${NC}  Restart a service"
+    echo -e "  ${GREEN}c1 stop <service>${NC}     Stop a service"
+    echo -e "  ${GREEN}c1 logs <service>${NC}     Jump to window"
+    echo -e "  ${GREEN}c1 status${NC}             Show all status"
+    echo
+
+    exec "$SHELL"
+}
+
+display_be() {
+    clear
+    echo
+    echo -e "${BOLD}${YELLOW}╔══════════════════════════════════════════════╗${NC}"
+    echo -e "${BOLD}${YELLOW}║         BACKEND SERVICES (Kotlin)            ║${NC}"
+    echo -e "${BOLD}${YELLOW}╚══════════════════════════════════════════════╝${NC}"
+    echo
+    echo -e "${DIM}Navigate: ${NC}${BOLD}Ctrl+b w${NC}${DIM} (list) ${NC}${BOLD}Ctrl+b '${NC}${DIM} (number)${NC}"
+    echo
+    echo -e "${BOLD}Services:${NC}"
+    echo -e "  app-api, tasks-api, mail-api, search-api, private-file-proxy"
+    echo -e "  center-api, entry-api, gmo-api, cloud-sign-api, integration-api"
+    echo -e "  lk-api, ops-api, contract-llm-api"
+    echo
+    echo -e "${DIM}────────────────────────────────────────────────${NC}"
+    echo -e "${BOLD}Commands:${NC}"
+    echo -e "  ${GREEN}c1 hello${NC}              Start all + attach"
+    echo -e "  ${GREEN}c1 bye${NC}                Graceful shutdown"
+    echo -e "  ${GREEN}c1 start <service>${NC}    Start a service"
+    echo -e "  ${GREEN}c1 restart <service>${NC}  Restart a service"
+    echo -e "  ${GREEN}c1 stop <service>${NC}     Stop a service"
+    echo -e "  ${GREEN}c1 logs <service>${NC}     Jump to window"
+    echo -e "  ${GREEN}c1 status${NC}             Show all status"
+    echo
+
+    exec "$SHELL"
+}
+
+main() {
+    local mode="${1:-}"
+
+    case "$mode" in
+        fe|frontend)
+            display_fe
+            ;;
+        be|backend)
+            display_be
+            ;;
+        *)
+            echo "Usage: c1-launcher <fe|be>"
+            echo "  fe - Display frontend services"
+            echo "  be - Display backend services"
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"
