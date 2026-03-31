@@ -58,9 +58,12 @@ prefix_rule(pattern=["git", "fetch"], decision="allow", justification="Fetch fro
 prefix_rule(pattern=["git", "cherry"], decision="allow", justification="Find commits not merged")
 prefix_rule(pattern=["git", "merge-tree"], decision="allow", justification="Inspect merge result without mutating history")
 prefix_rule(pattern=["git", "stash"], decision="allow", justification="Stash changes")
+prefix_rule(pattern=["git", "config", "--get"], decision="allow", justification="Read git config value")
+prefix_rule(pattern=["git", "config", "--list"], decision="allow", justification="List git config values")
+prefix_rule(pattern=["git", "config", "--global", "--get"], decision="allow", justification="Read global git config value")
+prefix_rule(pattern=["git", "config", "--global", "--list"], decision="allow", justification="List global git config values")
 prefix_rule(pattern=["git", "rev-parse"], decision="allow", justification="Parse git refs")
 prefix_rule(pattern=["git", "ls-files"], decision="allow", justification="List tracked files")
-prefix_rule(pattern=["git", "config"], decision="allow", justification="Show git config")
 
 # --- Git (write operations) ---
 prefix_rule(pattern=["git", "add"], decision="allow", justification="Stage changes")
@@ -104,7 +107,6 @@ prefix_rule(pattern=["gh", "workflow", "list"], decision="allow", justification=
 prefix_rule(pattern=["gh", "workflow", "view"], decision="allow", justification="View workflow")
 prefix_rule(pattern=["gh", "release", "list"], decision="allow", justification="List releases")
 prefix_rule(pattern=["gh", "release", "view"], decision="allow", justification="View release")
-prefix_rule(pattern=["gh", "api"], decision="allow", justification="GitHub API calls")
 
 # --- gCloud CLI (read operations) ---
 prefix_rule(pattern=["gcloud", "storage", "ls"], decision="allow", justification="List GCS buckets or objects")
@@ -161,6 +163,8 @@ prefix_rule(pattern=["yarn"], decision="prompt", justification="Package manager 
 prefix_rule(pattern=["pnpm"], decision="prompt", justification="Package manager commands require confirmation")
 prefix_rule(pattern=["bun"], decision="prompt", justification="Package manager commands require confirmation")
 prefix_rule(pattern=["curl"], decision="prompt", justification="Network access requires confirmation")
+prefix_rule(pattern=["gh", "api"], decision="prompt", justification="GitHub API may perform mutations depending on method and endpoint")
+prefix_rule(pattern=["git", "config"], decision="prompt", justification="git config may update repository or user configuration")
 prefix_rule(pattern=["terraform", "init"], decision="prompt", justification="Downloads providers and configures backend")
 prefix_rule(pattern=["terraform", "plan"], decision="prompt", justification="May refresh remote state and access provider APIs")
 prefix_rule(pattern=["gcloud", "storage", "cat"], decision="prompt", justification="May read sensitive object contents")
