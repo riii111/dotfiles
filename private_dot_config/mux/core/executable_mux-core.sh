@@ -713,7 +713,7 @@ docker_exec_container() {
 
     if [[ -z "$running" ]]; then
         echo -e "${RED}Error: No running containers${NC}"
-        echo -e "Start docker first: ${CYAN}${PROJECT_NAME} start docker${NC}"
+        echo -e "Start docker first: ${CYAN}${PROJECT_NAME} up docker${NC}"
         return 1
     fi
 

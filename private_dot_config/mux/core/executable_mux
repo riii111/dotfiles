@@ -30,7 +30,7 @@ ${BOLD}Commands:${NC}
     detach              Detach from session (Ctrl+b d)
     kill                Kill session immediately
     status              Show status of all services
-    start [--all|docker|service|group]   Start service(s)
+    up [--all|docker|service|group]      Start service(s)
     stop [--all|docker|service|group]    Stop service(s)
     restart <docker|service|group>       Restart service(s)
     logs <service>      Focus on specific service window
@@ -43,7 +43,7 @@ ${BOLD}Examples:${NC}
     ${project_name} hello --co-core # Start session + CO CORE + frontend + BFF
     ${project_name} bye             # Graceful shutdown
     ${project_name} attach          # Attach only (no start)
-    ${project_name} start co-core   # Start CO CORE services
+    ${project_name} up co-core      # Start CO CORE services
     ${project_name} stop co-core    # Stop CO CORE services
     ${project_name} restart co-core # Restart CO CORE services
     ${project_name} restart docker  # Restart docker services
@@ -428,7 +428,7 @@ main() {
             acquire_lock "$project" || exit 1
             kill_session
             ;;
-        start)
+        up)
             if [[ "$arg" == "--all" || -z "$arg" ]]; then
                 if ! session_exists; then
                     echo -e "${RED}Error: Session not running. Run '${PROJECT_NAME} hello' first.${NC}"

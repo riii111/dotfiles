@@ -59,7 +59,7 @@ display_services() {
     echo -e "  ${GREEN}${PROJECT_NAME} bye${NC}             Graceful shutdown"
     echo -e "  ${GREEN}${PROJECT_NAME} re${NC}              Restart session"
     echo -e "  ${GREEN}${PROJECT_NAME} status${NC}          Show all status"
-    echo -e "  ${GREEN}${PROJECT_NAME} start <svc|group>${NC}   Start a service or group"
+    echo -e "  ${GREEN}${PROJECT_NAME} up <svc|group>${NC}      Start a service or group"
     echo -e "  ${GREEN}${PROJECT_NAME} stop <svc|group>${NC}    Stop a service or group"
     echo -e "  ${GREEN}${PROJECT_NAME} restart <svc|group>${NC} Restart a service or group"
     echo -e "  ${GREEN}${PROJECT_NAME} logs <svc>${NC}      Jump to window"
