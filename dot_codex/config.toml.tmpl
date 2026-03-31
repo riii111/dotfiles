@@ -1,0 +1,34 @@
+model_reasoning_effort = "high"
+model = "gpt-5.4-mini"
+web_search = "live"
+personality = "pragmatic"
+service_tier = "fast"
+
+[features]
+streamable_shell = true
+
+[sandbox_workspace_write]
+network_access = true
+
+[mcp_servers.context7]
+command = "npx"
+args = ["-y", "@upstash/context7-mcp"]
+
+[mcp_servers.notion]
+url = "https://mcp.notion.com/mcp"
+
+[projects."{{ .chezmoi.homeDir }}/ghq/github.com/riii111/dotfiles"]
+trust_level = "trusted"
+
+[projects."{{ .chezmoi.homeDir }}/ghq/github.com/riii111/kotlin-language-server"]
+trust_level = "trusted"
+
+[projects."{{ .chezmoi.homeDir }}/ghq/github.com/riii111/sabiql"]
+trust_level = "trusted"
+{{ if eq .type "personal" }}
+[projects."{{ .chezmoi.homeDir }}/ghq/github.com/{{ .side_work_org }}/{{ .side_work_project }}"]
+trust_level = "trusted"
+{{ else }}
+[projects."{{ .chezmoi.homeDir }}/ghq/github.com/{{ .gh_work_org }}/{{ .work_project }}"]
+trust_level = "trusted"
+{{ end }}
