@@ -173,6 +173,7 @@ prefix_rule(pattern=["gh", "api"], decision="prompt", justification="GitHub API 
 prefix_rule(pattern=["git", "config"], decision="prompt", justification="git config may update repository or user configuration")
 prefix_rule(pattern=["terraform", "init"], decision="prompt", justification="Downloads providers and configures backend")
 prefix_rule(pattern=["terraform", "plan"], decision="prompt", justification="May refresh remote state and access provider APIs")
+prefix_rule(pattern=["bq", "query"], decision="prompt", justification="BigQuery queries should require confirmation")
 prefix_rule(pattern=["gcloud", "storage", "cat"], decision="prompt", justification="May read sensitive object contents")
 prefix_rule(pattern=["gcloud", "secrets", "list"], decision="prompt", justification="May expose sensitive secret metadata")
 prefix_rule(pattern=["gcloud", "secrets", "versions", "access"], decision="prompt", justification="Reads secret values")
