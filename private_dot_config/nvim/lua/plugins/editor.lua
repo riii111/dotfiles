@@ -6,6 +6,7 @@ return {
 		build = ":TSUpdate",
 		lazy = false,
 		opts = {
+			parser_install_dir = vim.fn.stdpath("data") .. "/site",
 			ensure_installed = {
 				"bash",
 				"c",
@@ -45,6 +46,7 @@ return {
 			},
 		},
 		config = function(_, opts)
+			vim.opt.runtimepath:append(opts.parser_install_dir)
 			require("nvim-treesitter.configs").setup(opts)
 
 			vim.treesitter.language.register("markdown", "octo")
