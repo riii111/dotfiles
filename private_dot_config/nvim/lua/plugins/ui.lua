@@ -359,7 +359,7 @@ return {
 				},
 				on_open = function(term)
 					-- lazygit uses <esc> internally, so don't map it to close
-					vim.keymap.del("t", "<esc>", { buf = term.bufnr })
+					vim.keymap.del("t", "<esc>", { buffer = term.bufnr })
 				end,
 				hidden = true,
 			})
