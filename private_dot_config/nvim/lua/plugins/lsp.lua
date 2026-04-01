@@ -22,6 +22,9 @@ return {
     dependencies = "rafamadriz/friendly-snippets",
     version = "v0.*",
     opts = {
+      enabled = function()
+        return vim.bo.filetype ~= "oil"
+      end,
       keymap = {
         preset = "default",
         ["<CR>"] = {
