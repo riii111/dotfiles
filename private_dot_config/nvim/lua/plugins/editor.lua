@@ -6,6 +6,7 @@ return {
 		build = ":TSUpdate",
 		lazy = false,
 		opts = {
+			parser_install_dir = vim.fn.stdpath("data") .. "/site",
 			ensure_installed = {
 				"bash",
 				"c",
@@ -29,35 +30,33 @@ return {
 				"vim",
 				"vimdoc",
 				"yaml",
+				"kotlin",
 				"go",
 				"gomod",
 				"gowork",
 				"gosum",
 				"rust",
 			},
+			highlight = {
+				enable = true,
+			},
+			indent = {
+				enable = true,
+				disable = { "rust" },
+			},
 		},
 		config = function(_, opts)
-			local treesitter = require("nvim-treesitter")
-
-			treesitter.setup()
+			vim.opt.runtimepath:append(opts.parser_install_dir)
+			require("nvim-treesitter.configs").setup(opts)
 
 			vim.treesitter.language.register("markdown", "octo")
-
-			vim.api.nvim_create_autocmd("FileType", {
-				callback = function(args)
-					local ok = pcall(vim.treesitter.start)
-					if ok and vim.bo[args.buf].filetype ~= "rust" then
-						vim.bo[args.buf].indentexpr = 'v:lua.require"nvim-treesitter".indentexpr()'
-					end
-				end,
-			})
 		end,
 	},
 
 	-- Treesitter textobjects
 	{
 		"nvim-treesitter/nvim-treesitter-textobjects",
-		branch = "main",
+		branch = "master",
 		enabled = false,
 		event = "VeryLazy",
 		dependencies = { "nvim-treesitter/nvim-treesitter" },
