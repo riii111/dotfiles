@@ -1,5 +1,5 @@
 interface:
-  display_name: "Alert Check"
+  display_name: "alert-check"
   short_description: "Triages prod alerts with pe"
   default_prompt: "Use $alert-check to triage production alerts with pe, gh, and gcloud, then report the likely cause and next action."
 

@@ -1,4 +1,5 @@
 ---
+name: alert-check
 description: Production alert triage using `pe`, `gh`, and `gcloud`.
 ---
 
