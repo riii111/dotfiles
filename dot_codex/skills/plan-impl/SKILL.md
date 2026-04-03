@@ -3,7 +3,7 @@ description: |
   Plan and implement pragmatically.
   Ask only when ambiguity would materially change the implementation.
   Keep implementation in a single main thread.
-  Use plan subagents only when clearly helpful.
+  Exploration/design subagents are mandatory when Phase 2 selects explore or design depth.
 argument-hint: "[-w] [-quick] [branch=<name>] [task description (free-form)]"
 ---
 
