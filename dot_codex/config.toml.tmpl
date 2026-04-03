@@ -18,22 +18,11 @@ approval_policy = { granular = {
   skill_approval = false,
 } }
 
-sandbox_mode = "workspace-write"
-
 # =============================================================================
 # Global Features
 # =============================================================================
 [features]
 fast_mode = true
-
-# =============================================================================
-# Global Sandbox
-# =============================================================================
-[sandbox_workspace_write]
-writable_roots = ["{{ .chezmoi.homeDir }}/.config/gcloud"]
-network_access = true
-exclude_slash_tmp = false
-exclude_tmpdir_env_var = false
 
 # =============================================================================
 # Shell Environment
@@ -108,4 +97,4 @@ trust_level = "trusted"
 {{ end }}
 
 [tui]
-status_line = ["context-remaining", "model-name", "git-branch", "five-hour-limit", "weekly-limit", "fast-mode"]
+status_line = ["model-with-reasoning", "git-branch", "context-remaining", "five-hour-limit", "weekly-limit"]
