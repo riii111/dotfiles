@@ -29,6 +29,8 @@ When: multiple modules/layers changed, new abstraction or API shape introduced, 
 - correctness
 - readability
 - unnecessary branching/fallbacks
+- fallback paths not justified by real failure modes
+- defensive code that adds noise without meaningful risk reduction
 - test/validation gaps
 
 #### consistency-reviewer focus
@@ -37,6 +39,8 @@ When: multiple modules/layers changed, new abstraction or API shape introduced, 
 - duplication vs reuse
 - whether the touched area now looks inconsistent with surrounding code
 - whether a small local refactor would materially improve coherence
+- whether nearby code should be lightly aligned in the same change
+- whether the implementation is locally convenient but globally off-pattern
 
 ### +sec (added when -sec specified or sensitive surface detected)
 

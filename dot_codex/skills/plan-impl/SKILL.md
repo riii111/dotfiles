@@ -81,6 +81,9 @@ Produce a concise plan with:
 - Goal
 - Approach
 - Files/areas likely touched
+- Test strategy
+- what validation is required now
+- what validation is unnecessary for this task
 - Validation steps
 - Assumptions (if any)
 
@@ -100,7 +103,14 @@ After implementation, before moving to validation:
 - If the diff is unexpectedly large or touches unplanned files, STOP and ask the user
 
 ## Phase 4: Validate
-Run relevant tests/validation if available.
+Choose the lightest test depth that credibly covers the change:
+- unit
+- integration
+- e2e
+- manual
+
+Run the required tests/validation if available.
+Do not add broader validation that is unlikely to catch regressions for this task.
 Then re-read the plan and verify each goal is met.
 
 If -quick is set:
