@@ -58,6 +58,11 @@ Assess task complexity and choose the cheapest acceptable path:
 ### solo (no subagents)
 When: change is local, requirement is clear, existing pattern is obvious.
 
+Before planning, do a lightweight scan (no subagents):
+- read files directly related to the change
+- confirm existing patterns/helpers that should be reused
+- identify the test file(s) to run
+
 ### explore (one explorer subagent)
 When: similar implementations must be found, touched area is not fully obvious, validation paths need discovery.
 
@@ -86,6 +91,10 @@ Produce a concise plan with:
 - what validation is unnecessary for this task
 - Validation steps
 - Assumptions (if any)
+
+### Gate
+- solo: proceed to Phase 3 without waiting for approval
+- explore / design: enter Plan Mode and wait for user approval before proceeding
 
 ## Phase 3: Implement
 
