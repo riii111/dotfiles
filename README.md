@@ -2,7 +2,7 @@
 
 Dev environment for macOS, managed by [chezmoi](https://www.chezmoi.io/).
 
-<img width="720" alt="after-2" src="https://github.com/user-attachments/assets/ab112ea6-e819-46de-9cc1-eb0961824efe" />
+<img width="720" alt="nvim" src="https://github.com/user-attachments/assets/0511c1be-2d3a-4b09-a14a-10a1e5f715ad" />
 
 
 ## Setup
@@ -56,18 +56,8 @@ Delta for modern diffs. `|` key toggles split/unified view.
 
 ### AI tooling
 
-#### Claude Code
-
-- PreToolUse hook: find/grep/cat → fd/rg/bat
-- Permission policy: build/test/read-only git auto-allowed, rm requires confirm
-- Machine-specific settings via chezmoi template (work/personal)
-- Context7 MCP
-
-#### Codex CLI
-
-- GPT-5 custom prompt (skim/focus/dive for inference control)
-- `model_reasoning_effort = "high"`
-- Context7 MCP
+main: Codex
+sub: Claude Code
 
 ## Trade-offs
 
