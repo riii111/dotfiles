@@ -596,52 +596,54 @@ local function get_lualine_theme()
 		return "auto"
 	end
 	local colors = get_colors()
+	local section_c = { fg = colors.normal_c, bg = colors.section_c_bg }
+	local section_x = { fg = colors.normal_c, bg = colors.section_c_bg }
 	return {
 		normal = {
 			a = { fg = colors.normal_a, bg = colors.mode_normal, gui = "bold" },
 			b = { fg = colors.normal_b, bg = colors.normal_bg_b },
-			c = { fg = colors.normal_c },
-			x = { fg = colors.normal_c },
+			c = section_c,
+			x = section_x,
 			y = { fg = colors.normal_b, bg = colors.normal_bg_b },
 			z = { fg = colors.normal_b, bg = colors.normal_bg_b },
 		},
 		insert = {
 			a = { fg = colors.normal_a, bg = colors.mode_insert, gui = "bold" },
 			b = { fg = colors.normal_b, bg = colors.normal_bg_b },
-			c = { fg = colors.normal_c },
-			x = { fg = colors.normal_c },
+			c = section_c,
+			x = section_x,
 			y = { fg = colors.normal_b, bg = colors.normal_bg_b },
 			z = { fg = colors.normal_b, bg = colors.normal_bg_b },
 		},
 		visual = {
 			a = { fg = colors.normal_a, bg = colors.mode_visual, gui = "bold" },
 			b = { fg = colors.normal_b, bg = colors.normal_bg_b },
-			c = { fg = colors.normal_c },
-			x = { fg = colors.normal_c },
+			c = section_c,
+			x = section_x,
 			y = { fg = colors.normal_b, bg = colors.normal_bg_b },
 			z = { fg = colors.normal_b, bg = colors.normal_bg_b },
 		},
 		replace = {
 			a = { fg = colors.fg, bg = colors.mode_replace, gui = "bold" },
 			b = { fg = colors.normal_b, bg = colors.normal_bg_b },
-			c = { fg = colors.normal_c },
-			x = { fg = colors.normal_c },
+			c = section_c,
+			x = section_x,
 			y = { fg = colors.normal_b, bg = colors.normal_bg_b },
 			z = { fg = colors.normal_b, bg = colors.normal_bg_b },
 		},
 		command = {
 			a = { fg = colors.normal_a, bg = colors.mode_command, gui = "bold" },
 			b = { fg = colors.normal_b, bg = colors.normal_bg_b },
-			c = { fg = colors.normal_c },
-			x = { fg = colors.normal_c },
+			c = section_c,
+			x = section_x,
 			y = { fg = colors.normal_b, bg = colors.normal_bg_b },
 			z = { fg = colors.normal_b, bg = colors.normal_bg_b },
 		},
 		terminal = {
 			a = { fg = colors.normal_a, bg = colors.mode_insert, gui = "bold" },
 			b = { fg = colors.normal_b, bg = colors.normal_bg_b },
-			c = { fg = colors.normal_c },
-			x = { fg = colors.normal_c },
+			c = section_c,
+			x = section_x,
 			y = { fg = colors.normal_b, bg = colors.normal_bg_b },
 			z = { fg = colors.normal_b, bg = colors.normal_bg_b },
 		},
