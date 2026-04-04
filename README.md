@@ -1,6 +1,6 @@
 # dotfiles
 
-Dev environment for macOS, managed by [chezmoi](https://www.chezmoi.io/).
+Dev environment for macOS, managed by chezmoi.
 
 <img width="720" alt="nvim" src="https://github.com/user-attachments/assets/0511c1be-2d3a-4b09-a14a-10a1e5f715ad" />
 
