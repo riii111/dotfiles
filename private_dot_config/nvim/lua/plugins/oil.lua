@@ -20,7 +20,7 @@ return {
 
 		win_options = {
 			wrap = false,
-			signcolumn = "no",
+			signcolumn = "yes:2",
 			cursorcolumn = false,
 			foldcolumn = "0",
 			spell = false,
@@ -30,6 +30,7 @@ return {
 		},
 
 		delete_to_trash = true,
+		watch_for_changes = true,
 		skip_confirm_for_simple_edits = false,
 		prompt_save_on_select_new_entry = true,
 		cleanup_delay_ms = 2000,
