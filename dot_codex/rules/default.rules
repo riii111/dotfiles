@@ -66,6 +66,8 @@ prefix_rule(pattern=["git", "rev-parse"], decision="allow", justification="Parse
 prefix_rule(pattern=["git", "ls-files"], decision="allow", justification="List tracked files")
 
 # --- Git (write operations) ---
+prefix_rule(pattern=["git", "add", "-f"], decision="forbidden", justification="Force-add bypasses .gitignore — may commit excluded files")
+prefix_rule(pattern=["git", "add", "--force"], decision="forbidden", justification="Force-add bypasses .gitignore — may commit excluded files")
 prefix_rule(pattern=["git", "add"], decision="allow", justification="Stage changes")
 prefix_rule(pattern=["git", "apply"], decision="allow", justification="Apply a patch to the working tree")
 prefix_rule(pattern=["git", "commit"], decision="allow", justification="Commit changes")
