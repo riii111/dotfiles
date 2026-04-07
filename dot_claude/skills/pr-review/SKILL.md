@@ -35,7 +35,7 @@ Phase 5: 完了報告
 スクリプトを実行してworktreeとレビューディレクトリを準備する。
 
 ```bash
-source_output=$(bash scripts/pr-review-setup.sh "$PR_NUMBER")
+source_output=$(bash ~/.claude/skills/pr-review/scripts/pr-review-setup.sh "$PR_NUMBER")
 eval "$source_output"
 # → WORKTREE_DIR, REVIEW_DIR, PR_BRANCH, BASE_BRANCH が設定される
 ```
@@ -80,7 +80,7 @@ gh pr diff "$PR_NUMBER" --name-only
 スクリプトを実行し、結果を変数に保持する。
 
 ```bash
-bash scripts/pr-review-external.sh "$WORKTREE_DIR" "$BASE_BRANCH"
+bash ~/.claude/skills/pr-review/scripts/pr-review-external.sh "$WORKTREE_DIR" "$BASE_BRANCH"
 # → stdout に === CODEX_RESULT === と === CR_RESULT === のセクションで結果が出力される
 ```
 
