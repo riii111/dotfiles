@@ -16,8 +16,9 @@ PRの変更内容を多角的にレビューし、ファイル・行レベルの
 ```
 Phase 0: Worktree準備（スクリプト）
 Phase 1: Auto-analysis + ユーザー確認
-Phase 2: 外部ツールスキャン（スクリプト。ユーザー選択時のみ。全モードで利用可）
-Phase 3: レビュー実行（Quick: main agent / Standard・Deep: subagent並列）
+Phase 2+3: 並列実行
+  ├─ Phase 2: 外部ツールスキャン（ユーザー選択時のみ。全モードで利用可）
+  └─ Phase 3: レビュー実行（Quick: main agent / Standard・Deep: subagent並列）
 Phase 4: 検証・統合・出力（Standard: スポットチェック / Deep: 検証agent）
 Phase 5: 完了報告
 ```
@@ -76,18 +77,19 @@ bash ~/.claude/skills/pr-review/scripts/pr-review-external.sh "$WORKTREE_DIR" "$
 # → stdout に === CODEX_RESULT === と === CR_RESULT === のセクションで結果が出力される
 ```
 
-結果はPhase 3以降で参照する。
+結果はPhase 4の統合時に参照する（Phase 3には渡さない。Phase 2と3を並列実行するため）。
 
 ---
 
 ## Phase 3: レビュー実行
+
+Phase 2（外部ツール）が選択されている場合、Phase 2 のスクリプトを Bash `run_in_background: true` で起動してから Phase 3 に入ること。Phase 2 の結果は Phase 4 で統合する。
 
 ### Quick モード（並列数 1）
 
 subagentは使わない。あなた（main agent）自身がworktree上でレビューを行う。
 `references/review_criteria.md` のセクションA〜Eすべてを参照し、
 `templates/review_final.md.tmpl` のフォーマットに従って `${REVIEW_DIR}/REVIEW_FINAL.md` を直接書く。
-Phase 2の外部ツール結果がある場合はそれも参照する。
 
 REVIEW_FINAL.md を書く前に各指摘に対してセルフチェックを行うこと:
 
@@ -120,9 +122,8 @@ A〜Eを並列数に応じてラウンドロビンで振り分ける（例: 2並
 1. 担当セクションの内容（review_criteria.md から該当部分を抽出）
 2. 担当外セクションの一覧（「これらは他のagentが担当するため言及不要」と明示）
 3. PRのコンテキスト情報（タイトル、説明、ベースブランチ、ユーザー提供の追加コンテキスト）
-4. 外部ツールの結果（Phase 2の結果がある場合。重複指摘を避けるための参考情報）
-5. 出力フォーマットの指示: `templates/review_final.md.tmpl` の指摘フォーマットに従う
-6. **worktreeの絶対パス**（「すべてのファイル読み取りはこのパスを使え」と明示）
+4. 出力フォーマットの指示: `templates/review_final.md.tmpl` の指摘フォーマットに従う
+5. **worktreeの絶対パス**（「すべてのファイル読み取りはこのパスを使え」と明示）
 
 subagentへの指示要点:
 - worktree上のコードを実際に読み、diffだけでなく周辺コードや既存の類似実装も確認すること
