@@ -91,6 +91,7 @@ prefix_rule(pattern=["pwd"], decision="allow", justification="Print working dire
 
 # --- GitHub CLI (read operations) ---
 prefix_rule(pattern=["gh", "auth"], decision="allow", justification="GitHub auth")
+prefix_rule(pattern=["gh", "api"], decision="allow", justification="Read-only GitHub API access")
 prefix_rule(pattern=["gh", "pr", "view"], decision="allow", justification="View PR")
 prefix_rule(pattern=["gh", "pr", "list"], decision="allow", justification="List PRs")
 prefix_rule(pattern=["gh", "pr", "checkout"], decision="allow", justification="Checkout PR")
@@ -170,6 +171,11 @@ prefix_rule(pattern=["pnpm"], decision="prompt", justification="Package manager 
 prefix_rule(pattern=["bun"], decision="prompt", justification="Package manager commands require confirmation")
 prefix_rule(pattern=["curl"], decision="prompt", justification="Network access requires confirmation")
 prefix_rule(pattern=["gh", "api"], decision="prompt", justification="GitHub API may perform mutations depending on method and endpoint")
+prefix_rule(pattern=["gh", "api", "--method", "POST"], decision="prompt", justification="Mutating GitHub API call")  # -f みたいなパターンはカバーできないので不完全
+prefix_rule(pattern=["gh", "api", "--method", "PATCH"], decision="prompt", justification="Mutating GitHub API call")
+prefix_rule(pattern=["gh", "api", "--method", "PUT"], decision="prompt", justification="Mutating GitHub API call")
+prefix_rule(pattern=["gh", "api", "--method", "DELETE"], decision="prompt", justification="Mutating GitHub API call")
+prefix_rule(pattern=["gh", "api", "graphql"], decision="prompt", justification="GraphQL uses POST")
 prefix_rule(pattern=["git", "config"], decision="prompt", justification="git config may update repository or user configuration")
 prefix_rule(pattern=["terraform", "init"], decision="prompt", justification="Downloads providers and configures backend")
 prefix_rule(pattern=["terraform", "plan"], decision="prompt", justification="May refresh remote state and access provider APIs")
