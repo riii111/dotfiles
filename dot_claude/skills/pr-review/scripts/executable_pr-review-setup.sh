@@ -22,14 +22,14 @@ BASE_BRANCH="$(gh pr view "$PR_NUMBER" --json baseRefName --jq '.baseRefName')"
 WORKTREE_DIR="$(cd "${REPO_ROOT}/.." && pwd)/${REPO_NAME}-pr-${PR_NUMBER}"
 REVIEW_DIR="${REPO_ROOT}/reviews/$(echo "$PR_BRANCH" | tr '/' '-')"
 
+# PRブランチとベースブランチの両方をfetch（外部ツールがbase比較に使う）
+git fetch origin "$PR_BRANCH" "$BASE_BRANCH"
+
 # Worktree作成（既存なら再利用）
 if [ -d "$WORKTREE_DIR" ]; then
   echo "Worktree already exists: $WORKTREE_DIR" >&2
-  # HEADを最新に更新
-  git fetch origin "$PR_BRANCH"
   git -C "$WORKTREE_DIR" checkout "origin/${PR_BRANCH}" --detach 2>/dev/null || true
 else
-  git fetch origin "$PR_BRANCH"
   git worktree add "$WORKTREE_DIR" "origin/${PR_BRANCH}"
 fi
 
