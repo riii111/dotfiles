@@ -3,7 +3,7 @@
 # ---------------------------------------------
 #  - Rust  : cargo fmt
 #  - SQL   : sqlfluff fix
-#  - FE    : yarn lint:fix (biome)
+#  - FE    : npm run lint:fix (biome)
 # ---------------------------------------------
 
 set -euo pipefail
@@ -63,7 +63,7 @@ fi
 # -------------------------------------
 if echo "$staged_files" | grep -qE "frontend/.*\.(ts|tsx|js|jsx)$"; then
   echo "⚛️ フロントエンドファイルが検出されました！"
-  _format_and_notify "yarn lint:fix" "frontend/.*\\.(ts|tsx|js|jsx)$" "✅ Frontend format successful" "❌ biome lint error" "$repo_root/frontend"
+  _format_and_notify "npm run lint:fix" "frontend/.*\\.(ts|tsx|js|jsx)$" "✅ Frontend format successful" "❌ biome lint error" "$repo_root/frontend"
 fi
 
 exit 0 
