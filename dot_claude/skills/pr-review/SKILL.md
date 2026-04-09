@@ -28,7 +28,7 @@ eval "$source_output"
 
 以降、すべてのコード調査は `$WORKTREE_DIR` 配下で行う。
 
-Worktree準備後、AskUserQuestion で以下のテキストを送信すること:
+準備後、AskUserQuestion で以下4つの質問を送信すること:
 
 ```
 レビュー設定を確認させてください:
