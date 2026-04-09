@@ -2,7 +2,8 @@ session_name: nodex
 start_directory: /Users/{{ .chezmoi.username }}/ghq/github.com/{{ .side_work_org }}/{{ .side_work_project }}-platform
 
 options:
-  status-left: "[nodex] Ctrl+b w:list | f:follow | ':number | z:zoom | [:scroll | d:detach "
+  prefix: C-q
+  status-left: "[nodex] Ctrl+q w:list | f:follow | ':number | z:zoom | [:scroll | d:detach "
   status-left-length: 80
   status-right: ""
   remain-on-exit: on

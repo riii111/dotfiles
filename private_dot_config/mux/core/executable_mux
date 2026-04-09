@@ -79,6 +79,7 @@ session_name: ${SESSION_NAME}
 start_directory: ${PROJECT_ROOT}
 
 options:
+  prefix: C-q
   status-left: "[${PROJECT_NAME}] Ctrl+q w:list | f:follow | ':number | z:zoom | [:scroll | d:detach "
   status-left-length: 80
   status-right: ""
@@ -295,6 +296,9 @@ start_session() {
 
     # Wait for windows
     sleep 2
+
+    # Make the mux session independent from global tmux prefix defaults.
+    tmux set-option -t "$SESSION_NAME" prefix C-q
 
     # Hide window list by overriding status-format[0]
     tmux set-option -t "$SESSION_NAME" status-format[0] '#[align=left]#{T;=/#{status-left-length}:status-left}#[align=right]#{T;=/#{status-right-length}:status-right}'

@@ -2,7 +2,8 @@ session_name: c1
 start_directory: /Users/{{ .chezmoi.username }}/ghq/github.com/{{ .gh_work_org }}/{{ .work_project }}
 
 options:
-  status-left: "[c1] Ctrl+b w:list | f:follow | ':number | z:zoom | [:scroll | d:detach "
+  prefix: C-q
+  status-left: "[c1] Ctrl+q w:list | f:follow | ':number | z:zoom | [:scroll | d:detach "
   status-left-length: 80
   status-right: ""
   remain-on-exit: on
