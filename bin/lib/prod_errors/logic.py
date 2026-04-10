@@ -108,9 +108,9 @@ def build_service_summary_data(filtered, since=None):
         key=lambda kv: sum(int(group.get("count", "0")) for group in kv[1]),
         reverse=True,
     ):
-        top = sorted(items, key=lambda group: int(group.get("count", "0")), reverse=True)[
-            :3
-        ]
+        top = sorted(
+            items, key=lambda group: int(group.get("count", "0")), reverse=True
+        )[:3]
         entry = {
             "service": service,
             "groupCount": len(items),
@@ -160,7 +160,9 @@ def windowed_counts(item, since=None):
             continue
         total += count
         active_buckets += 1
-        if bucket_start and (first_bucket_start is None or bucket_start < first_bucket_start):
+        if bucket_start and (
+            first_bucket_start is None or bucket_start < first_bucket_start
+        ):
             first_bucket_start = bucket_start
         if bucket_end and (last_bucket_end is None or bucket_end > last_bucket_end):
             last_bucket_end = bucket_end
@@ -182,7 +184,9 @@ def build_hotspot_data(filtered, since=None):
             {
                 "groupId": group.get("groupId", ""),
                 "status": group.get("resolutionStatus", ""),
-                "message": item.get("representative", {}).get("message", "").split("\n")[0],
+                "message": item.get("representative", {})
+                .get("message", "")
+                .split("\n")[0],
                 "count": range_count,
                 "activeBuckets": active_buckets,
                 "firstSeenTime": range_first or item.get("firstSeenTime", ""),
@@ -200,7 +204,18 @@ def build_hotspot_data(filtered, since=None):
         key=lambda entry: (
             -entry["count"],
             -entry["activeBuckets"],
-            -(int(entry["lastSeenTime"].replace("-", "").replace(":", "").replace("T", "").replace("Z", "").replace(".", "")) if entry["lastSeenTime"] else 0),
+            -(
+                int(
+                    entry["lastSeenTime"]
+                    .replace("-", "")
+                    .replace(":", "")
+                    .replace("T", "")
+                    .replace("Z", "")
+                    .replace(".", "")
+                )
+                if entry["lastSeenTime"]
+                else 0
+            ),
             entry["groupId"],
         )
     )

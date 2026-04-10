@@ -35,9 +35,18 @@ def build_parser():
     sub.required = True
 
     summary = sub.add_parser("summary", help="List error groups")
-    summary.add_argument("--json", action="store_true", default=False, help="Output as JSON instead of Markdown")
-    summary.add_argument("--status", default="OPEN", help="Comma-separated status filter (default: OPEN)")
-    summary.add_argument("--group-by", choices=["service"], default=None, help="Group results by service")
+    summary.add_argument(
+        "--json",
+        action="store_true",
+        default=False,
+        help="Output as JSON instead of Markdown",
+    )
+    summary.add_argument(
+        "--status", default="OPEN", help="Comma-separated status filter (default: OPEN)"
+    )
+    summary.add_argument(
+        "--group-by", choices=["service"], default=None, help="Group results by service"
+    )
     summary.add_argument(
         "--since",
         default=None,
@@ -46,15 +55,27 @@ def build_parser():
 
     trace = sub.add_parser("trace", help="Deep-dive into an error group")
     trace.add_argument("group_id", help="Error group ID from summary output")
-    trace.add_argument("--json", action="store_true", default=False, help="Output as JSON instead of Markdown")
+    trace.add_argument(
+        "--json",
+        action="store_true",
+        default=False,
+        help="Output as JSON instead of Markdown",
+    )
     trace.add_argument(
         "--freshness",
         default="30d",
         help="Cloud Logging search window (default: 30d). Format: Nd where N is number of days (e.g. 7d, 30d, 90d)",
     )
 
-    hotspots = sub.add_parser("hotspots", help="Rank frequent error groups for weekly improvement discovery")
-    hotspots.add_argument("--json", action="store_true", default=False, help="Output as JSON instead of Markdown")
+    hotspots = sub.add_parser(
+        "hotspots", help="Rank frequent error groups for weekly improvement discovery"
+    )
+    hotspots.add_argument(
+        "--json",
+        action="store_true",
+        default=False,
+        help="Output as JSON instead of Markdown",
+    )
     hotspots.add_argument(
         "--status",
         default="OPEN,ACKNOWLEDGED,RESOLVED",
@@ -71,7 +92,12 @@ def build_parser():
         default="30d",
         help="Error Reporting time window (default: 30d)",
     )
-    hotspots.add_argument("--limit", type=int, default=20, help="Maximum number of hotspot groups to show (default: 20)")
+    hotspots.add_argument(
+        "--limit",
+        type=int,
+        default=20,
+        help="Maximum number of hotspot groups to show (default: 20)",
+    )
 
     return parser
 
@@ -80,5 +106,9 @@ def main():
     parser = build_parser()
     args = parser.parse_args()
     if not args.project:
-        parser.error("--project is required (or set GCP_PROJECT env var in ~/.zshrc.local)")
-    {"summary": cmd_summary, "hotspots": cmd_hotspots, "trace": cmd_trace}[args.command](args)
+        parser.error(
+            "--project is required (or set GCP_PROJECT env var in ~/.zshrc.local)"
+        )
+    {"summary": cmd_summary, "hotspots": cmd_hotspots, "trace": cmd_trace}[
+        args.command
+    ](args)

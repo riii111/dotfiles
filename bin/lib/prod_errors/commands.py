@@ -10,15 +10,25 @@ from prod_errors.client import (
     period_timedelta_for,
     timed_count_duration_for_period,
 )
-from prod_errors.formatters import print_flat_summary, print_hotspots, print_service_summary
-from prod_errors.logic import build_hotspot_data, build_service_summary_data, build_summary_data
-from prod_errors.trace import cmd_trace
+from prod_errors.formatters import (
+    print_flat_summary,
+    print_hotspots,
+    print_service_summary,
+)
+from prod_errors.logic import (
+    build_hotspot_data,
+    build_service_summary_data,
+    build_summary_data,
+)
+from prod_errors.trace import cmd_trace as trace_cmd
 
 
 def cmd_summary(args):
     since = parse_since(args.since) if args.since else None
     token = get_token()
-    groups = api_get_all_pages(build_group_stats_url(args.project), token, "errorGroupStats")
+    groups = api_get_all_pages(
+        build_group_stats_url(args.project), token, "errorGroupStats"
+    )
     statuses = {status.strip().upper() for status in args.status.split(",")}
     filtered = [
         group
@@ -26,7 +36,9 @@ def cmd_summary(args):
         if group["group"].get("resolutionStatus", "UNKNOWN") in statuses
     ]
     if since:
-        filtered = [group for group in filtered if group.get("lastSeenTime", "") >= since]
+        filtered = [
+            group for group in filtered if group.get("lastSeenTime", "") >= since
+        ]
 
     if args.group_by == "service":
         data = build_service_summary_data(filtered, since)
@@ -131,3 +143,7 @@ def cmd_hotspots(args):
         f"Status: {args.status} | Window: {label} | Limit: {args.limit} | Total: {len(hotspots)}\n"
     )
     print_hotspots(hotspots)
+
+
+def cmd_trace(args):
+    return trace_cmd(args)

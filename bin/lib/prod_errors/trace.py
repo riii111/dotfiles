@@ -2,7 +2,16 @@ import json
 import re
 import sys
 
-from prod_errors.ansi import _BOLD, _CYAN, _DIM, _GREEN, _RED, _YELLOW, color, strip_ansi
+from prod_errors.ansi import (
+    _BOLD,
+    _CYAN,
+    _DIM,
+    _GREEN,
+    _RED,
+    _YELLOW,
+    color,
+    strip_ansi,
+)
 from prod_errors.client import (
     API_BASE,
     LoggingError,
@@ -88,7 +97,9 @@ def _build_trace_result(group_id, target):
 
 def _print_trace_header(group_id, target, known_service, colors):
     print(f"{colors['bold']('## Error Group:')} {colors['cyan'](group_id)}\n")
-    print(f"- Message: {target.get('representative', {}).get('message', '').splitlines()[0][:120]}")
+    print(
+        f"- Message: {target.get('representative', {}).get('message', '').splitlines()[0][:120]}"
+    )
     print(f"- Count: {target.get('count', '0')}")
     print(f"- First: {target.get('firstSeenTime', '')[:19]}Z")
     print(f"- Last:  {target.get('lastSeenTime', '')[:19]}Z")
@@ -121,8 +132,7 @@ def _build_cloud_logging_filter(first_line, known_service):
     search = first_line[:80].replace('"', '\\"')
     if known_service:
         return (
-            f'resource.labels.service_name="{known_service}" '
-            f'"{search}" severity>=ERROR'
+            f'resource.labels.service_name="{known_service}" "{search}" severity>=ERROR'
         )
     return f'"{search}" severity>=ERROR'
 
@@ -151,7 +161,9 @@ def _lookup_trace_lifecycle(project, token, service, trace_id, freshness):
     trace_filter = (
         f'resource.labels.service_name="{service}" jsonPayload.trace_id="{trace_id}"'
     )
-    trace_logs = logging_read(project, token, trace_filter, limit=50, freshness=freshness)
+    trace_logs = logging_read(
+        project, token, trace_filter, limit=50, freshness=freshness
+    )
     if trace_logs:
         return trace_logs
 
@@ -223,7 +235,9 @@ def _lookup_retry_logs(project, token, service, endpoint, error_timestamp, fresh
         f'jsonPayload.message:"{endpoint}" '
         f'timestamp>="{error_timestamp}"'
     )
-    retry_logs = logging_read(project, token, retry_filter, limit=30, freshness=freshness)
+    retry_logs = logging_read(
+        project, token, retry_filter, limit=30, freshness=freshness
+    )
     return retry_filter, retry_logs
 
 
@@ -284,7 +298,9 @@ def cmd_trace(args):
         lookup = _lookup_cloud_logging(args.project, token, filt, args.freshness)
     except LoggingError as exc:
         result["cloudLogging"]["error"] = str(exc)
-        _print_trace_error_result(args.json, result, f"**Cloud Logging query FAILED**: {exc}")
+        _print_trace_error_result(
+            args.json, result, f"**Cloud Logging query FAILED**: {exc}"
+        )
         return
 
     if not lookup:
@@ -335,7 +351,9 @@ def cmd_trace(args):
         )
     except LoggingError as exc:
         result["lifecycle"] = {"error": str(exc)}
-        _print_trace_error_result(args.json, result, f"\n**Cloud Logging trace query FAILED**: {exc}")
+        _print_trace_error_result(
+            args.json, result, f"\n**Cloud Logging trace query FAILED**: {exc}"
+        )
         return
 
     if trace_logs:
@@ -346,7 +364,9 @@ def cmd_trace(args):
             "entries": lifecycle_entries,
         }
         if not args.json:
-            _print_log_entries("### Request Lifecycle (trace-level match)", lifecycle_entries, colors)
+            _print_log_entries(
+                "### Request Lifecycle (trace-level match)", lifecycle_entries, colors
+            )
     else:
         result["lifecycle"] = {
             "scope": "latest_event_only",
@@ -354,7 +374,9 @@ def cmd_trace(args):
             "entries": [],
         }
 
-    endpoint, error_timestamp, http_status = _extract_retry_context(trace_logs, lookup["logs"])
+    endpoint, error_timestamp, http_status = _extract_retry_context(
+        trace_logs, lookup["logs"]
+    )
     if not endpoint or not error_timestamp:
         result["retryCheck"] = {"status": "could_not_extract_endpoint"}
         if args.json:
@@ -383,8 +405,12 @@ def cmd_trace(args):
             print(f"- Endpoint: `{endpoint}` (HTTP {http_status})")
             print(f"- Error at: {error_timestamp[:23]}Z")
             print(f"- Verdict: {colors['yellow']('Error within success response')}")
-            print(f"  Endpoint returned HTTP {http_status} but ERROR was logged internally.")
-            print("  Retry check not applicable — the endpoint does not fail at HTTP level.")
+            print(
+                f"  Endpoint returned HTTP {http_status} but ERROR was logged internally."
+            )
+            print(
+                "  Retry check not applicable — the endpoint does not fail at HTTP level."
+            )
         return
 
     if not args.json:
@@ -403,7 +429,9 @@ def cmd_trace(args):
         )
     except LoggingError as exc:
         result["retryCheck"] = {"error": str(exc)}
-        _print_trace_error_result(args.json, result, f"**Retry check query FAILED**: {exc}")
+        _print_trace_error_result(
+            args.json, result, f"**Retry check query FAILED**: {exc}"
+        )
         return
 
     ok, fail, first_ok_timestamp, verdict = _summarize_retry_logs(retry_logs)
@@ -432,4 +460,6 @@ def cmd_trace(args):
             f"- Verdict: {colors['red']('Not recovered')} (endpoint-level match, not trace-level)"
         )
     else:
-        print(f"- Verdict: {colors['yellow']('Unknown')} (no subsequent requests on this endpoint)")
+        print(
+            f"- Verdict: {colors['yellow']('Unknown')} (no subsequent requests on this endpoint)"
+        )

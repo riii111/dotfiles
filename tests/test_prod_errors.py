@@ -1,6 +1,13 @@
+# ruff: noqa: E402
+
+import argparse
+import contextlib
+import io
+import json
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -11,12 +18,11 @@ if str(LIB) not in sys.path:
 from prod_errors.cli import build_parser
 from prod_errors.ansi import display_width, pad_left, pad_right, trunc
 from prod_errors.commands import cmd_hotspots, cmd_trace
-from prod_errors.logic import build_hotspot_data, build_service_summary_data, windowed_counts
-from unittest import mock
-import argparse
-import io
-import contextlib
-import json
+from prod_errors.logic import (
+    build_hotspot_data,
+    build_service_summary_data,
+    windowed_counts,
+)
 
 
 def make_group(
