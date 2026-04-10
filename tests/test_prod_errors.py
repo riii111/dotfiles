@@ -10,7 +10,7 @@ if str(LIB) not in sys.path:
 
 from prod_errors.cli import build_parser
 from prod_errors.ansi import display_width, pad_left, pad_right, trunc
-from prod_errors.commands import cmd_hotspots
+from prod_errors.commands import cmd_hotspots, cmd_trace
 from prod_errors.logic import build_hotspot_data, build_service_summary_data, windowed_counts
 from unittest import mock
 import argparse
@@ -257,6 +257,152 @@ class ProdErrorsCommandTest(unittest.TestCase):
         self.assertEqual(payload["total"], 1)
         self.assertEqual(payload["errors"][0]["groupId"], "g-open")
         self.assertEqual(payload["errors"][0]["activeBuckets"], 1)
+
+    @mock.patch("prod_errors.trace.get_token", return_value="token")
+    @mock.patch("prod_errors.trace.api_get")
+    @mock.patch("prod_errors.trace.api_get_all_pages")
+    @mock.patch("prod_errors.trace.logging_read")
+    def test_cmd_trace_shows_matched_logs_without_cloud_trace_id(
+        self,
+        mock_logging_read,
+        mock_api_get_all_pages,
+        mock_api_get,
+        _mock_get_token,
+    ):
+        mock_api_get_all_pages.return_value = [
+            make_group(
+                "g-trace",
+                "OPEN",
+                "FooError: boom",
+                5,
+                "2026-04-01T00:00:00.000000Z",
+                "2026-04-05T00:00:00.000000Z",
+                "svc-a",
+            )
+        ]
+        mock_api_get.return_value = {
+            "errorEvents": [
+                {
+                    "eventTime": "2026-04-05T00:00:00.000000Z",
+                    "serviceContext": {"service": "svc-a"},
+                }
+            ]
+        }
+        mock_logging_read.return_value = [
+            {
+                "timestamp": "2026-04-05T00:00:00.000000Z",
+                "severity": "ERROR",
+                "resource": {"labels": {"service_name": "svc-a"}},
+                "textPayload": "FooError: boom",
+            }
+        ]
+
+        args = argparse.Namespace(
+            project="demo",
+            group_id="g-trace",
+            json=False,
+            freshness="30d",
+        )
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            cmd_trace(args)
+
+        output = stdout.getvalue()
+        self.assertIn("## Error Group: g-trace", output)
+        self.assertIn("### Matched Error Logs", output)
+        self.assertIn("Cloud Trace ID: (not found)", output)
+        self.assertIn("Request-lifecycle lookup is unavailable", output)
+
+    @mock.patch("prod_errors.trace.get_token", return_value="token")
+    @mock.patch("prod_errors.trace.api_get")
+    @mock.patch("prod_errors.trace.api_get_all_pages")
+    @mock.patch("prod_errors.trace.logging_read")
+    def test_cmd_trace_json_includes_lifecycle_and_retry_check(
+        self,
+        mock_logging_read,
+        mock_api_get_all_pages,
+        mock_api_get,
+        _mock_get_token,
+    ):
+        mock_api_get_all_pages.return_value = [
+            make_group(
+                "g-trace",
+                "OPEN",
+                "FooError: boom",
+                5,
+                "2026-04-01T00:00:00.000000Z",
+                "2026-04-05T00:00:00.000000Z",
+                "svc-a",
+            )
+        ]
+        mock_api_get.return_value = {
+            "errorEvents": [
+                {
+                    "eventTime": "2026-04-05T00:00:00.000000Z",
+                    "serviceContext": {"service": "svc-a"},
+                }
+            ]
+        }
+        mock_logging_read.side_effect = [
+            [
+                {
+                    "timestamp": "2026-04-05T00:00:00.000000Z",
+                    "severity": "ERROR",
+                    "resource": {"labels": {"service_name": "svc-a"}},
+                    "jsonPayload": {
+                        "message": "FooError: boom",
+                        "logger": "app",
+                        "trace_id": "trace-123",
+                    },
+                }
+            ],
+            [
+                {
+                    "timestamp": "2026-04-05T00:00:02.000000Z",
+                    "severity": "INFO",
+                    "jsonPayload": {
+                        "message": "200 OK: GET - /foo in 20ms",
+                        "logger": "access",
+                    },
+                },
+                {
+                    "timestamp": "2026-04-05T00:00:01.000000Z",
+                    "severity": "ERROR",
+                    "jsonPayload": {
+                        "message": "500 Internal Server Error: GET - /foo in 10ms",
+                        "logger": "app",
+                    },
+                },
+            ],
+            [
+                {
+                    "timestamp": "2026-04-05T00:00:03.000000Z",
+                    "severity": "INFO",
+                    "jsonPayload": {
+                        "message": "200 OK: GET - /foo in 20ms",
+                        "logger": "access",
+                    },
+                }
+            ],
+        ]
+
+        args = argparse.Namespace(
+            project="demo",
+            group_id="g-trace",
+            json=True,
+            freshness="30d",
+        )
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            cmd_trace(args)
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["groupId"], "g-trace")
+        self.assertEqual(payload["cloudLogging"]["traceId"], "trace-123")
+        self.assertEqual(len(payload["lifecycle"]["entries"]), 2)
+        self.assertEqual(payload["retryCheck"]["verdict"], "endpoint_healthy")
 
 
 if __name__ == "__main__":
