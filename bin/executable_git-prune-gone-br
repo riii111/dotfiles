@@ -132,6 +132,8 @@ def main(argv):
             elif not detail["upstream"] and is_merged_into(base_branch, branch):
                 reason = "merged branch"
                 delete_args = ("branch", "-d", branch)
+            elif branch.startswith("_slot-") and not detail["upstream"]:
+                reason = "orphan slot branch"
 
             if reason is None:
                 continue
