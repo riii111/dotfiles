@@ -46,18 +46,50 @@ def worktree_branches():
     return branches
 
 
-def gone_branches():
+def branch_details():
     output = git_output(
         "for-each-ref",
-        "--format=%(refname:short)\t%(upstream:track)",
+        "--format=%(refname:short)\t%(upstream:short)\t%(upstream:track)",
         "refs/heads",
     )
     for line in output.splitlines():
         if not line:
             continue
-        branch, _, track = line.partition("\t")
-        if track == "[gone]":
-            yield branch
+        branch, _, rest = line.partition("\t")
+        upstream, _, track = rest.partition("\t")
+        yield {
+            "branch": branch,
+            "upstream": upstream,
+            "track": track,
+        }
+
+
+def default_branch():
+    try:
+        origin_head = git_output("symbolic-ref", "refs/remotes/origin/HEAD")
+        prefix = "refs/remotes/origin/"
+        if origin_head.startswith(prefix):
+            return origin_head[len(prefix) :]
+    except subprocess.CalledProcessError:
+        pass
+
+    for candidate in ("main", "master"):
+        if git_run("show-ref", "--verify", f"refs/heads/{candidate}").returncode == 0:
+            return candidate
+
+    current = git_output("branch", "--show-current")
+    if current:
+        return current
+
+    raise subprocess.CalledProcessError(
+        returncode=1,
+        cmd=["git", "branch", "--show-current"],
+    )
+
+
+def is_merged_into(base_branch, branch):
+    result = git_run("merge-base", "--is-ancestor", branch, base_branch)
+    return result.returncode == 0
 
 
 def parse_args(argv):
@@ -78,25 +110,40 @@ def main(argv):
         )
 
         active_worktrees = worktree_branches()
+        base_branch = default_branch()
         lines = []
         removed = 0
         skipped = 0
         exit_code = 0
 
-        for branch in gone_branches():
+        for detail in branch_details():
+            branch = detail["branch"]
+            if branch == base_branch:
+                continue
             if branch in active_worktrees:
                 lines.append(style(YELLOW, f"Skipped (worktree): {branch}"))
                 skipped += 1
                 continue
 
+            reason = None
+            delete_args = ("branch", "-D", branch)
+            if detail["track"] == "[gone]":
+                reason = "gone branch"
+            elif not detail["upstream"] and is_merged_into(base_branch, branch):
+                reason = "merged branch"
+                delete_args = ("branch", "-d", branch)
+
+            if reason is None:
+                continue
+
             if args.dry_run:
-                lines.append(style(GREEN, f"Would remove (branch): {branch}"))
+                lines.append(style(GREEN, f"Would remove ({reason}): {branch}"))
                 removed += 1
                 continue
 
-            result = git_run("branch", "-D", branch)
+            result = git_run(*delete_args)
             if result.returncode == 0:
-                lines.append(style(GREEN, f"Removed (branch): {branch}"))
+                lines.append(style(GREEN, f"Removed ({reason}): {branch}"))
                 removed += 1
             else:
                 lines.append(style(YELLOW, f"Skipped (delete failed): {branch}"))
@@ -104,7 +151,7 @@ def main(argv):
                 exit_code = 1
 
         if not lines:
-            print("No gone branches found")
+            print("No stale branches found")
             return 0
 
         print("\n".join(lines))

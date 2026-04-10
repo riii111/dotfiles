@@ -88,24 +88,41 @@ class GitPruneGoneTest(unittest.TestCase):
 
         dry_run = self.run_script(BR_SCRIPT, "--dry-run")
         self.assertEqual(dry_run.returncode, 0)
-        self.assertIn("Would remove (branch): remove-me", dry_run.stdout)
+        self.assertIn("Would remove (gone branch): remove-me", dry_run.stdout)
         self.assertIn("Skipped (worktree): worktree-branch", dry_run.stdout)
         self.assertIn("Summary: 1 would remove, 1 skipped", dry_run.stdout)
 
         result = self.run_script(BR_SCRIPT)
 
         self.assertEqual(result.returncode, 0)
-        self.assertIn("Removed (branch): remove-me", result.stdout)
+        self.assertIn("Removed (gone branch): remove-me", result.stdout)
         self.assertIn("Skipped (worktree): worktree-branch", result.stdout)
         self.assertIn("Summary: 1 removed, 1 skipped", result.stdout)
         self.assertEqual(self.git("branch", "--list", "remove-me"), "")
         self.assertIn("worktree-branch", self.git("branch", "--list", "worktree-branch"))
 
-    def test_branch_script_reports_no_gone_branches(self):
+    def test_branch_script_removes_merged_local_branch_without_upstream(self):
+        self.git("checkout", "-b", "merged-local")
+        self.commit_file("merged-local.txt", "merged-local\n", "merged-local")
+        self.git("checkout", "main")
+        self.git("merge", "--ff-only", "merged-local")
+
+        dry_run = self.run_script(BR_SCRIPT, "--dry-run")
+
+        self.assertEqual(dry_run.returncode, 0)
+        self.assertIn("Would remove (merged branch): merged-local", dry_run.stdout)
+
         result = self.run_script(BR_SCRIPT)
 
         self.assertEqual(result.returncode, 0)
-        self.assertEqual(result.stdout.strip(), "No gone branches found")
+        self.assertIn("Removed (merged branch): merged-local", result.stdout)
+        self.assertEqual(self.git("branch", "--list", "merged-local"), "")
+
+    def test_branch_script_reports_no_stale_branches(self):
+        result = self.run_script(BR_SCRIPT)
+
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout.strip(), "No stale branches found")
 
     def test_worktree_script_removes_only_worktree(self):
         self.create_tracked_branch("gone-worktree")
