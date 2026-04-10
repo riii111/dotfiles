@@ -27,9 +27,9 @@ def print_flat_summary(items, since=None):
     is_tty = sys.stdout.isatty()
 
     if not is_tty:
-        header = "| # | Status | groupId | Error | Count | First | Last | Service | Related |"
+        header = "| # | Status | Group | Error | Count | First | Last | Service | Related |"
         if since:
-            header = "| # | Status | New? | groupId | Error | Count | First | Last | Service | Related |"
+            header = "| # | Status | New? | Group | Error | Count | First | Last | Service | Related |"
         print(header)
         print("-" * len(header))
         for idx, item in enumerate(items, 1):
@@ -97,9 +97,9 @@ def print_flat_summary(items, since=None):
             )
 
     headers = (
-        ("#", "Status", "New?", "groupId", "Error", "Count", "First", "Last", "Service", "Related")
+        ("#", "Status", "New?", "Group", "Error", "Count", "First", "Last", "Service", "Related")
         if since
-        else ("#", "Status", "groupId", "Error", "Count", "First", "Last", "Service", "Related")
+        else ("#", "Status", "Group", "Error", "Count", "First", "Last", "Service", "Related")
     )
     widths = col_widths(rows, headers)
 
@@ -112,7 +112,7 @@ def print_flat_summary(items, since=None):
             if colorize:
                 if col_name == "Status":
                     padded = status_color.get(plain, color())(pad_right(plain, width))
-                elif col_name == "groupId":
+                elif col_name == "Group":
                     padded = gid_color(pad_right(plain, width))
                 elif col_name == "Service":
                     padded = service_color(pad_right(plain, width))
@@ -191,15 +191,15 @@ def print_hotspots(items):
     is_tty = sys.stdout.isatty()
 
     if not is_tty:
-        print("| # | groupId | Error | Count | Days | First | Last | Service | Status | Related |")
-        print("|---|---------|-------|-------|------|-------|------|---------|--------|---------|")
+        print("| # | Group | Error | Count | Days | First | Last | Service | Status | Related |")
+        print("|---|-------|-------|-------|------|-------|------|---------|--------|---------|")
         for idx, item in enumerate(items, 1):
             rel = f"#{item['relatedTo']}?" if item.get("relatedTo") else ""
             print(
-                f"| {idx} | `{item['groupId']}` | {_display_message(item)[:80]} | {item['count']} | "
-                f"{item['activeDays']} | {item['firstSeenTime'][:10]} | {item['lastSeenTime'][:10]} | "
-                f"{_display_service(item)} | {item['status']} | {rel} |"
-            )
+                    f"| {idx} | `{item['groupId']}` | {_display_message(item)[:80]} | {item['count']} | "
+                    f"{item['activeBuckets']} | {item['firstSeenTime'][:10]} | {item['lastSeenTime'][:10]} | "
+                    f"{_display_service(item)} | {item['status']} | {rel} |"
+                )
         return
 
     status_color = {
@@ -217,7 +217,7 @@ def print_hotspots(items):
             item["groupId"],
             trunc(_display_message(item), 48),
             str(item["count"]),
-            str(item["activeDays"]),
+            str(item["activeBuckets"]),
             item["firstSeenTime"][:10],
             item["lastSeenTime"][:10],
             trunc(_display_service(item), 32),
@@ -226,7 +226,7 @@ def print_hotspots(items):
         )
         for idx, item in enumerate(items, 1)
     ]
-    headers = ("#", "groupId", "Error", "Count", "Days", "First", "Last", "Service", "Status", "Related")
+    headers = ("#", "Group", "Error", "Count", "Buckets", "First", "Last", "Service", "Status", "Related")
     widths = col_widths(rows, headers)
 
     def render_row(cells, colorize=False):
@@ -234,9 +234,9 @@ def print_hotspots(items):
         for idx, (cell, width) in enumerate(zip(cells, widths)):
             col_name = headers[idx]
             plain = str(cell)
-            padded = pad_left(plain, width) if col_name in ("Count", "Days") else pad_right(plain, width)
+            padded = pad_left(plain, width) if col_name in ("Count", "Buckets") else pad_right(plain, width)
             if colorize:
-                if col_name == "groupId":
+                if col_name == "Group":
                     padded = gid_color(pad_right(plain, width))
                 elif col_name == "Service":
                     padded = service_color(pad_right(plain, width))
@@ -244,7 +244,7 @@ def print_hotspots(items):
                     padded = status_color.get(plain, color())(pad_right(plain, width))
                 elif col_name == "Related":
                     padded = rel_color(pad_right(plain, width))
-                elif col_name in ("Count", "Days"):
+                elif col_name in ("Count", "Buckets"):
                     padded = pad_left(plain, width)
                 else:
                     padded = pad_right(plain, width)

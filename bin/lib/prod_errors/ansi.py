@@ -15,7 +15,7 @@ def color(*codes):
     open_seq = "".join(codes)
 
     def wrap(text):
-        if not sys.stdout.isatty():
+        if not sys.stdout.isatty() or not open_seq:
             return str(text)
         return f"{open_seq}{text}{_RESET}"
 
@@ -65,3 +65,9 @@ def pad_left(text, width):
 def pad_right(text, width):
     text = str(text)
     return text + " " * max(width - display_width(text), 0)
+
+
+def strip_ansi(text):
+    import re
+
+    return re.sub(r"\x1b\[[0-9;]*m", "", text)

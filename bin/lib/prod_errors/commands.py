@@ -1,9 +1,8 @@
 import json
-import re
 import sys
 from datetime import datetime, timezone
 
-from prod_errors.ansi import _BOLD, _CYAN, _DIM, _GREEN, _RED, _YELLOW, color
+from prod_errors.ansi import _BOLD, _CYAN, _DIM, _GREEN, _RED, _YELLOW, color, strip_ansi
 from prod_errors.client import (
     API_BASE,
     LoggingError,
@@ -14,6 +13,7 @@ from prod_errors.client import (
     get_service_from_group,
     get_token,
     logging_read,
+    parse_since,
     period_timedelta_for,
     timed_count_duration_for_period,
 )
@@ -21,8 +21,32 @@ from prod_errors.formatters import print_flat_summary, print_hotspots, print_ser
 from prod_errors.logic import build_hotspot_data, build_service_summary_data, build_summary_data
 
 
+def _summarize_log_entry(entry):
+    payload = entry.get("jsonPayload", {})
+    raw = payload.get("message", "") or entry.get("textPayload", "")
+    return {
+        "timestamp": entry.get("timestamp", ""),
+        "severity": entry.get("severity", ""),
+        "logger": payload.get("logger", ""),
+        "message": strip_ansi(raw).split("\n")[0][:150],
+    }
+
+
+def _print_log_entries(title, entries, bold, dim, severity_color):
+    if not entries:
+        return
+    print(f"\n{bold(title)}\n")
+    for log_entry in entries:
+        severity = log_entry["severity"]
+        print(
+            f"  [{log_entry['timestamp'][:23]}] "
+            f"{severity_color.get(severity, color())(f'{severity:7s}')} "
+            f"[{dim(log_entry['logger'])}] {log_entry['message']}"
+        )
+
+
 def cmd_summary(args):
-    since = args.parse_since(args.since) if args.since else None
+    since = parse_since(args.since) if args.since else None
     token = get_token()
     groups = api_get_all_pages(build_group_stats_url(args.project), token, "errorGroupStats")
     statuses = {status.strip().upper() for status in args.status.split(",")}
@@ -74,7 +98,7 @@ def cmd_hotspots(args):
         print("--limit must be greater than 0", file=sys.stderr)
         sys.exit(1)
 
-    since = args.parse_since(args.since) if args.since else None
+    since = parse_since(args.since) if args.since else None
     if since:
         window_begin = (
             datetime.now(timezone.utc) - period_timedelta_for(args.period)
@@ -245,22 +269,29 @@ def cmd_trace(args):
     service = resource_labels.get(
         "service_name", resource_labels.get("configuration_name", "unknown")
     )
+    matched_logs = [_summarize_log_entry(log_entry) for log_entry in logs]
     trace_id = extract_trace_id(entry)
     result["cloudLogging"]["service"] = service
     result["cloudLogging"]["traceId"] = trace_id or None
+    result["cloudLogging"]["matchedEntries"] = matched_logs
 
     if not as_json:
         print(f"- Service: {bold(service)}")
-        print(f"- Trace ID: `{trace_id}`")
+        print(f"- Cloud Trace ID: `{trace_id}`" if trace_id else "- Cloud Trace ID: (not found)")
+        _print_log_entries(
+            "### Matched Error Logs",
+            list(reversed(matched_logs)),
+            bold,
+            dim,
+            severity_color,
+        )
 
     if not trace_id:
         if as_json:
             print(json.dumps(result, indent=2, ensure_ascii=False))
         else:
-            print("\nNo trace_id in log entry. Likely an uncaught exception logged as textPayload.")
-            print("Tip: search Cloud Logging manually with:")
-            print(f'  `resource.labels.service_name="{service}" severity>=ERROR`')
-            print("  and look at surrounding logs by timestamp.")
+            print("\nCloud Trace ID was not found in the matched log entry.")
+            print("Request-lifecycle lookup is unavailable, but the matched error logs above can be used to inspect this hotspot.")
         return
 
     trace_filter = f'resource.labels.service_name="{service}" jsonPayload.trace_id="{trace_id}"'
@@ -281,13 +312,14 @@ def cmd_trace(args):
         lifecycle = []
         for trace_log in reversed(trace_logs):
             payload = trace_log.get("jsonPayload", {})
-            raw = payload.get("message", "") or trace_log.get("textPayload", "")
             lifecycle.append(
                 {
                     "timestamp": trace_log.get("timestamp", ""),
                     "severity": trace_log.get("severity", ""),
                     "logger": payload.get("logger", ""),
-                    "message": re.sub(r"\x1b\[[0-9;]*m", "", raw).split("\n")[0][:150],
+                    "message": strip_ansi(
+                        payload.get("message", "") or trace_log.get("textPayload", "")
+                    ).split("\n")[0][:150],
                 }
             )
         result["lifecycle"] = {
@@ -296,14 +328,13 @@ def cmd_trace(args):
             "entries": lifecycle,
         }
         if not as_json:
-            print(f"\n{bold('### Request Lifecycle (trace-level match)')}\n")
-            for lifecycle_entry in lifecycle:
-                severity = lifecycle_entry["severity"]
-                print(
-                    f"  [{lifecycle_entry['timestamp'][:23]}] "
-                    f"{severity_color.get(severity, color())(f'{severity:7s}')} "
-                    f"[{dim(lifecycle_entry['logger'])}] {lifecycle_entry['message']}"
-                )
+            _print_log_entries(
+                "### Request Lifecycle (trace-level match)",
+                lifecycle,
+                bold,
+                dim,
+                severity_color,
+            )
 
     access_log_re = re.compile(
         r"(\d{3})\s+[\w ]+:\s+(GET|POST|PUT|PATCH|DELETE)\s+-\s+(.+?)\s+in\s+\d+ms"
@@ -319,7 +350,7 @@ def cmd_trace(args):
         severity = trace_log.get("severity", "")
         payload = trace_log.get("jsonPayload", {})
         raw = payload.get("message", "") or trace_log.get("textPayload", "")
-        clean = re.sub(r"\x1b\[[0-9;]*m", "", raw)
+        clean = strip_ansi(raw)
         if severity in ("ERROR", "CRITICAL"):
             error_timestamps.append(timestamp)
         match = access_log_re.search(clean)
@@ -398,7 +429,7 @@ def cmd_trace(args):
     for retry_log in reversed(retry_logs):
         payload = retry_log.get("jsonPayload", {})
         raw = payload.get("message", "") or retry_log.get("textPayload", "")
-        message = re.sub(r"\x1b\[[0-9;]*m", "", raw)
+        message = strip_ansi(raw)
         if "200 OK" in message:
             ok += 1
             if first_ok_timestamp is None:

@@ -1,7 +1,5 @@
 import argparse
 import os
-
-from prod_errors.client import parse_since
 from prod_errors.commands import cmd_hotspots, cmd_summary, cmd_trace
 
 
@@ -65,7 +63,7 @@ def build_parser():
     hotspots.add_argument(
         "--since",
         default=None,
-        help="Approximate lower bound inside the selected period. Counts are recalculated from timed buckets when set.",
+        help="Approximate lower bound inside the selected period. Counts are recalculated from timed buckets when set, and overlapping buckets are counted in full.",
     )
     hotspots.add_argument(
         "--period",
@@ -83,5 +81,4 @@ def main():
     args = parser.parse_args()
     if not args.project:
         parser.error("--project is required (or set GCP_PROJECT env var in ~/.zshrc.local)")
-    args.parse_since = parse_since
     {"summary": cmd_summary, "hotspots": cmd_hotspots, "trace": cmd_trace}[args.command](args)

@@ -1,7 +1,6 @@
 import configparser
 import json
 import os
-import re
 import sqlite3
 import subprocess
 import sys
@@ -135,12 +134,6 @@ def logging_read(project, token, filt, limit=10, freshness="30d"):
     except urllib.error.URLError as e:
         raise LoggingError(str(e.reason)[:200])
     return data.get("entries", [])
-
-
-def strip_ansi(text):
-    return re.sub(r"\x1b\[[0-9;]*m", "", text)
-
-
 def extract_trace_id(entry):
     json_payload = entry.get("jsonPayload", {})
     trace_id = json_payload.get("trace_id", "")

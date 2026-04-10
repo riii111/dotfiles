@@ -184,7 +184,7 @@ def build_hotspot_data(filtered, since=None):
                 "status": group.get("resolutionStatus", ""),
                 "message": item.get("representative", {}).get("message", "").split("\n")[0],
                 "count": range_count,
-                "activeDays": active_buckets,
+                "activeBuckets": active_buckets,
                 "firstSeenTime": range_first or item.get("firstSeenTime", ""),
                 "lastSeenTime": range_last or item.get("lastSeenTime", ""),
                 "service": get_service_from_group(item) or None,
@@ -199,8 +199,8 @@ def build_hotspot_data(filtered, since=None):
     items.sort(
         key=lambda entry: (
             -entry["count"],
-            -entry["activeDays"],
-            entry["lastSeenTime"] or "",
+            -entry["activeBuckets"],
+            -(int(entry["lastSeenTime"].replace("-", "").replace(":", "").replace("T", "").replace("Z", "").replace(".", "")) if entry["lastSeenTime"] else 0),
             entry["groupId"],
         )
     )

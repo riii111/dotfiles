@@ -10,7 +10,13 @@ if str(LIB) not in sys.path:
 
 from prod_errors.cli import build_parser
 from prod_errors.ansi import display_width, pad_left, pad_right, trunc
+from prod_errors.commands import cmd_hotspots
 from prod_errors.logic import build_hotspot_data, build_service_summary_data, windowed_counts
+from unittest import mock
+import argparse
+import io
+import contextlib
+import json
 
 
 def make_group(
@@ -110,6 +116,7 @@ class ProdErrorsLogicTest(unittest.TestCase):
         self.assertEqual([item["groupId"] for item in items], ["g2", "g1"])
         self.assertEqual(items[0]["relatedTo"], 2)
         self.assertIsNone(items[1]["relatedTo"])
+        self.assertEqual(items[0]["activeBuckets"], 1)
 
     def test_build_service_summary_data_aggregates_by_service(self):
         filtered = [
@@ -175,6 +182,81 @@ class ProdErrorsCliTest(unittest.TestCase):
         self.assertEqual(args.command, "hotspots")
         self.assertEqual(args.project, "demo")
         self.assertEqual(args.period, "7d")
+
+    def test_hotspots_since_help_mentions_approximate_buckets(self):
+        parser = build_parser()
+
+        hotspots_action = next(
+            action
+            for action in parser._actions
+            if isinstance(action, argparse._SubParsersAction)
+        )
+        hotspots_parser = hotspots_action.choices["hotspots"]
+        since_action = next(
+            action for action in hotspots_parser._actions if action.dest == "since"
+        )
+
+        self.assertIn("overlapping buckets are counted in full", since_action.help)
+
+
+class ProdErrorsCommandTest(unittest.TestCase):
+    @mock.patch("prod_errors.commands.get_token", return_value="token")
+    @mock.patch("prod_errors.commands.api_get_all_pages")
+    def test_cmd_hotspots_json_filters_status_and_uses_buckets(
+        self, mock_api_get_all_pages, _mock_get_token
+    ):
+        mock_api_get_all_pages.return_value = [
+            make_group(
+                "g-open",
+                "OPEN",
+                "FooError: boom",
+                5,
+                "2026-04-01T00:00:00.000000Z",
+                "2026-04-05T00:00:00.000000Z",
+                "svc-a",
+                timed_counts=[
+                    {
+                        "count": "2",
+                        "startTime": "2026-04-03T00:00:00.000000Z",
+                        "endTime": "2026-04-04T00:00:00.000000Z",
+                    }
+                ],
+            ),
+            make_group(
+                "g-resolved",
+                "RESOLVED",
+                "BarError: boom",
+                8,
+                "2026-04-01T00:00:00.000000Z",
+                "2026-04-06T00:00:00.000000Z",
+                "svc-b",
+                timed_counts=[
+                    {
+                        "count": "8",
+                        "startTime": "2026-04-02T00:00:00.000000Z",
+                        "endTime": "2026-04-03T00:00:00.000000Z",
+                    }
+                ],
+            ),
+        ]
+
+        args = argparse.Namespace(
+            project="demo",
+            status="OPEN",
+            since="2026-04-02T12:00:00Z",
+            period="30d",
+            limit=20,
+            json=True,
+        )
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            cmd_hotspots(args)
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["total"], 1)
+        self.assertEqual(payload["errors"][0]["groupId"], "g-open")
+        self.assertEqual(payload["errors"][0]["activeBuckets"], 1)
 
 
 if __name__ == "__main__":
