@@ -1,0 +1,159 @@
+#!/usr/bin/env python3
+
+import argparse
+import subprocess
+import sys
+from pathlib import Path
+
+
+def git_output(*args, cwd=None):
+    return subprocess.check_output(["git", *args], text=True, cwd=cwd).strip()
+
+
+def git_run(*args, cwd=None):
+    return subprocess.run(
+        ["git", *args],
+        text=True,
+        cwd=cwd,
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+
+def branch_tracks():
+    output = git_output(
+        "for-each-ref",
+        "--format=%(refname)\t%(upstream:track)",
+        "refs/heads",
+    )
+    tracks = {}
+    for line in output.splitlines():
+        if not line:
+            continue
+        refname, _, track = line.partition("\t")
+        tracks[refname] = track
+    return tracks
+
+
+def worktrees():
+    output = git_output("worktree", "list", "--porcelain")
+    entries = []
+    entry = None
+
+    for line in output.splitlines():
+        if line.startswith("worktree "):
+            if entry is not None:
+                entries.append(entry)
+            entry = {
+                "path": line[len("worktree ") :],
+                "branch": None,
+                "detached": False,
+                "locked": False,
+                "prunable": False,
+            }
+        elif entry is None:
+            continue
+        elif line.startswith("branch "):
+            entry["branch"] = line[len("branch ") :]
+        elif line == "detached":
+            entry["detached"] = True
+        elif line.startswith("locked"):
+            entry["locked"] = True
+        elif line.startswith("prunable"):
+            entry["prunable"] = True
+
+    if entry is not None:
+        entries.append(entry)
+
+    return entries
+
+
+def is_dirty(path):
+    return bool(git_output("status", "--porcelain", cwd=path))
+
+
+def parse_args(argv):
+    parser = argparse.ArgumentParser(prog="git prune-gone-wt")
+    parser.add_argument("-n", "--dry-run", action="store_true")
+    return parser.parse_args(argv)
+
+
+def main(argv):
+    args = parse_args(argv)
+    subprocess.run(["git", "fetch", "--prune", "--quiet"], check=True)
+
+    current = Path(
+        git_output("rev-parse", "--path-format=absolute", "--show-toplevel")
+    ).resolve()
+    primary = Path(
+        git_output("rev-parse", "--path-format=absolute", "--git-common-dir")
+    ).resolve().parent
+    tracks = branch_tracks()
+
+    lines = []
+    removed = 0
+    skipped = 0
+    exit_code = 0
+
+    for entry in worktrees():
+        branch = entry["branch"]
+        if not branch or tracks.get(branch) != "[gone]":
+            continue
+
+        name = branch.removeprefix("refs/heads/")
+        path = Path(entry["path"]).resolve()
+
+        if path == current:
+            lines.append(f"Skipped (current): {name}")
+            skipped += 1
+            continue
+        if path == primary:
+            lines.append(f"Skipped (primary): {name}")
+            skipped += 1
+            continue
+        if entry["locked"]:
+            lines.append(f"Skipped (locked): {name}")
+            skipped += 1
+            continue
+        if entry["prunable"]:
+            lines.append(f"Skipped (prunable): {name}")
+            skipped += 1
+            continue
+        if entry["detached"]:
+            lines.append(f"Skipped (detached): {name}")
+            skipped += 1
+            continue
+        if is_dirty(path):
+            lines.append(f"Skipped (dirty): {name}")
+            skipped += 1
+            continue
+        if args.dry_run:
+            lines.append(f"Would remove (worktree): {name}")
+            removed += 1
+            continue
+
+        result = git_run("worktree", "remove", str(path))
+        if result.returncode == 0:
+            lines.append(f"Removed (worktree): {name}")
+            removed += 1
+        else:
+            lines.append(f"Skipped (remove failed): {name}")
+            skipped += 1
+            exit_code = 1
+
+    if not lines:
+        print("No gone worktrees found")
+        return 0
+
+    print("\n".join(lines))
+    if args.dry_run:
+        print(f"Summary: {removed} would remove, {skipped} skipped")
+    else:
+        print(f"Summary: {removed} removed, {skipped} skipped")
+
+    return exit_code
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))
