@@ -147,21 +147,6 @@ def _lookup_cloud_logging(project, token, filt, freshness):
     }
 
 
-def _print_cloud_logging_lookup(filt, lookup, colors):
-    print(f"\n{colors['bold']('### Cloud Logging Lookup')}\n")
-    print(f"Filter: `{filt}`\n")
-    print(f"- Service: {colors['bold'](lookup['service'])}")
-    if lookup["traceId"]:
-        print(f"- Cloud Trace ID: `{lookup['traceId']}`")
-    else:
-        print("- Cloud Trace ID: (not found)")
-    _print_log_entries(
-        "### Matched Error Logs",
-        list(reversed(lookup["matchedEntries"])),
-        colors,
-    )
-
-
 def _lookup_trace_lifecycle(project, token, service, trace_id, freshness):
     trace_filter = (
         f'resource.labels.service_name="{service}" jsonPayload.trace_id="{trace_id}"'
