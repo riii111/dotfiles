@@ -143,6 +143,20 @@ class GitPruneGoneTest(unittest.TestCase):
         self.assertIn("Skipped (dirty): dirty-worktree", result.stdout)
         self.assertTrue(worktree_path.exists())
 
+    def test_worktree_script_skips_locked_worktree(self):
+        self.create_tracked_branch("locked-worktree")
+        self.git("checkout", "main")
+        worktree_path = self.root / "locked-worktree"
+        self.git("worktree", "add", str(worktree_path), "locked-worktree")
+        self.git("worktree", "lock", str(worktree_path))
+        self.delete_remote_branch("locked-worktree")
+
+        result = self.run_script(WT_SCRIPT, "--dry-run")
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("Skipped (locked): locked-worktree", result.stdout)
+        self.assertTrue(worktree_path.exists())
+
     def test_worktree_script_reports_no_gone_worktrees(self):
         result = self.run_script(WT_SCRIPT, "--dry-run")
 

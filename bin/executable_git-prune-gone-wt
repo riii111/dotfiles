@@ -111,9 +111,11 @@ def main(argv):
         current = Path(
             git_output("rev-parse", "--path-format=absolute", "--show-toplevel")
         ).resolve()
-        primary = Path(
-            git_output("rev-parse", "--path-format=absolute", "--git-common-dir")
-        ).resolve().parent
+        primary = (
+            Path(git_output("rev-parse", "--path-format=absolute", "--git-common-dir"))
+            .resolve()
+            .parent
+        )
         tracks = branch_tracks()
 
         lines = []
