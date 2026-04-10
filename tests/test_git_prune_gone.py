@@ -175,6 +175,33 @@ class GitPruneGoneTest(unittest.TestCase):
         self.assertIn("Pruned (worktree): prunable-worktree", result.stdout)
         self.assertNotIn(str(worktree_path), self.git("worktree", "list", "--porcelain"))
 
+    def test_worktree_script_removes_managed_detached_codex_worktree(self):
+        worktree_path = self.repo / ".codex" / "worktrees" / "detached-review"
+        worktree_path.parent.mkdir(parents=True, exist_ok=True)
+        self.git("worktree", "add", "--detach", str(worktree_path), "HEAD")
+
+        dry_run = self.run_script(WT_SCRIPT, "--dry-run")
+
+        self.assertEqual(dry_run.returncode, 0)
+        self.assertIn("Would remove (worktree): detached-review", dry_run.stdout)
+        self.assertNotIn("Hint: branches still exist.", dry_run.stdout)
+
+        result = self.run_script(WT_SCRIPT)
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("Removed (worktree): detached-review", result.stdout)
+        self.assertNotIn("Hint: branches still exist.", result.stdout)
+        self.assertNotIn(str(worktree_path), self.git("worktree", "list", "--porcelain"))
+
+    def test_worktree_script_removes_managed_detached_pr_review_worktree(self):
+        worktree_path = self.root / f"{self.repo.name}-pr-123"
+        self.git("worktree", "add", "--detach", str(worktree_path), "HEAD")
+
+        result = self.run_script(WT_SCRIPT, "--dry-run")
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn(f"Would remove (worktree): {worktree_path.name}", result.stdout)
+
     def test_worktree_script_reports_no_gone_worktrees(self):
         result = self.run_script(WT_SCRIPT, "--dry-run")
 

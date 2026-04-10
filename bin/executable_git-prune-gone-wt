@@ -104,6 +104,26 @@ def worktree_name(entry):
     return Path(entry["path"]).name
 
 
+def is_managed_detached_worktree(path, repo_root):
+    path = path.resolve()
+    repo_root = repo_root.resolve()
+
+    managed_roots = (
+        repo_root / ".claude" / "worktrees",
+        repo_root / ".codex" / "worktrees",
+    )
+    for managed_root in managed_roots:
+        try:
+            path.relative_to(managed_root)
+            return True
+        except ValueError:
+            continue
+
+    parent = repo_root.parent.resolve()
+    name = path.name
+    return path.parent == parent and name.startswith(f"{repo_root.name}-pr-")
+
+
 def main(argv):
     try:
         args = parse_args(argv)
@@ -118,6 +138,7 @@ def main(argv):
         current = Path(
             git_output("rev-parse", "--path-format=absolute", "--show-toplevel")
         ).resolve()
+        repo_root = current
         primary = (
             Path(git_output("rev-parse", "--path-format=absolute", "--git-common-dir"))
             .resolve()
@@ -130,13 +151,20 @@ def main(argv):
         skipped = 0
         exit_code = 0
         prunable_names = []
+        should_show_branch_hint = False
 
         for entry in worktrees():
             branch = entry["branch"]
             is_prunable = entry["prunable"]
+            is_detached_managed = (
+                entry["detached"]
+                and is_managed_detached_worktree(Path(entry["path"]), repo_root)
+            )
             is_gone_branch = bool(branch) and tracks.get(branch) == "[gone]"
-            if not is_prunable and not is_gone_branch:
+            if not is_prunable and not is_gone_branch and not is_detached_managed:
                 continue
+            if is_gone_branch or (is_prunable and bool(branch)):
+                should_show_branch_hint = True
 
             name = worktree_name(entry)
             path = Path(entry["path"]).resolve()
@@ -159,6 +187,10 @@ def main(argv):
                     removed += 1
                 else:
                     prunable_names.append(name)
+                continue
+            if entry["detached"] and not is_detached_managed:
+                lines.append(style(YELLOW, f"Skipped (detached): {name}"))
+                skipped += 1
                 continue
             if is_dirty(path):
                 lines.append(style(YELLOW, f"Skipped (dirty): {name}"))
@@ -199,7 +231,7 @@ def main(argv):
             print(f"Summary: {removed} would remove, {skipped} skipped")
         else:
             print(f"Summary: {removed} removed, {skipped} skipped")
-        if removed > 0:
+        if should_show_branch_hint:
             print("Hint: branches still exist. Run `git prune-gone-br` to remove them.")
 
         return exit_code
