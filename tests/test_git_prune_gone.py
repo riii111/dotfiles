@@ -193,14 +193,14 @@ class GitPruneGoneTest(unittest.TestCase):
         self.assertNotIn("Hint: branches still exist.", result.stdout)
         self.assertNotIn(str(worktree_path), self.git("worktree", "list", "--porcelain"))
 
-    def test_worktree_script_removes_managed_detached_pr_review_worktree(self):
+    def test_worktree_script_ignores_detached_pr_review_worktree(self):
         worktree_path = self.root / f"{self.repo.name}-pr-123"
         self.git("worktree", "add", "--detach", str(worktree_path), "HEAD")
 
         result = self.run_script(WT_SCRIPT, "--dry-run")
 
         self.assertEqual(result.returncode, 0)
-        self.assertIn(f"Would remove (worktree): {worktree_path.name}", result.stdout)
+        self.assertEqual(result.stdout.strip(), "No gone worktrees found")
 
     def test_worktree_script_reports_no_gone_worktrees(self):
         result = self.run_script(WT_SCRIPT, "--dry-run")

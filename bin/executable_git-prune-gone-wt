@@ -118,10 +118,7 @@ def is_managed_detached_worktree(path, repo_root):
             return True
         except ValueError:
             continue
-
-    parent = repo_root.parent.resolve()
-    name = path.name
-    return path.parent == parent and name.startswith(f"{repo_root.name}-pr-")
+    return False
 
 
 def main(argv):
