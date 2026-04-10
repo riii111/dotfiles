@@ -1,13 +1,31 @@
 #!/usr/bin/env python3
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
 
 
+USE_COLOR = sys.stdout.isatty() and "NO_COLOR" not in os.environ
+GREEN = "\033[32m" if USE_COLOR else ""
+YELLOW = "\033[33m" if USE_COLOR else ""
+RESET = "\033[0m" if USE_COLOR else ""
+
+
+def style(color, text):
+    return f"{color}{text}{RESET}" if color else text
+
+
 def git_output(*args, cwd=None):
-    return subprocess.check_output(["git", *args], text=True, cwd=cwd).strip()
+    return subprocess.run(
+        ["git", *args],
+        text=True,
+        cwd=cwd,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    ).stdout.strip()
 
 
 def git_run(*args, cwd=None):
@@ -80,79 +98,90 @@ def parse_args(argv):
 
 
 def main(argv):
-    args = parse_args(argv)
-    subprocess.run(["git", "fetch", "--prune", "--quiet"], check=True)
+    try:
+        args = parse_args(argv)
+        subprocess.run(
+            ["git", "fetch", "--prune", "--quiet"],
+            check=True,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
 
-    current = Path(
-        git_output("rev-parse", "--path-format=absolute", "--show-toplevel")
-    ).resolve()
-    primary = Path(
-        git_output("rev-parse", "--path-format=absolute", "--git-common-dir")
-    ).resolve().parent
-    tracks = branch_tracks()
+        current = Path(
+            git_output("rev-parse", "--path-format=absolute", "--show-toplevel")
+        ).resolve()
+        primary = Path(
+            git_output("rev-parse", "--path-format=absolute", "--git-common-dir")
+        ).resolve().parent
+        tracks = branch_tracks()
 
-    lines = []
-    removed = 0
-    skipped = 0
-    exit_code = 0
+        lines = []
+        removed = 0
+        skipped = 0
+        exit_code = 0
 
-    for entry in worktrees():
-        branch = entry["branch"]
-        if not branch or tracks.get(branch) != "[gone]":
-            continue
+        for entry in worktrees():
+            branch = entry["branch"]
+            if not branch or tracks.get(branch) != "[gone]":
+                continue
 
-        name = branch.removeprefix("refs/heads/")
-        path = Path(entry["path"]).resolve()
+            name = branch.removeprefix("refs/heads/")
+            path = Path(entry["path"]).resolve()
 
-        if path == current:
-            lines.append(f"Skipped (current): {name}")
-            skipped += 1
-            continue
-        if path == primary:
-            lines.append(f"Skipped (primary): {name}")
-            skipped += 1
-            continue
-        if entry["locked"]:
-            lines.append(f"Skipped (locked): {name}")
-            skipped += 1
-            continue
-        if entry["prunable"]:
-            lines.append(f"Skipped (prunable): {name}")
-            skipped += 1
-            continue
-        if entry["detached"]:
-            lines.append(f"Skipped (detached): {name}")
-            skipped += 1
-            continue
-        if is_dirty(path):
-            lines.append(f"Skipped (dirty): {name}")
-            skipped += 1
-            continue
+            if path == current:
+                lines.append(style(YELLOW, f"Skipped (current): {name}"))
+                skipped += 1
+                continue
+            if path == primary:
+                lines.append(style(YELLOW, f"Skipped (primary): {name}"))
+                skipped += 1
+                continue
+            if entry["locked"]:
+                lines.append(style(YELLOW, f"Skipped (locked): {name}"))
+                skipped += 1
+                continue
+            if entry["prunable"]:
+                lines.append(style(YELLOW, f"Skipped (prunable): {name}"))
+                skipped += 1
+                continue
+            if is_dirty(path):
+                lines.append(style(YELLOW, f"Skipped (dirty): {name}"))
+                skipped += 1
+                continue
+            if args.dry_run:
+                lines.append(style(GREEN, f"Would remove (worktree): {name}"))
+                removed += 1
+                continue
+
+            result = git_run("worktree", "remove", str(path))
+            if result.returncode == 0:
+                lines.append(style(GREEN, f"Removed (worktree): {name}"))
+                removed += 1
+            else:
+                lines.append(style(YELLOW, f"Skipped (remove failed): {name}"))
+                skipped += 1
+                exit_code = 1
+
+        if not lines:
+            print("No gone worktrees found")
+            return 0
+
+        print("\n".join(lines))
         if args.dry_run:
-            lines.append(f"Would remove (worktree): {name}")
-            removed += 1
-            continue
-
-        result = git_run("worktree", "remove", str(path))
-        if result.returncode == 0:
-            lines.append(f"Removed (worktree): {name}")
-            removed += 1
+            print(f"Summary: {removed} would remove, {skipped} skipped")
         else:
-            lines.append(f"Skipped (remove failed): {name}")
-            skipped += 1
-            exit_code = 1
+            print(f"Summary: {removed} removed, {skipped} skipped")
+        if removed > 0:
+            print("Hint: branches still exist. Run `git prune-gone-br` to remove them.")
 
-    if not lines:
-        print("No gone worktrees found")
-        return 0
-
-    print("\n".join(lines))
-    if args.dry_run:
-        print(f"Summary: {removed} would remove, {skipped} skipped")
-    else:
-        print(f"Summary: {removed} removed, {skipped} skipped")
-
-    return exit_code
+        return exit_code
+    except subprocess.CalledProcessError as exc:
+        cmd = " ".join(str(part) for part in exc.cmd)
+        print(f"Error: `{cmd}` failed (exit {exc.returncode})", file=sys.stderr)
+        if exc.stderr:
+            print(exc.stderr.strip(), file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

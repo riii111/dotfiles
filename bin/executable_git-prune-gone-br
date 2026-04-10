@@ -1,11 +1,29 @@
 #!/usr/bin/env python3
 
+import argparse
+import os
 import subprocess
 import sys
 
 
+USE_COLOR = sys.stdout.isatty() and "NO_COLOR" not in os.environ
+GREEN = "\033[32m" if USE_COLOR else ""
+YELLOW = "\033[33m" if USE_COLOR else ""
+RESET = "\033[0m" if USE_COLOR else ""
+
+
+def style(color, text):
+    return f"{color}{text}{RESET}" if color else text
+
+
 def git_output(*args):
-    return subprocess.check_output(["git", *args], text=True).strip()
+    return subprocess.run(
+        ["git", *args],
+        text=True,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    ).stdout.strip()
 
 
 def git_run(*args):
@@ -42,34 +60,66 @@ def gone_branches():
             yield branch
 
 
+def parse_args(argv):
+    parser = argparse.ArgumentParser(prog="git prune-gone-br")
+    parser.add_argument("-n", "--dry-run", action="store_true")
+    return parser.parse_args(argv)
+
+
 def main(argv):
-    if argv:
-        print("Usage: git prune-gone-br", file=sys.stderr)
-        return 1
+    try:
+        args = parse_args(argv)
+        subprocess.run(
+            ["git", "fetch", "--prune", "--quiet"],
+            check=True,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
 
-    subprocess.run(["git", "fetch", "--prune", "--quiet"], check=True)
+        active_worktrees = worktree_branches()
+        lines = []
+        removed = 0
+        skipped = 0
+        exit_code = 0
 
-    active_worktrees = worktree_branches()
-    matched = False
-    exit_code = 0
+        for branch in gone_branches():
+            if branch in active_worktrees:
+                lines.append(style(YELLOW, f"Skipped (worktree): {branch}"))
+                skipped += 1
+                continue
 
-    for branch in gone_branches():
-        matched = True
-        if branch in active_worktrees:
-            print(f"Skipped (worktree): {branch}")
-            continue
+            if args.dry_run:
+                lines.append(style(GREEN, f"Would remove (branch): {branch}"))
+                removed += 1
+                continue
 
-        result = git_run("branch", "-D", branch)
-        if result.returncode == 0:
-            print(f"Removed (branch): {branch}")
+            result = git_run("branch", "-D", branch)
+            if result.returncode == 0:
+                lines.append(style(GREEN, f"Removed (branch): {branch}"))
+                removed += 1
+            else:
+                lines.append(style(YELLOW, f"Skipped (delete failed): {branch}"))
+                skipped += 1
+                exit_code = 1
+
+        if not lines:
+            print("No gone branches found")
+            return 0
+
+        print("\n".join(lines))
+        if args.dry_run:
+            print(f"Summary: {removed} would remove, {skipped} skipped")
         else:
-            print(f"Skipped (delete failed): {branch}")
-            exit_code = 1
+            print(f"Summary: {removed} removed, {skipped} skipped")
 
-    if not matched:
-        print("No gone branches found")
-
-    return exit_code
+        return exit_code
+    except subprocess.CalledProcessError as exc:
+        cmd = " ".join(str(part) for part in exc.cmd)
+        print(f"Error: `{cmd}` failed (exit {exc.returncode})", file=sys.stderr)
+        if exc.stderr:
+            print(exc.stderr.strip(), file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":
