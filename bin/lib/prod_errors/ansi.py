@@ -1,4 +1,5 @@
 import sys
+import unicodedata
 
 
 _BOLD = "\033[1m"
@@ -21,17 +22,46 @@ def color(*codes):
     return wrap
 
 
+def display_width(text):
+    width = 0
+    for char in str(text):
+        if unicodedata.combining(char):
+            continue
+        width += 2 if unicodedata.east_asian_width(char) in ("F", "W") else 1
+    return width
+
+
 def col_widths(rows, headers):
-    widths = [len(h) for h in headers]
+    widths = [display_width(h) for h in headers]
     for row in rows:
         for i, cell in enumerate(row):
             if i < len(widths):
-                widths[i] = max(widths[i], len(str(cell)))
+                widths[i] = max(widths[i], display_width(cell))
     return widths
 
 
 def trunc(text, maxlen):
     text = str(text)
-    if len(text) <= maxlen:
+    if display_width(text) <= maxlen:
         return text
-    return text[: maxlen - 1] + "\u2026"
+    ellipsis = "\u2026"
+    kept = []
+    current_width = 0
+    limit = maxlen - display_width(ellipsis)
+    for char in text:
+        char_width = display_width(char)
+        if current_width + char_width > limit:
+            break
+        kept.append(char)
+        current_width += char_width
+    return "".join(kept) + ellipsis
+
+
+def pad_left(text, width):
+    text = str(text)
+    return " " * max(width - display_width(text), 0) + text
+
+
+def pad_right(text, width):
+    text = str(text)
+    return text + " " * max(width - display_width(text), 0)

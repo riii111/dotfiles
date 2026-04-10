@@ -9,8 +9,18 @@ from prod_errors.ansi import (
     _YELLOW,
     col_widths,
     color,
+    pad_left,
+    pad_right,
     trunc,
 )
+
+
+def _display_message(item):
+    return item.get("message") or "(empty)"
+
+
+def _display_service(item):
+    return item.get("service") or "(unknown)"
 
 
 def print_flat_summary(items, since=None):
@@ -27,15 +37,15 @@ def print_flat_summary(items, since=None):
             if since:
                 mark = "NEW" if item["isNew"] else "REGR"
                 print(
-                    f"| {idx} | {item['status']} | {mark} | `{item['groupId']}` | {item['message'][:80]} "
+                    f"| {idx} | {item['status']} | {mark} | `{item['groupId']}` | {_display_message(item)[:80]} "
                     f"| {item['count']} | {item['firstSeenTime'][:10]} | {item['lastSeenTime'][:10]} "
-                    f"| {item.get('service') or '-'} | {rel} |"
+                    f"| {_display_service(item)} | {rel} |"
                 )
             else:
                 print(
-                    f"| {idx} | {item['status']} | `{item['groupId']}` | {item['message'][:80]} "
+                    f"| {idx} | {item['status']} | `{item['groupId']}` | {_display_message(item)[:80]} "
                     f"| {item['count']} | {item['firstSeenTime'][:10]} | {item['lastSeenTime'][:10]} "
-                    f"| {item.get('service') or '-'} | {rel} |"
+                    f"| {_display_service(item)} | {rel} |"
                 )
         print("\n> Detail: `prod-errors trace <groupId>`")
         return
@@ -63,11 +73,11 @@ def print_flat_summary(items, since=None):
                     item["status"],
                     mark,
                     item["groupId"],
-                    trunc(item["message"], 50),
+                    trunc(_display_message(item), 50),
                     str(item["count"]),
                     item["firstSeenTime"][:10],
                     item["lastSeenTime"][:10],
-                    trunc(item.get("service") or "-", 40),
+                    trunc(_display_service(item), 40),
                     rel,
                 )
             )
@@ -77,11 +87,11 @@ def print_flat_summary(items, since=None):
                     str(idx),
                     item["status"],
                     item["groupId"],
-                    trunc(item["message"], 50),
+                    trunc(_display_message(item), 50),
                     str(item["count"]),
                     item["firstSeenTime"][:10],
                     item["lastSeenTime"][:10],
-                    trunc(item.get("service") or "-", 40),
+                    trunc(_display_service(item), 40),
                     rel,
                 )
             )
@@ -98,27 +108,27 @@ def print_flat_summary(items, since=None):
         for idx, (cell, width) in enumerate(zip(cells, widths)):
             col_name = headers[idx]
             plain = str(cell)
-            padded = plain.rjust(width) if col_name == "Count" else plain.ljust(width)
+            padded = pad_left(plain, width) if col_name == "Count" else pad_right(plain, width)
             if colorize:
                 if col_name == "Status":
-                    padded = status_color.get(plain, color())(plain.ljust(width))
+                    padded = status_color.get(plain, color())(pad_right(plain, width))
                 elif col_name == "groupId":
-                    padded = gid_color(plain.ljust(width))
+                    padded = gid_color(pad_right(plain, width))
                 elif col_name == "Service":
-                    padded = service_color(plain.ljust(width))
+                    padded = service_color(pad_right(plain, width))
                 elif col_name == "New?":
-                    padded = new_color(plain.ljust(width)) if plain == "NEW" else regr_color(plain.ljust(width))
+                    padded = new_color(pad_right(plain, width)) if plain == "NEW" else regr_color(pad_right(plain, width))
                 elif col_name == "Related":
-                    padded = rel_color(plain.ljust(width))
+                    padded = rel_color(pad_right(plain, width))
                 elif col_name == "Count":
-                    padded = plain.rjust(width)
+                    padded = pad_left(plain, width)
                 else:
-                    padded = plain.ljust(width)
+                    padded = pad_right(plain, width)
             parts.append(padded)
         return " │ ".join(parts)
 
     sep = "─" * (sum(widths) + 3 * (len(widths) - 1))
-    print(" │ ".join(header_color(h.ljust(w)) for h, w in zip(headers, widths)))
+    print(" │ ".join(header_color(pad_right(h, w)) for h, w in zip(headers, widths)))
     print(sep)
     for row in rows:
         print(render_row(row, colorize=True))
@@ -158,18 +168,18 @@ def print_service_summary(items):
     headers = ("Service", "Groups", "Total", "Oldest First", "Latest Last", "Top Errors")
     widths = col_widths(rows, headers)
     sep = "─" * (sum(widths) + 3 * (len(widths) - 1))
-    print(" │ ".join(header_color(h.ljust(w)) for h, w in zip(headers, widths)))
+    print(" │ ".join(header_color(pad_right(h, w)) for h, w in zip(headers, widths)))
     print(sep)
     for row in rows:
         print(
             " │ ".join(
                 [
-                    service_color(row[0].ljust(widths[0])),
-                    row[1].rjust(widths[1]),
-                    row[2].rjust(widths[2]),
-                    row[3].ljust(widths[3]),
-                    row[4].ljust(widths[4]),
-                    dim_color(row[5].ljust(widths[5])),
+                    service_color(pad_right(row[0], widths[0])),
+                    pad_left(row[1], widths[1]),
+                    pad_left(row[2], widths[2]),
+                    pad_right(row[3], widths[3]),
+                    pad_right(row[4], widths[4]),
+                    dim_color(pad_right(row[5], widths[5])),
                 ]
             )
         )
@@ -186,9 +196,9 @@ def print_hotspots(items):
         for idx, item in enumerate(items, 1):
             rel = f"#{item['relatedTo']}?" if item.get("relatedTo") else ""
             print(
-                f"| {idx} | `{item['groupId']}` | {item['message'][:80]} | {item['count']} | "
+                f"| {idx} | `{item['groupId']}` | {_display_message(item)[:80]} | {item['count']} | "
                 f"{item['activeDays']} | {item['firstSeenTime'][:10]} | {item['lastSeenTime'][:10]} | "
-                f"{item.get('service') or '-'} | {item['status']} | {rel} |"
+                f"{_display_service(item)} | {item['status']} | {rel} |"
             )
         return
 
@@ -205,12 +215,12 @@ def print_hotspots(items):
         (
             str(idx),
             item["groupId"],
-            trunc(item["message"], 48),
+            trunc(_display_message(item), 48),
             str(item["count"]),
             str(item["activeDays"]),
             item["firstSeenTime"][:10],
             item["lastSeenTime"][:10],
-            trunc(item.get("service") or "-", 32),
+            trunc(_display_service(item), 32),
             item["status"],
             f"#{item['relatedTo']}?" if item.get("relatedTo") else "",
         )
@@ -224,25 +234,25 @@ def print_hotspots(items):
         for idx, (cell, width) in enumerate(zip(cells, widths)):
             col_name = headers[idx]
             plain = str(cell)
-            padded = plain.rjust(width) if col_name in ("Count", "Days") else plain.ljust(width)
+            padded = pad_left(plain, width) if col_name in ("Count", "Days") else pad_right(plain, width)
             if colorize:
                 if col_name == "groupId":
-                    padded = gid_color(plain.ljust(width))
+                    padded = gid_color(pad_right(plain, width))
                 elif col_name == "Service":
-                    padded = service_color(plain.ljust(width))
+                    padded = service_color(pad_right(plain, width))
                 elif col_name == "Status":
-                    padded = status_color.get(plain, color())(plain.ljust(width))
+                    padded = status_color.get(plain, color())(pad_right(plain, width))
                 elif col_name == "Related":
-                    padded = rel_color(plain.ljust(width))
+                    padded = rel_color(pad_right(plain, width))
                 elif col_name in ("Count", "Days"):
-                    padded = plain.rjust(width)
+                    padded = pad_left(plain, width)
                 else:
-                    padded = plain.ljust(width)
+                    padded = pad_right(plain, width)
             parts.append(padded)
         return " │ ".join(parts)
 
     sep = "─" * (sum(widths) + 3 * (len(widths) - 1))
-    print(" │ ".join(header_color(h.ljust(w)) for h, w in zip(headers, widths)))
+    print(" │ ".join(header_color(pad_right(h, w)) for h, w in zip(headers, widths)))
     print(sep)
     for row in rows:
         print(render_row(row, colorize=True))

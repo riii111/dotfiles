@@ -9,6 +9,7 @@ if str(LIB) not in sys.path:
     sys.path.insert(0, str(LIB))
 
 from prod_errors.cli import build_parser
+from prod_errors.ansi import display_width, pad_left, pad_right, trunc
 from prod_errors.logic import build_hotspot_data, build_service_summary_data, windowed_counts
 
 
@@ -150,6 +151,19 @@ class ProdErrorsLogicTest(unittest.TestCase):
         self.assertEqual(summary[0]["totalCount"], 8)
         self.assertEqual(summary[0]["newCount"], 0)
         self.assertEqual(summary[0]["regressedCount"], 2)
+
+
+class ProdErrorsAnsiTest(unittest.TestCase):
+    def test_display_width_counts_wide_chars(self):
+        self.assertEqual(display_width("abc"), 3)
+        self.assertEqual(display_width("ログ"), 4)
+
+    def test_padding_uses_display_width(self):
+        self.assertEqual(pad_right("ログ", 6), "ログ  ")
+        self.assertEqual(pad_left("12", 4), "  12")
+
+    def test_trunc_uses_display_width(self):
+        self.assertEqual(trunc("ログイン時にエラー", 8), "ログイ…")
 
 
 class ProdErrorsCliTest(unittest.TestCase):
