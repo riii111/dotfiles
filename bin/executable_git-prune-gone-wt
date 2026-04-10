@@ -97,6 +97,13 @@ def parse_args(argv):
     return parser.parse_args(argv)
 
 
+def worktree_name(entry):
+    branch = entry["branch"]
+    if branch:
+        return branch.removeprefix("refs/heads/")
+    return Path(entry["path"]).name
+
+
 def main(argv):
     try:
         args = parse_args(argv)
@@ -122,13 +129,16 @@ def main(argv):
         removed = 0
         skipped = 0
         exit_code = 0
+        prunable_names = []
 
         for entry in worktrees():
             branch = entry["branch"]
-            if not branch or tracks.get(branch) != "[gone]":
+            is_prunable = entry["prunable"]
+            is_gone_branch = bool(branch) and tracks.get(branch) == "[gone]"
+            if not is_prunable and not is_gone_branch:
                 continue
 
-            name = branch.removeprefix("refs/heads/")
+            name = worktree_name(entry)
             path = Path(entry["path"]).resolve()
 
             if path == current:
@@ -143,9 +153,12 @@ def main(argv):
                 lines.append(style(YELLOW, f"Skipped (locked): {name}"))
                 skipped += 1
                 continue
-            if entry["prunable"]:
-                lines.append(style(YELLOW, f"Skipped (prunable): {name}"))
-                skipped += 1
+            if is_prunable:
+                if args.dry_run:
+                    lines.append(style(GREEN, f"Would prune (worktree): {name}"))
+                    removed += 1
+                else:
+                    prunable_names.append(name)
                 continue
             if is_dirty(path):
                 lines.append(style(YELLOW, f"Skipped (dirty): {name}"))
@@ -163,6 +176,18 @@ def main(argv):
             else:
                 lines.append(style(YELLOW, f"Skipped (remove failed): {name}"))
                 skipped += 1
+                exit_code = 1
+
+        if prunable_names:
+            result = git_run("worktree", "prune", "--expire", "now")
+            if result.returncode == 0:
+                for name in prunable_names:
+                    lines.append(style(GREEN, f"Pruned (worktree): {name}"))
+                    removed += 1
+            else:
+                for name in prunable_names:
+                    lines.append(style(YELLOW, f"Skipped (prune failed): {name}"))
+                    skipped += 1
                 exit_code = 1
 
         if not lines:

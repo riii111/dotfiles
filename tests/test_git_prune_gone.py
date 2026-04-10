@@ -157,6 +157,24 @@ class GitPruneGoneTest(unittest.TestCase):
         self.assertIn("Skipped (locked): locked-worktree", result.stdout)
         self.assertTrue(worktree_path.exists())
 
+    def test_worktree_script_prunes_prunable_worktree(self):
+        self.create_tracked_branch("prunable-worktree")
+        self.git("checkout", "main")
+        worktree_path = self.root / "prunable-worktree"
+        self.git("worktree", "add", str(worktree_path), "prunable-worktree")
+        subprocess.run(["rm", "-rf", str(worktree_path)], check=True)
+
+        dry_run = self.run_script(WT_SCRIPT, "--dry-run")
+
+        self.assertEqual(dry_run.returncode, 0)
+        self.assertIn("Would prune (worktree): prunable-worktree", dry_run.stdout)
+
+        result = self.run_script(WT_SCRIPT)
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("Pruned (worktree): prunable-worktree", result.stdout)
+        self.assertNotIn(str(worktree_path), self.git("worktree", "list", "--porcelain"))
+
     def test_worktree_script_reports_no_gone_worktrees(self):
         result = self.run_script(WT_SCRIPT, "--dry-run")
 
