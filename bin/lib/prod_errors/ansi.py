@@ -1,3 +1,4 @@
+import re
 import sys
 import unicodedata
 
@@ -68,6 +69,4 @@ def pad_right(text, width):
 
 
 def strip_ansi(text):
-    import re
-
     return re.sub(r"\x1b\[[0-9;]*m", "", text)
