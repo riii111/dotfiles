@@ -469,16 +469,6 @@ open() {
 }
 
 # ==========================================
-# Wi-Fi CLI (networksetup + 1Password)
-# ==========================================
-if [[ -f "$XDG_CONFIG_HOME/wifi/wifi.zsh" ]]; then
-  source "$XDG_CONFIG_HOME/wifi/wifi.zsh"
-  alias wifi-status='wifi status'
-  alias wifi-scan='wifi scan'
-  alias wifi-tether='wifi tether'
-fi
-
-# ==========================================
 # Runtime tools
 # ==========================================
 # deno
