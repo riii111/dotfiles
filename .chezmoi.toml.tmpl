@@ -7,6 +7,7 @@ sourceDir = "{{ .chezmoi.homeDir }}/ghq/github.com/riii111/dotfiles"
     git_email_side_work = {{ promptStringOnce . "git_email_side_work" "Git email for side-work repos under side_work_org" | quote }}
     git_name = "riii111"
     git_signingkey = "059E3467BC399937"
+    git_signing_key_side_work = {{ promptStringOnce . "git_signing_key_side_work" "SSH public key path for side-work commit signing (e.g. ~/.ssh/id_ed25519.pub)" | quote }}
     side_work_org = {{ promptStringOnce . "side_work_org" "GitHub org name for side work" | quote }}
     side_work_project = {{ promptStringOnce . "side_work_project" "Project name for side work" | quote }}
 {{- else }}

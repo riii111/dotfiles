@@ -10,12 +10,11 @@
 	email = {{ .git_email }}
 	name = {{ .git_name }}
 {{ if eq .type "personal" }}
-	signingkey = {{ .git_signingkey }}
 
 [commit]
-	gpgsign = true
+	gpgsign = false
 
-# Override user.email for side-work repos (company address instead of noreply)
+# Override user.email + enable SSH signing only for side-work repos
 [includeIf "gitdir:~/ghq/github.com/{{ .side_work_org }}/"]
 	path = ~/.gitconfig-side-work
 {{ else }}
