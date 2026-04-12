@@ -14,6 +14,7 @@ scripts
 {{ if ne .type "personal" }}
 .local/bin/nodex
 .config/mux/nodex
+.gitconfig-side-work
 {{ end }}
 
 # Work machine only

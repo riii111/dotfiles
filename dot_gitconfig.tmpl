@@ -14,6 +14,10 @@
 
 [commit]
 	gpgsign = true
+
+# Override user.email for side-work repos (company address instead of noreply)
+[includeIf "gitdir:~/ghq/github.com/{{ .side_work_org }}/"]
+	path = ~/.gitconfig-side-work
 {{ else }}
 
 [commit]
