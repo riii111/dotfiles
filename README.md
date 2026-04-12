@@ -28,21 +28,16 @@ Routing: text / code → Neovim, csv / tsv → csvlens, parquet → VisiData, im
 
 ## Features
 
-### zsh: 9.5ms startup
+### zsh
 
 - Deferred `compinit` after prompt display
 - Cache regeneration only on config change
 - Modern CLI: bat, eza, fd, fzf
 - fzf integration: Ctrl-R history, Ctrl-O cd, Ctrl-G repo jump
 
-```
-zsh -i -c exit:  98.5ms → 9.5ms  (-90%)
-zsh -il -c exit: 129.7ms → 39.2ms (-70%)
-```
-
 ### Neovim
 
-50+ plugins, 66ms startup. Custom colorscheme.
+50+ plugins. Custom colorscheme.
 
 - Bufferline with language-colored labels (GitHub Linguist)
 - Inline reference count (symbol-usage)
