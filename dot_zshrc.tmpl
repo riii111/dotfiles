@@ -457,11 +457,11 @@ fi
 open() {
   if [[ -n "$WEZTERM_PANE" && $# -eq 1 && -f "$1" ]]; then
     case "${1:l}" in
-      *.md|*.txt|*.json|*.yaml|*.yml|*.toml|*.sh|*.bash|*.zsh|*.rs|*.go|*.kt|*.kts|*.py|*.lua|*.tf|*.hcl|*.sql|*.conf|*.ini|*.env|*.log)
+      *.md|*.mdx|*.txt|*.json|*.yaml|*.yml|*.toml|*.sh|*.bash|*.zsh|*.rs|*.go|*.kt|*.kts|*.py|*.lua|*.tf|*.hcl|*.sql|*.conf|*.ini|*.env|*.log|*.xml|*.graphql|*.proto)
         command nvim "$1"; return ;;
       *.csv|*.tsv)
         command csvlens -d auto "$1"; return ;;
-      *.parquet)
+      *.parquet|*.sqlite|*.sqlite3|*.db|*.ndjson|*.jsonl)
         command vd "$1"; return ;;
     esac
   fi

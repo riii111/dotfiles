@@ -47,7 +47,7 @@ for uti in \
 	assign_uti "$NVIM_ID" "$uti"
 done
 
-for ext in md txt json yaml yml toml sh bash zsh rs go kt kts py lua tf hcl sql conf ini env log; do
+for ext in md mdx txt json yaml yml toml sh bash zsh rs go kt kts py lua tf hcl sql conf ini env log xml graphql proto; do
 	assign_ext "$NVIM_ID" "$ext"
 done
 
@@ -63,8 +63,11 @@ for ext in csv tsv; do
 	assign_ext "$CSV_ID" "$ext"
 done
 
-echo "Assigning parquet -> OpenInVisiData (csvlens doesn't support parquet)"
-assign_ext "$VD_ID" parquet
+echo "Assigning parquet / sqlite / ndjson / jsonl -> OpenInVisiData (csvlens scope)"
+# VisiData handles what csvlens can't: columnar, multi-table SQLite, row-per-line JSON.
+for ext in parquet sqlite sqlite3 db ndjson jsonl; do
+	assign_ext "$VD_ID" "$ext"
+done
 
 # xlsx is opt-in: overriding it hijacks Numbers / Excel for work spreadsheets.
 # Uncomment to route .xlsx to VisiData as well.
