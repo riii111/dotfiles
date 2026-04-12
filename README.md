@@ -48,8 +48,7 @@ Markdown clipboard-to-image paste: `<C-v>` in normal mode (uses `pngpaste`, alre
 
 ### DB tools: [sabiql](https://github.com/riii111/sabiql)
 
-<img width="720" alt="DB Tool - sabiql" src="https://github.com/user-attachments/assets/35cdc1fc-21ee-4446-a8f7-f3d217e3437e" />
-
+![sabiql(db tool)](https://github.com/user-attachments/assets/745ab18f-915c-4017-81a6-465c5c5ee11c)
 
 TUI-based DB management tool built with Rust + Ratatui.
 
