@@ -2,7 +2,7 @@
 
 Dev environment for macOS, managed by chezmoi.
 
-<img width="720" alt="nvim" src="https://github.com/user-attachments/assets/0511c1be-2d3a-4b09-a14a-10a1e5f715ad" />
+![nvim](https://github.com/user-attachments/assets/0511c1be-2d3a-4b09-a14a-10a1e5f715ad)
 
 
 ## Setup
@@ -60,7 +60,7 @@ TUI-based DB management tool built with Rust + Ratatui.
 
 Delta for modern diffs. `|` key toggles split/unified view.
 
-<img width="720" alt="lazygit" src="https://github.com/user-attachments/assets/4312502b-c2a9-4269-86a0-9eeda9671fed" />
+![lazygit](https://github.com/user-attachments/assets/4312502b-c2a9-4269-86a0-9eeda9671fed)
 
 ### AI tooling
 
