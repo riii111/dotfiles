@@ -23,8 +23,6 @@ bash ~/ghq/github.com/riii111/dotfiles/scripts/build-open-apps.sh
 bash ~/ghq/github.com/riii111/dotfiles/scripts/setup-default-apps.sh
 ```
 
-The wrappers install under `~/Library/Application Support/open-routing/` to stay out of Launchpad.
-
 Routing: text / code → Neovim, csv / tsv → csvlens, parquet / sqlite / jsonl → VisiData, images / pdf → Preview (untouched).
 
 Markdown clipboard-to-image paste: `<C-v>` in normal mode (uses `pngpaste`, already in Brewfile).
