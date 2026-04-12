@@ -448,6 +448,27 @@ fi
 {{ end }}
 
 # ==========================================
+# open(1) routing: reuse WezTerm tab for nvim/csvlens/vd-handled files
+# ==========================================
+# Inside a WezTerm pane, `open foo.md` runs nvim in the current tab instead
+# of going through OpenInNvim.app (which spawns a new window). Finder clicks
+# and non-WezTerm callers still hit the .app wrappers as usual.
+# Fall-through cases: multiple args, URLs, non-matching extensions, pdf -> system open.
+open() {
+  if [[ -n "$WEZTERM_PANE" && $# -eq 1 && -f "$1" ]]; then
+    case "${1:l}" in
+      *.md|*.txt|*.json|*.yaml|*.yml|*.toml|*.sh|*.bash|*.zsh|*.rs|*.go|*.kt|*.kts|*.py|*.lua|*.tf|*.hcl|*.sql|*.conf|*.ini|*.env|*.log)
+        command nvim "$1"; return ;;
+      *.csv|*.tsv)
+        command csvlens -d auto "$1"; return ;;
+      *.parquet)
+        command vd "$1"; return ;;
+    esac
+  fi
+  command open "$@"
+}
+
+# ==========================================
 # Runtime tools
 # ==========================================
 # deno

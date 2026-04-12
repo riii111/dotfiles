@@ -184,6 +184,26 @@ return {
 					},
 				},
 			},
+			-- Image floating preview felt awkward in WezTerm; browser preview (mkdp)
+			-- is used for rich viewing instead. img-clip handles paste independently.
+			image = { enabled = false },
+		},
+	},
+
+	-- Paste images from clipboard into markdown as ![](path) links
+	{
+		"HakonHarnes/img-clip.nvim",
+		ft = { "markdown" },
+		opts = {
+			default = {
+				dir_path = "assets",
+				relative_to_current_file = true,
+				prompt_for_file_name = false,
+				file_name = "%Y%m%d-%H%M%S",
+			},
+		},
+		keys = {
+			{ "<C-v>", "<cmd>PasteImage<cr>", mode = "n", ft = "markdown", desc = "Paste image from clipboard" },
 		},
 	},
 

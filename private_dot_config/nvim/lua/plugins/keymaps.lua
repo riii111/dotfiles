@@ -391,6 +391,8 @@ return {
 				{ "<leader>w", group = "+window/buffer" },
 				{ "<leader>r", group = "+replace" },
 				{ "<leader>R", group = "+replace global" },
+				{ "<leader>m", group = "+markdown" },
+				{ "<leader>mp", desc = "Markdown preview (browser)" },
 				{ "<C-g>", group = "+grep/search" },
 				{ "<C-p>", group = "+files" },
 				{ "<C-S-f>", group = "+search" },

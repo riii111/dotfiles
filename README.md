@@ -14,6 +14,18 @@ chezmoi apply
 brew bundle --file ~/ghq/github.com/riii111/dotfiles/Brewfile
 ```
 
+### Finder integration (optional)
+
+Route Finder double-clicks to WezTerm + Neovim / VisiData.
+
+```bash
+bash ~/ghq/github.com/riii111/dotfiles/scripts/build-open-apps.sh
+# Right-click OpenInNvim.app and OpenInVisiData.app in /Applications -> "Open" once to clear Gatekeeper
+bash ~/ghq/github.com/riii111/dotfiles/scripts/setup-default-apps.sh
+```
+
+Routing: text / code → Neovim, csv / tsv → csvlens, parquet → VisiData, images / pdf → Preview (untouched).
+
 ## Features
 
 ### zsh: 9.5ms startup

@@ -4,6 +4,7 @@ README.md
 LICENSE
 .gitignore
 tests
+scripts
 
 # Python runtime artifacts
 **/__pycache__/**

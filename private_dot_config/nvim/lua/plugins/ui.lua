@@ -410,6 +410,17 @@ return {
 		},
 	},
 
+	-- Browser-based markdown preview (complements render-markdown.nvim's inline render)
+	{
+		"iamcco/markdown-preview.nvim",
+		cmd = { "MarkdownPreviewToggle", "MarkdownPreview", "MarkdownPreviewStop" },
+		ft = "markdown",
+		build = "cd app && ./install.sh",
+		keys = {
+			{ "<leader>mp", "<cmd>MarkdownPreviewToggle<cr>", ft = "markdown", desc = "Markdown preview (browser)" },
+		},
+	},
+
 	-- Search highlighting
 	{
 		"kevinhwang91/nvim-hlslens",
