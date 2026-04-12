@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Build two .app wrappers that forward Finder "Open" events to WezTerm
-# running nvim or vd. Installs to /Applications and re-registers with
-# LaunchServices so duti can target them by bundle ID.
+# Build .app wrappers that forward Finder "Open" events to WezTerm running
+# nvim / vd / csvlens. Installs under ~/Library/Application Support/ so the
+# wrappers stay out of Launchpad, and re-registers with LaunchServices so duti
+# can target them by bundle ID.
 #
 # Idempotent: re-running overwrites existing installs.
-# First launch will trigger Gatekeeper (unsigned app); right-click -> Open once.
 
-readonly DEST="/Applications"
+readonly DEST="$HOME/Library/Application Support/open-routing"
 readonly WEZTERM="/opt/homebrew/bin/wezterm"
 readonly NVIM="/opt/homebrew/bin/nvim"
 readonly VD="/opt/homebrew/bin/vd"
@@ -20,6 +20,8 @@ readonly LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Versions/
 [[ -x "$VD" ]] || { echo "ERROR: $VD not found (brew install visidata)"; exit 1; }
 [[ -x "$CSVLENS" ]] || { echo "ERROR: $CSVLENS not found (brew install csvlens)"; exit 1; }
 command -v osacompile >/dev/null || { echo "ERROR: osacompile missing"; exit 1; }
+
+mkdir -p "$DEST"
 
 WORK="$(mktemp -d -t open-apps.XXXXXX)"
 trap 'rm -rf "$WORK"' EXIT
@@ -70,9 +72,8 @@ build_app "OpenInNvim" "com.riii111.openinnvim" "$NVIM"
 build_app "OpenInCsvLens" "com.riii111.openincsvlens" "$CSVLENS -d auto"
 build_app "OpenInVisiData" "com.riii111.openinvisidata" "$VD"
 
-cat <<'EOF'
+cat <<EOF
 
-Next steps:
-  1. Right-click each app in /Applications and choose "Open" to clear Gatekeeper (one-time, per app).
-  2. Run scripts/setup-default-apps.sh to assign file types.
+Installed under: $DEST
+Next: run scripts/setup-default-apps.sh to assign file types.
 EOF

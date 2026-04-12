@@ -20,9 +20,10 @@ Route Finder double-clicks to WezTerm + Neovim / VisiData.
 
 ```bash
 bash ~/ghq/github.com/riii111/dotfiles/scripts/build-open-apps.sh
-# Right-click OpenInNvim.app and OpenInVisiData.app in /Applications -> "Open" once to clear Gatekeeper
 bash ~/ghq/github.com/riii111/dotfiles/scripts/setup-default-apps.sh
 ```
+
+The wrappers install under `~/Library/Application Support/open-routing/` to stay out of Launchpad.
 
 Routing: text / code → Neovim, csv / tsv → csvlens, parquet / sqlite / jsonl → VisiData, images / pdf → Preview (untouched).
 

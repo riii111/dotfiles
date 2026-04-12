@@ -11,9 +11,11 @@ set -euo pipefail
 # PDF is intentionally left alone (macOS Preview.app stays the default).
 
 command -v duti >/dev/null || { echo "ERROR: duti not installed (brew bundle)"; exit 1; }
-[[ -d /Applications/OpenInNvim.app ]] || { echo "ERROR: OpenInNvim.app missing. Run scripts/build-open-apps.sh first."; exit 1; }
-[[ -d /Applications/OpenInCsvLens.app ]] || { echo "ERROR: OpenInCsvLens.app missing. Run scripts/build-open-apps.sh first."; exit 1; }
-[[ -d /Applications/OpenInVisiData.app ]] || { echo "ERROR: OpenInVisiData.app missing. Run scripts/build-open-apps.sh first."; exit 1; }
+
+readonly APPS_DIR="$HOME/Library/Application Support/open-routing"
+for app in OpenInNvim OpenInCsvLens OpenInVisiData; do
+	[[ -d "$APPS_DIR/$app.app" ]] || { echo "ERROR: $app.app missing under $APPS_DIR. Run scripts/build-open-apps.sh first."; exit 1; }
+done
 
 readonly NVIM_ID="com.riii111.openinnvim"
 readonly CSV_ID="com.riii111.openincsvlens"
