@@ -319,6 +319,55 @@ class ProdErrorsCommandTest(unittest.TestCase):
         self.assertIn("### Matched Error Logs", output)
         self.assertIn("Cloud Trace ID: (not found)", output)
         self.assertIn("Request-lifecycle lookup is unavailable", output)
+        self.assertNotIn("### Recent Events", output)
+        self.assertNotIn("### Cloud Logging Lookup", output)
+
+    @mock.patch("prod_errors.trace.get_token", return_value="token")
+    @mock.patch("prod_errors.trace.api_get")
+    @mock.patch("prod_errors.trace.api_get_all_pages")
+    @mock.patch("prod_errors.trace.logging_read", return_value=[])
+    def test_cmd_trace_shows_recent_events_only_as_fallback_when_logs_not_found(
+        self,
+        _mock_logging_read,
+        mock_api_get_all_pages,
+        mock_api_get,
+        _mock_get_token,
+    ):
+        mock_api_get_all_pages.return_value = [
+            make_group(
+                "g-trace",
+                "OPEN",
+                "FooError: boom",
+                5,
+                "2026-04-01T00:00:00.000000Z",
+                "2026-04-05T00:00:00.000000Z",
+                "svc-a",
+            )
+        ]
+        mock_api_get.return_value = {
+            "errorEvents": [
+                {
+                    "eventTime": "2026-04-05T00:00:00.000000Z",
+                    "serviceContext": {"service": "svc-a"},
+                }
+            ]
+        }
+
+        args = argparse.Namespace(
+            project="demo",
+            group_id="g-trace",
+            json=False,
+            freshness="30d",
+        )
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            cmd_trace(args)
+
+        output = stdout.getvalue()
+        self.assertIn("No matching logs in Cloud Logging", output)
+        self.assertIn("### Recent Events (1)", output)
+        self.assertNotIn("### Matched Error Logs", output)
 
     @mock.patch("prod_errors.trace.get_token", return_value="token")
     @mock.patch("prod_errors.trace.api_get")

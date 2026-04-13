@@ -285,14 +285,9 @@ def cmd_trace(args):
 
     events = _load_recent_events(args.project, token, args.group_id)
     result["recentEvents"] = events
-    if not args.json:
-        _print_recent_events(events, colors)
 
     filt = _build_cloud_logging_filter(first_line, known_service)
     result["cloudLogging"] = {"filter": filt}
-    if not args.json:
-        print(f"\n{colors['bold']('### Cloud Logging Lookup')}\n")
-        print(f"Filter: `{filt}`\n")
 
     try:
         lookup = _lookup_cloud_logging(args.project, token, filt, args.freshness)
@@ -309,6 +304,8 @@ def cmd_trace(args):
             print(json.dumps(result, indent=2, ensure_ascii=False))
         else:
             print(f"No matching logs in Cloud Logging ({args.freshness} window).")
+            if events:
+                _print_recent_events(events, colors)
         return
 
     result["cloudLogging"].update(
