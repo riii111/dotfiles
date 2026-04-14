@@ -8,8 +8,9 @@ window-padding-x = 20
 window-padding-y = 5
 window-padding-balance = true
 window-theme = ghostty
-background-opacity = 0.85
+background-opacity = 0.45
 background-blur-radius = 20
+custom-shader = ~/.config/ghostty/passthrough.glsl
 macos-titlebar-style = transparent
 macos-icon = holographic
 
@@ -17,6 +18,12 @@ window-theme = dark
 
 # Global hotkeys
 keybind = "global:ctrl+cmd+g=toggle_quick_terminal"
+
+# Font size (cmux overrides the default, so re-declare explicitly)
+keybind = super+==increase_font_size:1
+keybind = super++=increase_font_size:1
+keybind = super+-=decrease_font_size:1
+keybind = super+0=reset_font_size
 
 # for nvim / for Claude Code CLI
 keybind = super+right=unbind
