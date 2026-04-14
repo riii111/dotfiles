@@ -49,7 +49,7 @@ def cmd_summary(args):
     if args.json:
         result = {
             "project": args.project,
-            "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+            "date": current_jst_date(),
             "status": args.status,
             "period": f"since {since}" if since else "30 days",
             "total": len(filtered),
@@ -119,7 +119,7 @@ def cmd_hotspots(args):
             json.dumps(
                 {
                     "project": args.project,
-                    "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+                    "date": current_jst_date(),
                     "status": args.status,
                     "period": args.period,
                     "since": since,
@@ -137,7 +137,7 @@ def cmd_hotspots(args):
         print(f"No hotspot groups with status [{args.status}] in the selected window.")
         return
 
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = current_jst_date()
     label = f"since {since}" if since else f"last {args.period}"
     print(f"## {args.project} - Error Hotspots ({today})\n")
     print(

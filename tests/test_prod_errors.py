@@ -26,6 +26,7 @@ from prod_errors.logic import (
 )
 from prod_errors.timefmt import (
     format_jst_timestamp,
+    parse_timestamp,
     format_relative_age,
     format_summary_last_seen,
 )
@@ -248,10 +249,30 @@ class ProdErrorsAnsiTest(unittest.TestCase):
 
 
 class ProdErrorsTimefmtTest(unittest.TestCase):
+    def test_parse_timestamp_returns_none_for_empty_value(self):
+        self.assertIsNone(parse_timestamp(""))
+
+    def test_parse_timestamp_converts_offset_to_utc(self):
+        parsed = parse_timestamp("2026-04-14T10:23:45+09:00")
+        self.assertEqual(parsed.isoformat(), "2026-04-14T01:23:45+00:00")
+
+    def test_parse_timestamp_treats_naive_as_utc(self):
+        parsed = parse_timestamp("2026-04-14T01:23:45")
+        self.assertEqual(parsed.isoformat(), "2026-04-14T01:23:45+00:00")
+
+    def test_parse_timestamp_returns_none_for_invalid_value(self):
+        self.assertIsNone(parse_timestamp("not-a-timestamp"))
+
     def test_format_jst_timestamp_converts_utc_to_jst(self):
         self.assertEqual(
             format_jst_timestamp("2026-04-14T01:23:45.205000Z", include_seconds=True),
             "2026-04-14 10:23:45 JST",
+        )
+
+    def test_format_jst_timestamp_includes_millis_with_seconds(self):
+        self.assertEqual(
+            format_jst_timestamp("2026-04-14T01:23:45.205000Z", include_millis=True),
+            "2026-04-14 10:23:45.205 JST",
         )
 
     def test_format_relative_age_returns_minutes(self):
@@ -263,6 +284,33 @@ class ProdErrorsTimefmtTest(unittest.TestCase):
             "18m ago",
         )
 
+    def test_format_relative_age_returns_just_now(self):
+        self.assertEqual(
+            format_relative_age(
+                "2026-04-14T01:17:45.000000Z",
+                now=datetime(2026, 4, 14, 1, 18, tzinfo=timezone.utc),
+            ),
+            "just now",
+        )
+
+    def test_format_relative_age_returns_hours(self):
+        self.assertEqual(
+            format_relative_age(
+                "2026-04-13T23:00:00.000000Z",
+                now=datetime(2026, 4, 14, 1, 18, tzinfo=timezone.utc),
+            ),
+            "2h ago",
+        )
+
+    def test_format_relative_age_returns_days(self):
+        self.assertEqual(
+            format_relative_age(
+                "2026-04-12T01:18:00.000000Z",
+                now=datetime(2026, 4, 14, 1, 18, tzinfo=timezone.utc),
+            ),
+            "2d ago",
+        )
+
     def test_format_summary_last_seen_combines_absolute_and_relative(self):
         self.assertEqual(
             format_summary_last_seen(
@@ -271,6 +319,9 @@ class ProdErrorsTimefmtTest(unittest.TestCase):
             ),
             "2026-04-14 10:00 JST (18m ago)",
         )
+
+    def test_format_summary_last_seen_returns_empty_for_empty_value(self):
+        self.assertEqual(format_summary_last_seen(""), "")
 
 
 class ProdErrorsCliTest(unittest.TestCase):

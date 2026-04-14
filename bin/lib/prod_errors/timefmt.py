@@ -34,6 +34,8 @@ def format_jst_timestamp(value, include_seconds=False, include_millis=False):
         return ""
     local = parsed.astimezone(JST)
     text = local.strftime("%Y-%m-%d %H:%M")
+    if include_millis:
+        include_seconds = True
     if include_seconds:
         text += local.strftime(":%S")
     if include_millis:
