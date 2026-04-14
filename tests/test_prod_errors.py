@@ -23,6 +23,7 @@ from prod_errors.logic import (
     build_service_summary_data,
     windowed_counts,
 )
+from prod_errors.trace import _extract_context_from_object
 
 
 def make_group(
@@ -46,6 +47,29 @@ def make_group(
     if timed_counts is not None:
         item["timedCounts"] = timed_counts
     return item
+
+
+def make_trace_log(timestamp, severity, message, logger="app", **payload):
+    json_payload = {"message": message, "logger": logger}
+    json_payload.update(payload)
+    return {
+        "timestamp": timestamp,
+        "severity": severity,
+        "jsonPayload": json_payload,
+    }
+
+
+def make_trace_lookup_log():
+    return {
+        "timestamp": "2026-04-05T00:00:00.000000Z",
+        "severity": "ERROR",
+        "resource": {"labels": {"service_name": "svc-a"}},
+        "jsonPayload": {
+            "message": "FooError: boom",
+            "logger": "app",
+            "trace_id": "trace-123",
+        },
+    }
 
 
 class ProdErrorsLogicTest(unittest.TestCase):
@@ -166,6 +190,39 @@ class ProdErrorsLogicTest(unittest.TestCase):
         self.assertEqual(summary[0]["regressedCount"], 2)
 
 
+class ProdErrorsTraceHelpersTest(unittest.TestCase):
+    def test_extract_context_from_object_reads_nested_aliases_and_strings(self):
+        context = {}
+
+        _extract_context_from_object(
+            {
+                "request": {
+                    "headers": {
+                        "x-tenant-id": "tenant-a",
+                        "x-user-account-id": "ua-1",
+                    }
+                },
+                "detail": 'actor="userId: user-9"',
+            },
+            context,
+        )
+
+        self.assertEqual(context["tenantId"], "tenant-a")
+        self.assertEqual(context["userAccountId"], "ua-1")
+        self.assertEqual(context["userId"], "user-9")
+
+    def test_extract_context_from_object_stops_at_max_depth(self):
+        nested = "tenantId=too-deep"
+        for _ in range(20):
+            nested = {"child": nested}
+
+        context = {}
+
+        _extract_context_from_object(nested, context)
+
+        self.assertEqual(context, {})
+
+
 class ProdErrorsAnsiTest(unittest.TestCase):
     def test_display_width_counts_wide_chars(self):
         self.assertEqual(display_width("abc"), 3)
@@ -206,6 +263,52 @@ class ProdErrorsCliTest(unittest.TestCase):
 
 
 class ProdErrorsCommandTest(unittest.TestCase):
+    def _setup_trace_group_mocks(self, mock_api_get_all_pages, mock_api_get):
+        mock_api_get_all_pages.return_value = [
+            make_group(
+                "g-trace",
+                "OPEN",
+                "FooError: boom",
+                5,
+                "2026-04-01T00:00:00.000000Z",
+                "2026-04-05T00:00:00.000000Z",
+                "svc-a",
+            )
+        ]
+        mock_api_get.return_value = {
+            "errorEvents": [
+                {
+                    "eventTime": "2026-04-05T00:00:00.000000Z",
+                    "serviceContext": {"service": "svc-a"},
+                }
+            ]
+        }
+
+    def _run_trace(
+        self,
+        mock_logging_read,
+        mock_api_get_all_pages,
+        mock_api_get,
+        side_effect,
+        *,
+        as_json,
+    ):
+        self._setup_trace_group_mocks(mock_api_get_all_pages, mock_api_get)
+        mock_logging_read.side_effect = side_effect
+        args = argparse.Namespace(
+            project="demo",
+            group_id="g-trace",
+            json=as_json,
+            freshness="30d",
+        )
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            cmd_trace(args)
+
+        output = stdout.getvalue()
+        return json.loads(output) if as_json else output
+
     @mock.patch("prod_errors.commands.get_token", return_value="token")
     @mock.patch("prod_errors.commands.api_get_all_pages")
     def test_cmd_hotspots_json_filters_status_and_uses_buckets(
@@ -380,6 +483,224 @@ class ProdErrorsCommandTest(unittest.TestCase):
         mock_api_get,
         _mock_get_token,
     ):
+        payload = self._run_trace(
+            mock_logging_read,
+            mock_api_get_all_pages,
+            mock_api_get,
+            [
+                [make_trace_lookup_log()],
+                [
+                    make_trace_log(
+                        "2026-04-05T00:00:02.000000Z",
+                        "INFO",
+                        "200 OK: GET - /foo in 20ms",
+                        logger="access",
+                        request={
+                            "headers": {
+                                "x-tenant-id": "tenant-a",
+                                "x-user-account-id": "ua-1",
+                            }
+                        },
+                    ),
+                    make_trace_log(
+                        "2026-04-05T00:00:01.000000Z",
+                        "ERROR",
+                        "500 Internal Server Error: GET - /foo in 10ms",
+                        request={
+                            "headers": {
+                                "x-tenant-id": "tenant-a",
+                                "x-user-account-id": "ua-1",
+                            }
+                        },
+                    ),
+                ],
+                [
+                    make_trace_log(
+                        "2026-04-05T00:00:03.000000Z",
+                        "INFO",
+                        "200 OK: GET - /foo in 20ms",
+                        logger="access",
+                        request={
+                            "headers": {
+                                "x-tenant-id": "tenant-a",
+                                "x-user-account-id": "ua-1",
+                            }
+                        },
+                    )
+                ],
+            ],
+            as_json=True,
+        )
+
+        self.assertEqual(payload["groupId"], "g-trace")
+        self.assertEqual(payload["cloudLogging"]["traceId"], "trace-123")
+        self.assertEqual(len(payload["lifecycle"]["entries"]), 2)
+        self.assertEqual(payload["retryCheck"]["sourceContext"]["tenantId"], "tenant-a")
+        self.assertEqual(
+            payload["retryCheck"]["sourceContext"]["userAccountId"], "ua-1"
+        )
+        self.assertEqual(payload["retryCheck"]["verdict"], "recovered_same_caller")
+
+    @mock.patch("prod_errors.trace.get_token", return_value="token")
+    @mock.patch("prod_errors.trace.api_get")
+    @mock.patch("prod_errors.trace.api_get_all_pages")
+    @mock.patch("prod_errors.trace.logging_read")
+    def test_cmd_trace_json_marks_same_tenant_recovery(
+        self,
+        mock_logging_read,
+        mock_api_get_all_pages,
+        mock_api_get,
+        _mock_get_token,
+    ):
+        payload = self._run_trace(
+            mock_logging_read,
+            mock_api_get_all_pages,
+            mock_api_get,
+            [
+                [make_trace_lookup_log()],
+                [
+                    make_trace_log(
+                        "2026-04-05T00:00:01.000000Z",
+                        "ERROR",
+                        "500 Internal Server Error: GET - /foo in 10ms",
+                        request={
+                            "headers": {
+                                "x-tenant-id": "tenant-a",
+                                "x-user-account-id": "ua-1",
+                            }
+                        },
+                    )
+                ],
+                [
+                    make_trace_log(
+                        "2026-04-05T00:00:03.000000Z",
+                        "INFO",
+                        "200 OK: GET - /foo in 20ms",
+                        logger="access",
+                        request={
+                            "headers": {
+                                "x-tenant-id": "tenant-a",
+                                "x-user-account-id": "ua-2",
+                            }
+                        },
+                    )
+                ],
+            ],
+            as_json=True,
+        )
+
+        self.assertEqual(payload["retryCheck"]["sameTenantSuccessCount"], 1)
+        self.assertEqual(payload["retryCheck"]["sameCallerSuccessCount"], 0)
+        self.assertEqual(payload["retryCheck"]["verdict"], "recovered_same_tenant")
+
+    @mock.patch("prod_errors.trace.get_token", return_value="token")
+    @mock.patch("prod_errors.trace.api_get")
+    @mock.patch("prod_errors.trace.api_get_all_pages")
+    @mock.patch("prod_errors.trace.logging_read")
+    def test_cmd_trace_output_marks_endpoint_only_recovery_when_context_differs(
+        self,
+        mock_logging_read,
+        mock_api_get_all_pages,
+        mock_api_get,
+        _mock_get_token,
+    ):
+        payload = self._run_trace(
+            mock_logging_read,
+            mock_api_get_all_pages,
+            mock_api_get,
+            [
+                [make_trace_lookup_log()],
+                [
+                    make_trace_log(
+                        "2026-04-05T00:00:01.000000Z",
+                        "ERROR",
+                        "500 Internal Server Error: GET - /foo in 10ms",
+                        request={
+                            "headers": {
+                                "x-tenant-id": "tenant-a",
+                                "x-user-account-id": "ua-1",
+                            }
+                        },
+                    )
+                ],
+                [
+                    make_trace_log(
+                        "2026-04-05T00:00:03.000000Z",
+                        "INFO",
+                        "200 OK: GET - /foo in 20ms",
+                        logger="access",
+                        request={
+                            "headers": {
+                                "x-tenant-id": "tenant-b",
+                                "x-user-account-id": "ua-9",
+                            }
+                        },
+                    )
+                ],
+            ],
+            as_json=True,
+        )
+
+        self.assertEqual(payload["retryCheck"]["sameTenantSuccessCount"], 0)
+        self.assertEqual(payload["retryCheck"]["sameCallerSuccessCount"], 0)
+        self.assertEqual(payload["retryCheck"]["verdict"], "recovered_endpoint_only")
+        self.assertEqual(
+            payload["retryCheck"]["detail"],
+            "Subsequent success found on the same endpoint, but tenant/caller match was not confirmed.",
+        )
+
+    @mock.patch("prod_errors.trace.get_token", return_value="token")
+    @mock.patch("prod_errors.trace.api_get")
+    @mock.patch("prod_errors.trace.api_get_all_pages")
+    @mock.patch("prod_errors.trace.logging_read")
+    def test_cmd_trace_json_marks_not_recovered_when_only_failures_follow(
+        self,
+        mock_logging_read,
+        mock_api_get_all_pages,
+        mock_api_get,
+        _mock_get_token,
+    ):
+        payload = self._run_trace(
+            mock_logging_read,
+            mock_api_get_all_pages,
+            mock_api_get,
+            [
+                [make_trace_lookup_log()],
+                [
+                    make_trace_log(
+                        "2026-04-05T00:00:01.000000Z",
+                        "ERROR",
+                        "500 Internal Server Error: GET - /foo in 10ms",
+                        request={"headers": {"x-tenant-id": "tenant-a"}},
+                    )
+                ],
+                [
+                    make_trace_log(
+                        "2026-04-05T00:00:03.000000Z",
+                        "ERROR",
+                        "500 Internal Server Error: GET - /foo in 20ms",
+                        request={"headers": {"x-tenant-id": "tenant-a"}},
+                    )
+                ],
+            ],
+            as_json=True,
+        )
+
+        self.assertEqual(payload["retryCheck"]["successCount"], 0)
+        self.assertEqual(payload["retryCheck"]["failureCount"], 1)
+        self.assertEqual(payload["retryCheck"]["verdict"], "not_recovered")
+
+    @mock.patch("prod_errors.trace.get_token", return_value="token")
+    @mock.patch("prod_errors.trace.api_get")
+    @mock.patch("prod_errors.trace.api_get_all_pages")
+    @mock.patch("prod_errors.trace.logging_read")
+    def test_cmd_trace_json_marks_no_subsequent_requests_when_retry_logs_are_empty(
+        self,
+        mock_logging_read,
+        mock_api_get_all_pages,
+        mock_api_get,
+        _mock_get_token,
+    ):
         mock_api_get_all_pages.return_value = [
             make_group(
                 "g-trace",
@@ -413,32 +734,90 @@ class ProdErrorsCommandTest(unittest.TestCase):
                 }
             ],
             [
-                {
-                    "timestamp": "2026-04-05T00:00:02.000000Z",
-                    "severity": "INFO",
-                    "jsonPayload": {
-                        "message": "200 OK: GET - /foo in 20ms",
-                        "logger": "access",
-                    },
-                },
-                {
-                    "timestamp": "2026-04-05T00:00:01.000000Z",
-                    "severity": "ERROR",
-                    "jsonPayload": {
-                        "message": "500 Internal Server Error: GET - /foo in 10ms",
-                        "logger": "app",
-                    },
-                },
+                make_trace_log(
+                    "2026-04-05T00:00:01.000000Z",
+                    "ERROR",
+                    "500 Internal Server Error: GET - /foo in 10ms",
+                )
             ],
+            [],
+        ]
+
+        args = argparse.Namespace(
+            project="demo",
+            group_id="g-trace",
+            json=True,
+            freshness="30d",
+        )
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            cmd_trace(args)
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["retryCheck"]["verdict"], "no_subsequent_requests")
+        self.assertEqual(
+            payload["retryCheck"]["detail"],
+            "No subsequent requests were found on the same endpoint after the error.",
+        )
+
+    @mock.patch("prod_errors.trace.get_token", return_value="token")
+    @mock.patch("prod_errors.trace.api_get")
+    @mock.patch("prod_errors.trace.api_get_all_pages")
+    @mock.patch("prod_errors.trace.logging_read")
+    def test_cmd_trace_json_falls_back_to_endpoint_only_without_context(
+        self,
+        mock_logging_read,
+        mock_api_get_all_pages,
+        mock_api_get,
+        _mock_get_token,
+    ):
+        mock_api_get_all_pages.return_value = [
+            make_group(
+                "g-trace",
+                "OPEN",
+                "FooError: boom",
+                5,
+                "2026-04-01T00:00:00.000000Z",
+                "2026-04-05T00:00:00.000000Z",
+                "svc-a",
+            )
+        ]
+        mock_api_get.return_value = {
+            "errorEvents": [
+                {
+                    "eventTime": "2026-04-05T00:00:00.000000Z",
+                    "serviceContext": {"service": "svc-a"},
+                }
+            ]
+        }
+        mock_logging_read.side_effect = [
             [
                 {
-                    "timestamp": "2026-04-05T00:00:03.000000Z",
-                    "severity": "INFO",
+                    "timestamp": "2026-04-05T00:00:00.000000Z",
+                    "severity": "ERROR",
+                    "resource": {"labels": {"service_name": "svc-a"}},
                     "jsonPayload": {
-                        "message": "200 OK: GET - /foo in 20ms",
-                        "logger": "access",
+                        "message": "FooError: boom",
+                        "logger": "app",
+                        "trace_id": "trace-123",
                     },
                 }
+            ],
+            [
+                make_trace_log(
+                    "2026-04-05T00:00:01.000000Z",
+                    "ERROR",
+                    "500 Internal Server Error: GET - /foo in 10ms",
+                )
+            ],
+            [
+                make_trace_log(
+                    "2026-04-05T00:00:03.000000Z",
+                    "INFO",
+                    "200 OK: GET - /foo in 20ms",
+                    logger="access",
+                )
             ],
         ]
 
@@ -454,10 +833,8 @@ class ProdErrorsCommandTest(unittest.TestCase):
             cmd_trace(args)
 
         payload = json.loads(stdout.getvalue())
-        self.assertEqual(payload["groupId"], "g-trace")
-        self.assertEqual(payload["cloudLogging"]["traceId"], "trace-123")
-        self.assertEqual(len(payload["lifecycle"]["entries"]), 2)
-        self.assertEqual(payload["retryCheck"]["verdict"], "endpoint_healthy")
+        self.assertEqual(payload["retryCheck"]["sourceContext"], {})
+        self.assertEqual(payload["retryCheck"]["verdict"], "recovered_endpoint_only")
 
 
 if __name__ == "__main__":

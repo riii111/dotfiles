@@ -189,10 +189,139 @@ def _build_lifecycle_entries(trace_logs):
     ]
 
 
+_CONTEXT_KEY_ALIASES = {
+    "tenantId": (
+        "tenantid",
+        "tenant_id",
+        "xtenantid",
+    ),
+    "userAccountId": (
+        "useraccountid",
+        "user_account_id",
+        "xuseraccountid",
+    ),
+    "userId": (
+        "userid",
+        "user_id",
+        "xuserid",
+    ),
+}
+
+_CONTEXT_VALUE_PATTERNS = {
+    "tenantId": re.compile(
+        r'(?i)(?:tenantId|tenant_id|x-tenant-id|x_tenant_id)["\'=:,\s]+([A-Za-z0-9._:-]+)'
+    ),
+    "userAccountId": re.compile(
+        r'(?i)(?:userAccountId|user_account_id|x-user-account-id|x_user_account_id)["\'=:,\s]+([A-Za-z0-9._:-]+)'
+    ),
+    "userId": re.compile(
+        r'(?i)(?:userId|user_id|x-user-id|x_user_id)["\'=:,\s]+([A-Za-z0-9._:-]+)'
+    ),
+}
+
+_ACCESS_LOG_RE = re.compile(
+    r"(\d{3})\s+[\w ]+:\s+(GET|POST|PUT|PATCH|DELETE)\s+-\s+(.+?)\s+in\s+\d+ms"
+)
+_MAX_CONTEXT_DEPTH = 12
+
+
+def _normalize_context_key(key):
+    return re.sub(r"[^a-z0-9]", "", str(key).lower())
+
+
+def _stringify_context_value(value):
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, (str, int, float)):
+        text = str(value).strip()
+        return text or None
+    return None
+
+
+def _merge_context_value(context, key, value):
+    if key not in context and value:
+        context[key] = value
+
+
+def _extract_context_from_object(obj, context, depth=0):
+    if depth > _MAX_CONTEXT_DEPTH:
+        return
+    if isinstance(obj, dict):
+        for raw_key, value in obj.items():
+            normalized_key = _normalize_context_key(raw_key)
+            for context_key, aliases in _CONTEXT_KEY_ALIASES.items():
+                if normalized_key in aliases:
+                    _merge_context_value(
+                        context, context_key, _stringify_context_value(value)
+                    )
+            _extract_context_from_object(value, context, depth + 1)
+    elif isinstance(obj, list):
+        for item in obj:
+            _extract_context_from_object(item, context, depth + 1)
+    elif isinstance(obj, str):
+        for context_key, pattern in _CONTEXT_VALUE_PATTERNS.items():
+            if context_key in context:
+                continue
+            match = pattern.search(obj)
+            if match:
+                _merge_context_value(context, context_key, match.group(1))
+
+
+def _extract_log_context(log_entry):
+    context = {}
+    payload = log_entry.get("jsonPayload", {})
+    _extract_context_from_object(payload, context)
+    _extract_context_from_object(log_entry.get("httpRequest", {}), context)
+    _extract_context_from_object(log_entry.get("labels", {}), context)
+    raw = payload.get("message", "") or log_entry.get("textPayload", "")
+    if raw:
+        _extract_context_from_object(raw, context)
+    return context
+
+
+def _collect_source_context(*log_groups):
+    context = {}
+    for logs in log_groups:
+        for log_entry in logs:
+            extracted = _extract_log_context(log_entry)
+            for key, value in extracted.items():
+                _merge_context_value(context, key, value)
+    return context
+
+
+def _match_same_tenant(source_context, retry_context):
+    source_tenant = source_context.get("tenantId")
+    retry_tenant = retry_context.get("tenantId")
+    return bool(source_tenant and retry_tenant and source_tenant == retry_tenant)
+
+
+def _match_same_caller(source_context, retry_context):
+    if not _match_same_tenant(source_context, retry_context):
+        return False
+    for key in ("userAccountId", "userId"):
+        source_value = source_context.get(key)
+        retry_value = retry_context.get(key)
+        if source_value and retry_value and source_value == retry_value:
+            return True
+    return False
+
+
+def _extract_retry_log_entry(log_entry):
+    payload = log_entry.get("jsonPayload", {})
+    raw = payload.get("message", "") or log_entry.get("textPayload", "")
+    message = strip_ansi(raw)
+    match = _ACCESS_LOG_RE.search(message)
+    if not match:
+        return None
+    return {
+        "timestamp": log_entry.get("timestamp", ""),
+        "httpStatus": int(match.group(1)),
+        "endpoint": match.group(3).strip(),
+        "context": _extract_log_context(log_entry),
+    }
+
+
 def _extract_retry_context(trace_logs, logs):
-    access_log_re = re.compile(
-        r"(\d{3})\s+[\w ]+:\s+(GET|POST|PUT|PATCH|DELETE)\s+-\s+(.+?)\s+in\s+\d+ms"
-    )
     endpoint = None
     error_timestamp = None
     http_status = None
@@ -200,20 +329,11 @@ def _extract_retry_context(trace_logs, logs):
     access_logs = []
 
     for trace_log in trace_logs:
-        payload = trace_log.get("jsonPayload", {})
-        raw = payload.get("message", "") or trace_log.get("textPayload", "")
-        clean = strip_ansi(raw)
         if trace_log.get("severity", "") in ("ERROR", "CRITICAL"):
             error_timestamps.append(trace_log.get("timestamp", ""))
-        match = access_log_re.search(clean)
-        if match:
-            access_logs.append(
-                {
-                    "timestamp": trace_log.get("timestamp", ""),
-                    "httpStatus": int(match.group(1)),
-                    "endpoint": match.group(3).strip(),
-                }
-            )
+        access_log = _extract_retry_log_entry(trace_log)
+        if access_log:
+            access_logs.append(access_log)
 
     if error_timestamps:
         error_timestamp = error_timestamps[0]
@@ -241,28 +361,127 @@ def _lookup_retry_logs(project, token, service, endpoint, error_timestamp, fresh
     return retry_filter, retry_logs
 
 
-def _summarize_retry_logs(retry_logs):
+def _summarize_retry_logs(retry_logs, source_context):
     ok = 0
     fail = 0
     first_ok_timestamp = None
+    same_tenant_ok = 0
+    same_tenant_fail = 0
+    first_same_tenant_ok_timestamp = None
+    same_caller_ok = 0
+    same_caller_fail = 0
+    first_same_caller_ok_timestamp = None
+
     for retry_log in reversed(retry_logs):
-        payload = retry_log.get("jsonPayload", {})
-        raw = payload.get("message", "") or retry_log.get("textPayload", "")
-        message = strip_ansi(raw)
-        if "200 OK" in message:
+        retry_entry = _extract_retry_log_entry(retry_log)
+        if not retry_entry:
+            continue
+
+        status = retry_entry["httpStatus"]
+        retry_context = retry_entry["context"]
+        timestamp = retry_log.get("timestamp", "")[:23]
+
+        if 200 <= status < 300:
             ok += 1
             if first_ok_timestamp is None:
-                first_ok_timestamp = retry_log.get("timestamp", "")[:23]
-        elif "500" in message and "Internal Server Error" in message:
+                first_ok_timestamp = timestamp
+            if _match_same_tenant(source_context, retry_context):
+                same_tenant_ok += 1
+                if first_same_tenant_ok_timestamp is None:
+                    first_same_tenant_ok_timestamp = timestamp
+            if _match_same_caller(source_context, retry_context):
+                same_caller_ok += 1
+                if first_same_caller_ok_timestamp is None:
+                    first_same_caller_ok_timestamp = timestamp
+        elif status >= 500:
             fail += 1
-    verdict = (
-        "endpoint_healthy"
-        if ok > 0
-        else "still_failing"
-        if fail > 0
-        else "no_subsequent_requests"
-    )
-    return ok, fail, first_ok_timestamp, verdict
+            if _match_same_tenant(source_context, retry_context):
+                same_tenant_fail += 1
+            if _match_same_caller(source_context, retry_context):
+                same_caller_fail += 1
+
+    if same_caller_ok > 0:
+        verdict = "recovered_same_caller"
+        first_success_timestamp = first_same_caller_ok_timestamp
+    elif same_tenant_ok > 0:
+        verdict = "recovered_same_tenant"
+        first_success_timestamp = first_same_tenant_ok_timestamp
+    elif ok > 0:
+        verdict = "recovered_endpoint_only"
+        first_success_timestamp = first_ok_timestamp
+    elif fail > 0:
+        verdict = "not_recovered"
+        first_success_timestamp = None
+    else:
+        verdict = "no_subsequent_requests"
+        first_success_timestamp = None
+
+    return {
+        "successCount": ok,
+        "failureCount": fail,
+        "firstSuccessTimestamp": first_success_timestamp,
+        "sameTenantSuccessCount": same_tenant_ok,
+        "sameTenantFailureCount": same_tenant_fail,
+        "firstSameTenantSuccessTimestamp": first_same_tenant_ok_timestamp,
+        "sameCallerSuccessCount": same_caller_ok,
+        "sameCallerFailureCount": same_caller_fail,
+        "firstSameCallerSuccessTimestamp": first_same_caller_ok_timestamp,
+        "verdict": verdict,
+    }
+
+
+def _build_retry_detail(retry_summary, source_context):
+    verdict = retry_summary["verdict"]
+    if verdict == "recovered_same_caller":
+        return (
+            "Subsequent success found on the same endpoint with matching tenant and "
+            "caller context."
+        )
+    if verdict == "recovered_same_tenant":
+        return "Subsequent success found on the same endpoint for the same tenant."
+    if verdict == "recovered_endpoint_only":
+        missing_context = []
+        if not source_context.get("tenantId"):
+            missing_context.append("tenantId")
+        if not source_context.get("userAccountId") and not source_context.get("userId"):
+            missing_context.append("caller")
+        if missing_context:
+            joined = ", ".join(missing_context)
+            return (
+                "Subsequent success found on the same endpoint, but stronger matching "
+                f"context was unavailable ({joined})."
+            )
+        return (
+            "Subsequent success found on the same endpoint, but tenant/caller match "
+            "was not confirmed."
+        )
+    if verdict == "not_recovered":
+        return "No subsequent success found on the same endpoint after the error."
+    return "No subsequent requests were found on the same endpoint after the error."
+
+
+def _format_retry_context(context):
+    parts = []
+    if context.get("tenantId"):
+        parts.append(f"tenantId={context['tenantId']}")
+    if context.get("userAccountId"):
+        parts.append(f"userAccountId={context['userAccountId']}")
+    if context.get("userId"):
+        parts.append(f"userId={context['userId']}")
+    return ", ".join(parts) if parts else "(unavailable)"
+
+
+def _format_retry_verdict(colors, retry_summary):
+    verdict = retry_summary["verdict"]
+    if verdict == "recovered_same_caller":
+        return colors["green"]("Recovered (same caller)")
+    if verdict == "recovered_same_tenant":
+        return colors["green"]("Recovered (same tenant)")
+    if verdict == "recovered_endpoint_only":
+        return colors["yellow"]("Recovered (endpoint only)")
+    if verdict == "not_recovered":
+        return colors["red"]("Not recovered")
+    return colors["yellow"]("Unknown")
 
 
 def _print_trace_error_result(as_json, result, message):
@@ -431,32 +650,44 @@ def cmd_trace(args):
         )
         return
 
-    ok, fail, first_ok_timestamp, verdict = _summarize_retry_logs(retry_logs)
+    source_context = _collect_source_context(trace_logs, lookup["logs"])
+    retry_summary = _summarize_retry_logs(retry_logs, source_context)
     result["retryCheck"] = {
         "scope": "endpoint",
         "endpoint": endpoint,
         "errorTimestamp": error_timestamp,
-        "successCount": ok,
-        "failureCount": fail,
-        "firstSuccessTimestamp": first_ok_timestamp,
-        "verdict": verdict,
+        "sourceContext": source_context,
+        **retry_summary,
     }
+    result["retryCheck"]["detail"] = _build_retry_detail(retry_summary, source_context)
 
     if args.json:
         print(json.dumps(result, indent=2, ensure_ascii=False))
         return
 
-    print(f"- After error: **{ok}** ok / **{fail}** fail")
-    if ok > 0:
-        print(f"- First success: {first_ok_timestamp}Z")
+    print(
+        f"- After error: **{retry_summary['successCount']}** ok / **{retry_summary['failureCount']}** fail"
+    )
+    print(f"- Source context: {_format_retry_context(source_context)}")
+    if (
+        retry_summary["sameTenantSuccessCount"]
+        or retry_summary["sameTenantFailureCount"]
+    ):
         print(
-            f"- Verdict: {colors['green']('Likely recovered')} (endpoint-level match, not trace-level)"
+            "- Same tenant after error: "
+            f"**{retry_summary['sameTenantSuccessCount']}** ok / "
+            f"**{retry_summary['sameTenantFailureCount']}** fail"
         )
-    elif fail > 0:
+    if (
+        retry_summary["sameCallerSuccessCount"]
+        or retry_summary["sameCallerFailureCount"]
+    ):
         print(
-            f"- Verdict: {colors['red']('Not recovered')} (endpoint-level match, not trace-level)"
+            "- Same caller after error: "
+            f"**{retry_summary['sameCallerSuccessCount']}** ok / "
+            f"**{retry_summary['sameCallerFailureCount']}** fail"
         )
-    else:
-        print(
-            f"- Verdict: {colors['yellow']('Unknown')} (no subsequent requests on this endpoint)"
-        )
+    if retry_summary["firstSuccessTimestamp"]:
+        print(f"- First success: {retry_summary['firstSuccessTimestamp']}Z")
+    print(f"- Verdict: {_format_retry_verdict(colors, retry_summary)}")
+    print(f"  {result['retryCheck']['detail']}")
