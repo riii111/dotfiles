@@ -25,6 +25,206 @@ from prod_errors.client import (
 )
 
 
+def cmd_trace(args):
+    token = get_token()
+    colors = _trace_colors()
+    target = _lookup_error_group(args.project, token, args.group_id)
+    result, first_line, known_service = _build_trace_result(args.group_id, target)
+
+    if not args.json:
+        _print_trace_header(args.group_id, target, known_service, colors)
+
+    events = _load_recent_events(args.project, token, args.group_id)
+    result["recentEvents"] = events
+
+    filt = _build_cloud_logging_filter(first_line, known_service)
+    result["cloudLogging"] = {"filter": filt}
+
+    try:
+        lookup = _lookup_cloud_logging(args.project, token, filt, args.freshness)
+    except LoggingError as exc:
+        result["cloudLogging"]["error"] = str(exc)
+        _print_trace_error_result(
+            args.json, result, f"**Cloud Logging query FAILED**: {exc}"
+        )
+        return
+
+    if not lookup:
+        result["cloudLogging"]["matched"] = False
+        if args.json:
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+        else:
+            print(f"No matching logs in Cloud Logging ({args.freshness} window).")
+            if events:
+                _print_recent_events(events, colors)
+        return
+
+    result["cloudLogging"].update(
+        {
+            "matched": True,
+            "service": lookup["service"],
+            "traceId": lookup["traceId"],
+            "matchedEntries": lookup["matchedEntries"],
+        }
+    )
+    if not args.json:
+        print(f"- Service: {colors['bold'](lookup['service'])}")
+        if lookup["traceId"]:
+            print(f"- Cloud Trace ID: `{lookup['traceId']}`")
+        else:
+            print("- Cloud Trace ID: (not found)")
+        _print_log_entries(
+            "### Matched Error Logs",
+            list(reversed(lookup["matchedEntries"])),
+            colors,
+        )
+
+    if not lookup["traceId"]:
+        if args.json:
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+        else:
+            print("\nCloud Trace ID was not found in the matched log entry.")
+            print(
+                "Request-lifecycle lookup is unavailable, but the matched error logs above can be used to inspect this hotspot."
+            )
+        return
+
+    try:
+        trace_logs = _lookup_trace_lifecycle(
+            args.project,
+            token,
+            lookup["service"],
+            lookup["traceId"],
+            args.freshness,
+        )
+    except LoggingError as exc:
+        result["lifecycle"] = {"error": str(exc)}
+        _print_trace_error_result(
+            args.json, result, f"\n**Cloud Logging trace query FAILED**: {exc}"
+        )
+        return
+
+    if trace_logs:
+        lifecycle_entries = _build_lifecycle_entries(trace_logs)
+        result["lifecycle"] = {
+            "scope": "latest_event_only",
+            "traceId": lookup["traceId"],
+            "entries": lifecycle_entries,
+        }
+        if not args.json:
+            _print_log_entries(
+                "### Request Lifecycle (trace-level match)", lifecycle_entries, colors
+            )
+    else:
+        result["lifecycle"] = {
+            "scope": "latest_event_only",
+            "traceId": lookup["traceId"],
+            "entries": [],
+        }
+
+    endpoint, error_timestamp, http_status = _extract_retry_context(
+        trace_logs, lookup["logs"]
+    )
+    if not endpoint or not error_timestamp:
+        result["retryCheck"] = {"status": "could_not_extract_endpoint"}
+        if args.json:
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+        else:
+            print(f"\n{colors['bold']('### Retry Check')}\n")
+            print("Could not extract endpoint. Manual investigation needed.")
+        return
+
+    if http_status is not None and http_status < 500:
+        result["retryCheck"] = {
+            "scope": "endpoint",
+            "endpoint": endpoint,
+            "httpStatus": http_status,
+            "errorTimestamp": error_timestamp,
+            "verdict": "error_within_success_response",
+            "detail": (
+                f"Endpoint returned HTTP {http_status} but ERROR was logged internally"
+                ". Retry check not applicable."
+            ),
+        }
+        if args.json:
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+        else:
+            print(f"\n{colors['bold']('### Retry Check')}\n")
+            print(f"- Endpoint: `{endpoint}` (HTTP {http_status})")
+            print(f"- Error at: {error_timestamp[:23]}Z")
+            print(f"- Verdict: {colors['yellow']('Error within success response')}")
+            print(
+                f"  Endpoint returned HTTP {http_status} but ERROR was logged internally."
+            )
+            print(
+                "  Retry check not applicable — the endpoint does not fail at HTTP level."
+            )
+        return
+
+    if not args.json:
+        print(f"\n{colors['bold']('### Retry Check')}\n")
+        print(f"- Endpoint: `{endpoint}`")
+        print(f"- Error at: {error_timestamp[:23]}Z")
+
+    try:
+        _retry_filter, retry_logs = _lookup_retry_logs(
+            args.project,
+            token,
+            lookup["service"],
+            endpoint,
+            error_timestamp,
+            args.freshness,
+        )
+    except LoggingError as exc:
+        result["retryCheck"] = {"error": str(exc)}
+        _print_trace_error_result(
+            args.json, result, f"**Retry check query FAILED**: {exc}"
+        )
+        return
+
+    source_context = _collect_source_context(trace_logs, lookup["logs"])
+    retry_summary = _summarize_retry_logs(retry_logs, source_context)
+    result["retryCheck"] = {
+        "scope": "endpoint",
+        "endpoint": endpoint,
+        "errorTimestamp": error_timestamp,
+        "sourceContext": source_context,
+        **retry_summary,
+    }
+    result["retryCheck"]["detail"] = _build_retry_detail(retry_summary, source_context)
+
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return
+
+    print(
+        f"- After error: **{retry_summary['successCount']}** ok / **{retry_summary['failureCount']}** fail"
+    )
+    print(f"- Source context: {_format_retry_context(source_context)}")
+    if (
+        retry_summary["sameTenantSuccessCount"]
+        or retry_summary["sameTenantFailureCount"]
+    ):
+        print(
+            "- Same tenant after error: "
+            f"**{retry_summary['sameTenantSuccessCount']}** ok / "
+            f"**{retry_summary['sameTenantFailureCount']}** fail"
+        )
+    if (
+        retry_summary["sameCallerSuccessCount"]
+        or retry_summary["sameCallerFailureCount"]
+    ):
+        print(
+            "- Same caller after error: "
+            f"**{retry_summary['sameCallerSuccessCount']}** ok / "
+            f"**{retry_summary['sameCallerFailureCount']}** fail"
+        )
+    if retry_summary["firstSuccessTimestamp"]:
+        print(f"- First success: {retry_summary['firstSuccessTimestamp']}Z")
+    print(f"- Verdict: {_format_retry_verdict(colors, retry_summary)}")
+    print(f"  {result['retryCheck']['detail']}")
+
+
 def _trace_colors():
     return {
         "bold": color(_BOLD),
@@ -491,203 +691,3 @@ def _print_trace_error_result(as_json, result, message):
     print(message)
     if message.startswith("**Cloud Logging query FAILED**"):
         print("Cannot determine if logs exist. Check auth and filter syntax.")
-
-
-def cmd_trace(args):
-    token = get_token()
-    colors = _trace_colors()
-    target = _lookup_error_group(args.project, token, args.group_id)
-    result, first_line, known_service = _build_trace_result(args.group_id, target)
-
-    if not args.json:
-        _print_trace_header(args.group_id, target, known_service, colors)
-
-    events = _load_recent_events(args.project, token, args.group_id)
-    result["recentEvents"] = events
-
-    filt = _build_cloud_logging_filter(first_line, known_service)
-    result["cloudLogging"] = {"filter": filt}
-
-    try:
-        lookup = _lookup_cloud_logging(args.project, token, filt, args.freshness)
-    except LoggingError as exc:
-        result["cloudLogging"]["error"] = str(exc)
-        _print_trace_error_result(
-            args.json, result, f"**Cloud Logging query FAILED**: {exc}"
-        )
-        return
-
-    if not lookup:
-        result["cloudLogging"]["matched"] = False
-        if args.json:
-            print(json.dumps(result, indent=2, ensure_ascii=False))
-        else:
-            print(f"No matching logs in Cloud Logging ({args.freshness} window).")
-            if events:
-                _print_recent_events(events, colors)
-        return
-
-    result["cloudLogging"].update(
-        {
-            "matched": True,
-            "service": lookup["service"],
-            "traceId": lookup["traceId"],
-            "matchedEntries": lookup["matchedEntries"],
-        }
-    )
-    if not args.json:
-        print(f"- Service: {colors['bold'](lookup['service'])}")
-        if lookup["traceId"]:
-            print(f"- Cloud Trace ID: `{lookup['traceId']}`")
-        else:
-            print("- Cloud Trace ID: (not found)")
-        _print_log_entries(
-            "### Matched Error Logs",
-            list(reversed(lookup["matchedEntries"])),
-            colors,
-        )
-
-    if not lookup["traceId"]:
-        if args.json:
-            print(json.dumps(result, indent=2, ensure_ascii=False))
-        else:
-            print("\nCloud Trace ID was not found in the matched log entry.")
-            print(
-                "Request-lifecycle lookup is unavailable, but the matched error logs above can be used to inspect this hotspot."
-            )
-        return
-
-    try:
-        trace_logs = _lookup_trace_lifecycle(
-            args.project,
-            token,
-            lookup["service"],
-            lookup["traceId"],
-            args.freshness,
-        )
-    except LoggingError as exc:
-        result["lifecycle"] = {"error": str(exc)}
-        _print_trace_error_result(
-            args.json, result, f"\n**Cloud Logging trace query FAILED**: {exc}"
-        )
-        return
-
-    if trace_logs:
-        lifecycle_entries = _build_lifecycle_entries(trace_logs)
-        result["lifecycle"] = {
-            "scope": "latest_event_only",
-            "traceId": lookup["traceId"],
-            "entries": lifecycle_entries,
-        }
-        if not args.json:
-            _print_log_entries(
-                "### Request Lifecycle (trace-level match)", lifecycle_entries, colors
-            )
-    else:
-        result["lifecycle"] = {
-            "scope": "latest_event_only",
-            "traceId": lookup["traceId"],
-            "entries": [],
-        }
-
-    endpoint, error_timestamp, http_status = _extract_retry_context(
-        trace_logs, lookup["logs"]
-    )
-    if not endpoint or not error_timestamp:
-        result["retryCheck"] = {"status": "could_not_extract_endpoint"}
-        if args.json:
-            print(json.dumps(result, indent=2, ensure_ascii=False))
-        else:
-            print(f"\n{colors['bold']('### Retry Check')}\n")
-            print("Could not extract endpoint. Manual investigation needed.")
-        return
-
-    if http_status is not None and http_status < 500:
-        result["retryCheck"] = {
-            "scope": "endpoint",
-            "endpoint": endpoint,
-            "httpStatus": http_status,
-            "errorTimestamp": error_timestamp,
-            "verdict": "error_within_success_response",
-            "detail": (
-                f"Endpoint returned HTTP {http_status} but ERROR was logged internally"
-                ". Retry check not applicable."
-            ),
-        }
-        if args.json:
-            print(json.dumps(result, indent=2, ensure_ascii=False))
-        else:
-            print(f"\n{colors['bold']('### Retry Check')}\n")
-            print(f"- Endpoint: `{endpoint}` (HTTP {http_status})")
-            print(f"- Error at: {error_timestamp[:23]}Z")
-            print(f"- Verdict: {colors['yellow']('Error within success response')}")
-            print(
-                f"  Endpoint returned HTTP {http_status} but ERROR was logged internally."
-            )
-            print(
-                "  Retry check not applicable — the endpoint does not fail at HTTP level."
-            )
-        return
-
-    if not args.json:
-        print(f"\n{colors['bold']('### Retry Check')}\n")
-        print(f"- Endpoint: `{endpoint}`")
-        print(f"- Error at: {error_timestamp[:23]}Z")
-
-    try:
-        _retry_filter, retry_logs = _lookup_retry_logs(
-            args.project,
-            token,
-            lookup["service"],
-            endpoint,
-            error_timestamp,
-            args.freshness,
-        )
-    except LoggingError as exc:
-        result["retryCheck"] = {"error": str(exc)}
-        _print_trace_error_result(
-            args.json, result, f"**Retry check query FAILED**: {exc}"
-        )
-        return
-
-    source_context = _collect_source_context(trace_logs, lookup["logs"])
-    retry_summary = _summarize_retry_logs(retry_logs, source_context)
-    result["retryCheck"] = {
-        "scope": "endpoint",
-        "endpoint": endpoint,
-        "errorTimestamp": error_timestamp,
-        "sourceContext": source_context,
-        **retry_summary,
-    }
-    result["retryCheck"]["detail"] = _build_retry_detail(retry_summary, source_context)
-
-    if args.json:
-        print(json.dumps(result, indent=2, ensure_ascii=False))
-        return
-
-    print(
-        f"- After error: **{retry_summary['successCount']}** ok / **{retry_summary['failureCount']}** fail"
-    )
-    print(f"- Source context: {_format_retry_context(source_context)}")
-    if (
-        retry_summary["sameTenantSuccessCount"]
-        or retry_summary["sameTenantFailureCount"]
-    ):
-        print(
-            "- Same tenant after error: "
-            f"**{retry_summary['sameTenantSuccessCount']}** ok / "
-            f"**{retry_summary['sameTenantFailureCount']}** fail"
-        )
-    if (
-        retry_summary["sameCallerSuccessCount"]
-        or retry_summary["sameCallerFailureCount"]
-    ):
-        print(
-            "- Same caller after error: "
-            f"**{retry_summary['sameCallerSuccessCount']}** ok / "
-            f"**{retry_summary['sameCallerFailureCount']}** fail"
-        )
-    if retry_summary["firstSuccessTimestamp"]:
-        print(f"- First success: {retry_summary['firstSuccessTimestamp']}Z")
-    print(f"- Verdict: {_format_retry_verdict(colors, retry_summary)}")
-    print(f"  {result['retryCheck']['detail']}")
