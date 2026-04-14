@@ -481,6 +481,55 @@ class ProdErrorsCommandTest(unittest.TestCase):
         self.assertEqual(payload["errors"][0]["groupId"], "g-open")
         self.assertEqual(payload["errors"][0]["activeBuckets"], 1)
 
+    @mock.patch("prod_errors.timefmt.now_utc")
+    @mock.patch("prod_errors.commands.get_token", return_value="token")
+    @mock.patch("prod_errors.commands.api_get_all_pages")
+    def test_cmd_hotspots_output_uses_jst_and_relative_last_seen(
+        self,
+        mock_api_get_all_pages,
+        _mock_get_token,
+        mock_now_utc,
+    ):
+        mock_now_utc.return_value = datetime(2026, 4, 5, 0, 18, tzinfo=timezone.utc)
+        mock_api_get_all_pages.return_value = [
+            make_group(
+                "g-open",
+                "OPEN",
+                "FooError: boom",
+                5,
+                "2026-04-05T00:00:00.000000Z",
+                "2026-04-05T00:00:00.000000Z",
+                "svc-a",
+                timed_counts=[
+                    {
+                        "count": "2",
+                        "startTime": "2026-04-05T00:00:00.000000Z",
+                        "endTime": "2026-04-05T00:10:00.000000Z",
+                    }
+                ],
+            )
+        ]
+
+        args = argparse.Namespace(
+            project="demo",
+            status="OPEN",
+            since=None,
+            period="30d",
+            limit=20,
+            json=False,
+        )
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            cmd_hotspots(args)
+
+        output = stdout.getvalue()
+        self.assertIn("Error Hotspots", output)
+        self.assertIn("First", output)
+        self.assertIn("Last", output)
+        self.assertIn("2026-04-05 09:00 JST", output)
+        self.assertIn("2026-04-05 09:10 JST (8m ago)", output)
+
     @mock.patch("prod_errors.trace.get_token", return_value="token")
     @mock.patch("prod_errors.trace.api_get")
     @mock.patch("prod_errors.trace.api_get_all_pages")

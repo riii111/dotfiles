@@ -244,7 +244,7 @@ def print_hotspots(items):
             rel = f"#{item['relatedTo']}?" if item.get("relatedTo") else ""
             print(
                 f"| {idx} | `{item['groupId']}` | {_display_message(item)[:80]} | {item['count']} | "
-                f"{item['activeBuckets']} | {item['firstSeenTime'][:10]} | {item['lastSeenTime'][:10]} | "
+                f"{item['activeBuckets']} | {format_jst_timestamp(item['firstSeenTime'])} | {format_summary_last_seen(item['lastSeenTime'])} | "
                 f"{_display_service(item)} | {item['status']} | {rel} |"
             )
         return
@@ -265,8 +265,8 @@ def print_hotspots(items):
             trunc(_display_message(item), 48),
             str(item["count"]),
             str(item["activeBuckets"]),
-            item["firstSeenTime"][:10],
-            item["lastSeenTime"][:10],
+            format_jst_timestamp(item["firstSeenTime"]),
+            format_summary_last_seen(item["lastSeenTime"]),
             trunc(_display_service(item), 32),
             item["status"],
             f"#{item['relatedTo']}?" if item.get("relatedTo") else "",
