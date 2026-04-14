@@ -13,6 +13,7 @@ from prod_errors.ansi import (
     pad_right,
     trunc,
 )
+from prod_errors.timefmt import format_jst_timestamp, format_summary_last_seen
 
 
 def _display_message(item):
@@ -28,10 +29,10 @@ def print_flat_summary(items, since=None):
 
     if not is_tty:
         header = (
-            "| # | Status | Group | Error | Count | First | Last | Service | Related |"
+            "| # | Status | Group | Error | Count | First (JST) | Last (JST) | Service | Related |"
         )
         if since:
-            header = "| # | Status | New? | Group | Error | Count | First | Last | Service | Related |"
+            header = "| # | Status | New? | Group | Error | Count | First (JST) | Last (JST) | Service | Related |"
         print(header)
         print("-" * len(header))
         for idx, item in enumerate(items, 1):
@@ -40,13 +41,13 @@ def print_flat_summary(items, since=None):
                 mark = "NEW" if item["isNew"] else "REGR"
                 print(
                     f"| {idx} | {item['status']} | {mark} | `{item['groupId']}` | {_display_message(item)[:80]} "
-                    f"| {item['count']} | {item['firstSeenTime'][:10]} | {item['lastSeenTime'][:10]} "
+                    f"| {item['count']} | {format_jst_timestamp(item['firstSeenTime'])} | {format_summary_last_seen(item['lastSeenTime'])} "
                     f"| {_display_service(item)} | {rel} |"
                 )
             else:
                 print(
                     f"| {idx} | {item['status']} | `{item['groupId']}` | {_display_message(item)[:80]} "
-                    f"| {item['count']} | {item['firstSeenTime'][:10]} | {item['lastSeenTime'][:10]} "
+                    f"| {item['count']} | {format_jst_timestamp(item['firstSeenTime'])} | {format_summary_last_seen(item['lastSeenTime'])} "
                     f"| {_display_service(item)} | {rel} |"
                 )
         print("\n> Detail: `prod-errors trace <groupId>`")
@@ -77,8 +78,8 @@ def print_flat_summary(items, since=None):
                     item["groupId"],
                     trunc(_display_message(item), 50),
                     str(item["count"]),
-                    item["firstSeenTime"][:10],
-                    item["lastSeenTime"][:10],
+                    format_jst_timestamp(item["firstSeenTime"]),
+                    format_summary_last_seen(item["lastSeenTime"]),
                     trunc(_display_service(item), 40),
                     rel,
                 )
@@ -91,8 +92,8 @@ def print_flat_summary(items, since=None):
                     item["groupId"],
                     trunc(_display_message(item), 50),
                     str(item["count"]),
-                    item["firstSeenTime"][:10],
-                    item["lastSeenTime"][:10],
+                    format_jst_timestamp(item["firstSeenTime"]),
+                    format_summary_last_seen(item["lastSeenTime"]),
                     trunc(_display_service(item), 40),
                     rel,
                 )
@@ -106,8 +107,8 @@ def print_flat_summary(items, since=None):
             "Group",
             "Error",
             "Count",
-            "First",
-            "Last",
+            "First (JST)",
+            "Last (JST)",
             "Service",
             "Related",
         )
@@ -118,8 +119,8 @@ def print_flat_summary(items, since=None):
             "Group",
             "Error",
             "Count",
-            "First",
-            "Last",
+            "First (JST)",
+            "Last (JST)",
             "Service",
             "Related",
         )
@@ -172,15 +173,15 @@ def print_service_summary(items):
 
     if not is_tty:
         print(
-            "| Service | Groups | Total Count | Oldest First | Latest Last | Top Errors |"
+            "| Service | Groups | Total Count | Oldest First (JST) | Latest Last (JST) | Top Errors |"
         )
         print(
-            "|---------|--------|-------------|--------------|-------------|------------|"
+            "|---------|--------|-------------|-------------------|-------------------|------------|"
         )
         for item in items:
             print(
                 f"| {item['service']} | {item['groupCount']} | {item['totalCount']} | "
-                f"{item['oldestFirstSeen'][:10]} | {item['latestLastSeen'][:10]} | "
+                f"{format_jst_timestamp(item['oldestFirstSeen'])} | {format_summary_last_seen(item['latestLastSeen'])} | "
                 f"{'; '.join(msg[:40] for msg in item['topErrors'])} |"
             )
         print("\n> Flat view: `prod-errors summary`")
@@ -194,8 +195,8 @@ def print_service_summary(items):
             trunc(item["service"], 40),
             str(item["groupCount"]),
             str(item["totalCount"]),
-            item["oldestFirstSeen"][:10],
-            item["latestLastSeen"][:10],
+            format_jst_timestamp(item["oldestFirstSeen"]),
+            format_summary_last_seen(item["latestLastSeen"]),
             "; ".join(trunc(msg, 40) for msg in item["topErrors"]),
         )
         for item in items
@@ -204,8 +205,8 @@ def print_service_summary(items):
         "Service",
         "Groups",
         "Total",
-        "Oldest First",
-        "Latest Last",
+        "Oldest First (JST)",
+        "Latest Last (JST)",
         "Top Errors",
     )
     widths = col_widths(rows, headers)

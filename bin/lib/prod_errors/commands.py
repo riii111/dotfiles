@@ -20,6 +20,7 @@ from prod_errors.logic import (
     build_service_summary_data,
     build_summary_data,
 )
+from prod_errors.timefmt import current_jst_date
 from prod_errors.trace import cmd_trace as trace_cmd
 
 
@@ -65,7 +66,7 @@ def cmd_summary(args):
         print(f"No errors with status [{args.status}] in the given time range.")
         return
 
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = current_jst_date()
     period = f"since {since}" if since else "30 days"
     print(f"## {args.project} - Error Summary ({today})\n")
     print(f"Status: {args.status} | Period: {period} | Total: {len(filtered)}\n")
