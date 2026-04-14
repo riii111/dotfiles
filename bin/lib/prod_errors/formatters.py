@@ -29,10 +29,10 @@ def print_flat_summary(items, since=None):
 
     if not is_tty:
         header = (
-            "| # | Status | Group | Error | Count | First (JST) | Last (JST) | Service | Related |"
+            "| # | Status | Group | Error | Count | First | Last | Service | Related |"
         )
         if since:
-            header = "| # | Status | New? | Group | Error | Count | First (JST) | Last (JST) | Service | Related |"
+            header = "| # | Status | New? | Group | Error | Count | First | Last | Service | Related |"
         print(header)
         print("-" * len(header))
         for idx, item in enumerate(items, 1):
@@ -107,8 +107,8 @@ def print_flat_summary(items, since=None):
             "Group",
             "Error",
             "Count",
-            "First (JST)",
-            "Last (JST)",
+            "First",
+            "Last",
             "Service",
             "Related",
         )
@@ -119,8 +119,8 @@ def print_flat_summary(items, since=None):
             "Group",
             "Error",
             "Count",
-            "First (JST)",
-            "Last (JST)",
+            "First",
+            "Last",
             "Service",
             "Related",
         )
@@ -173,10 +173,10 @@ def print_service_summary(items):
 
     if not is_tty:
         print(
-            "| Service | Groups | Total Count | Oldest First (JST) | Latest Last (JST) | Top Errors |"
+            "| Service | Groups | Total Count | Oldest First | Latest Last | Top Errors |"
         )
         print(
-            "|---------|--------|-------------|-------------------|-------------------|------------|"
+            "|---------|--------|-------------|--------------|-------------|------------|"
         )
         for item in items:
             print(
@@ -205,8 +205,8 @@ def print_service_summary(items):
         "Service",
         "Groups",
         "Total",
-        "Oldest First (JST)",
-        "Latest Last (JST)",
+        "Oldest First",
+        "Latest Last",
         "Top Errors",
     )
     widths = col_widths(rows, headers)

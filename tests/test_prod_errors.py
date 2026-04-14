@@ -367,8 +367,8 @@ class ProdErrorsCommandTest(unittest.TestCase):
             cmd_summary(args)
 
         output = stdout.getvalue()
-        self.assertIn("First (JST)", output)
-        self.assertIn("Last (JST)", output)
+        self.assertIn("First", output)
+        self.assertIn("Last", output)
         self.assertIn("2026-04-05 09:00 JST", output)
         self.assertIn("2026-04-05 09:00 JST (18m ago)", output)
 
@@ -482,8 +482,8 @@ class ProdErrorsCommandTest(unittest.TestCase):
 
         output = stdout.getvalue()
         self.assertIn("## Error Group: g-trace", output)
-        self.assertIn("- First (JST): 2026-04-01 09:00:00 JST", output)
-        self.assertIn("- Last (JST):  2026-04-05 09:00:00 JST", output)
+        self.assertIn("- First: 2026-04-01 09:00:00 JST", output)
+        self.assertIn("- Last:  2026-04-05 09:00:00 JST", output)
         self.assertIn("### Matched Error Logs", output)
         self.assertIn("[2026-04-05 09:00:00.000 JST]", output)
         self.assertIn("Cloud Trace ID: (not found)", output)
@@ -862,8 +862,8 @@ class ProdErrorsCommandTest(unittest.TestCase):
             cmd_trace(args)
 
         output = stdout.getvalue()
-        self.assertIn("- Error at (JST): 2026-04-05 09:00:01.000 JST", output)
-        self.assertIn("- First success (JST): 2026-04-05 09:00:03.000 JST", output)
+        self.assertIn("- Error at: 2026-04-05 09:00:01.000 JST", output)
+        self.assertIn("- First success: 2026-04-05 09:00:03.000 JST", output)
         self.assertIn("Recovered (endpoint only)", output)
         self.assertIn("tenant/caller match was not confirmed", output)
 

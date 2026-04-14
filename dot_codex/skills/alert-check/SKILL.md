@@ -19,7 +19,7 @@ description: Production alert triage using `pe`, `gh`, and `gcloud`.
 
 - 取得は原則 `--json` を使うのだ。
 - 事実が足りないときは断定しないのだ。
-- `retryCheck` は caller 文脈が取れれば `same caller` / `same tenant` まで見るのだ。取れないケースは endpoint-only として扱うのだ。
+- `retryCheck` は source と後続成功の caller 文脈を照合して `same caller` / `same tenant` まで見るのだ。`endpoint-only` は caller 文脈がない場合だけでなく、一致しなかった場合も含むのだ。
 - `pe trace` の lifecycle は直近 1 件だけだとみなすのだ。
 - この skill ではコード修正はしないのだ。分析と報告に徹するのだ。
 

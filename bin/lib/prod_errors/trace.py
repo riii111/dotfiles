@@ -153,7 +153,7 @@ def cmd_trace(args):
             print(f"\n{colors['bold']('### Retry Check')}\n")
             print(f"- Endpoint: `{endpoint}` (HTTP {http_status})")
             print(
-                f"- Error at (JST): {format_jst_timestamp(error_timestamp, include_seconds=True, include_millis=True)}"
+                f"- Error at: {format_jst_timestamp(error_timestamp, include_seconds=True, include_millis=True)}"
             )
             print(f"- Verdict: {colors['yellow']('Error within success response')}")
             print(
@@ -168,7 +168,7 @@ def cmd_trace(args):
         print(f"\n{colors['bold']('### Retry Check')}\n")
         print(f"- Endpoint: `{endpoint}`")
         print(
-            f"- Error at (JST): {format_jst_timestamp(error_timestamp, include_seconds=True, include_millis=True)}"
+            f"- Error at: {format_jst_timestamp(error_timestamp, include_seconds=True, include_millis=True)}"
         )
 
     try:
@@ -226,7 +226,7 @@ def cmd_trace(args):
         )
     if retry_summary["firstSuccessTimestamp"]:
         print(
-            f"- First success (JST): {format_jst_timestamp(retry_summary['firstSuccessTimestamp'], include_seconds=True, include_millis=True)}"
+            f"- First success: {format_jst_timestamp(retry_summary['firstSuccessTimestamp'], include_seconds=True, include_millis=True)}"
         )
     print(f"- Verdict: {_format_retry_verdict(colors, retry_summary)}")
     print(f"  {result['retryCheck']['detail']}")
@@ -309,10 +309,10 @@ def _print_trace_header(group_id, target, known_service, colors):
     )
     print(f"- Count: {target.get('count', '0')}")
     print(
-        f"- First (JST): {format_jst_timestamp(target.get('firstSeenTime', ''), include_seconds=True)}"
+        f"- First: {format_jst_timestamp(target.get('firstSeenTime', ''), include_seconds=True)}"
     )
     print(
-        f"- Last (JST):  {format_jst_timestamp(target.get('lastSeenTime', ''), include_seconds=True)}"
+        f"- Last:  {format_jst_timestamp(target.get('lastSeenTime', ''), include_seconds=True)}"
     )
     if known_service:
         print(f"- Service (from Error Reporting): {colors['dim'](known_service)}")
@@ -402,6 +402,8 @@ def _build_lifecycle_entries(trace_logs):
     ]
 
 
+# Structured payload/header keys are normalized first and matched here.
+# Add aliases here when the same caller context is available as explicit JSON keys.
 _CONTEXT_KEY_ALIASES = {
     "tenantId": (
         "tenantid",
@@ -411,12 +413,9 @@ _CONTEXT_KEY_ALIASES = {
         "xapptenantid",
     ),
     "userAccountId": (
-        "accountid",
-        "account_id",
         "appaccountid",
         "useraccountid",
         "user_account_id",
-        "xaccountid",
         "xappaccountid",
         "xuseraccountid",
     ),
@@ -429,12 +428,14 @@ _CONTEXT_KEY_ALIASES = {
     ),
 }
 
+# Free-text payloads need a second path because some logs only expose caller context
+# inside message strings rather than structured JSON fields.
 _CONTEXT_VALUE_PATTERNS = {
     "tenantId": re.compile(
         r'(?i)(?:tenantId|tenant_id|appTenantId|app_tenant_id|x-tenant-id|x_tenant_id|x-app-tenant-id|x_app_tenant_id)["\'=:,\s]+([A-Za-z0-9._:-]+)'
     ),
     "userAccountId": re.compile(
-        r'(?i)(?:accountId|account_id|appAccountId|app_account_id|userAccountId|user_account_id|x-account-id|x_account_id|x-app-account-id|x_app_account_id|x-user-account-id|x_user_account_id)["\'=:,\s]+([A-Za-z0-9._:-]+)'
+        r'(?i)(?:appAccountId|app_account_id|userAccountId|user_account_id|x-app-account-id|x_app_account_id|x-user-account-id|x_user_account_id)["\'=:,\s]+([A-Za-z0-9._:-]+)'
     ),
     "userId": re.compile(
         r'(?i)(?:userId|user_id|appUserId|app_user_id|x-user-id|x_user_id|x-app-user-id|x_app_user_id)["\'=:,\s]+([A-Za-z0-9._:-]+)'
@@ -594,9 +595,10 @@ def _extract_retry_context(trace_logs, logs):
 
 
 def _lookup_retry_logs(project, token, service, endpoint, error_timestamp, freshness):
+    escaped_endpoint = endpoint.replace('"', '\\"')
     retry_filter = (
         f'resource.labels.service_name="{service}" '
-        f'jsonPayload.message:"{endpoint}" '
+        f'jsonPayload.message:"{escaped_endpoint}" '
         f'timestamp>="{error_timestamp}"'
     )
     retry_logs = logging_read(
