@@ -6,6 +6,7 @@ import io
 import json
 import sys
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest import mock
 
@@ -17,11 +18,16 @@ if str(LIB) not in sys.path:
 
 from prod_errors.cli import build_parser
 from prod_errors.ansi import display_width, pad_left, pad_right, trunc
-from prod_errors.commands import cmd_hotspots, cmd_trace
+from prod_errors.commands import cmd_hotspots, cmd_summary, cmd_trace
 from prod_errors.logic import (
     build_hotspot_data,
     build_service_summary_data,
     windowed_counts,
+)
+from prod_errors.timefmt import (
+    format_jst_timestamp,
+    format_relative_age,
+    format_summary_last_seen,
 )
 from prod_errors.trace import _extract_context_from_object
 
@@ -198,6 +204,24 @@ class ProdErrorsTraceHelpersTest(unittest.TestCase):
         self.assertEqual(context["userAccountId"], "ua-1")
         self.assertEqual(context["userId"], "user-9")
 
+    def test_extract_context_from_object_reads_x_app_headers(self):
+        context = {}
+
+        _extract_context_from_object(
+            {
+                "headers": {
+                    "X-App-Tenant-Id": "tenant-a",
+                    "X-App-Account-Id": "account-a",
+                    "X-App-User-Id": "user-a",
+                }
+            },
+            context,
+        )
+
+        self.assertEqual(context["tenantId"], "tenant-a")
+        self.assertEqual(context["userAccountId"], "account-a")
+        self.assertEqual(context["userId"], "user-a")
+
     def test_extract_context_from_object_stops_at_max_depth(self):
         nested = "tenantId=too-deep"
         for _ in range(20):
@@ -221,6 +245,32 @@ class ProdErrorsAnsiTest(unittest.TestCase):
 
     def test_trunc_uses_display_width(self):
         self.assertEqual(trunc("ログイン時にエラー", 8), "ログイ…")
+
+
+class ProdErrorsTimefmtTest(unittest.TestCase):
+    def test_format_jst_timestamp_converts_utc_to_jst(self):
+        self.assertEqual(
+            format_jst_timestamp("2026-04-14T01:23:45.205000Z", include_seconds=True),
+            "2026-04-14 10:23:45 JST",
+        )
+
+    def test_format_relative_age_returns_minutes(self):
+        self.assertEqual(
+            format_relative_age(
+                "2026-04-14T01:00:00.000000Z",
+                now=datetime(2026, 4, 14, 1, 18, tzinfo=timezone.utc),
+            ),
+            "18m ago",
+        )
+
+    def test_format_summary_last_seen_combines_absolute_and_relative(self):
+        self.assertEqual(
+            format_summary_last_seen(
+                "2026-04-14T01:00:00.000000Z",
+                now=datetime(2026, 4, 14, 1, 18, tzinfo=timezone.utc),
+            ),
+            "2026-04-14 10:00 JST (18m ago)",
+        )
 
 
 class ProdErrorsCliTest(unittest.TestCase):
@@ -281,6 +331,46 @@ class ProdErrorsCommandTest(unittest.TestCase):
             },
         }
     ]
+
+    @mock.patch("prod_errors.timefmt.now_utc")
+    @mock.patch("prod_errors.commands.get_token", return_value="token")
+    @mock.patch("prod_errors.commands.api_get_all_pages")
+    def test_cmd_summary_output_uses_jst_and_relative_last_seen(
+        self,
+        mock_api_get_all_pages,
+        _mock_get_token,
+        mock_now_utc,
+    ):
+        mock_now_utc.return_value = datetime(2026, 4, 5, 0, 18, tzinfo=timezone.utc)
+        mock_api_get_all_pages.return_value = [
+            make_group(
+                "g-open",
+                "OPEN",
+                "FooError: boom",
+                5,
+                "2026-04-05T00:00:00.000000Z",
+                "2026-04-05T00:00:00.000000Z",
+                "svc-a",
+            )
+        ]
+
+        args = argparse.Namespace(
+            project="demo",
+            status="OPEN",
+            group_by=None,
+            since=None,
+            json=False,
+        )
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            cmd_summary(args)
+
+        output = stdout.getvalue()
+        self.assertIn("First (JST)", output)
+        self.assertIn("Last (JST)", output)
+        self.assertIn("2026-04-05 09:00 JST", output)
+        self.assertIn("2026-04-05 09:00 JST (18m ago)", output)
 
     @mock.patch("prod_errors.commands.get_token", return_value="token")
     @mock.patch("prod_errors.commands.api_get_all_pages")
@@ -392,7 +482,10 @@ class ProdErrorsCommandTest(unittest.TestCase):
 
         output = stdout.getvalue()
         self.assertIn("## Error Group: g-trace", output)
+        self.assertIn("- First (JST): 2026-04-01 09:00:00 JST", output)
+        self.assertIn("- Last (JST):  2026-04-05 09:00:00 JST", output)
         self.assertIn("### Matched Error Logs", output)
+        self.assertIn("[2026-04-05 09:00:00.000 JST]", output)
         self.assertIn("Cloud Trace ID: (not found)", output)
         self.assertIn("Request-lifecycle lookup is unavailable", output)
         self.assertNotIn("### Recent Events", output)
@@ -443,6 +536,7 @@ class ProdErrorsCommandTest(unittest.TestCase):
         output = stdout.getvalue()
         self.assertIn("No matching logs in Cloud Logging", output)
         self.assertIn("### Recent Events (1)", output)
+        self.assertIn("2026-04-05 09:00:00 JST", output)
         self.assertNotIn("### Matched Error Logs", output)
 
     def test_cmd_trace_json_includes_lifecycle_and_retry_check(self):
@@ -537,6 +631,136 @@ class ProdErrorsCommandTest(unittest.TestCase):
         self.assertEqual(payload["retryCheck"]["sameTenantSuccessCount"], 1)
         self.assertEqual(payload["retryCheck"]["sameCallerSuccessCount"], 0)
         self.assertEqual(payload["retryCheck"]["verdict"], "recovered_same_tenant")
+
+    def test_cmd_trace_json_marks_same_caller_recovery_from_x_app_headers(self):
+        payload = self._run_trace_json(
+            [
+                [
+                    {
+                        "timestamp": "2026-04-05T00:00:00.000000Z",
+                        "severity": "ERROR",
+                        "resource": {"labels": {"service_name": "svc-a"}},
+                        "jsonPayload": {
+                            "message": "FooError: boom",
+                            "logger": "app",
+                            "trace_id": "trace-123",
+                            "headers": {
+                                "X-App-Tenant-Id": "tenant-a",
+                                "X-App-Account-Id": "account-a",
+                                "X-App-User-Id": "user-a",
+                            },
+                        },
+                    }
+                ],
+                [
+                    make_trace_log(
+                        "2026-04-05T00:00:01.000000Z",
+                        "ERROR",
+                        "500 Internal Server Error: GET - /foo in 10ms",
+                        request={
+                            "headers": {
+                                "x-app-tenant-id": "tenant-a",
+                                "x-app-account-id": "account-a",
+                                "x-app-user-id": "user-a",
+                            }
+                        },
+                    )
+                ],
+                [
+                    make_trace_log(
+                        "2026-04-05T00:00:03.000000Z",
+                        "INFO",
+                        "200 OK: GET - /foo in 20ms",
+                        logger="access",
+                        request={
+                            "headers": {
+                                "x-app-tenant-id": "tenant-a",
+                                "x-app-account-id": "account-a",
+                                "x-app-user-id": "user-a",
+                            }
+                        },
+                    )
+                ],
+            ]
+        )
+
+        self.assertEqual(payload["retryCheck"]["sourceContext"]["tenantId"], "tenant-a")
+        self.assertEqual(
+            payload["retryCheck"]["sourceContext"]["userAccountId"], "account-a"
+        )
+        self.assertEqual(payload["retryCheck"]["sourceContext"]["userId"], "user-a")
+        self.assertEqual(payload["retryCheck"]["sameTenantSuccessCount"], 1)
+        self.assertEqual(payload["retryCheck"]["sameCallerSuccessCount"], 1)
+        self.assertEqual(payload["retryCheck"]["verdict"], "recovered_same_caller")
+
+    def test_cmd_trace_json_uses_trace_context_for_retry_access_logs(self):
+        payload = self._run_trace_json(
+            [
+                [
+                    {
+                        "timestamp": "2026-04-05T00:00:00.000000Z",
+                        "severity": "ERROR",
+                        "resource": {"labels": {"service_name": "svc-a"}},
+                        "jsonPayload": {
+                            "message": "FooError: boom",
+                            "logger": "app",
+                            "trace_id": "trace-123",
+                            "context": {
+                                "tenantId": "tenant-a",
+                                "userAccountId": "ua-1",
+                                "userId": "user-1",
+                            },
+                        },
+                    }
+                ],
+                [
+                    make_trace_log(
+                        "2026-04-05T00:00:01.000000Z",
+                        "ERROR",
+                        "500 Internal Server Error: GET - /foo in 10ms",
+                        logger="Application",
+                        trace_id="trace-fail",
+                    ),
+                    make_trace_log(
+                        "2026-04-05T00:00:01.001000Z",
+                        "INFO",
+                        "Response Information GET /foo",
+                        logger="Application",
+                        trace_id="trace-fail",
+                        context={
+                            "tenantId": "tenant-a",
+                            "userAccountId": "ua-1",
+                            "userId": "user-1",
+                        },
+                    ),
+                ],
+                [
+                    make_trace_log(
+                        "2026-04-05T00:00:03.000000Z",
+                        "INFO",
+                        "200 OK: GET - /foo in 20ms",
+                        logger="access",
+                        trace_id="trace-ok",
+                    ),
+                    make_trace_log(
+                        "2026-04-05T00:00:03.001000Z",
+                        "INFO",
+                        "Response Information GET /foo",
+                        logger="Application",
+                        trace_id="trace-ok",
+                        context={
+                            "tenantId": "tenant-a",
+                            "userAccountId": "ua-1",
+                            "userId": "user-1",
+                        },
+                    ),
+                ],
+            ]
+        )
+
+        self.assertEqual(payload["retryCheck"]["sameTenantSuccessCount"], 1)
+        self.assertEqual(payload["retryCheck"]["sameCallerSuccessCount"], 1)
+        self.assertEqual(payload["retryCheck"]["verdict"], "recovered_same_caller")
 
     def test_cmd_trace_json_marks_endpoint_only_recovery_when_context_differs(
         self,
@@ -638,6 +862,8 @@ class ProdErrorsCommandTest(unittest.TestCase):
             cmd_trace(args)
 
         output = stdout.getvalue()
+        self.assertIn("- Error at (JST): 2026-04-05 09:00:01.000 JST", output)
+        self.assertIn("- First success (JST): 2026-04-05 09:00:03.000 JST", output)
         self.assertIn("Recovered (endpoint only)", output)
         self.assertIn("tenant/caller match was not confirmed", output)
 

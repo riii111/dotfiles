@@ -23,6 +23,7 @@ from prod_errors.client import (
     get_token,
     logging_read,
 )
+from prod_errors.timefmt import format_jst_timestamp
 
 
 def cmd_trace(args):
@@ -151,7 +152,9 @@ def cmd_trace(args):
         else:
             print(f"\n{colors['bold']('### Retry Check')}\n")
             print(f"- Endpoint: `{endpoint}` (HTTP {http_status})")
-            print(f"- Error at: {error_timestamp[:23]}Z")
+            print(
+                f"- Error at (JST): {format_jst_timestamp(error_timestamp, include_seconds=True, include_millis=True)}"
+            )
             print(f"- Verdict: {colors['yellow']('Error within success response')}")
             print(
                 f"  Endpoint returned HTTP {http_status} but ERROR was logged internally."
@@ -164,7 +167,9 @@ def cmd_trace(args):
     if not args.json:
         print(f"\n{colors['bold']('### Retry Check')}\n")
         print(f"- Endpoint: `{endpoint}`")
-        print(f"- Error at: {error_timestamp[:23]}Z")
+        print(
+            f"- Error at (JST): {format_jst_timestamp(error_timestamp, include_seconds=True, include_millis=True)}"
+        )
 
     try:
         _retry_filter, retry_logs = _lookup_retry_logs(
@@ -220,7 +225,9 @@ def cmd_trace(args):
             f"**{retry_summary['sameCallerFailureCount']}** fail"
         )
     if retry_summary["firstSuccessTimestamp"]:
-        print(f"- First success: {retry_summary['firstSuccessTimestamp']}Z")
+        print(
+            f"- First success (JST): {format_jst_timestamp(retry_summary['firstSuccessTimestamp'], include_seconds=True, include_millis=True)}"
+        )
     print(f"- Verdict: {_format_retry_verdict(colors, retry_summary)}")
     print(f"  {result['retryCheck']['detail']}")
 
@@ -262,7 +269,7 @@ def _print_log_entries(title, entries, colors):
     for log_entry in entries:
         severity = log_entry["severity"]
         print(
-            f"  [{log_entry['timestamp'][:23]}] "
+            f"  [{format_jst_timestamp(log_entry['timestamp'], include_seconds=True, include_millis=True)}] "
             f"{colors['severity'].get(severity, color())(f'{severity:7s}')} "
             f"[{colors['dim'](log_entry['logger'])}] {log_entry['message']}"
         )
@@ -301,8 +308,12 @@ def _print_trace_header(group_id, target, known_service, colors):
         f"- Message: {target.get('representative', {}).get('message', '').splitlines()[0][:120]}"
     )
     print(f"- Count: {target.get('count', '0')}")
-    print(f"- First: {target.get('firstSeenTime', '')[:19]}Z")
-    print(f"- Last:  {target.get('lastSeenTime', '')[:19]}Z")
+    print(
+        f"- First (JST): {format_jst_timestamp(target.get('firstSeenTime', ''), include_seconds=True)}"
+    )
+    print(
+        f"- Last (JST):  {format_jst_timestamp(target.get('lastSeenTime', ''), include_seconds=True)}"
+    )
     if known_service:
         print(f"- Service (from Error Reporting): {colors['dim'](known_service)}")
 
@@ -325,7 +336,9 @@ def _load_recent_events(project, token, group_id):
 def _print_recent_events(events, colors):
     print(f"\n{colors['bold'](f'### Recent Events ({len(events)})')}\n")
     for event in events:
-        print(f"  - {event['eventTime'][:19]}Z | {colors['dim'](event['service'])}")
+        print(
+            f"  - {format_jst_timestamp(event['eventTime'], include_seconds=True)} | {colors['dim'](event['service'])}"
+        )
 
 
 def _build_cloud_logging_filter(first_line, known_service):
@@ -393,29 +406,38 @@ _CONTEXT_KEY_ALIASES = {
     "tenantId": (
         "tenantid",
         "tenant_id",
+        "apptenantid",
         "xtenantid",
+        "xapptenantid",
     ),
     "userAccountId": (
+        "accountid",
+        "account_id",
+        "appaccountid",
         "useraccountid",
         "user_account_id",
+        "xaccountid",
+        "xappaccountid",
         "xuseraccountid",
     ),
     "userId": (
+        "appuserid",
         "userid",
         "user_id",
+        "xappuserid",
         "xuserid",
     ),
 }
 
 _CONTEXT_VALUE_PATTERNS = {
     "tenantId": re.compile(
-        r'(?i)(?:tenantId|tenant_id|x-tenant-id|x_tenant_id)["\'=:,\s]+([A-Za-z0-9._:-]+)'
+        r'(?i)(?:tenantId|tenant_id|appTenantId|app_tenant_id|x-tenant-id|x_tenant_id|x-app-tenant-id|x_app_tenant_id)["\'=:,\s]+([A-Za-z0-9._:-]+)'
     ),
     "userAccountId": re.compile(
-        r'(?i)(?:userAccountId|user_account_id|x-user-account-id|x_user_account_id)["\'=:,\s]+([A-Za-z0-9._:-]+)'
+        r'(?i)(?:accountId|account_id|appAccountId|app_account_id|userAccountId|user_account_id|x-account-id|x_account_id|x-app-account-id|x_app_account_id|x-user-account-id|x_user_account_id)["\'=:,\s]+([A-Za-z0-9._:-]+)'
     ),
     "userId": re.compile(
-        r'(?i)(?:userId|user_id|x-user-id|x_user_id)["\'=:,\s]+([A-Za-z0-9._:-]+)'
+        r'(?i)(?:userId|user_id|appUserId|app_user_id|x-user-id|x_user_id|x-app-user-id|x_app_user_id)["\'=:,\s]+([A-Za-z0-9._:-]+)'
     ),
 }
 
@@ -489,6 +511,20 @@ def _collect_source_context(*log_groups):
     return context
 
 
+def _build_retry_contexts_by_trace_id(retry_logs):
+    contexts_by_trace_id = {}
+    for retry_log in retry_logs:
+        trace_id = extract_trace_id(retry_log)
+        if not trace_id:
+            continue
+
+        trace_context = contexts_by_trace_id.setdefault(trace_id, {})
+        extracted = _extract_log_context(retry_log)
+        for key, value in extracted.items():
+            _merge_context_value(trace_context, key, value)
+    return contexts_by_trace_id
+
+
 def _match_same_tenant(source_context, retry_context):
     source_tenant = source_context.get("tenantId")
     retry_tenant = retry_context.get("tenantId")
@@ -506,18 +542,26 @@ def _match_same_caller(source_context, retry_context):
     return False
 
 
-def _extract_retry_log_entry(log_entry):
+def _extract_retry_log_entry(log_entry, contexts_by_trace_id=None):
     payload = log_entry.get("jsonPayload", {})
     raw = payload.get("message", "") or log_entry.get("textPayload", "")
     message = strip_ansi(raw)
     match = _ACCESS_LOG_RE.search(message)
     if not match:
         return None
+
+    context = _extract_log_context(log_entry)
+    if contexts_by_trace_id:
+        trace_id = extract_trace_id(log_entry)
+        if trace_id:
+            for key, value in contexts_by_trace_id.get(trace_id, {}).items():
+                _merge_context_value(context, key, value)
+
     return {
         "timestamp": log_entry.get("timestamp", ""),
         "httpStatus": int(match.group(1)),
         "endpoint": match.group(3).strip(),
-        "context": _extract_log_context(log_entry),
+        "context": context,
     }
 
 
@@ -571,15 +615,16 @@ def _summarize_retry_logs(retry_logs, source_context):
     same_caller_ok = 0
     same_caller_fail = 0
     first_same_caller_ok_timestamp = None
+    contexts_by_trace_id = _build_retry_contexts_by_trace_id(retry_logs)
 
     for retry_log in reversed(retry_logs):
-        retry_entry = _extract_retry_log_entry(retry_log)
+        retry_entry = _extract_retry_log_entry(retry_log, contexts_by_trace_id)
         if not retry_entry:
             continue
 
         status = retry_entry["httpStatus"]
         retry_context = retry_entry["context"]
-        timestamp = retry_log.get("timestamp", "")[:23]
+        timestamp = retry_log.get("timestamp", "")
 
         if 200 <= status < 300:
             ok += 1
