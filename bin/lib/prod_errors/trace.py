@@ -203,9 +203,10 @@ def cmd_trace(args):
         return
 
     print(
-        "- Subsequent requests on same endpoint: "
-        f"**{retry_summary['successCount']}** ok / "
-        f"**{retry_summary['failureCount']}** fail"
+        "- Same-endpoint requests after this error "
+        f"(within {args.freshness}): "
+        f"{retry_summary['successCount']} ok / "
+        f"{retry_summary['failureCount']} fail"
     )
     print(f"- Recovery match context: {_format_retry_context(source_context)}")
     if (
@@ -214,8 +215,8 @@ def cmd_trace(args):
     ):
         print(
             "- Same tenant after error: "
-            f"**{retry_summary['sameTenantSuccessCount']}** ok / "
-            f"**{retry_summary['sameTenantFailureCount']}** fail"
+            f"{retry_summary['sameTenantSuccessCount']} ok / "
+            f"{retry_summary['sameTenantFailureCount']} fail"
         )
     if (
         retry_summary["sameCallerSuccessCount"]
@@ -223,8 +224,8 @@ def cmd_trace(args):
     ):
         print(
             "- Same caller after error: "
-            f"**{retry_summary['sameCallerSuccessCount']}** ok / "
-            f"**{retry_summary['sameCallerFailureCount']}** fail"
+            f"{retry_summary['sameCallerSuccessCount']} ok / "
+            f"{retry_summary['sameCallerFailureCount']} fail"
         )
     if retry_summary["firstSuccessTimestamp"]:
         print(
