@@ -203,9 +203,11 @@ def cmd_trace(args):
         return
 
     print(
-        f"- After error: **{retry_summary['successCount']}** ok / **{retry_summary['failureCount']}** fail"
+        "- Subsequent requests on same endpoint: "
+        f"**{retry_summary['successCount']}** ok / "
+        f"**{retry_summary['failureCount']}** fail"
     )
-    print(f"- Source context: {_format_retry_context(source_context)}")
+    print(f"- Recovery match context: {_format_retry_context(source_context)}")
     if (
         retry_summary["sameTenantSuccessCount"]
         or retry_summary["sameTenantFailureCount"]
