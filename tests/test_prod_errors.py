@@ -663,6 +663,57 @@ class ProdErrorsCommandTest(unittest.TestCase):
         self.assertIn("2026-04-05 09:10 JST", output)
         self.assertIn("2026-04-05 09:10 JST (8m ago)", output)
 
+    @mock.patch("prod_errors.commands.logging_list_all")
+    @mock.patch("prod_errors.commands.get_token", return_value="token")
+    @mock.patch("prod_errors.commands.api_get_all_pages")
+    def test_cmd_hotspots_without_until_uses_fast_path(
+        self,
+        mock_api_get_all_pages,
+        _mock_get_token,
+        mock_logging_list_all,
+    ):
+        mock_api_get_all_pages.return_value = [
+            make_group(
+                "g-fast",
+                "OPEN",
+                "FastError: boom",
+                5,
+                "2026-04-01T00:00:00.000000Z",
+                "2026-04-05T00:00:00.000000Z",
+                "svc-a",
+                timed_counts=[
+                    {
+                        "count": "3",
+                        "startTime": "2026-04-04T00:00:00.000000Z",
+                        "endTime": "2026-04-05T00:00:00.000000Z",
+                    }
+                ],
+            )
+        ]
+        mock_logging_list_all.side_effect = AssertionError(
+            "fast path should not scan Cloud Logging"
+        )
+
+        args = argparse.Namespace(
+            project="demo",
+            status="OPEN",
+            since="2026-04-04T00:00:00Z",
+            until=None,
+            period="7d",
+            bucket="1d",
+            limit=20,
+            json=True,
+        )
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            cmd_hotspots(args)
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["summary"]["totalGroups"], 1)
+        self.assertEqual(payload["errors"][0]["groupId"], "g-fast")
+        self.assertEqual(payload["errors"][0]["activeBuckets"], 1)
+
     @mock.patch("prod_errors.commands.get_token", return_value="token")
     @mock.patch(
         "prod_errors.commands._find_prior_occurrences",

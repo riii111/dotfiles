@@ -15,6 +15,7 @@ from prod_errors.client import (
     parse_time_arg,
     parse_since,
     period_timedelta_for,
+    timed_count_duration_for_bucket,
 )
 from prod_errors.formatters import (
     print_flat_summary,
@@ -25,6 +26,7 @@ from prod_errors.formatters import (
 )
 from prod_errors.logic import (
     aggregate_hotspot_logs,
+    aggregate_hotspot_group_stats,
     bucket_timedelta_for,
     build_hotspot_analysis,
     build_service_summary_data,
@@ -104,13 +106,25 @@ def cmd_hotspots(args):
     _validate_hotspot_bucket(since, until, args.bucket)
     token = get_token()
     statuses = {status.strip().upper() for status in args.status.split(",")}
-    analysis = _build_hotspot_range_analysis(
-        args.project,
-        token,
-        since,
-        until,
-        args.bucket,
-        statuses,
+    analysis = (
+        _build_hotspot_fast_analysis(
+            args.project,
+            token,
+            since,
+            until,
+            args.period,
+            args.bucket,
+            statuses,
+        )
+        if _should_use_fast_hotspot_path(args)
+        else _build_hotspot_range_analysis(
+            args.project,
+            token,
+            since,
+            until,
+            args.bucket,
+            statuses,
+        )
     )
     hotspots = analysis["errors"][: args.limit]
 
@@ -278,6 +292,61 @@ def _build_hotspot_range_analysis(project, token, since, until, bucket, statuses
     return analysis
 
 
+def _build_hotspot_fast_analysis(
+    project,
+    token,
+    since,
+    until,
+    period,
+    bucket,
+    statuses,
+):
+    try:
+        groups = api_get_all_pages(
+            build_group_stats_url(
+                project,
+                period=period,
+                timed_count_duration=timed_count_duration_for_bucket(bucket),
+            ),
+            token,
+            "errorGroupStats",
+        )
+    except LoggingError as e:
+        print(f"hotspots data fetch failed: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    filtered = [
+        group
+        for group in groups
+        if group.get("group", {}).get("resolutionStatus", UNKNOWN_STATUS) in statuses
+    ]
+    aggregated_groups = aggregate_hotspot_group_stats(filtered, since, until)
+    if not aggregated_groups:
+        analysis = empty_hotspot_analysis(since, until, bucket)
+        analysis["skippedGroups"] = {"count": 0, "groupIds": []}
+        return analysis
+
+    group_metadata = {
+        group.get("group", {}).get("groupId", ""): group for group in filtered
+    }
+    prior_occurrences = {
+        group_id: parse_timestamp(group_metadata[group_id].get("firstSeenTime", ""))
+        < parse_timestamp(since)
+        for group_id in aggregated_groups
+        if group_id in group_metadata
+    }
+    analysis = build_hotspot_analysis(
+        aggregated_groups,
+        {group_id: group_metadata[group_id] for group_id in aggregated_groups},
+        prior_occurrences,
+        since,
+        until,
+        bucket,
+    )
+    analysis["skippedGroups"] = {"count": 0, "groupIds": []}
+    return analysis
+
+
 def _fetch_group_metadata(project, token, group_ids, progress=None):
     metadata = {}
     missing = []
@@ -380,6 +449,10 @@ def _find_prior_occurrences(
 
 def _escape_logging_string(value):
     return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _should_use_fast_hotspot_path(args):
+    return args.until is None
 
 
 class _ProgressReporter:

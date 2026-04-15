@@ -242,6 +242,8 @@ def aggregate_hotspot_logs(entries, since, until, bucket):
         message = extract_log_message(entry)
         service = extract_log_service(entry)
         bucket_index = int((timestamp - since_dt).total_seconds() // bucket_seconds)
+        bucket_start = since_dt + (bucket_span * bucket_index)
+        bucket_key = isoformat_utc(bucket_start)
 
         for group_id in group_ids:
             group = groups.setdefault(
@@ -265,7 +267,53 @@ def aggregate_hotspot_logs(entries, since, until, bucket):
                 group["message"] = message
             if service and not group["service"]:
                 group["service"] = service
-            group["bucketEventCounts"][bucket_index] += 1
+            group["bucketEventCounts"][bucket_key] += 1
+
+    return groups
+
+
+def aggregate_hotspot_group_stats(items, since, until):
+    since_dt = parse_timestamp(since)
+    until_dt = parse_timestamp(until)
+    groups = {}
+
+    for item in items:
+        group_id = item.get("group", {}).get("groupId", "")
+        if not group_id:
+            continue
+
+        bucket_event_counts = defaultdict(int)
+        first_seen = None
+        last_seen = None
+        for timed_count in item.get("timedCounts", []):
+            count = int(timed_count.get("count", "0"))
+            if count <= 0:
+                continue
+            bucket_start = parse_timestamp(timed_count.get("startTime", ""))
+            bucket_end = parse_timestamp(timed_count.get("endTime", ""))
+            if bucket_start is None or bucket_end is None:
+                continue
+            if bucket_end <= since_dt or bucket_start >= until_dt:
+                continue
+            bucket_key = isoformat_utc(bucket_start)
+            bucket_event_counts[bucket_key] += count
+            if first_seen is None or bucket_start < first_seen:
+                first_seen = bucket_start
+            if last_seen is None or bucket_end > last_seen:
+                last_seen = bucket_end
+
+        if not bucket_event_counts:
+            continue
+
+        groups[group_id] = {
+            "groupId": group_id,
+            "count": sum(bucket_event_counts.values()),
+            "firstSeenTime": first_seen,
+            "lastSeenTime": last_seen,
+            "message": item.get("representative", {}).get("message", "").split("\n")[0],
+            "service": get_service_from_group(item) or "",
+            "bucketEventCounts": bucket_event_counts,
+        }
 
     return groups
 
@@ -300,7 +348,7 @@ def build_hotspot_analysis(
         is_recurring = prior_occurrences.get(group_id, False)
         is_new = not is_recurring
         bucket_counts = aggregated["bucketEventCounts"]
-        first_bucket_index = min(bucket_counts) if bucket_counts else None
+        first_bucket_key = min(bucket_counts) if bucket_counts else None
         entry = {
             "groupId": group_id,
             "status": group.get("resolutionStatus", UNKNOWN_STATUS),
@@ -317,7 +365,7 @@ def build_hotspot_analysis(
             "isNewInRange": is_new,
             "isRecurringInRange": is_recurring,
             "bucketEventCounts": dict(bucket_counts),
-            "firstBucketIndex": first_bucket_index,
+            "firstBucketKey": first_bucket_key,
         }
         errors.append(entry)
 
@@ -332,8 +380,9 @@ def build_hotspot_analysis(
             rank_by_group_id.get(related_group_id) if related_group_id else None
         )
         bucket_counts = entry.pop("bucketEventCounts")
-        first_bucket_index = entry.pop("firstBucketIndex")
-        for bucket_index, event_count in bucket_counts.items():
+        first_bucket_key = entry.pop("firstBucketKey")
+        for bucket_key, event_count in bucket_counts.items():
+            bucket_index = find_bucket_index(bucket_entries, bucket_key)
             if bucket_index < 0 or bucket_index >= len(bucket_entries):
                 continue
             bucket_entry = bucket_entries[bucket_index]
@@ -343,7 +392,7 @@ def build_hotspot_analysis(
                 bucket_entry["activeNewGroups"] += 1
             if entry["isRecurringInRange"]:
                 bucket_entry["activeRecurringGroups"] += 1
-            if bucket_index == first_bucket_index:
+            if bucket_key == first_bucket_key:
                 if entry["isNewInRange"]:
                     bucket_entry["newGroups"] += 1
                 if entry["isRecurringInRange"]:
@@ -429,3 +478,10 @@ def build_related_group_candidates(aggregated_groups, group_metadata):
             }
         )
     return candidates
+
+
+def find_bucket_index(bucket_entries, bucket_key):
+    for idx, bucket_entry in enumerate(bucket_entries):
+        if bucket_entry["start"] == bucket_key:
+            return idx
+    return -1

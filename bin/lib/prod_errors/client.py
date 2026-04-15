@@ -283,6 +283,13 @@ def timed_count_duration_for_period(value):
     }[value]
 
 
+def timed_count_duration_for_bucket(value):
+    return {
+        "1d": "86400s",
+        "7d": "604800s",
+    }[value]
+
+
 def period_timedelta_for(value):
     return {
         "1h": timedelta(hours=1),
