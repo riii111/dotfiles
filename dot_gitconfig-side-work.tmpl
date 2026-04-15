@@ -5,10 +5,12 @@
 
 [user]
 	email = {{ .git_email_side_work }}
-	signingKey = {{ .git_signing_key_side_work }}
+	signingKey = key::{{ .git_signing_key_side_work }}
 
 [gpg]
 	format = ssh
+[gpg "ssh"]
+	program = /Applications/1Password.app/Contents/MacOS/op-ssh-sign
 
 [commit]
 	gpgsign = true

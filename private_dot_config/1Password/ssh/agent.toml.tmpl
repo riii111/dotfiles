@@ -1,0 +1,4 @@
+{{- if eq .type "personal" -}}
+[[ssh-keys]]
+vault = {{ .side_work_1p_vault | quote }}
+{{- end }}
