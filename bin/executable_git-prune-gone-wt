@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import json
 import os
 import re
 import subprocess
@@ -99,6 +100,7 @@ def is_dirty(path):
 def parse_args(argv):
     parser = argparse.ArgumentParser(prog="git prune-gone-wt")
     parser.add_argument("-n", "--dry-run", action="store_true")
+    parser.add_argument("--no-fetch", action="store_true")
     return parser.parse_args(argv)
 
 
@@ -224,15 +226,37 @@ def pr_state_override(pr_number):
     return None
 
 
-def pr_state(pr_number):
-    override = pr_state_override(pr_number)
-    if override is not None:
-        return override
+def graphql_pr_states_query(owner, repo, pr_numbers):
+    query_lines = [
+        "query {",
+        f'  repository(owner: "{owner}", name: "{repo}") {{',
+    ]
+    for pr_number in pr_numbers:
+        query_lines.append(
+            f"    pr{pr_number}: pullRequest(number: {pr_number}) {{ state }}"
+        )
+    query_lines.extend(["  }", "}"])
+    return "\n".join(query_lines)
+
+
+def pr_states(pr_numbers):
+    states = {}
+    remaining = []
+    for pr_number in sorted(set(pr_numbers)):
+        override = pr_state_override(pr_number)
+        if override is not None:
+            states[pr_number] = override
+        else:
+            remaining.append(pr_number)
+
+    if not remaining:
+        return states
 
     repo = parse_origin_repo()
     if repo is None:
-        return None
+        return states
     owner, name = repo
+    query = graphql_pr_states_query(owner, name, remaining)
 
     for user in gh_auth_users():
         token = subprocess.run(
@@ -248,7 +272,7 @@ def pr_state(pr_number):
         env = os.environ.copy()
         env["GH_TOKEN"] = token.stdout.strip()
         result = subprocess.run(
-            ["gh", "api", f"repos/{owner}/{name}/pulls/{pr_number}", "--jq", ".state"],
+            ["gh", "api", "graphql", "-f", f"query={query}"],
             text=True,
             check=False,
             stdout=subprocess.PIPE,
@@ -256,23 +280,31 @@ def pr_state(pr_number):
             env=env,
         )
         if result.returncode == 0:
-            state = result.stdout.strip()
-            if state:
-                return state.upper()
+            try:
+                payload = json.loads(result.stdout)
+            except json.JSONDecodeError:
+                continue
+            repository = payload.get("data", {}).get("repository", {})
+            for pr_number in remaining:
+                state = repository.get(f"pr{pr_number}", {}).get("state")
+                if state:
+                    states[pr_number] = state.upper()
+            return states
 
-    return None
+    return states
 
 
 def main(argv):
     try:
         args = parse_args(argv)
-        subprocess.run(
-            ["git", "fetch", "--prune", "--quiet"],
-            check=True,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
+        if not args.no_fetch:
+            subprocess.run(
+                ["git", "fetch", "--prune", "--quiet"],
+                check=True,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
 
         current = Path(
             git_output("rev-parse", "--path-format=absolute", "--show-toplevel")
@@ -283,8 +315,17 @@ def main(argv):
             .resolve()
             .parent
         )
+        entries = worktrees()
         branch_info = branch_details()
         base_branch, base_ref = default_branch()
+        review_pr_states = pr_states(
+            [
+                extract_review_pr_number(Path(entry["path"]), repo_root)
+                for entry in entries
+                if entry["detached"]
+                and extract_review_pr_number(Path(entry["path"]), repo_root) is not None
+            ]
+        )
 
         lines = []
         removed = 0
@@ -293,7 +334,7 @@ def main(argv):
         prunable_names = []
         should_show_branch_hint = False
 
-        for entry in worktrees():
+        for entry in entries:
             branch = entry["branch"]
             is_prunable = entry["prunable"]
 
@@ -314,9 +355,11 @@ def main(argv):
                 extract_review_pr_number(path, repo_root) if entry["detached"] else None
             )
             review_pr_state = (
-                pr_state(review_pr_number) if review_pr_number is not None else None
+                review_pr_states.get(review_pr_number)
+                if review_pr_number is not None
+                else None
             )
-            is_closed_review_worktree = review_pr_state == "CLOSED"
+            is_closed_review_worktree = review_pr_state in {"CLOSED", "MERGED"}
 
             if not any(
                 (

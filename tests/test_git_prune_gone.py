@@ -1,13 +1,24 @@
+import importlib.util
 import subprocess
 import tempfile
 import unittest
 import os
 from pathlib import Path
+from importlib.machinery import SourceFileLoader
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
 BR_SCRIPT = ROOT / "bin" / "executable_git-prune-gone-br"
 WT_SCRIPT = ROOT / "bin" / "executable_git-prune-gone-wt"
+
+
+def load_script_module(name, path):
+    loader = SourceFileLoader(name, str(path))
+    spec = importlib.util.spec_from_loader(name, loader)
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
 
 
 class GitPruneGoneTest(unittest.TestCase):
@@ -150,6 +161,14 @@ class GitPruneGoneTest(unittest.TestCase):
 
     def test_branch_script_reports_no_stale_branches(self):
         result = self.run_script(BR_SCRIPT)
+
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout.strip(), "No stale branches found")
+
+    def test_branch_script_skips_fetch_when_no_fetch_is_set(self):
+        self.git("remote", "set-url", "origin", "ssh://invalid.example/repo.git")
+
+        result = self.run_script(BR_SCRIPT, "--dry-run", "--no-fetch")
 
         self.assertEqual(result.returncode, 0)
         self.assertEqual(result.stdout.strip(), "No stale branches found")
@@ -333,6 +352,58 @@ class GitPruneGoneTest(unittest.TestCase):
         self.assertNotIn(
             str(worktree_path), self.git("worktree", "list", "--porcelain")
         )
+
+    def test_worktree_script_skips_fetch_when_no_fetch_is_set(self):
+        self.git("remote", "set-url", "origin", "ssh://invalid.example/repo.git")
+
+        result = self.run_script(WT_SCRIPT, "--dry-run", "--no-fetch")
+
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout.strip(), "No gone worktrees found")
+
+    def test_worktree_script_batches_pr_state_queries(self):
+        module = load_script_module("git_prune_gone_wt_test", WT_SCRIPT)
+        calls = []
+
+        def fake_run(args, **kwargs):
+            calls.append(args)
+            if args[:5] == [
+                "gh",
+                "auth",
+                "token",
+                "--hostname",
+                "github.com",
+            ]:
+                return subprocess.CompletedProcess(args, 0, stdout="token\n", stderr="")
+            if args[:3] == ["gh", "api", "graphql"]:
+                self.assertIn("pr123: pullRequest(number: 123)", args[-1])
+                self.assertIn("pr456: pullRequest(number: 456)", args[-1])
+                payload = {
+                    "data": {
+                        "repository": {
+                            "pr123": {"state": "OPEN"},
+                            "pr456": {"state": "MERGED"},
+                        }
+                    }
+                }
+                return subprocess.CompletedProcess(
+                    args,
+                    0,
+                    stdout=os.linesep.join([__import__("json").dumps(payload)]),
+                    stderr="",
+                )
+            self.fail(f"unexpected subprocess.run call: {args}")
+
+        with (
+            mock.patch.object(module, "parse_origin_repo", return_value=("o", "r")),
+            mock.patch.object(module, "gh_auth_users", return_value=["tester"]),
+            mock.patch.object(module.subprocess, "run", side_effect=fake_run),
+        ):
+            states = module.pr_states([123, 456, 123])
+
+        self.assertEqual(states, {123: "OPEN", 456: "MERGED"})
+        graphql_calls = [args for args in calls if args[:3] == ["gh", "api", "graphql"]]
+        self.assertEqual(len(graphql_calls), 1)
 
     def test_worktree_script_reports_no_gone_worktrees(self):
         result = self.run_script(WT_SCRIPT, "--dry-run")
