@@ -1091,6 +1091,138 @@ class ProdErrorsCommandTest(unittest.TestCase):
     @mock.patch("prod_errors.trace.api_get")
     @mock.patch("prod_errors.trace.api_get_all_pages")
     @mock.patch("prod_errors.trace.logging_read")
+    def test_cmd_trace_shows_matched_log_analysis_without_cloud_trace_id(
+        self,
+        mock_logging_read,
+        mock_api_get_all_pages,
+        mock_api_get,
+        _mock_get_token,
+    ):
+        mock_api_get_all_pages.return_value = self._DEFAULT_GROUPS
+        mock_api_get.return_value = self._DEFAULT_EVENTS
+        mock_logging_read.return_value = [
+            {
+                "timestamp": "2026-04-05T00:00:00.000000Z",
+                "severity": "ERROR",
+                "resource": {"labels": {"service_name": "svc-a"}},
+                "jsonPayload": {
+                    "message": "FooError: boom",
+                    "logger": "app",
+                    "request": {"path": "/foo", "status": 503},
+                },
+            },
+            {
+                "timestamp": "2026-04-05T00:00:01.000000Z",
+                "severity": "ERROR",
+                "resource": {"labels": {"service_name": "svc-a"}},
+                "jsonPayload": {
+                    "message": "FooError: boom",
+                    "logger": "worker",
+                    "request": {"path": "/foo", "status": 500},
+                },
+            },
+            {
+                "timestamp": "2026-04-05T00:00:02.000000Z",
+                "severity": "ERROR",
+                "resource": {"labels": {"service_name": "svc-a"}},
+                "jsonPayload": {
+                    "message": "BarError: timeout",
+                    "logger": "app",
+                    "request": {"path": "/bar", "status": 500},
+                },
+            },
+        ]
+
+        args = argparse.Namespace(
+            project="demo",
+            group_id="g-trace",
+            json=False,
+            freshness="30d",
+        )
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            cmd_trace(args)
+
+        output = stdout.getvalue()
+        self.assertIn("- Service clue: svc-a", output)
+        self.assertIn("- Endpoint: `/foo` (HTTP 503, HTTP 500)", output)
+        self.assertIn("### Endpoint Candidates", output)
+        self.assertIn("`/foo` | 2 | HTTP 503, HTTP 500", output)
+        self.assertIn("`/bar` | 1 | HTTP 500", output)
+        self.assertIn("### Message Variants", output)
+        self.assertIn("FooError: boom | 2", output)
+        self.assertIn("BarError: timeout | 1", output)
+        self.assertIn("### Logger Clues", output)
+        self.assertIn("app | 2", output)
+        self.assertIn("worker | 1", output)
+        self.assertIn("### Matched Error Logs", output)
+
+    def test_cmd_trace_json_includes_matched_log_analysis_without_trace_id(self):
+        payload = self._run_trace_json(
+            [
+                [
+                    {
+                        "timestamp": "2026-04-05T00:00:00.000000Z",
+                        "severity": "ERROR",
+                        "resource": {"labels": {"service_name": "svc-a"}},
+                        "jsonPayload": {
+                            "message": "FooError: boom",
+                            "logger": "app",
+                            "request": {"path": "/foo", "status": 503},
+                        },
+                    },
+                    {
+                        "timestamp": "2026-04-05T00:00:01.000000Z",
+                        "severity": "ERROR",
+                        "resource": {"labels": {"service_name": "svc-a"}},
+                        "jsonPayload": {
+                            "message": "FooError: boom",
+                            "logger": "worker",
+                            "request": {"path": "/foo", "status": 500},
+                        },
+                    },
+                    {
+                        "timestamp": "2026-04-05T00:00:02.000000Z",
+                        "severity": "ERROR",
+                        "resource": {"labels": {"service_name": "svc-a"}},
+                        "jsonPayload": {
+                            "message": "BarError: timeout",
+                            "logger": "app",
+                            "request": {"path": "/bar", "status": 500},
+                        },
+                    },
+                ]
+            ]
+        )
+
+        self.assertEqual(payload["cloudLogging"]["traceId"], None)
+        self.assertEqual(
+            payload["cloudLogging"]["endpointCandidates"],
+            [
+                {"endpoint": "/foo", "count": 2, "httpStatuses": [503, 500]},
+                {"endpoint": "/bar", "count": 1, "httpStatuses": [500]},
+            ],
+        )
+        self.assertEqual(
+            payload["cloudLogging"]["messageVariants"],
+            [
+                {"value": "FooError: boom", "count": 2},
+                {"value": "BarError: timeout", "count": 1},
+            ],
+        )
+        self.assertEqual(
+            payload["cloudLogging"]["loggerClues"],
+            [
+                {"value": "app", "count": 2},
+                {"value": "worker", "count": 1},
+            ],
+        )
+
+    @mock.patch("prod_errors.trace.get_token", return_value="token")
+    @mock.patch("prod_errors.trace.api_get")
+    @mock.patch("prod_errors.trace.api_get_all_pages")
+    @mock.patch("prod_errors.trace.logging_read")
     def test_cmd_trace_shows_endpoint_before_retry_check_when_trace_id_exists(
         self,
         mock_logging_read,

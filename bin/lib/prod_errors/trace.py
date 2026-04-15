@@ -1,3 +1,4 @@
+from collections import Counter
 import json
 import re
 import sys
@@ -67,25 +68,21 @@ def cmd_trace(args):
             "service": lookup["service"],
             "traceId": lookup["traceId"],
             "matchedEntries": lookup["matchedEntries"],
+            "endpointCandidates": lookup["endpointCandidates"],
+            "messageVariants": lookup["messageVariants"],
+            "loggerClues": lookup["loggerClues"],
         }
     )
     if not args.json:
+        if lookup["service"] and lookup["service"] != "unknown":
+            print(f"- Service clue: {colors['dim'](lookup['service'])}")
         if lookup["traceId"]:
             print(f"- Cloud Trace ID: `{lookup['traceId']}`")
         else:
             print("- Cloud Trace ID: (not found)")
-        matched_endpoint, _, matched_http_status = _extract_retry_context(
-            [], lookup["logs"]
-        )
-        if matched_endpoint:
-            http_status_suffix = (
-                f" (HTTP {matched_http_status})"
-                if matched_http_status is not None
-                else ""
-            )
-            print(f"- Endpoint: `{matched_endpoint}`{http_status_suffix}")
-        else:
-            print("- Endpoint: (not found)")
+        _print_endpoint_summary(lookup["endpointCandidates"])
+        _print_ranked_values("### Message Variants", lookup["messageVariants"], colors)
+        _print_ranked_values("### Logger Clues", lookup["loggerClues"], colors)
         _print_log_entries(
             "### Matched Error Logs",
             list(reversed(lookup["matchedEntries"])),
@@ -290,6 +287,33 @@ def _print_log_entries(title, entries, colors):
         )
 
 
+def _print_endpoint_summary(endpoint_candidates):
+    if not endpoint_candidates:
+        print("- Endpoint: (not found)")
+        return
+
+    primary = endpoint_candidates[0]
+    statuses = _format_http_statuses(primary.get("httpStatuses", []))
+    suffix = f" ({statuses})" if statuses else ""
+    print(f"- Endpoint: `{primary['endpoint']}`{suffix}")
+
+    if len(endpoint_candidates) > 1:
+        print("\n### Endpoint Candidates\n")
+        for candidate in endpoint_candidates:
+            statuses = _format_http_statuses(candidate.get("httpStatuses", []))
+            detail = f" | {statuses}" if statuses else ""
+            print(f"  - `{candidate['endpoint']}` | {candidate['count']}{detail}")
+
+
+def _print_ranked_values(title, items, colors):
+    if not items:
+        return
+
+    print(f"\n{colors['bold'](title)}\n")
+    for item in items:
+        print(f"  - {item['value']} | {item['count']}")
+
+
 def _lookup_error_group(project, token, group_id):
     groups = api_get_all_pages(build_group_stats_url(project), token, "errorGroupStats")
     target = next(
@@ -354,7 +378,7 @@ def _build_cloud_logging_filter(first_line, known_service):
 
 
 def _lookup_cloud_logging(project, token, filt, freshness):
-    logs = logging_read(project, token, filt, limit=3, freshness=freshness)
+    logs = logging_read(project, token, filt, limit=5, freshness=freshness)
     if not logs:
         return None
 
@@ -365,11 +389,17 @@ def _lookup_cloud_logging(project, token, filt, freshness):
     )
     matched_logs = [_summarize_log_entry(log_entry) for log_entry in logs]
     trace_id = extract_trace_id(entry)
+    endpoint_candidates = _collect_endpoint_candidates(logs)
+    message_variants = _collect_message_variants(matched_logs)
+    logger_clues = _collect_logger_clues(matched_logs)
     return {
         "logs": logs,
         "service": service,
         "matchedEntries": matched_logs,
         "traceId": trace_id or None,
+        "endpointCandidates": endpoint_candidates,
+        "messageVariants": message_variants,
+        "loggerClues": logger_clues,
     }
 
 
@@ -545,6 +575,78 @@ def _build_retry_contexts_by_trace_id(retry_logs):
         for key, value in extracted.items():
             _merge_context_value(trace_context, key, value)
     return contexts_by_trace_id
+
+
+def _format_http_statuses(statuses):
+    if not statuses:
+        return ""
+    return ", ".join(f"HTTP {status}" for status in statuses)
+
+
+def _collect_endpoint_candidates(logs, limit=5):
+    counts = Counter()
+    statuses_by_endpoint = {}
+    order = []
+
+    for log_entry in logs:
+        request_info = _extract_http_request_info(log_entry)
+        if not request_info or not request_info["endpoint"]:
+            continue
+
+        endpoint = request_info["endpoint"]
+        if endpoint not in counts:
+            order.append(endpoint)
+        counts[endpoint] += 1
+
+        http_status = request_info["httpStatus"]
+        if http_status is not None:
+            statuses = statuses_by_endpoint.setdefault(endpoint, [])
+            if http_status not in statuses:
+                statuses.append(http_status)
+
+    ranked = sorted(
+        order, key=lambda endpoint: (-counts[endpoint], order.index(endpoint))
+    )
+    return [
+        {
+            "endpoint": endpoint,
+            "count": counts[endpoint],
+            "httpStatuses": statuses_by_endpoint.get(endpoint, []),
+        }
+        for endpoint in ranked[:limit]
+    ]
+
+
+def _collect_message_variants(matched_logs, limit=5):
+    counts = Counter()
+    order = []
+
+    for log_entry in matched_logs:
+        message = log_entry.get("message", "").strip()
+        if not message:
+            continue
+        if message not in counts:
+            order.append(message)
+        counts[message] += 1
+
+    ranked = sorted(order, key=lambda message: (-counts[message], order.index(message)))
+    return [{"value": message, "count": counts[message]} for message in ranked[:limit]]
+
+
+def _collect_logger_clues(matched_logs, limit=5):
+    counts = Counter()
+    order = []
+
+    for log_entry in matched_logs:
+        logger = log_entry.get("logger", "").strip()
+        if not logger:
+            continue
+        if logger not in counts:
+            order.append(logger)
+        counts[logger] += 1
+
+    ranked = sorted(order, key=lambda logger: (-counts[logger], order.index(logger)))
+    return [{"value": logger, "count": counts[logger]} for logger in ranked[:limit]]
 
 
 def _coerce_http_status(value):
