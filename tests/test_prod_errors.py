@@ -37,7 +37,12 @@ from prod_errors.timefmt import (
     format_relative_age,
     format_summary_last_seen,
 )
-from prod_errors.trace import _extract_context_from_object
+from prod_errors.trace import (
+    _coerce_http_status,
+    _extract_context_from_object,
+    _extract_http_request_info,
+    _normalize_endpoint_value,
+)
 
 
 def make_group(
@@ -238,6 +243,89 @@ class ProdErrorsTraceHelpersTest(unittest.TestCase):
         _extract_context_from_object(nested, context)
 
         self.assertEqual(context, {})
+
+    def test_normalize_endpoint_value_handles_full_url_and_query(self):
+        self.assertEqual(
+            _normalize_endpoint_value("https://example.com/foo/bar?debug=true"),
+            "/foo/bar?debug=true",
+        )
+
+    def test_normalize_endpoint_value_handles_plain_path_and_empty_values(self):
+        self.assertEqual(_normalize_endpoint_value("/foo/bar"), "/foo/bar")
+        self.assertIsNone(_normalize_endpoint_value(""))
+        self.assertIsNone(_normalize_endpoint_value(None))
+
+    def test_coerce_http_status_rejects_invalid_values(self):
+        self.assertEqual(_coerce_http_status("200"), 200)
+        self.assertIsNone(_coerce_http_status(None))
+        self.assertIsNone(_coerce_http_status(""))
+        self.assertIsNone(_coerce_http_status(True))
+        self.assertIsNone(_coerce_http_status(0))
+        self.assertIsNone(_coerce_http_status(-1))
+
+    def test_extract_http_request_info_prefers_access_log_regex(self):
+        entry = make_trace_log(
+            "2026-04-05T00:00:01.000000Z",
+            "ERROR",
+            "500 Internal Server Error: GET - /foo in 10ms",
+            request={"path": "/ignored", "status": 200},
+        )
+
+        self.assertEqual(
+            _extract_http_request_info(entry),
+            {"httpStatus": 500, "endpoint": "/foo"},
+        )
+
+    def test_extract_http_request_info_reads_http_request_fields(self):
+        entry = {
+            "timestamp": "2026-04-05T00:00:00.000000Z",
+            "severity": "ERROR",
+            "httpRequest": {
+                "requestUrl": "https://example.com/foo/bar?debug=true",
+                "status": "503",
+            },
+            "jsonPayload": {"message": "FooError: boom", "logger": "app"},
+        }
+
+        self.assertEqual(
+            _extract_http_request_info(entry),
+            {"httpStatus": 503, "endpoint": "/foo/bar?debug=true"},
+        )
+
+    def test_extract_http_request_info_falls_back_to_json_payload_request(self):
+        entry = {
+            "timestamp": "2026-04-05T00:00:00.000000Z",
+            "severity": "ERROR",
+            "jsonPayload": {
+                "message": "FooError: boom",
+                "logger": "app",
+                "request": {
+                    "path": "/foo/bar",
+                    "status": 502,
+                },
+            },
+        }
+
+        self.assertEqual(
+            _extract_http_request_info(entry),
+            {"httpStatus": 502, "endpoint": "/foo/bar"},
+        )
+
+    def test_extract_http_request_info_returns_status_none_when_missing(self):
+        entry = {
+            "timestamp": "2026-04-05T00:00:00.000000Z",
+            "severity": "ERROR",
+            "jsonPayload": {
+                "message": "FooError: boom",
+                "logger": "app",
+                "request": {"path": "/foo/bar"},
+            },
+        }
+
+        self.assertEqual(
+            _extract_http_request_info(entry),
+            {"httpStatus": None, "endpoint": "/foo/bar"},
+        )
 
 
 class ProdErrorsAnsiTest(unittest.TestCase):
@@ -998,6 +1086,108 @@ class ProdErrorsCommandTest(unittest.TestCase):
         self.assertIn("- Endpoint: `/foo/bar?debug=true` (HTTP 503)", output)
         self.assertIn("### Matched Error Logs", output)
         self.assertIn("Request-lifecycle lookup is unavailable", output)
+
+    @mock.patch("prod_errors.trace.get_token", return_value="token")
+    @mock.patch("prod_errors.trace.api_get")
+    @mock.patch("prod_errors.trace.api_get_all_pages")
+    @mock.patch("prod_errors.trace.logging_read")
+    def test_cmd_trace_shows_endpoint_before_retry_check_when_trace_id_exists(
+        self,
+        mock_logging_read,
+        mock_api_get_all_pages,
+        mock_api_get,
+        _mock_get_token,
+    ):
+        mock_api_get_all_pages.return_value = self._DEFAULT_GROUPS
+        mock_api_get.return_value = self._DEFAULT_EVENTS
+        mock_logging_read.side_effect = [
+            [
+                {
+                    "timestamp": "2026-04-05T00:00:00.000000Z",
+                    "severity": "ERROR",
+                    "resource": {"labels": {"service_name": "svc-a"}},
+                    "jsonPayload": {
+                        "message": "FooError: boom",
+                        "logger": "app",
+                        "trace_id": "trace-123",
+                        "request": {"path": "/foo", "status": 500},
+                    },
+                }
+            ],
+            [
+                make_trace_log(
+                    "2026-04-05T00:00:01.000000Z",
+                    "ERROR",
+                    "500 Internal Server Error: GET - /foo in 10ms",
+                    request={"headers": {"x-tenant-id": "tenant-a"}},
+                )
+            ],
+            [
+                make_trace_log(
+                    "2026-04-05T00:00:03.000000Z",
+                    "INFO",
+                    "200 OK: GET - /foo in 20ms",
+                    logger="access",
+                    request={"headers": {"x-tenant-id": "tenant-a"}},
+                )
+            ],
+        ]
+
+        args = argparse.Namespace(
+            project="demo",
+            group_id="g-trace",
+            json=False,
+            freshness="30d",
+        )
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            cmd_trace(args)
+
+        output = stdout.getvalue()
+        self.assertIn("- Cloud Trace ID: `trace-123`", output)
+        self.assertIn("- Endpoint: `/foo` (HTTP 500)", output)
+        self.assertIn("### Retry Check", output)
+        self.assertGreaterEqual(output.count("- Endpoint: `/foo`"), 2)
+
+    def test_cmd_trace_json_ignores_retry_logs_without_http_status(self):
+        payload = self._run_trace_json(
+            [
+                [
+                    {
+                        "timestamp": "2026-04-05T00:00:00.000000Z",
+                        "severity": "ERROR",
+                        "resource": {"labels": {"service_name": "svc-a"}},
+                        "jsonPayload": {
+                            "message": "FooError: boom",
+                            "logger": "app",
+                            "trace_id": "trace-123",
+                        },
+                    }
+                ],
+                [
+                    make_trace_log(
+                        "2026-04-05T00:00:01.000000Z",
+                        "ERROR",
+                        "500 Internal Server Error: GET - /foo in 10ms",
+                        request={"headers": {"x-tenant-id": "tenant-a"}},
+                    )
+                ],
+                [
+                    make_trace_log(
+                        "2026-04-05T00:00:03.000000Z",
+                        "INFO",
+                        "request completed",
+                        logger="app",
+                        request={"path": "/foo"},
+                    )
+                ],
+            ]
+        )
+
+        self.assertEqual(payload["retryCheck"]["successCount"], 0)
+        self.assertEqual(payload["retryCheck"]["failureCount"], 0)
+        self.assertEqual(payload["retryCheck"]["verdict"], "no_subsequent_requests")
 
     def test_cmd_trace_json_includes_lifecycle_and_retry_check(self):
         payload = self._run_trace_json(

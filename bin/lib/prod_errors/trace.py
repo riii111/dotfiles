@@ -548,12 +548,13 @@ def _build_retry_contexts_by_trace_id(retry_logs):
 
 
 def _coerce_http_status(value):
-    if value in (None, ""):
+    if value is None or value == "" or isinstance(value, bool):
         return None
     try:
-        return int(value)
+        code = int(value)
     except (TypeError, ValueError):
         return None
+    return code if 100 <= code < 600 else None
 
 
 def _normalize_endpoint_value(value):
@@ -593,17 +594,17 @@ def _extract_http_request_info(log_entry):
             continue
         endpoint = next(
             (
-                _normalize_endpoint_value(candidate.get(field))
+                value
                 for field in _ENDPOINT_CANDIDATE_FIELDS
-                if _normalize_endpoint_value(candidate.get(field))
+                if (value := _normalize_endpoint_value(candidate.get(field)))
             ),
             None,
         )
         http_status = next(
             (
-                _coerce_http_status(candidate.get(field))
+                value
                 for field in _STATUS_CANDIDATE_FIELDS
-                if _coerce_http_status(candidate.get(field)) is not None
+                if (value := _coerce_http_status(candidate.get(field))) is not None
             ),
             None,
         )
@@ -726,6 +727,8 @@ def _summarize_retry_logs(retry_logs, source_context):
         retry_context = retry_entry["context"]
         timestamp = retry_log.get("timestamp", "")
 
+        if status is None:
+            continue
         if 200 <= status < 300:
             ok += 1
             if first_ok_timestamp is None:
