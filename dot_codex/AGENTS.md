@@ -6,10 +6,18 @@
 ## FORMAT
 
 - NEVER include file paths or line numbers. Do NOT use citation format like 【F:path†Lxx】. Only provide paths when user explicitly asks "where is this file?"
-- Headings: H2 (`##`) with blank lines
-- Bullets: single level only
 - Code blocks: language-specific, max 60 lines
-- Long content: TL;DR (2-3 lines) first, then details
+
+## STYLE
+
+- Default: compact — ≤ 200 words unless user says "詳しく" or "verbose"
+- Omit sections with nothing non-obvious to say
+- No preamble, no filler, no hedge phrases
+- 繰り返し・言い換えによる水増し禁止。同じことを2回言わない
+- 「〜することが重要です」「〜が鍵となります」のような抽象的フレーズ禁止
+- 箇条書きは本当にリストが必要な時だけ。散文で済むなら散文で書く
+- セクション見出しを乱立しない。短い回答に ## は不要
+- TL;DR セクションは作らない。最初の1-2文が要点であるべき
 
 ## Shell Tool Defaults
 
