@@ -337,16 +337,11 @@ def print_hotspot_bucket_summary(buckets):
     print("Bucket Summary")
 
     if not is_tty:
-        print(
-            "| Start | End | Active Groups | Active New | Active Recurring | Event Count |"
-        )
-        print(
-            "|-------|-----|---------------|------------|------------------|-------------|"
-        )
+        print("| Bucket | Groups | First-seen | Known | Events |")
+        print("|--------|--------|------------|-------|--------|")
         for bucket in buckets:
             print(
-                f"| {format_jst_timestamp(bucket['start'])} | {format_jst_timestamp(bucket['end'])} | "
-                f"{bucket['activeGroups']} | {bucket['activeNewGroups']} | {bucket['activeRecurringGroups']} | {bucket['eventCount']} |"
+                f"| {_bucket_label(bucket)} | {bucket['activeGroups']} | {bucket['activeNewGroups']} | {bucket['activeRecurringGroups']} | {bucket['eventCount']} |"
             )
         return
 
@@ -354,8 +349,7 @@ def print_hotspot_bucket_summary(buckets):
     dim_color = color(_DIM)
     rows = [
         (
-            format_jst_timestamp(bucket["start"]),
-            format_jst_timestamp(bucket["end"]),
+            _bucket_label(bucket),
             str(bucket["activeGroups"]),
             str(bucket["activeNewGroups"]),
             str(bucket["activeRecurringGroups"]),
@@ -364,12 +358,11 @@ def print_hotspot_bucket_summary(buckets):
         for bucket in buckets
     ]
     headers = (
-        "Start",
-        "End",
-        "Active Groups",
-        "Active New",
-        "Active Recurring",
-        "Event Count",
+        "Bucket",
+        "Groups",
+        "First-seen",
+        "Known",
+        "Events",
     )
     widths = col_widths(rows, headers)
     sep = "─" * (sum(widths) + 3 * (len(widths) - 1))
@@ -381,15 +374,20 @@ def print_hotspot_bucket_summary(buckets):
             " │ ".join(
                 [
                     pad_right(row[0], widths[0]),
-                    pad_right(row[1], widths[1]),
+                    pad_left(row[1], widths[1]),
                     pad_left(row[2], widths[2]),
                     pad_left(row[3], widths[3]),
-                    pad_left(row[4], widths[4]),
-                    dim_color(pad_left(row[5], widths[5])),
+                    dim_color(pad_left(row[4], widths[4])),
                 ]
             )
         )
     print(sep)
+
+
+def _bucket_label(bucket):
+    start = format_jst_timestamp(bucket["start"])
+    end = format_jst_timestamp(bucket["end"])
+    return f"{start} -> {end}"
 
 
 def _hotspot_type(item):

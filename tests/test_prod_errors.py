@@ -658,6 +658,8 @@ class ProdErrorsCommandTest(unittest.TestCase):
         self.assertIn("Error Hotspots", output)
         self.assertIn("Range Summary", output)
         self.assertIn("Bucket Summary", output)
+        self.assertIn("First-seen", output)
+        self.assertIn("Known", output)
         self.assertIn("First", output)
         self.assertIn("Last", output)
         self.assertIn("2026-04-05 09:10 JST", output)
@@ -713,6 +715,8 @@ class ProdErrorsCommandTest(unittest.TestCase):
         self.assertEqual(payload["summary"]["totalGroups"], 1)
         self.assertEqual(payload["errors"][0]["groupId"], "g-fast")
         self.assertEqual(payload["errors"][0]["activeBuckets"], 1)
+        self.assertEqual(payload["buckets"][0]["activeGroups"], 1)
+        self.assertEqual(payload["buckets"][0]["eventCount"], 3)
 
     @mock.patch("prod_errors.commands.get_token", return_value="token")
     @mock.patch(

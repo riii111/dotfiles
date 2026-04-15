@@ -320,7 +320,7 @@ def _build_hotspot_fast_analysis(
         for group in groups
         if group.get("group", {}).get("resolutionStatus", UNKNOWN_STATUS) in statuses
     ]
-    aggregated_groups = aggregate_hotspot_group_stats(filtered, since, until)
+    aggregated_groups = aggregate_hotspot_group_stats(filtered, since, until, bucket)
     if not aggregated_groups:
         analysis = empty_hotspot_analysis(since, until, bucket)
         analysis["skippedGroups"] = {"count": 0, "groupIds": []}

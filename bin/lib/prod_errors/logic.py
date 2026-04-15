@@ -272,9 +272,11 @@ def aggregate_hotspot_logs(entries, since, until, bucket):
     return groups
 
 
-def aggregate_hotspot_group_stats(items, since, until):
+def aggregate_hotspot_group_stats(items, since, until, bucket):
     since_dt = parse_timestamp(since)
     until_dt = parse_timestamp(until)
+    bucket_span = bucket_timedelta_for(bucket)
+    bucket_seconds = bucket_span.total_seconds()
     groups = {}
 
     for item in items:
@@ -295,12 +297,17 @@ def aggregate_hotspot_group_stats(items, since, until):
                 continue
             if bucket_end <= since_dt or bucket_start >= until_dt:
                 continue
-            bucket_key = isoformat_utc(bucket_start)
+            effective_start = max(bucket_start, since_dt)
+            bucket_index = int(
+                ((effective_start - since_dt).total_seconds()) // bucket_seconds
+            )
+            bucket_key = isoformat_utc(since_dt + (bucket_span * bucket_index))
             bucket_event_counts[bucket_key] += count
-            if first_seen is None or bucket_start < first_seen:
-                first_seen = bucket_start
-            if last_seen is None or bucket_end > last_seen:
-                last_seen = bucket_end
+            if first_seen is None or effective_start < first_seen:
+                first_seen = effective_start
+            effective_end = min(bucket_end, until_dt)
+            if last_seen is None or effective_end > last_seen:
+                last_seen = effective_end
 
         if not bucket_event_counts:
             continue
