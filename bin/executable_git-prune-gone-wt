@@ -14,6 +14,11 @@ GREEN = "\033[32m" if USE_COLOR else ""
 YELLOW = "\033[33m" if USE_COLOR else ""
 RESET = "\033[0m" if USE_COLOR else ""
 
+REASON_PRUNABLE = "prunable"
+REASON_GONE_BRANCH_WORKTREE = "gone branch worktree"
+REASON_MERGED_BRANCH_WORKTREE = "merged branch worktree"
+REASON_CLOSED_PR_WORKTREE = "closed pr worktree"
+
 
 def style(color, text):
     return f"{color}{text}{RESET}" if color else text
@@ -42,6 +47,7 @@ def git_run(*args, cwd=None):
 
 
 def branch_details():
+    # Full refname to match `git worktree list --porcelain` branch lines.
     output = git_output(
         "for-each-ref",
         "--format=%(refname)\t%(upstream:short)\t%(upstream:track)",
@@ -232,9 +238,11 @@ def pr_state_override(pr_number):
 
 
 def graphql_pr_states_query(owner, repo, pr_numbers):
+    owner = json.dumps(owner)
+    repo = json.dumps(repo)
     query_lines = [
         "query {",
-        f'  repository(owner: "{owner}", name: "{repo}") {{',
+        f"  repository(owner: {owner}, name: {repo}) {{",
     ]
     for pr_number in pr_numbers:
         query_lines.append(
@@ -259,9 +267,14 @@ def pr_states(pr_numbers):
 
     repo = parse_origin_repo()
     if repo is None:
+        print(
+            "Warning: could not determine GitHub origin repo for PR state lookup",
+            file=sys.stderr,
+        )
         return states
     owner, name = repo
     query = graphql_pr_states_query(owner, name, remaining)
+    query_succeeded = False
 
     for user in gh_auth_users():
         token = subprocess.run(
@@ -290,12 +303,15 @@ def pr_states(pr_numbers):
             except json.JSONDecodeError:
                 continue
             repository = payload.get("data", {}).get("repository", {})
+            query_succeeded = True
             for pr_number in remaining:
                 state = repository.get(f"pr{pr_number}", {}).get("state")
                 if state:
                     states[pr_number] = state.upper()
             return states
 
+    if not query_succeeded:
+        print("Warning: could not fetch PR states from GitHub", file=sys.stderr)
     return states
 
 
@@ -311,17 +327,23 @@ def review_pr_states_for_entries(entries, repo_root):
 
 
 def candidate_reason(
-    entry, repo_root, branch_info, base_branch, base_ref, review_pr_states
+    entry,
+    path,
+    review_pr_number,
+    repo_root,
+    branch_info,
+    base_branch,
+    base_ref,
+    review_pr_states,
 ):
     branch = entry["branch"]
-    path = Path(entry["path"]).resolve()
     info = branch_info.get(branch or "", {"upstream": "", "track": ""})
 
     if entry["prunable"]:
-        return "prunable"
+        return REASON_PRUNABLE
 
     if bool(branch) and info["track"] == "[gone]":
-        return "gone branch worktree"
+        return REASON_GONE_BRANCH_WORKTREE
 
     if bool(branch) and is_managed_worktree_path(path, repo_root):
         branch_name = branch.removeprefix("refs/heads/")
@@ -331,27 +353,21 @@ def candidate_reason(
             and not is_default_branch
             and is_merged_into(base_ref, branch_name)
         ):
-            return "merged branch worktree"
+            return REASON_MERGED_BRANCH_WORKTREE
 
-    if entry["detached"]:
-        pr_number = extract_review_pr_number(path, repo_root)
-        if pr_number is not None:
-            review_pr_state = review_pr_states.get(pr_number)
-            if review_pr_state in {"CLOSED", "MERGED"}:
-                return "closed pr worktree"
+    if review_pr_number is not None:
+        review_pr_state = review_pr_states.get(review_pr_number)
+        if review_pr_state in {"CLOSED", "MERGED"}:
+            return REASON_CLOSED_PR_WORKTREE
 
     return None
 
 
-def skip_reason_for_non_candidate(entry, repo_root, review_pr_states):
-    if not entry["detached"]:
+def skip_reason_for_non_candidate(review_pr_number, review_pr_states):
+    if review_pr_number is None:
         return None
 
-    pr_number = extract_review_pr_number(Path(entry["path"]), repo_root)
-    if pr_number is None:
-        return None
-
-    review_pr_state = review_pr_states.get(pr_number)
+    review_pr_state = review_pr_states.get(review_pr_number)
     if review_pr_state == "OPEN":
         return "open pr"
     if review_pr_state is None:
@@ -374,12 +390,12 @@ def main(argv):
         current = Path(
             git_output("rev-parse", "--path-format=absolute", "--show-toplevel")
         ).resolve()
-        repo_root = current
         primary = (
             Path(git_output("rev-parse", "--path-format=absolute", "--git-common-dir"))
             .resolve()
             .parent
         )
+        repo_root = primary
         entries = worktrees()
         branch_info = branch_details()
         base_branch, base_ref = default_branch()
@@ -395,20 +411,31 @@ def main(argv):
         for entry in entries:
             name = worktree_name(entry)
             path = Path(entry["path"]).resolve()
+            review_pr_number = (
+                extract_review_pr_number(path, repo_root) if entry["detached"] else None
+            )
             reason = candidate_reason(
-                entry, repo_root, branch_info, base_branch, base_ref, review_pr_states
+                entry,
+                path,
+                review_pr_number,
+                repo_root,
+                branch_info,
+                base_branch,
+                base_ref,
+                review_pr_states,
             )
             if reason is None:
                 skip_reason = skip_reason_for_non_candidate(
-                    entry, repo_root, review_pr_states
+                    review_pr_number, review_pr_states
                 )
                 if skip_reason is not None:
                     lines.append(style(YELLOW, f"Skipped ({skip_reason}): {name}"))
                     skipped += 1
                 continue
-            if reason in {"gone branch worktree", "merged branch worktree"} or (
-                reason == "prunable" and bool(entry["branch"])
-            ):
+            if reason in {
+                REASON_GONE_BRANCH_WORKTREE,
+                REASON_MERGED_BRANCH_WORKTREE,
+            } or (reason == REASON_PRUNABLE and bool(entry["branch"])):
                 should_show_branch_hint = True
 
             if path == current:
@@ -423,11 +450,12 @@ def main(argv):
                 lines.append(style(YELLOW, f"Skipped (locked): {name}"))
                 skipped += 1
                 continue
-            if reason == "prunable":
+            if reason == REASON_PRUNABLE:
                 if args.dry_run:
                     lines.append(style(GREEN, f"Would prune (worktree): {name}"))
                     removed += 1
                 else:
+                    # `git worktree prune` respects locks, so skipped locked entries remain safe.
                     prunable_names.append(name)
                 continue
             if is_dirty(path):

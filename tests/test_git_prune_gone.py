@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import io
 import subprocess
 import tempfile
 import unittest
@@ -73,14 +74,14 @@ class GitPruneGoneTest(unittest.TestCase):
             check=True,
         )
 
-    def run_script(self, script, *args, extra_env=None):
+    def run_script(self, script, *args, extra_env=None, cwd=None):
         env = os.environ.copy()
         env["NO_COLOR"] = "1"
         if extra_env:
             env.update(extra_env)
         return subprocess.run(
             ["python3", str(script), *args],
-            cwd=self.repo,
+            cwd=cwd or self.repo,
             text=True,
             capture_output=True,
             check=False,
@@ -406,6 +407,37 @@ class GitPruneGoneTest(unittest.TestCase):
             str(worktree_path), self.git("worktree", "list", "--porcelain")
         )
 
+    def test_worktree_script_finds_candidates_when_run_from_linked_worktree(self):
+        self.git("checkout", "-b", "current-linked")
+        self.git("checkout", "main")
+        runner_path = self.root / "runner"
+        self.git("worktree", "add", str(runner_path), "current-linked")
+
+        self.git("checkout", "-b", "merged-codex")
+        self.commit_file("merged-codex.txt", "merged-codex\n", "merged-codex")
+        self.git("checkout", "main")
+        self.git("merge", "--ff-only", "merged-codex")
+        worktree_path = self.repo / ".codex" / "worktrees" / "merged-codex"
+        worktree_path.parent.mkdir(parents=True, exist_ok=True)
+        self.git("worktree", "add", str(worktree_path), "merged-codex")
+
+        review_path = self.root / f"{self.repo.name}-pr-123"
+        self.git("worktree", "add", "--detach", str(review_path), "HEAD")
+
+        result = self.run_script(
+            WT_SCRIPT,
+            "--dry-run",
+            "--no-fetch",
+            extra_env={"PRUNE_GONE_WT_PR_STATES": "123:CLOSED"},
+            cwd=runner_path,
+        )
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn(
+            "Would remove (merged branch worktree): merged-codex", result.stdout
+        )
+        self.assertIn("Would remove (closed pr worktree): repo-pr-123", result.stdout)
+
     def test_worktree_script_skips_fetch_when_no_fetch_is_set(self):
         self.git("remote", "set-url", "origin", "ssh://invalid.example/repo.git")
 
@@ -482,6 +514,49 @@ class GitPruneGoneTest(unittest.TestCase):
             users = module.gh_auth_users()
 
         self.assertEqual(users, ["riii111", "ichinose_sansan"])
+
+    def test_worktree_script_warns_when_pr_state_lookup_fails(self):
+        module = load_script_module("git_prune_gone_wt_test_warning", WT_SCRIPT)
+        stderr = io.StringIO()
+
+        with (
+            mock.patch.object(module, "parse_origin_repo", return_value=("o", "r")),
+            mock.patch.object(module, "gh_auth_users", return_value=["tester"]),
+            mock.patch.object(
+                module.subprocess,
+                "run",
+                side_effect=[
+                    subprocess.CompletedProcess(
+                        ["gh", "auth", "token"], 1, stdout="", stderr="boom"
+                    )
+                ],
+            ),
+            mock.patch("sys.stderr", stderr),
+        ):
+            states = module.pr_states([123])
+
+        self.assertEqual(states, {})
+        self.assertIn(
+            "Warning: could not fetch PR states from GitHub", stderr.getvalue()
+        )
+
+    def test_worktree_script_parses_origin_repo_urls(self):
+        module = load_script_module("git_prune_gone_wt_test_origin", WT_SCRIPT)
+
+        with mock.patch.object(
+            module, "git_output", return_value="git@github.com:owner/repo.git"
+        ):
+            self.assertEqual(module.parse_origin_repo(), ("owner", "repo"))
+
+        with mock.patch.object(
+            module, "git_output", return_value="https://github.com/owner/repo"
+        ):
+            self.assertEqual(module.parse_origin_repo(), ("owner", "repo"))
+
+        with mock.patch.object(
+            module, "git_output", return_value="https://gitlab.com/owner/repo"
+        ):
+            self.assertIsNone(module.parse_origin_repo())
 
     def test_worktree_script_reports_no_gone_worktrees(self):
         result = self.run_script(WT_SCRIPT, "--dry-run")
