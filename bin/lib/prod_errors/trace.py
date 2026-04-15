@@ -27,6 +27,9 @@ from prod_errors.client import (
 )
 from prod_errors.timefmt import format_jst_timestamp
 
+_MATCHED_LOG_FETCH_LIMIT = 5
+_ANALYSIS_DISPLAY_LIMIT = 5
+
 
 def cmd_trace(args):
     token = get_token()
@@ -35,7 +38,7 @@ def cmd_trace(args):
     result, first_line, known_service = _build_trace_result(args.group_id, target)
 
     if not args.json:
-        _print_trace_header(args.group_id, colors)
+        print(f"{colors['bold']('## Error Group:')} {colors['cyan'](args.group_id)}\n")
 
     events = _load_recent_events(args.project, token, args.group_id)
     result["recentEvents"] = events
@@ -341,10 +344,6 @@ def _build_trace_result(group_id, target):
     return result, first_line, known_service
 
 
-def _print_trace_header(group_id, colors):
-    print(f"{colors['bold']('## Error Group:')} {colors['cyan'](group_id)}\n")
-
-
 def _load_recent_events(project, token, group_id):
     event_data = api_get(
         f"{API_BASE}/projects/{project}/events"
@@ -378,17 +377,18 @@ def _build_cloud_logging_filter(first_line, known_service):
 
 
 def _lookup_cloud_logging(project, token, filt, freshness):
-    logs = logging_read(project, token, filt, limit=5, freshness=freshness)
+    logs = logging_read(
+        project, token, filt, limit=_MATCHED_LOG_FETCH_LIMIT, freshness=freshness
+    )
     if not logs:
         return None
 
     entry = logs[0]
-    resource_labels = entry.get("resource", {}).get("labels", {})
-    service = resource_labels.get(
-        "service_name", resource_labels.get("configuration_name", "unknown")
-    )
     matched_logs = [_summarize_log_entry(log_entry) for log_entry in logs]
-    trace_id = _find_first_trace_id(logs)
+    trace_entry = _find_first_trace_entry(logs)
+    service_entry = trace_entry or entry
+    service = _extract_service_name(service_entry)
+    trace_id = extract_trace_id(trace_entry) if trace_entry else None
     endpoint_candidates = _collect_endpoint_candidates(logs)
     message_variants = _collect_message_variants(matched_logs)
     logger_clues = _collect_logger_clues(matched_logs)
@@ -577,11 +577,23 @@ def _build_retry_contexts_by_trace_id(retry_logs):
     return contexts_by_trace_id
 
 
-def _find_first_trace_id(logs):
+def _extract_service_name(log_entry):
+    resource_labels = log_entry.get("resource", {}).get("labels", {})
+    return resource_labels.get(
+        "service_name", resource_labels.get("configuration_name", "unknown")
+    )
+
+
+def _find_first_trace_entry(logs):
     for log_entry in logs:
-        if trace_id := extract_trace_id(log_entry):
-            return trace_id
+        if extract_trace_id(log_entry):
+            return log_entry
     return None
+
+
+def _find_first_trace_id(logs):
+    trace_entry = _find_first_trace_entry(logs)
+    return extract_trace_id(trace_entry) if trace_entry else None
 
 
 def _format_http_statuses(statuses):
@@ -590,7 +602,7 @@ def _format_http_statuses(statuses):
     return ", ".join(f"HTTP {status}" for status in statuses)
 
 
-def _collect_endpoint_candidates(logs, limit=5):
+def _collect_endpoint_candidates(logs, limit=_ANALYSIS_DISPLAY_LIMIT):
     counts = Counter()
     statuses_by_endpoint = {}
 
@@ -619,7 +631,7 @@ def _collect_endpoint_candidates(logs, limit=5):
     ]
 
 
-def _rank_by_frequency(items, key_fn, limit=5):
+def _rank_by_frequency(items, key_fn, limit=_ANALYSIS_DISPLAY_LIMIT):
     counts = Counter()
 
     for item in items:
@@ -686,30 +698,36 @@ def _extract_http_request_info(log_entry):
     candidates = [log_entry.get("httpRequest", {}), payload.get("httpRequest", {})]
     if isinstance(payload.get("request"), dict):
         candidates.append(payload["request"])
+
+    endpoint = None
+    http_status = None
     for candidate in candidates:
         if not isinstance(candidate, dict):
             continue
-        endpoint = next(
-            (
-                value
-                for field in _ENDPOINT_CANDIDATE_FIELDS
-                if (value := _normalize_endpoint_value(candidate.get(field)))
-            ),
-            None,
-        )
-        http_status = next(
-            (
-                value
-                for field in _STATUS_CANDIDATE_FIELDS
-                if (value := _coerce_http_status(candidate.get(field))) is not None
-            ),
-            None,
-        )
-        if endpoint:
-            return {
-                "httpStatus": http_status,
-                "endpoint": endpoint,
-            }
+        if endpoint is None:
+            endpoint = next(
+                (
+                    value
+                    for field in _ENDPOINT_CANDIDATE_FIELDS
+                    if (value := _normalize_endpoint_value(candidate.get(field)))
+                ),
+                None,
+            )
+        if http_status is None:
+            http_status = next(
+                (
+                    value
+                    for field in _STATUS_CANDIDATE_FIELDS
+                    if (value := _coerce_http_status(candidate.get(field))) is not None
+                ),
+                None,
+            )
+
+    if endpoint:
+        return {
+            "httpStatus": http_status,
+            "endpoint": endpoint,
+        }
 
     return None
 
@@ -736,8 +754,8 @@ def _extract_retry_log_entry(log_entry, contexts_by_trace_id=None):
     if not request_info or request_info["endpoint"] is None:
         return None
 
-    # Endpoint-only entries still matter for the default matched-log analysis and
-    # for choosing retry targets, even when an HTTP status is not available yet.
+    # Endpoint-only entries still matter for matched-log analysis and endpoint
+    # fallback selection, but _summarize_retry_logs skips them for recovery counts.
     context = _extract_log_context(log_entry)
     if contexts_by_trace_id:
         trace_id = extract_trace_id(log_entry)

@@ -18,7 +18,7 @@ if str(LIB) not in sys.path:
 
 from prod_errors.cli import build_parser
 from prod_errors.ansi import display_width, pad_left, pad_right, trunc
-from prod_errors.client import logging_list_all
+from prod_errors.client import extract_trace_id, logging_list_all
 from prod_errors.commands import (
     _find_prior_occurrences,
     _resolve_hotspot_window,
@@ -42,8 +42,10 @@ from prod_errors.trace import (
     _collect_logger_clues,
     _collect_message_variants,
     _coerce_http_status,
+    _extract_service_name,
     _extract_context_from_object,
     _extract_http_request_info,
+    _find_first_trace_entry,
     _find_first_trace_id,
     _normalize_endpoint_value,
 )
@@ -340,6 +342,23 @@ class ProdErrorsTraceHelpersTest(unittest.TestCase):
 
         self.assertIsNone(_extract_http_request_info(entry))
 
+    def test_extract_http_request_info_merges_status_from_later_candidate(self):
+        entry = {
+            "timestamp": "2026-04-05T00:00:00.000000Z",
+            "severity": "ERROR",
+            "httpRequest": {"status": "503"},
+            "jsonPayload": {
+                "message": "FooError: boom",
+                "logger": "app",
+                "request": {"path": "/foo/bar"},
+            },
+        }
+
+        self.assertEqual(
+            _extract_http_request_info(entry),
+            {"httpStatus": 503, "endpoint": "/foo/bar"},
+        )
+
     def test_collect_endpoint_candidates_ranks_and_limits_entries(self):
         logs = [
             make_trace_log(
@@ -411,6 +430,34 @@ class ProdErrorsTraceHelpersTest(unittest.TestCase):
         ]
 
         self.assertEqual(_find_first_trace_id(logs), "trace-123")
+
+    def test_find_first_trace_id_returns_none_for_empty_logs(self):
+        self.assertIsNone(_find_first_trace_id([]))
+
+    def test_find_first_trace_entry_returns_entry_with_trace_id(self):
+        logs = [
+            make_trace_log("2026-04-05T00:00:00.000000Z", "ERROR", "FooError: boom"),
+            make_trace_log(
+                "2026-04-05T00:00:01.000000Z",
+                "ERROR",
+                "FooError: boom",
+                trace_id="trace-123",
+            ),
+        ]
+
+        self.assertEqual(extract_trace_id(_find_first_trace_entry(logs)), "trace-123")
+
+    def test_extract_service_name_prefers_resource_labels(self):
+        entry = {
+            "resource": {
+                "labels": {
+                    "service_name": "svc-a",
+                    "configuration_name": "cfg-a",
+                }
+            }
+        }
+
+        self.assertEqual(_extract_service_name(entry), "svc-a")
 
 
 class ProdErrorsAnsiTest(unittest.TestCase):
@@ -1290,6 +1337,38 @@ class ProdErrorsCommandTest(unittest.TestCase):
         self.assertEqual(payload["cloudLogging"]["traceId"], "trace-123")
         self.assertIn("lifecycle", payload)
         self.assertIn("retryCheck", payload)
+
+    def test_cmd_trace_json_uses_service_from_trace_id_entry(self):
+        payload = self._run_trace_json(
+            [
+                [
+                    {
+                        "timestamp": "2026-04-05T00:00:02.000000Z",
+                        "severity": "ERROR",
+                        "resource": {"labels": {"service_name": "svc-a"}},
+                        "jsonPayload": {
+                            "message": "FooError: boom",
+                            "logger": "app",
+                        },
+                    },
+                    {
+                        "timestamp": "2026-04-05T00:00:01.000000Z",
+                        "severity": "ERROR",
+                        "resource": {"labels": {"service_name": "svc-b"}},
+                        "jsonPayload": {
+                            "message": "FooError: boom",
+                            "logger": "app",
+                            "trace_id": "trace-123",
+                        },
+                    },
+                ],
+                [],
+                [],
+            ]
+        )
+
+        self.assertEqual(payload["cloudLogging"]["service"], "svc-b")
+        self.assertEqual(payload["cloudLogging"]["traceId"], "trace-123")
 
     def test_cmd_trace_json_includes_matched_log_analysis_without_trace_id(self):
         payload = self._run_trace_json(
