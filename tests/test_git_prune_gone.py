@@ -49,9 +49,23 @@ class GitPruneGoneTest(unittest.TestCase):
     def delete_remote_branch(self, name):
         self.git("push", "origin", "--delete", name)
 
-    def run_script(self, script, *args):
+    def set_stale_origin_head(self, branch="master"):
+        subprocess.run(
+            [
+                "git",
+                "symbolic-ref",
+                "refs/remotes/origin/HEAD",
+                f"refs/remotes/origin/{branch}",
+            ],
+            cwd=self.repo,
+            check=True,
+        )
+
+    def run_script(self, script, *args, extra_env=None):
         env = os.environ.copy()
         env["NO_COLOR"] = "1"
+        if extra_env:
+            env.update(extra_env)
         return subprocess.run(
             ["python3", str(script), *args],
             cwd=self.repo,
@@ -61,9 +75,11 @@ class GitPruneGoneTest(unittest.TestCase):
             env=env,
         )
 
-    def run_script_outside_repo(self, script, *args):
+    def run_script_outside_repo(self, script, *args, extra_env=None):
         env = os.environ.copy()
         env["NO_COLOR"] = "1"
+        if extra_env:
+            env.update(extra_env)
         outside = self.root / "outside"
         outside.mkdir(exist_ok=True)
         return subprocess.run(
@@ -120,6 +136,18 @@ class GitPruneGoneTest(unittest.TestCase):
         self.assertIn("Removed (merged branch): merged-local", result.stdout)
         self.assertEqual(self.git("branch", "--list", "merged-local"), "")
 
+    def test_branch_script_uses_local_main_when_origin_head_is_stale(self):
+        self.git("checkout", "-b", "merged-local")
+        self.commit_file("merged-local.txt", "merged-local\n", "merged-local")
+        self.git("checkout", "main")
+        self.git("merge", "--ff-only", "merged-local")
+        self.set_stale_origin_head()
+
+        result = self.run_script(BR_SCRIPT, "--dry-run")
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("Would remove (merged branch): merged-local", result.stdout)
+
     def test_branch_script_reports_no_stale_branches(self):
         result = self.run_script(BR_SCRIPT)
 
@@ -135,7 +163,9 @@ class GitPruneGoneTest(unittest.TestCase):
 
         dry_run = self.run_script(WT_SCRIPT, "--dry-run")
         self.assertEqual(dry_run.returncode, 0)
-        self.assertIn("Would remove (worktree): gone-worktree", dry_run.stdout)
+        self.assertIn(
+            "Would remove (gone branch worktree): gone-worktree", dry_run.stdout
+        )
         self.assertIn("Summary: 1 would remove, 0 skipped", dry_run.stdout)
         self.assertIn(
             "Hint: branches still exist. Run `git prune-gone-br` to remove them.",
@@ -145,7 +175,7 @@ class GitPruneGoneTest(unittest.TestCase):
 
         result = self.run_script(WT_SCRIPT)
         self.assertEqual(result.returncode, 0)
-        self.assertIn("Removed (worktree): gone-worktree", result.stdout)
+        self.assertIn("Removed (gone branch worktree): gone-worktree", result.stdout)
         self.assertIn("Summary: 1 removed, 0 skipped", result.stdout)
         self.assertIn(
             "Hint: branches still exist. Run `git prune-gone-br` to remove them.",
@@ -202,34 +232,107 @@ class GitPruneGoneTest(unittest.TestCase):
             str(worktree_path), self.git("worktree", "list", "--porcelain")
         )
 
-    def test_worktree_script_removes_managed_detached_codex_worktree(self):
-        worktree_path = self.repo / ".codex" / "worktrees" / "detached-review"
+    def test_worktree_script_removes_merged_codex_branch_worktree(self):
+        self.git("checkout", "-b", "merged-codex")
+        self.commit_file("merged-codex.txt", "merged-codex\n", "merged-codex")
+        self.git("checkout", "main")
+        self.git("merge", "--ff-only", "merged-codex")
+
+        worktree_path = self.repo / ".codex" / "worktrees" / "merged-codex"
         worktree_path.parent.mkdir(parents=True, exist_ok=True)
-        self.git("worktree", "add", "--detach", str(worktree_path), "HEAD")
+        self.git("worktree", "add", str(worktree_path), "merged-codex")
 
         dry_run = self.run_script(WT_SCRIPT, "--dry-run")
 
         self.assertEqual(dry_run.returncode, 0)
-        self.assertIn("Would remove (worktree): detached-review", dry_run.stdout)
-        self.assertNotIn("Hint: branches still exist.", dry_run.stdout)
+        self.assertIn(
+            "Would remove (merged branch worktree): merged-codex", dry_run.stdout
+        )
+        self.assertIn(
+            "Hint: branches still exist. Run `git prune-gone-br` to remove them.",
+            dry_run.stdout,
+        )
 
         result = self.run_script(WT_SCRIPT)
 
         self.assertEqual(result.returncode, 0)
-        self.assertIn("Removed (worktree): detached-review", result.stdout)
-        self.assertNotIn("Hint: branches still exist.", result.stdout)
+        self.assertIn("Removed (merged branch worktree): merged-codex", result.stdout)
+        self.assertIn(
+            "Hint: branches still exist. Run `git prune-gone-br` to remove them.",
+            result.stdout,
+        )
         self.assertNotIn(
             str(worktree_path), self.git("worktree", "list", "--porcelain")
         )
 
-    def test_worktree_script_ignores_detached_pr_review_worktree(self):
-        worktree_path = self.root / f"{self.repo.name}-pr-123"
-        self.git("worktree", "add", "--detach", str(worktree_path), "HEAD")
+    def test_worktree_script_uses_local_main_when_origin_head_is_stale(self):
+        self.git("checkout", "-b", "merged-codex")
+        self.commit_file("merged-codex.txt", "merged-codex\n", "merged-codex")
+        self.git("checkout", "main")
+        self.git("merge", "--ff-only", "merged-codex")
+        self.set_stale_origin_head()
+
+        worktree_path = self.repo / ".codex" / "worktrees" / "merged-codex"
+        worktree_path.parent.mkdir(parents=True, exist_ok=True)
+        self.git("worktree", "add", str(worktree_path), "merged-codex")
+
+        result = self.run_script(WT_SCRIPT, "--dry-run")
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn(
+            "Would remove (merged branch worktree): merged-codex", result.stdout
+        )
+
+    def test_worktree_script_keeps_unmerged_codex_branch_worktree(self):
+        self.git("checkout", "-b", "active-codex")
+        self.commit_file("active-codex.txt", "active-codex\n", "active-codex")
+        self.git("checkout", "main")
+
+        worktree_path = self.repo / ".codex" / "worktrees" / "active-codex"
+        worktree_path.parent.mkdir(parents=True, exist_ok=True)
+        self.git("worktree", "add", str(worktree_path), "active-codex")
 
         result = self.run_script(WT_SCRIPT, "--dry-run")
 
         self.assertEqual(result.returncode, 0)
         self.assertEqual(result.stdout.strip(), "No gone worktrees found")
+
+    def test_worktree_script_keeps_open_pr_review_worktree(self):
+        worktree_path = self.root / f"{self.repo.name}-pr-123"
+        self.git("worktree", "add", "--detach", str(worktree_path), "HEAD")
+
+        result = self.run_script(
+            WT_SCRIPT,
+            "--dry-run",
+            extra_env={"PRUNE_GONE_WT_PR_STATES": "123:OPEN"},
+        )
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("Skipped (open pr): repo-pr-123", result.stdout)
+
+    def test_worktree_script_removes_closed_pr_review_worktree(self):
+        worktree_path = self.root / f"{self.repo.name}-pr-123"
+        self.git("worktree", "add", "--detach", str(worktree_path), "HEAD")
+
+        dry_run = self.run_script(
+            WT_SCRIPT,
+            "--dry-run",
+            extra_env={"PRUNE_GONE_WT_PR_STATES": "123:CLOSED"},
+        )
+
+        self.assertEqual(dry_run.returncode, 0)
+        self.assertIn("Would remove (closed pr worktree): repo-pr-123", dry_run.stdout)
+
+        result = self.run_script(
+            WT_SCRIPT,
+            extra_env={"PRUNE_GONE_WT_PR_STATES": "123:CLOSED"},
+        )
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("Removed (closed pr worktree): repo-pr-123", result.stdout)
+        self.assertNotIn(
+            str(worktree_path), self.git("worktree", "list", "--porcelain")
+        )
 
     def test_worktree_script_reports_no_gone_worktrees(self):
         result = self.run_script(WT_SCRIPT, "--dry-run")

@@ -65,21 +65,28 @@ def branch_details():
 
 
 def default_branch():
+    for candidate in ("main", "master"):
+        if git_run("show-ref", "--verify", f"refs/heads/{candidate}").returncode == 0:
+            return candidate, candidate
+
+    current = git_output("branch", "--show-current")
+    if current:
+        return current, current
+
     try:
         origin_head = git_output("symbolic-ref", "refs/remotes/origin/HEAD")
         prefix = "refs/remotes/origin/"
         if origin_head.startswith(prefix):
-            return origin_head[len(prefix) :]
+            remote_branch = origin_head[len(prefix) :]
+            if (
+                git_run(
+                    "show-ref", "--verify", f"refs/remotes/origin/{remote_branch}"
+                ).returncode
+                == 0
+            ):
+                return None, f"origin/{remote_branch}"
     except subprocess.CalledProcessError:
         pass
-
-    for candidate in ("main", "master"):
-        if git_run("show-ref", "--verify", f"refs/heads/{candidate}").returncode == 0:
-            return candidate
-
-    current = git_output("branch", "--show-current")
-    if current:
-        return current
 
     raise subprocess.CalledProcessError(
         returncode=1,
@@ -87,8 +94,8 @@ def default_branch():
     )
 
 
-def is_merged_into(base_branch, branch):
-    result = git_run("merge-base", "--is-ancestor", branch, base_branch)
+def is_merged_into(base_ref, branch):
+    result = git_run("merge-base", "--is-ancestor", branch, base_ref)
     return result.returncode == 0
 
 
@@ -110,7 +117,7 @@ def main(argv):
         )
 
         active_worktrees = worktree_branches()
-        base_branch = default_branch()
+        base_branch, base_ref = default_branch()
         lines = []
         removed = 0
         skipped = 0
@@ -118,7 +125,7 @@ def main(argv):
 
         for detail in branch_details():
             branch = detail["branch"]
-            if branch == base_branch:
+            if base_branch is not None and branch == base_branch:
                 continue
             if branch in active_worktrees:
                 lines.append(style(YELLOW, f"Skipped (worktree): {branch}"))
@@ -129,7 +136,7 @@ def main(argv):
             delete_args = ("branch", "-D", branch)
             if detail["track"] == "[gone]":
                 reason = "gone branch"
-            elif not detail["upstream"] and is_merged_into(base_branch, branch):
+            elif not detail["upstream"] and is_merged_into(base_ref, branch):
                 reason = "merged branch"
                 delete_args = ("branch", "-d", branch)
             elif branch.startswith("_slot-") and not detail["upstream"]:

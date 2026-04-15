@@ -2,6 +2,7 @@
 
 import argparse
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -39,19 +40,23 @@ def git_run(*args, cwd=None):
     )
 
 
-def branch_tracks():
+def branch_details():
     output = git_output(
         "for-each-ref",
-        "--format=%(refname)\t%(upstream:track)",
+        "--format=%(refname)\t%(upstream:short)\t%(upstream:track)",
         "refs/heads",
     )
-    tracks = {}
+    details = {}
     for line in output.splitlines():
         if not line:
             continue
-        refname, _, track = line.partition("\t")
-        tracks[refname] = track
-    return tracks
+        refname, _, rest = line.partition("\t")
+        upstream, _, track = rest.partition("\t")
+        details[refname] = {
+            "upstream": upstream,
+            "track": track,
+        }
+    return details
 
 
 def worktrees():
@@ -104,21 +109,158 @@ def worktree_name(entry):
     return Path(entry["path"]).name
 
 
-def is_managed_detached_worktree(path, repo_root):
-    path = path.resolve()
-    repo_root = repo_root.resolve()
-
-    managed_roots = (
+def managed_worktree_roots(repo_root):
+    return (
         repo_root / ".claude" / "worktrees",
         repo_root / ".codex" / "worktrees",
     )
-    for managed_root in managed_roots:
+
+
+def is_managed_worktree_path(path, repo_root):
+    path = path.resolve()
+    repo_root = repo_root.resolve()
+
+    for managed_root in managed_worktree_roots(repo_root):
         try:
             path.relative_to(managed_root)
             return True
         except ValueError:
             continue
     return False
+
+
+def default_branch():
+    for candidate in ("main", "master"):
+        if git_run("show-ref", "--verify", f"refs/heads/{candidate}").returncode == 0:
+            return candidate, candidate
+
+    current = git_output("branch", "--show-current")
+    if current:
+        return current, current
+
+    try:
+        origin_head = git_output("symbolic-ref", "refs/remotes/origin/HEAD")
+        prefix = "refs/remotes/origin/"
+        if origin_head.startswith(prefix):
+            remote_branch = origin_head[len(prefix) :]
+            if (
+                git_run(
+                    "show-ref", "--verify", f"refs/remotes/origin/{remote_branch}"
+                ).returncode
+                == 0
+            ):
+                return None, f"origin/{remote_branch}"
+    except subprocess.CalledProcessError:
+        pass
+
+    raise subprocess.CalledProcessError(
+        returncode=1,
+        cmd=["git", "branch", "--show-current"],
+    )
+
+
+def is_merged_into(base_ref, branch):
+    result = git_run("merge-base", "--is-ancestor", branch, base_ref)
+    return result.returncode == 0
+
+
+def extract_review_pr_number(path, repo_root):
+    path = path.resolve()
+    repo_root = repo_root.resolve()
+    pattern = rf"^{re.escape(repo_root.name)}-pr-(\d+)$"
+    if path.parent != repo_root.parent.resolve():
+        return None
+    match = re.match(pattern, path.name)
+    if match is None:
+        return None
+    return int(match.group(1))
+
+
+def parse_origin_repo():
+    url = git_output("remote", "get-url", "origin")
+    if url.startswith("git@github.com:"):
+        path = url.split(":", 1)[1]
+    elif "github.com/" in url:
+        path = url.split("github.com/", 1)[1]
+    else:
+        return None
+
+    if path.endswith(".git"):
+        path = path[:-4]
+    if "/" not in path:
+        return None
+    owner, repo = path.split("/", 1)
+    return owner, repo
+
+
+def gh_auth_users():
+    result = subprocess.run(
+        ["gh", "auth", "status"],
+        text=True,
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    if result.returncode != 0:
+        return []
+
+    users = []
+    prefix = "  ✓ Logged in to github.com account "
+    for line in result.stdout.splitlines():
+        if line.startswith(prefix):
+            users.append(line[len(prefix) :].split(" ", 1)[0])
+    return users
+
+
+def pr_state_override(pr_number):
+    raw = os.environ.get("PRUNE_GONE_WT_PR_STATES", "").strip()
+    if not raw:
+        return None
+
+    for item in raw.split(","):
+        number, _, state = item.partition(":")
+        if number.strip() == str(pr_number) and state.strip():
+            return state.strip().upper()
+    return None
+
+
+def pr_state(pr_number):
+    override = pr_state_override(pr_number)
+    if override is not None:
+        return override
+
+    repo = parse_origin_repo()
+    if repo is None:
+        return None
+    owner, name = repo
+
+    for user in gh_auth_users():
+        token = subprocess.run(
+            ["gh", "auth", "token", "--hostname", "github.com", "--user", user],
+            text=True,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        if token.returncode != 0:
+            continue
+
+        env = os.environ.copy()
+        env["GH_TOKEN"] = token.stdout.strip()
+        result = subprocess.run(
+            ["gh", "api", f"repos/{owner}/{name}/pulls/{pr_number}", "--jq", ".state"],
+            text=True,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env,
+        )
+        if result.returncode == 0:
+            state = result.stdout.strip()
+            if state:
+                return state.upper()
+
+    return None
 
 
 def main(argv):
@@ -141,7 +283,8 @@ def main(argv):
             .resolve()
             .parent
         )
-        tracks = branch_tracks()
+        branch_info = branch_details()
+        base_branch, base_ref = default_branch()
 
         lines = []
         removed = 0
@@ -153,18 +296,50 @@ def main(argv):
         for entry in worktrees():
             branch = entry["branch"]
             is_prunable = entry["prunable"]
-            is_detached_managed = (
-                entry["detached"]
-                and is_managed_detached_worktree(Path(entry["path"]), repo_root)
-            )
-            is_gone_branch = bool(branch) and tracks.get(branch) == "[gone]"
-            if not is_prunable and not is_gone_branch and not is_detached_managed:
-                continue
-            if is_gone_branch or (is_prunable and bool(branch)):
-                should_show_branch_hint = True
 
             name = worktree_name(entry)
             path = Path(entry["path"]).resolve()
+            info = branch_info.get(branch or "", {"upstream": "", "track": ""})
+            is_managed_branch_worktree = bool(branch) and is_managed_worktree_path(
+                path, repo_root
+            )
+            is_gone_branch = bool(branch) and info["track"] == "[gone]"
+            is_merged_managed_branch = (
+                is_managed_branch_worktree
+                and not info["upstream"]
+                and branch != f"refs/heads/{base_branch}"
+                and is_merged_into(base_ref, branch.removeprefix("refs/heads/"))
+            )
+            review_pr_number = (
+                extract_review_pr_number(path, repo_root) if entry["detached"] else None
+            )
+            review_pr_state = (
+                pr_state(review_pr_number) if review_pr_number is not None else None
+            )
+            is_closed_review_worktree = review_pr_state == "CLOSED"
+
+            if not any(
+                (
+                    is_prunable,
+                    is_gone_branch,
+                    is_merged_managed_branch,
+                    is_closed_review_worktree,
+                )
+            ):
+                if review_pr_number is not None:
+                    if review_pr_state == "OPEN":
+                        lines.append(style(YELLOW, f"Skipped (open pr): {name}"))
+                        skipped += 1
+                    elif review_pr_state is None:
+                        lines.append(style(YELLOW, f"Skipped (unknown pr): {name}"))
+                        skipped += 1
+                continue
+            if (
+                is_gone_branch
+                or is_merged_managed_branch
+                or (is_prunable and bool(branch))
+            ):
+                should_show_branch_hint = True
 
             if path == current:
                 lines.append(style(YELLOW, f"Skipped (current): {name}"))
@@ -185,22 +360,27 @@ def main(argv):
                 else:
                     prunable_names.append(name)
                 continue
-            if entry["detached"] and not is_detached_managed:
-                lines.append(style(YELLOW, f"Skipped (detached): {name}"))
-                skipped += 1
-                continue
             if is_dirty(path):
                 lines.append(style(YELLOW, f"Skipped (dirty): {name}"))
                 skipped += 1
                 continue
+
+            reason = "worktree"
+            if is_gone_branch:
+                reason = "gone branch worktree"
+            elif is_merged_managed_branch:
+                reason = "merged branch worktree"
+            elif is_closed_review_worktree:
+                reason = "closed pr worktree"
+
             if args.dry_run:
-                lines.append(style(GREEN, f"Would remove (worktree): {name}"))
+                lines.append(style(GREEN, f"Would remove ({reason}): {name}"))
                 removed += 1
                 continue
 
             result = git_run("worktree", "remove", str(path))
             if result.returncode == 0:
-                lines.append(style(GREEN, f"Removed (worktree): {name}"))
+                lines.append(style(GREEN, f"Removed ({reason}): {name}"))
                 removed += 1
             else:
                 lines.append(style(YELLOW, f"Skipped (remove failed): {name}"))
