@@ -127,16 +127,6 @@ function M.apply()
 		TelescopeResultsNormal = { bg = palette.telescope.results_normal },
 		TelescopePreviewNormal = { bg = palette.telescope.preview_normal },
 
-		-- Diffview specific highlights
-		DiffviewDiffAdd = { bg = palette.diffview.diff_add },
-		DiffviewDiffChange = { bg = palette.diffview.diff_change },
-		DiffviewDiffDelete = { bg = palette.diffview.diff_delete },
-		DiffviewDiffText = { bg = palette.diffview.diff_text },
-		DiffviewCursorLine = { bg = palette.diffview.cursor_line },
-		DiffviewStatusLine = { fg = palette.diffview.status_line, bg = palette.diffview.status_line_bg },
-		DiffviewFilePanelTitle = { fg = palette.diffview.file_panel_title, bold = true },
-		DiffviewFilePanelCounter = { fg = palette.diffview.file_panel_counter },
-
 		-- Render Markdown code block (darker background)
 		RenderMarkdownCode = { bg = palette.base.bg_dark },
 		RenderMarkdownCodeInline = { bg = palette.base.bg_dark },

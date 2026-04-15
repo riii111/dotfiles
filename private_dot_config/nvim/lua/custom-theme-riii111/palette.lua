@@ -194,17 +194,4 @@ M.telescope = {
 	preview_normal = "NONE",
 }
 
--- Diffview Colors
-M.diffview = {
-	diff_add = M.diff.add,
-	diff_change = M.diff.change,
-	diff_delete = M.diff.delete,
-	diff_text = M.diff.text,
-	cursor_line = M.visual.visual,
-	status_line = M.base.fg,
-	status_line_bg = M.base.bg_light,
-	file_panel_title = M.base.accent,
-	file_panel_counter = "#A29BFE",
-}
-
 return M

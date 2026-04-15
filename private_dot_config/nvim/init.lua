@@ -20,7 +20,6 @@ require("config.autocmd")
 require("config.lazy")
 
 -- Apply colorscheme after lazy.nvim (fallback to custom-theme if not found)
--- local ok, _ = pcall(vim.cmd.colorscheme, "rose-pine-moon")
 local ok, _ = pcall(vim.cmd.colorscheme, "custom-theme-riii111")
 if not ok then
 	vim.cmd.colorscheme("custom-theme-riii111")

@@ -24,7 +24,7 @@
     │   ├── lsp.lua            # lspconfig, none-ls, cmp, DAP, symbol-usage
     │   ├── lspsaga.lua        # LSP-specific keymaps (gd, K, [d, etc.)
     │   ├── mason.lua          # mason + mason-tool-installer
-    │   ├── ui.lua             # bufferline, incline, gitsigns, diffview, etc.
+    │   ├── ui.lua             # bufferline, incline, gitsigns, etc.
     │   │                      # (includes plugin-specific keymaps: hlslens, mini.move)
     │   ├── lualine.lua
     │   ├── editor.lua         # treesitter, textobjects, autopairs, comment, etc.
@@ -150,6 +150,6 @@ return {
 - Smart Keymaps: Smart 0 (toggle ^ and 0), auto-indent on empty lines (i/A), delete without yank (x/X), visual mode improvements.
 - Smart Editing: `monaqa/dial.nvim` (increment dates, booleans, case conversion).
 - File Management: `stevearc/oil.nvim` (buffered file explorer).
-- UI Polish: `akinsho/bufferline.nvim` (language‑grouped labels), `b0o/incline.nvim`, `lukas-reineke/indent-blankline.nvim`, `lewis6991/gitsigns.nvim`, `sindrets/diffview.nvim`, `akinsho/toggleterm.nvim`, `kevinhwang91/nvim-hlslens`.
+- UI Polish: `akinsho/bufferline.nvim` (language‑grouped labels), `b0o/incline.nvim`, `lukas-reineke/indent-blankline.nvim`, `lewis6991/gitsigns.nvim`, `akinsho/toggleterm.nvim`, `kevinhwang91/nvim-hlslens`.
 - Debugging: `mfussenegger/nvim-dap` + `rcarriga/nvim-dap-ui`; language adapters configured per module (e.g., C/C++ with `codelldb`).
 - Performance: Lua module loader cache enabled, unused providers/plugins disabled for faster startup.

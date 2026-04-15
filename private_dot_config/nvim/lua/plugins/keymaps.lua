@@ -256,9 +256,6 @@ local function setup_keymaps()
 				end,
 				desc = "Branch diff with difit (no PR needed)",
 			},
-			-- Diffview (file history only)
-			["<Leader>gh"] = { ":DiffviewFileHistory<CR>", desc = "File history" },
-
 			-- Copy file path to clipboard
 			["<Leader>cp"] = {
 				function()
@@ -420,7 +417,6 @@ return {
 				{ "<leader>gB", group = "+actions history by PR" },
 				{ "<leader>gX", group = "+actions dispatch" },
 				{ "<leader>gW", group = "+actions watch" },
-				{ "<leader>df", group = "+focus diffview files" },
 				{ "-", group = "+oil parent directory" },
 			})
 
