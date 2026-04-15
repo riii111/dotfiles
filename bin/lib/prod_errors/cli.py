@@ -16,6 +16,7 @@ def build_parser():
             "  prod-errors summary --since 2026-03-10T12:00:00Z\n"
             "  prod-errors hotspots\n"
             "  prod-errors hotspots --since 2026-03-10 --limit 10\n"
+            "  prod-errors hotspots --since 2026-03-01T00:00:00Z --until 2026-04-01T00:00:00Z --bucket 7d\n"
             "  prod-errors trace CNrJvq3nnZqKLA\n"
             "  prod-errors --project my-gcp-project summary\n"
             "\n"
@@ -84,13 +85,24 @@ def build_parser():
     hotspots.add_argument(
         "--since",
         default=None,
-        help="Approximate lower bound inside the selected period. Counts are recalculated from timed buckets when set, and overlapping buckets are counted in full.",
+        help="Range start timestamp (ISO 8601, e.g. 2026-03-10T12:00:00Z). If omitted, uses --period counted back from --until or now.",
+    )
+    hotspots.add_argument(
+        "--until",
+        default=None,
+        help="Range end timestamp (ISO 8601, exclusive upper bound). If omitted, uses current time.",
     )
     hotspots.add_argument(
         "--period",
         choices=["1h", "6h", "1d", "7d", "30d"],
         default="30d",
-        help="Error Reporting time window (default: 30d)",
+        help="Fallback range width when --since is omitted (default: 30d)",
+    )
+    hotspots.add_argument(
+        "--bucket",
+        choices=["1d", "7d"],
+        default="1d",
+        help="Bucket size for trend analysis (default: 1d)",
     )
     hotspots.add_argument(
         "--limit",

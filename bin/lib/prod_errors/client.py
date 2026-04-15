@@ -6,6 +6,7 @@ import sqlite3
 import subprocess
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
 
@@ -96,31 +97,41 @@ def api_get_all_pages(base_url, token, items_key):
     return all_items
 
 
-def logging_read(project, token, filt, limit=10, freshness="30d"):
-    match = re.match(r"^(\d+)d$", freshness)
-    if not match:
-        print(
-            f"Invalid freshness format: '{freshness}' (expected Nd, e.g. 7d, 30d, 90d)",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    days = int(match.group(1))
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-    time_filter = cutoff.strftime("%Y-%m-%dT%H:%M:%SZ")
-    full_filter = f'{filt} timestamp>="{time_filter}"'
+def logging_query(
+    project,
+    token,
+    filt,
+    limit=10,
+    order_by="timestamp desc",
+    freshness=None,
+    page_token=None,
+):
+    full_filter = filt
+    if freshness:
+        match = re.match(r"^(\d+)d$", freshness)
+        if not match:
+            print(
+                f"Invalid freshness format: '{freshness}' (expected Nd, e.g. 7d, 30d, 90d)",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        days = int(match.group(1))
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        time_filter = cutoff.strftime("%Y-%m-%dT%H:%M:%SZ")
+        full_filter = f'{filt} timestamp>="{time_filter}"'
 
-    body = json.dumps(
-        {
-            "resourceNames": [f"projects/{project}"],
-            "filter": full_filter,
-            "orderBy": "timestamp desc",
-            "pageSize": limit,
-        }
-    ).encode()
+    body = {
+        "resourceNames": [f"projects/{project}"],
+        "filter": full_filter,
+        "orderBy": order_by,
+        "pageSize": limit,
+    }
+    if page_token:
+        body["pageToken"] = page_token
 
     req = urllib.request.Request(
         "https://logging.googleapis.com/v2/entries:list",
-        data=body,
+        data=json.dumps(body).encode(),
         headers={
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
@@ -129,12 +140,39 @@ def logging_read(project, token, filt, limit=10, freshness="30d"):
     )
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
-            data = json.loads(resp.read())
+            return json.loads(resp.read())
     except urllib.error.HTTPError as e:
         raise LoggingError(e.read().decode("utf-8", errors="replace")[:200])
     except urllib.error.URLError as e:
         raise LoggingError(str(e.reason)[:200])
+
+
+def logging_read(project, token, filt, limit=10, freshness="30d"):
+    data = logging_query(project, token, filt, limit=limit, freshness=freshness)
     return data.get("entries", [])
+
+
+def logging_list_all(project, token, filt, limit=1000, order_by="timestamp asc"):
+    entries = []
+    page_token = None
+    while True:
+        data = logging_query(
+            project,
+            token,
+            filt,
+            limit=limit,
+            order_by=order_by,
+            page_token=page_token,
+        )
+        entries.extend(data.get("entries", []))
+        page_token = data.get("nextPageToken")
+        if not page_token:
+            return entries
+
+
+def logging_has_entries(project, token, filt):
+    data = logging_query(project, token, filt, limit=1, order_by="timestamp desc")
+    return bool(data.get("entries"))
 
 
 def extract_trace_id(entry):
@@ -156,7 +194,7 @@ def get_service_from_group(item):
     return ""
 
 
-def parse_since(value):
+def parse_time_arg(value, option_name="--since"):
     for fmt in ("%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%dT%H:%M:%S.%f%z"):
         try:
             dt = datetime.strptime(value, fmt)
@@ -170,8 +208,12 @@ def parse_since(value):
         return dt.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
     except ValueError:
         pass
-    print(f"Cannot parse --since value: {value}", file=sys.stderr)
+    print(f"Cannot parse {option_name} value: {value}", file=sys.stderr)
     sys.exit(1)
+
+
+def parse_since(value):
+    return parse_time_arg(value, option_name="--since")
 
 
 def api_period_for(value):
@@ -204,10 +246,22 @@ def period_timedelta_for(value):
     }[value]
 
 
-def build_group_stats_url(project, period="30d", timed_count_duration=None):
+def build_group_stats_url(
+    project,
+    period="30d",
+    timed_count_duration=None,
+    group_ids=None,
+    order="COUNT_DESC",
+    page_size=100,
+):
+    params = [("timeRange.period", api_period_for(period)), ("order", order)]
+    if timed_count_duration:
+        params.append(("timedCountDuration", timed_count_duration))
+    if group_ids:
+        params.extend(("groupId", group_id) for group_id in group_ids)
+    if page_size:
+        params.append(("pageSize", str(page_size)))
     return (
         f"{API_BASE}/projects/{project}/groupStats"
-        f"?timeRange.period={api_period_for(period)}"
-        f"{f'&timedCountDuration={timed_count_duration}' if timed_count_duration else ''}"
-        f"&order=COUNT_DESC&pageSize=100"
+        f"?{urllib.parse.urlencode(params, doseq=True)}"
     )

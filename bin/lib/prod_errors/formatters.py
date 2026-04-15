@@ -235,15 +235,16 @@ def print_hotspots(items):
 
     if not is_tty:
         print(
-            "| # | Group | Error | Count | Days | First | Last | Service | Status | Related |"
+            "| # | Type | Group | Error | Count | Buckets | First | Last | Service | Status | Related |"
         )
         print(
-            "|---|-------|-------|-------|------|-------|------|---------|--------|---------|"
+            "|---|------|-------|-------|-------|---------|-------|------|---------|--------|---------|"
         )
         for idx, item in enumerate(items, 1):
             rel = f"#{item['relatedTo']}?" if item.get("relatedTo") else ""
+            group_type = _hotspot_type(item)
             print(
-                f"| {idx} | `{item['groupId']}` | {_display_message(item)[:80]} | {item['count']} | "
+                f"| {idx} | {group_type} | `{item['groupId']}` | {_display_message(item)[:80]} | {item['count']} | "
                 f"{item['activeBuckets']} | {format_jst_timestamp(item['firstSeenTime'])} | {format_summary_last_seen(item['lastSeenTime'])} | "
                 f"{_display_service(item)} | {item['status']} | {rel} |"
             )
@@ -261,6 +262,7 @@ def print_hotspots(items):
     rows = [
         (
             str(idx),
+            _hotspot_type(item),
             item["groupId"],
             trunc(_display_message(item), 48),
             str(item["count"]),
@@ -275,6 +277,7 @@ def print_hotspots(items):
     ]
     headers = (
         "#",
+        "Type",
         "Group",
         "Error",
         "Count",
@@ -319,3 +322,34 @@ def print_hotspots(items):
     for row in rows:
         print(render_row(row, colorize=True))
     print(sep)
+
+
+def print_hotspot_overview(summary):
+    print("Range Summary")
+    print(f"- Total groups: {summary['totalGroups']}")
+    print(f"- New groups: {summary['newGroups']}")
+    print(f"- Recurring groups: {summary['recurringGroups']}")
+    print(f"- Event count: {summary['eventCount']}")
+
+
+def print_hotspot_bucket_summary(buckets):
+    print("Bucket Summary")
+    print(
+        "| Start | End | Active Groups | New Groups | Recurring Groups | Event Count |"
+    )
+    print(
+        "|-------|-----|---------------|------------|------------------|-------------|"
+    )
+    for bucket in buckets:
+        print(
+            f"| {format_jst_timestamp(bucket['start'])} | {format_jst_timestamp(bucket['end'])} | "
+            f"{bucket['activeGroups']} | {bucket['newGroups']} | {bucket['recurringGroups']} | {bucket['eventCount']} |"
+        )
+
+
+def _hotspot_type(item):
+    if item.get("isNewInRange"):
+        return "NEW"
+    if item.get("isRecurringInRange"):
+        return "RECUR"
+    return ""

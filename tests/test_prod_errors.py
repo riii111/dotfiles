@@ -20,6 +20,8 @@ from prod_errors.cli import build_parser
 from prod_errors.ansi import display_width, pad_left, pad_right, trunc
 from prod_errors.commands import cmd_hotspots, cmd_summary, cmd_trace
 from prod_errors.logic import (
+    aggregate_hotspot_logs,
+    build_hotspot_analysis,
     build_hotspot_data,
     build_service_summary_data,
     windowed_counts,
@@ -63,6 +65,15 @@ def make_trace_log(timestamp, severity, message, logger="app", **payload):
         "timestamp": timestamp,
         "severity": severity,
         "jsonPayload": json_payload,
+    }
+
+
+def make_hotspot_log(timestamp, group_id, message, service="svc-a"):
+    return {
+        "timestamp": timestamp,
+        "errorGroups": [{"id": group_id}],
+        "resource": {"labels": {"service_name": service}},
+        "jsonPayload": {"message": message},
     }
 
 
@@ -182,6 +193,66 @@ class ProdErrorsLogicTest(unittest.TestCase):
         self.assertEqual(summary[0]["totalCount"], 8)
         self.assertEqual(summary[0]["newCount"], 0)
         self.assertEqual(summary[0]["regressedCount"], 2)
+
+    def test_build_hotspot_analysis_summarizes_new_and_recurring_groups(self):
+        entries = [
+            make_hotspot_log(
+                "2026-04-01T01:00:00.000000Z", "g-new", "FooError: new", "svc-a"
+            ),
+            make_hotspot_log(
+                "2026-04-01T12:00:00.000000Z", "g-rec", "BarError: recurring", "svc-b"
+            ),
+            make_hotspot_log(
+                "2026-04-02T01:00:00.000000Z", "g-rec", "BarError: recurring", "svc-b"
+            ),
+        ]
+        aggregated = aggregate_hotspot_logs(
+            entries,
+            since="2026-04-01T00:00:00.000000Z",
+            until="2026-04-03T00:00:00.000000Z",
+            bucket="1d",
+        )
+        metadata = {
+            "g-new": make_group(
+                "g-new",
+                "OPEN",
+                "FooError: new",
+                1,
+                "2026-04-01T01:00:00.000000Z",
+                "2026-04-01T01:00:00.000000Z",
+                "svc-a",
+            ),
+            "g-rec": make_group(
+                "g-rec",
+                "RESOLVED",
+                "BarError: recurring",
+                2,
+                "2026-03-20T01:00:00.000000Z",
+                "2026-04-02T01:00:00.000000Z",
+                "svc-b",
+            ),
+        }
+
+        analysis = build_hotspot_analysis(
+            aggregated,
+            metadata,
+            prior_occurrences={"g-new": False, "g-rec": True},
+            since="2026-04-01T00:00:00.000000Z",
+            until="2026-04-03T00:00:00.000000Z",
+            bucket="1d",
+        )
+
+        self.assertEqual(analysis["summary"]["totalGroups"], 2)
+        self.assertEqual(analysis["summary"]["newGroups"], 1)
+        self.assertEqual(analysis["summary"]["recurringGroups"], 1)
+        self.assertEqual(analysis["summary"]["eventCount"], 3)
+        self.assertEqual(analysis["buckets"][0]["activeGroups"], 2)
+        self.assertEqual(analysis["buckets"][0]["newGroups"], 1)
+        self.assertEqual(analysis["buckets"][0]["recurringGroups"], 1)
+        self.assertEqual(analysis["buckets"][1]["activeGroups"], 1)
+        self.assertEqual(analysis["errors"][0]["groupId"], "g-rec")
+        self.assertTrue(analysis["errors"][0]["isRecurringInRange"])
+        self.assertTrue(analysis["errors"][1]["isNewInRange"])
 
 
 class ProdErrorsTraceHelpersTest(unittest.TestCase):
@@ -328,13 +399,27 @@ class ProdErrorsCliTest(unittest.TestCase):
     def test_build_parser_supports_hotspots(self):
         parser = build_parser()
 
-        args = parser.parse_args(["--project", "demo", "hotspots", "--period", "7d"])
+        args = parser.parse_args(
+            [
+                "--project",
+                "demo",
+                "hotspots",
+                "--period",
+                "7d",
+                "--until",
+                "2026-04-01T00:00:00Z",
+                "--bucket",
+                "7d",
+            ]
+        )
 
         self.assertEqual(args.command, "hotspots")
         self.assertEqual(args.project, "demo")
         self.assertEqual(args.period, "7d")
+        self.assertEqual(args.until, "2026-04-01T00:00:00Z")
+        self.assertEqual(args.bucket, "7d")
 
-    def test_hotspots_since_help_mentions_approximate_buckets(self):
+    def test_hotspots_since_help_mentions_range_start(self):
         parser = build_parser()
 
         hotspots_action = next(
@@ -347,7 +432,7 @@ class ProdErrorsCliTest(unittest.TestCase):
             action for action in hotspots_parser._actions if action.dest == "since"
         )
 
-        self.assertIn("overlapping buckets are counted in full", since_action.help)
+        self.assertIn("Range start timestamp", since_action.help)
 
 
 class ProdErrorsCommandTest(unittest.TestCase):
@@ -424,10 +509,27 @@ class ProdErrorsCommandTest(unittest.TestCase):
         self.assertIn("2026-04-05 09:00 JST (18m ago)", output)
 
     @mock.patch("prod_errors.commands.get_token", return_value="token")
+    @mock.patch("prod_errors.commands.logging_has_entries", return_value=False)
     @mock.patch("prod_errors.commands.api_get_all_pages")
+    @mock.patch("prod_errors.commands.logging_list_all")
     def test_cmd_hotspots_json_filters_status_and_uses_buckets(
-        self, mock_api_get_all_pages, _mock_get_token
+        self,
+        mock_logging_list_all,
+        mock_api_get_all_pages,
+        _mock_logging_has_entries,
+        _mock_get_token,
     ):
+        mock_logging_list_all.return_value = [
+            make_hotspot_log(
+                "2026-04-03T00:10:00.000000Z", "g-open", "FooError: boom", "svc-a"
+            ),
+            make_hotspot_log(
+                "2026-04-03T02:10:00.000000Z",
+                "g-resolved",
+                "BarError: boom",
+                "svc-b",
+            ),
+        ]
         mock_api_get_all_pages.return_value = [
             make_group(
                 "g-open",
@@ -437,13 +539,6 @@ class ProdErrorsCommandTest(unittest.TestCase):
                 "2026-04-01T00:00:00.000000Z",
                 "2026-04-05T00:00:00.000000Z",
                 "svc-a",
-                timed_counts=[
-                    {
-                        "count": "2",
-                        "startTime": "2026-04-03T00:00:00.000000Z",
-                        "endTime": "2026-04-04T00:00:00.000000Z",
-                    }
-                ],
             ),
             make_group(
                 "g-resolved",
@@ -453,13 +548,6 @@ class ProdErrorsCommandTest(unittest.TestCase):
                 "2026-04-01T00:00:00.000000Z",
                 "2026-04-06T00:00:00.000000Z",
                 "svc-b",
-                timed_counts=[
-                    {
-                        "count": "8",
-                        "startTime": "2026-04-02T00:00:00.000000Z",
-                        "endTime": "2026-04-03T00:00:00.000000Z",
-                    }
-                ],
             ),
         ]
 
@@ -467,7 +555,9 @@ class ProdErrorsCommandTest(unittest.TestCase):
             project="demo",
             status="OPEN",
             since="2026-04-02T12:00:00Z",
+            until="2026-04-04T00:00:00Z",
             period="30d",
+            bucket="1d",
             limit=20,
             json=True,
         )
@@ -478,15 +568,23 @@ class ProdErrorsCommandTest(unittest.TestCase):
 
         payload = json.loads(stdout.getvalue())
         self.assertEqual(payload["total"], 1)
+        self.assertEqual(payload["summary"]["totalGroups"], 1)
+        self.assertEqual(payload["summary"]["newGroups"], 1)
+        self.assertEqual(payload["buckets"][0]["activeGroups"], 1)
         self.assertEqual(payload["errors"][0]["groupId"], "g-open")
         self.assertEqual(payload["errors"][0]["activeBuckets"], 1)
+        self.assertTrue(payload["errors"][0]["isNewInRange"])
 
     @mock.patch("prod_errors.timefmt.now_utc")
     @mock.patch("prod_errors.commands.get_token", return_value="token")
+    @mock.patch("prod_errors.commands.logging_has_entries", return_value=False)
     @mock.patch("prod_errors.commands.api_get_all_pages")
+    @mock.patch("prod_errors.commands.logging_list_all")
     def test_cmd_hotspots_output_uses_jst_and_relative_last_seen(
         self,
+        mock_logging_list_all,
         mock_api_get_all_pages,
+        _mock_logging_has_entries,
         _mock_get_token,
         mock_now_utc,
     ):
@@ -500,21 +598,21 @@ class ProdErrorsCommandTest(unittest.TestCase):
                 "2026-04-05T00:00:00.000000Z",
                 "2026-04-05T00:00:00.000000Z",
                 "svc-a",
-                timed_counts=[
-                    {
-                        "count": "2",
-                        "startTime": "2026-04-05T00:00:00.000000Z",
-                        "endTime": "2026-04-05T00:10:00.000000Z",
-                    }
-                ],
+            )
+        ]
+        mock_logging_list_all.return_value = [
+            make_hotspot_log(
+                "2026-04-05T00:10:00.000000Z", "g-open", "FooError: boom", "svc-a"
             )
         ]
 
         args = argparse.Namespace(
             project="demo",
-            status="OPEN",
-            since=None,
+            status="OPEN,ACKNOWLEDGED,RESOLVED",
+            since="2026-04-05T00:00:00Z",
+            until="2026-04-05T01:00:00Z",
             period="30d",
+            bucket="1d",
             limit=20,
             json=False,
         )
@@ -525,9 +623,11 @@ class ProdErrorsCommandTest(unittest.TestCase):
 
         output = stdout.getvalue()
         self.assertIn("Error Hotspots", output)
+        self.assertIn("Range Summary", output)
+        self.assertIn("Bucket Summary", output)
         self.assertIn("First", output)
         self.assertIn("Last", output)
-        self.assertIn("2026-04-05 09:00 JST", output)
+        self.assertIn("2026-04-05 09:10 JST", output)
         self.assertIn("2026-04-05 09:10 JST (8m ago)", output)
 
     @mock.patch("prod_errors.trace.get_token", return_value="token")
