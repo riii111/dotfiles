@@ -24,11 +24,12 @@ from prod_errors.formatters import (
 )
 from prod_errors.logic import (
     aggregate_hotspot_logs,
+    bucket_timedelta_for,
     build_hotspot_analysis,
-    empty_hotspot_analysis,
     build_service_summary_data,
     build_summary_data,
-    update_bucket_occurrence_labels,
+    empty_hotspot_analysis,
+    UNKNOWN_STATUS,
 )
 from prod_errors.timefmt import current_jst_date, isoformat_utc, parse_timestamp
 from prod_errors.trace import cmd_trace as trace_cmd
@@ -37,6 +38,7 @@ GROUP_METADATA_CHUNK_SIZE = 50
 PRIOR_OCCURRENCE_CHUNK_SIZE = 20
 PRIOR_OCCURRENCE_PAGE_SIZE = 200
 PRIOR_OCCURRENCE_MAX_PAGES = 10
+SKIPPED_GROUP_SAMPLE_SIZE = 10
 
 
 def cmd_summary(args):
@@ -49,7 +51,7 @@ def cmd_summary(args):
     filtered = [
         group
         for group in groups
-        if group["group"].get("resolutionStatus", "UNKNOWN") in statuses
+        if group["group"].get("resolutionStatus", UNKNOWN_STATUS) in statuses
     ]
     if since:
         filtered = [
@@ -97,6 +99,7 @@ def cmd_hotspots(args):
         sys.exit(1)
 
     since, until = _resolve_hotspot_window(args)
+    _validate_hotspot_bucket(since, until, args.bucket)
     token = get_token()
     statuses = {status.strip().upper() for status in args.status.split(",")}
     analysis = _build_hotspot_range_analysis(
@@ -124,6 +127,7 @@ def cmd_hotspots(args):
                     "total": analysis["summary"]["totalGroups"],
                     "shown": len(hotspots),
                     "summary": analysis["summary"],
+                    "skippedGroups": analysis["skippedGroups"],
                     "buckets": analysis["buckets"],
                     "errors": hotspots,
                 },
@@ -134,6 +138,10 @@ def cmd_hotspots(args):
         return
 
     if not analysis["errors"]:
+        if analysis["skippedGroups"]["count"] > 0:
+            print(
+                f"Warning: skipped {analysis['skippedGroups']['count']} groups with missing metadata"
+            )
         print(f"No hotspot groups with status [{args.status}] in the selected window.")
         return
 
@@ -143,6 +151,11 @@ def cmd_hotspots(args):
     print(
         f"Status: {args.status} | Window: {label} | Bucket: {args.bucket} | Limit: {args.limit} | Shown: {len(hotspots)}/{analysis['summary']['totalGroups']}\n"
     )
+    if analysis["skippedGroups"]["count"] > 0:
+        print(
+            f"Warning: skipped {analysis['skippedGroups']['count']} groups with missing metadata"
+        )
+        print()
     print_hotspot_overview(analysis["summary"])
     print()
     print_hotspot_bucket_summary(analysis["buckets"])
@@ -174,6 +187,14 @@ def _resolve_hotspot_window(args):
     return isoformat_utc(since_dt_obj), isoformat_utc(until_dt_obj)
 
 
+def _validate_hotspot_bucket(since, until, bucket):
+    since_dt = parse_timestamp(since)
+    until_dt = parse_timestamp(until)
+    if bucket_timedelta_for(bucket) > (until_dt - since_dt):
+        print("--bucket must not be wider than the selected window", file=sys.stderr)
+        sys.exit(1)
+
+
 def _build_hotspot_range_analysis(project, token, since, until, bucket, statuses):
     try:
         entries = logging_list_all(
@@ -189,11 +210,15 @@ def _build_hotspot_range_analysis(project, token, since, until, bucket, statuses
 
     aggregated_groups = aggregate_hotspot_logs(entries, since, until, bucket)
     if not aggregated_groups:
-        return empty_hotspot_analysis(since, until, bucket)
+        analysis = empty_hotspot_analysis(since, until, bucket)
+        analysis["skippedGroups"] = {"count": 0, "groupIds": []}
+        return analysis
 
     group_ids = sorted(aggregated_groups)
     try:
-        group_metadata = _fetch_group_metadata(project, token, group_ids)
+        group_metadata, missing_group_ids = _fetch_group_metadata(
+            project, token, group_ids
+        )
     except LoggingError as e:
         print(f"hotspots data fetch failed: {e}", file=sys.stderr)
         sys.exit(1)
@@ -202,7 +227,7 @@ def _build_hotspot_range_analysis(project, token, since, until, bucket, statuses
         for group_id in group_ids
         if group_metadata.get(group_id, {})
         .get("group", {})
-        .get("resolutionStatus", "UNKNOWN")
+        .get("resolutionStatus", UNKNOWN_STATUS)
         in statuses
     ]
     filtered_groups = {
@@ -219,6 +244,7 @@ def _build_hotspot_range_analysis(project, token, since, until, bucket, statuses
             token,
             filtered_group_ids,
             since,
+            filtered_metadata,
         )
     except LoggingError as e:
         print(f"hotspots data fetch failed: {e}", file=sys.stderr)
@@ -232,12 +258,16 @@ def _build_hotspot_range_analysis(project, token, since, until, bucket, statuses
         until,
         bucket,
     )
-    update_bucket_occurrence_labels(analysis["buckets"])
+    analysis["skippedGroups"] = {
+        "count": len(missing_group_ids),
+        "groupIds": missing_group_ids[:SKIPPED_GROUP_SAMPLE_SIZE],
+    }
     return analysis
 
 
 def _fetch_group_metadata(project, token, group_ids):
     metadata = {}
+    missing = []
     for index in range(0, len(group_ids), GROUP_METADATA_CHUNK_SIZE):
         chunk = group_ids[index : index + GROUP_METADATA_CHUNK_SIZE]
         groups = api_get_all_pages(
@@ -268,13 +298,26 @@ def _fetch_group_metadata(project, token, group_ids):
                 "representative": {},
                 "affectedServices": [],
             }
-    return metadata
+        missing.extend(
+            group_id for group_id in missing_group_ids if group_id not in metadata
+        )
+    return metadata, missing
 
 
-def _find_prior_occurrences(project, token, group_ids, since):
+def _find_prior_occurrences(project, token, group_ids, since, group_metadata):
     prior_occurrences = {group_id: False for group_id in group_ids}
-    for index in range(0, len(group_ids), PRIOR_OCCURRENCE_CHUNK_SIZE):
-        chunk = group_ids[index : index + PRIOR_OCCURRENCE_CHUNK_SIZE]
+    since_dt = parse_timestamp(since)
+    unresolved_group_ids = []
+    for group_id in group_ids:
+        first_seen = parse_timestamp(
+            group_metadata.get(group_id, {}).get("firstSeenTime", "")
+        )
+        if first_seen is None:
+            unresolved_group_ids.append(group_id)
+            continue
+        prior_occurrences[group_id] = first_seen < since_dt
+    for index in range(0, len(unresolved_group_ids), PRIOR_OCCURRENCE_CHUNK_SIZE):
+        chunk = unresolved_group_ids[index : index + PRIOR_OCCURRENCE_CHUNK_SIZE]
         seen = set()
         page_token = None
         pages = 0

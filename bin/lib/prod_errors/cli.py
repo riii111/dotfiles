@@ -1,6 +1,7 @@
 import argparse
 import os
 from prod_errors.commands import cmd_hotspots, cmd_summary, cmd_trace
+from prod_errors.logic import bucket_choices
 
 
 def build_parser():
@@ -100,7 +101,7 @@ def build_parser():
     )
     hotspots.add_argument(
         "--bucket",
-        choices=["1d", "7d"],
+        choices=bucket_choices(),
         default="1d",
         help="Bucket size for trend analysis (default: 1d)",
     )

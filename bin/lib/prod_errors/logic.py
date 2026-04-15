@@ -1,9 +1,41 @@
 import re
 from collections import defaultdict
 from datetime import timedelta
+from typing import TypedDict
 
 from prod_errors.client import get_service_from_group
 from prod_errors.timefmt import isoformat_utc, parse_timestamp
+
+
+UNKNOWN_STATUS = "UNKNOWN"
+BUCKET_DELTAS = {
+    "1d": timedelta(days=1),
+    "7d": timedelta(days=7),
+}
+
+
+class BucketEntry(TypedDict):
+    start: str
+    end: str
+    activeGroups: int
+    activeNewGroups: int
+    activeRecurringGroups: int
+    newGroups: int
+    recurringGroups: int
+    eventCount: int
+
+
+class HotspotSummary(TypedDict):
+    totalGroups: int
+    newGroups: int
+    recurringGroups: int
+    eventCount: int
+
+
+class HotspotAnalysis(TypedDict):
+    summary: HotspotSummary
+    buckets: list[BucketEntry]
+    errors: list[dict]
 
 
 def find_related_groups(filtered):
@@ -135,91 +167,12 @@ def build_service_summary_data(filtered, since=None):
     return services
 
 
-def int_or_zero(value):
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return 0
-
-
-def windowed_counts(item, since=None):
-    timed_counts = item.get("timedCounts", [])
-    if not timed_counts:
-        count = int_or_zero(item.get("count", "0"))
-        return count, (1 if count > 0 else 0), None, None
-
-    total = 0
-    active_buckets = 0
-    first_bucket_start = None
-    last_bucket_end = None
-    for bucket in timed_counts:
-        count = int_or_zero(bucket.get("count", "0"))
-        if count <= 0:
-            continue
-        bucket_start = bucket.get("startTime", "")
-        bucket_end = bucket.get("endTime", "")
-        if since and bucket_end and bucket_end <= since:
-            continue
-        total += count
-        active_buckets += 1
-        if bucket_start and (
-            first_bucket_start is None or bucket_start < first_bucket_start
-        ):
-            first_bucket_start = bucket_start
-        if bucket_end and (last_bucket_end is None or bucket_end > last_bucket_end):
-            last_bucket_end = bucket_end
-    return total, active_buckets, first_bucket_start, last_bucket_end
-
-
-def build_hotspot_data(filtered, since=None):
-    related = find_related_groups(filtered)
-    items = []
-    for idx, item in enumerate(filtered):
-        range_count, active_buckets, range_first, range_last = windowed_counts(
-            item, since
-        )
-        if range_count <= 0:
-            continue
-
-        group = item["group"]
-        items.append(
-            {
-                "groupId": group.get("groupId", ""),
-                "status": group.get("resolutionStatus", ""),
-                "message": item.get("representative", {})
-                .get("message", "")
-                .split("\n")[0],
-                "count": range_count,
-                "activeBuckets": active_buckets,
-                "firstSeenTime": range_first or item.get("firstSeenTime", ""),
-                "lastSeenTime": range_last or item.get("lastSeenTime", ""),
-                "service": get_service_from_group(item) or None,
-                "relatedGroupId": (
-                    filtered[related[idx] - 1]["group"].get("groupId")
-                    if idx in related
-                    else None
-                ),
-            }
-        )
-
-    sort_hotspot_entries(items)
-
-    rank_by_group_id = {
-        entry["groupId"]: position for position, entry in enumerate(items, start=1)
-    }
-    for entry in items:
-        related_group_id = entry.pop("relatedGroupId", None)
-        entry["relatedTo"] = (
-            rank_by_group_id.get(related_group_id) if related_group_id else None
-        )
-    return items
-
-
 def bucket_timedelta_for(value):
-    return {
-        "1d": timedelta(days=1),
-        "7d": timedelta(days=7),
-    }[value]
+    return BUCKET_DELTAS[value]
+
+
+def bucket_choices():
+    return tuple(BUCKET_DELTAS.keys())
 
 
 def extract_log_group_ids(entry):
@@ -328,24 +281,15 @@ def build_hotspot_analysis(
     since_dt = parse_timestamp(since)
     until_dt = parse_timestamp(until)
     bucket_span = bucket_timedelta_for(bucket)
-    related_by_group_id = related_group_ids(list(group_metadata.values()))
+    related_by_group_id = related_group_ids(
+        build_related_group_candidates(aggregated_groups, group_metadata)
+    )
 
     bucket_entries = []
     cursor = since_dt
     while cursor < until_dt:
         end = min(cursor + bucket_span, until_dt)
-        bucket_entries.append(
-            {
-                "start": isoformat_utc(cursor),
-                "end": isoformat_utc(end),
-                "activeGroups": 0,
-                "activeNewGroups": 0,
-                "activeRecurringGroups": 0,
-                "newGroups": 0,
-                "recurringGroups": 0,
-                "eventCount": 0,
-            }
-        )
+        bucket_entries.append(make_bucket_entry(cursor, end))
         cursor = end
 
     errors = []
@@ -356,9 +300,10 @@ def build_hotspot_analysis(
         is_recurring = prior_occurrences.get(group_id, False)
         is_new = not is_recurring
         bucket_counts = aggregated["bucketEventCounts"]
+        first_bucket_index = min(bucket_counts) if bucket_counts else None
         entry = {
             "groupId": group_id,
-            "status": group.get("resolutionStatus", "UNKNOWN"),
+            "status": group.get("resolutionStatus", UNKNOWN_STATUS),
             "message": representative.get("message", "").split("\n")[0]
             or aggregated["message"],
             "count": aggregated["count"],
@@ -372,6 +317,7 @@ def build_hotspot_analysis(
             "isNewInRange": is_new,
             "isRecurringInRange": is_recurring,
             "bucketEventCounts": dict(bucket_counts),
+            "firstBucketIndex": first_bucket_index,
         }
         errors.append(entry)
 
@@ -386,18 +332,22 @@ def build_hotspot_analysis(
             rank_by_group_id.get(related_group_id) if related_group_id else None
         )
         bucket_counts = entry.pop("bucketEventCounts")
+        first_bucket_index = entry.pop("firstBucketIndex")
         for bucket_index, event_count in bucket_counts.items():
-            if bucket_index >= len(bucket_entries):
+            if bucket_index < 0 or bucket_index >= len(bucket_entries):
                 continue
             bucket_entry = bucket_entries[bucket_index]
             bucket_entry["activeGroups"] += 1
             bucket_entry["eventCount"] += event_count
             if entry["isNewInRange"]:
                 bucket_entry["activeNewGroups"] += 1
-                bucket_entry["newGroups"] += 1
             if entry["isRecurringInRange"]:
                 bucket_entry["activeRecurringGroups"] += 1
-                bucket_entry["recurringGroups"] += 1
+            if bucket_index == first_bucket_index:
+                if entry["isNewInRange"]:
+                    bucket_entry["newGroups"] += 1
+                if entry["isRecurringInRange"]:
+                    bucket_entry["recurringGroups"] += 1
 
     return {
         "summary": {
@@ -421,18 +371,7 @@ def empty_hotspot_analysis(since, until, bucket):
     cursor = since_dt
     while cursor < until_dt:
         end = min(cursor + bucket_span, until_dt)
-        buckets.append(
-            {
-                "start": isoformat_utc(cursor),
-                "end": isoformat_utc(end),
-                "activeGroups": 0,
-                "activeNewGroups": 0,
-                "activeRecurringGroups": 0,
-                "newGroups": 0,
-                "recurringGroups": 0,
-                "eventCount": 0,
-            }
-        )
+        buckets.append(make_bucket_entry(cursor, end))
         cursor = end
     return {
         "summary": {
@@ -446,14 +385,47 @@ def empty_hotspot_analysis(since, until, bucket):
     }
 
 
-def update_bucket_occurrence_labels(buckets):
-    for bucket in buckets:
-        bucket["newGroups"] = bucket["activeNewGroups"]
-        bucket["recurringGroups"] = bucket["activeRecurringGroups"]
-
-
 def sort_hotspot_entries(items):
     items.sort(key=lambda entry: entry["groupId"])
     items.sort(key=lambda entry: entry["lastSeenTime"] or "", reverse=True)
     items.sort(key=lambda entry: entry["activeBuckets"], reverse=True)
     items.sort(key=lambda entry: entry["count"], reverse=True)
+
+
+def make_bucket_entry(start, end) -> BucketEntry:
+    return {
+        "start": isoformat_utc(start),
+        "end": isoformat_utc(end),
+        "activeGroups": 0,
+        "activeNewGroups": 0,
+        "activeRecurringGroups": 0,
+        "newGroups": 0,
+        "recurringGroups": 0,
+        "eventCount": 0,
+    }
+
+
+def build_related_group_candidates(aggregated_groups, group_metadata):
+    candidates = []
+    for group_id, aggregated in aggregated_groups.items():
+        metadata = group_metadata.get(group_id, {})
+        message = (
+            metadata.get("representative", {}).get("message", "").split("\n")[0]
+            or aggregated["message"]
+        )
+        service = get_service_from_group(metadata) or aggregated["service"] or None
+        candidates.append(
+            {
+                "group": {
+                    "groupId": group_id,
+                    "resolutionStatus": metadata.get("group", {}).get(
+                        "resolutionStatus", UNKNOWN_STATUS
+                    ),
+                },
+                "representative": {"message": message},
+                "firstSeenTime": isoformat_utc(aggregated["firstSeenTime"]),
+                "lastSeenTime": isoformat_utc(aggregated["lastSeenTime"]),
+                "affectedServices": [{"service": service}] if service else [],
+            }
+        )
+    return candidates
