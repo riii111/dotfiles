@@ -38,9 +38,13 @@ from prod_errors.timefmt import (
     format_summary_last_seen,
 )
 from prod_errors.trace import (
+    _collect_endpoint_candidates,
+    _collect_logger_clues,
+    _collect_message_variants,
     _coerce_http_status,
     _extract_context_from_object,
     _extract_http_request_info,
+    _find_first_trace_id,
     _normalize_endpoint_value,
 )
 
@@ -326,6 +330,87 @@ class ProdErrorsTraceHelpersTest(unittest.TestCase):
             _extract_http_request_info(entry),
             {"httpStatus": None, "endpoint": "/foo/bar"},
         )
+
+    def test_extract_http_request_info_returns_none_when_no_endpoint(self):
+        entry = {
+            "timestamp": "2026-04-05T00:00:00.000000Z",
+            "severity": "ERROR",
+            "jsonPayload": {"message": "FooError: boom", "logger": "app"},
+        }
+
+        self.assertIsNone(_extract_http_request_info(entry))
+
+    def test_collect_endpoint_candidates_ranks_and_limits_entries(self):
+        logs = [
+            make_trace_log(
+                "2026-04-05T00:00:00.000000Z",
+                "ERROR",
+                "FooError: boom",
+                request={"path": "/foo", "status": 503},
+            ),
+            make_trace_log(
+                "2026-04-05T00:00:01.000000Z",
+                "ERROR",
+                "FooError: boom",
+                request={"path": "/foo", "status": 500},
+            ),
+            make_trace_log(
+                "2026-04-05T00:00:02.000000Z",
+                "ERROR",
+                "FooError: boom",
+                request={"path": "/bar", "status": 502},
+            ),
+        ]
+
+        self.assertEqual(
+            _collect_endpoint_candidates(logs, limit=1),
+            [{"endpoint": "/foo", "count": 2, "httpStatuses": [503, 500]}],
+        )
+
+    def test_collect_endpoint_candidates_returns_empty_when_no_endpoint(self):
+        logs = [
+            make_trace_log("2026-04-05T00:00:00.000000Z", "ERROR", "FooError: boom")
+        ]
+
+        self.assertEqual(_collect_endpoint_candidates(logs), [])
+
+    def test_collect_message_variants_handles_empty_and_duplicate_values(self):
+        self.assertEqual(_collect_message_variants([]), [])
+        self.assertEqual(
+            _collect_message_variants(
+                [
+                    {"message": "FooError: boom"},
+                    {"message": "FooError: boom"},
+                ]
+            ),
+            [{"value": "FooError: boom", "count": 2}],
+        )
+
+    def test_collect_logger_clues_handles_empty_and_duplicate_values(self):
+        self.assertEqual(_collect_logger_clues([]), [])
+        self.assertEqual(
+            _collect_logger_clues(
+                [
+                    {"logger": "app"},
+                    {"logger": "app"},
+                    {"logger": ""},
+                ]
+            ),
+            [{"value": "app", "count": 2}],
+        )
+
+    def test_find_first_trace_id_scans_all_matched_logs(self):
+        logs = [
+            make_trace_log("2026-04-05T00:00:00.000000Z", "ERROR", "FooError: boom"),
+            make_trace_log(
+                "2026-04-05T00:00:01.000000Z",
+                "ERROR",
+                "FooError: boom",
+                trace_id="trace-123",
+            ),
+        ]
+
+        self.assertEqual(_find_first_trace_id(logs), "trace-123")
 
 
 class ProdErrorsAnsiTest(unittest.TestCase):
@@ -989,7 +1074,7 @@ class ProdErrorsCommandTest(unittest.TestCase):
         self.assertNotIn("- Count:", output)
         self.assertNotIn("- First:", output)
         self.assertNotIn("- Last:", output)
-        self.assertNotIn("- Service:", output)
+        self.assertIn("- Service: svc-a", output)
         self.assertNotIn("### Recent Events", output)
         self.assertNotIn("### Cloud Logging Lookup", output)
 
@@ -1145,7 +1230,7 @@ class ProdErrorsCommandTest(unittest.TestCase):
             cmd_trace(args)
 
         output = stdout.getvalue()
-        self.assertIn("- Service clue: svc-a", output)
+        self.assertIn("- Service: svc-a", output)
         self.assertIn("- Endpoint: `/foo` (HTTP 503, HTTP 500)", output)
         self.assertIn("### Endpoint Candidates", output)
         self.assertIn("`/foo` | 2 | HTTP 503, HTTP 500", output)
@@ -1157,6 +1242,54 @@ class ProdErrorsCommandTest(unittest.TestCase):
         self.assertIn("app | 2", output)
         self.assertIn("worker | 1", output)
         self.assertIn("### Matched Error Logs", output)
+
+    def test_cmd_trace_json_uses_first_trace_id_found_in_matched_logs(self):
+        payload = self._run_trace_json(
+            [
+                [
+                    {
+                        "timestamp": "2026-04-05T00:00:02.000000Z",
+                        "severity": "ERROR",
+                        "resource": {"labels": {"service_name": "svc-a"}},
+                        "jsonPayload": {
+                            "message": "FooError: boom",
+                            "logger": "app",
+                        },
+                    },
+                    {
+                        "timestamp": "2026-04-05T00:00:01.000000Z",
+                        "severity": "ERROR",
+                        "resource": {"labels": {"service_name": "svc-a"}},
+                        "jsonPayload": {
+                            "message": "FooError: boom",
+                            "logger": "app",
+                            "trace_id": "trace-123",
+                        },
+                    },
+                ],
+                [
+                    make_trace_log(
+                        "2026-04-05T00:00:01.000000Z",
+                        "ERROR",
+                        "500 Internal Server Error: GET - /foo in 10ms",
+                        request={"headers": {"x-tenant-id": "tenant-a"}},
+                    )
+                ],
+                [
+                    make_trace_log(
+                        "2026-04-05T00:00:03.000000Z",
+                        "INFO",
+                        "200 OK: GET - /foo in 20ms",
+                        logger="access",
+                        request={"headers": {"x-tenant-id": "tenant-a"}},
+                    )
+                ],
+            ]
+        )
+
+        self.assertEqual(payload["cloudLogging"]["traceId"], "trace-123")
+        self.assertIn("lifecycle", payload)
+        self.assertIn("retryCheck", payload)
 
     def test_cmd_trace_json_includes_matched_log_analysis_without_trace_id(self):
         payload = self._run_trace_json(

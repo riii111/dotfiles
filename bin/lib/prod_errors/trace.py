@@ -75,7 +75,7 @@ def cmd_trace(args):
     )
     if not args.json:
         if lookup["service"] and lookup["service"] != "unknown":
-            print(f"- Service clue: {colors['dim'](lookup['service'])}")
+            print(f"- Service: {colors['dim'](lookup['service'])}")
         if lookup["traceId"]:
             print(f"- Cloud Trace ID: `{lookup['traceId']}`")
         else:
@@ -388,7 +388,7 @@ def _lookup_cloud_logging(project, token, filt, freshness):
         "service_name", resource_labels.get("configuration_name", "unknown")
     )
     matched_logs = [_summarize_log_entry(log_entry) for log_entry in logs]
-    trace_id = extract_trace_id(entry)
+    trace_id = _find_first_trace_id(logs)
     endpoint_candidates = _collect_endpoint_candidates(logs)
     message_variants = _collect_message_variants(matched_logs)
     logger_clues = _collect_logger_clues(matched_logs)
@@ -577,6 +577,13 @@ def _build_retry_contexts_by_trace_id(retry_logs):
     return contexts_by_trace_id
 
 
+def _find_first_trace_id(logs):
+    for log_entry in logs:
+        if trace_id := extract_trace_id(log_entry):
+            return trace_id
+    return None
+
+
 def _format_http_statuses(statuses):
     if not statuses:
         return ""
@@ -586,7 +593,6 @@ def _format_http_statuses(statuses):
 def _collect_endpoint_candidates(logs, limit=5):
     counts = Counter()
     statuses_by_endpoint = {}
-    order = []
 
     for log_entry in logs:
         request_info = _extract_http_request_info(log_entry)
@@ -594,8 +600,6 @@ def _collect_endpoint_candidates(logs, limit=5):
             continue
 
         endpoint = request_info["endpoint"]
-        if endpoint not in counts:
-            order.append(endpoint)
         counts[endpoint] += 1
 
         http_status = request_info["httpStatus"]
@@ -604,9 +608,7 @@ def _collect_endpoint_candidates(logs, limit=5):
             if http_status not in statuses:
                 statuses.append(http_status)
 
-    ranked = sorted(
-        order, key=lambda endpoint: (-counts[endpoint], order.index(endpoint))
-    )
+    ranked = sorted(counts, key=lambda endpoint: -counts[endpoint])
     return [
         {
             "endpoint": endpoint,
@@ -617,36 +619,29 @@ def _collect_endpoint_candidates(logs, limit=5):
     ]
 
 
-def _collect_message_variants(matched_logs, limit=5):
+def _rank_by_frequency(items, key_fn, limit=5):
     counts = Counter()
-    order = []
 
-    for log_entry in matched_logs:
-        message = log_entry.get("message", "").strip()
-        if not message:
+    for item in items:
+        value = key_fn(item)
+        if not value:
             continue
-        if message not in counts:
-            order.append(message)
-        counts[message] += 1
+        counts[value] += 1
 
-    ranked = sorted(order, key=lambda message: (-counts[message], order.index(message)))
-    return [{"value": message, "count": counts[message]} for message in ranked[:limit]]
+    ranked = sorted(counts, key=lambda value: -counts[value])
+    return [{"value": value, "count": counts[value]} for value in ranked[:limit]]
+
+
+def _collect_message_variants(matched_logs, limit=5):
+    return _rank_by_frequency(
+        matched_logs, lambda log_entry: log_entry.get("message", "").strip(), limit
+    )
 
 
 def _collect_logger_clues(matched_logs, limit=5):
-    counts = Counter()
-    order = []
-
-    for log_entry in matched_logs:
-        logger = log_entry.get("logger", "").strip()
-        if not logger:
-            continue
-        if logger not in counts:
-            order.append(logger)
-        counts[logger] += 1
-
-    ranked = sorted(order, key=lambda logger: (-counts[logger], order.index(logger)))
-    return [{"value": logger, "count": counts[logger]} for logger in ranked[:limit]]
+    return _rank_by_frequency(
+        matched_logs, lambda log_entry: log_entry.get("logger", "").strip(), limit
+    )
 
 
 def _coerce_http_status(value):
@@ -741,6 +736,8 @@ def _extract_retry_log_entry(log_entry, contexts_by_trace_id=None):
     if not request_info or request_info["endpoint"] is None:
         return None
 
+    # Endpoint-only entries still matter for the default matched-log analysis and
+    # for choosing retry targets, even when an HTTP status is not available yet.
     context = _extract_log_context(log_entry)
     if contexts_by_trace_id:
         trace_id = extract_trace_id(log_entry)
@@ -829,6 +826,8 @@ def _summarize_retry_logs(retry_logs, source_context):
         retry_context = retry_entry["context"]
         timestamp = retry_log.get("timestamp", "")
 
+        # Recovery counts require a concrete HTTP status; endpoint-only entries are
+        # kept earlier for extraction/fallback but are not counted here.
         if status is None:
             continue
         if 200 <= status < 300:
