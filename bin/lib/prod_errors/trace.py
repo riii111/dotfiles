@@ -28,7 +28,7 @@ from prod_errors.client import (
 from prod_errors.timefmt import format_jst_timestamp
 
 _MATCHED_LOG_FETCH_LIMIT = 5
-_ANALYSIS_DISPLAY_LIMIT = 5
+_ANALYSIS_DISPLAY_LIMIT = 3
 
 
 def cmd_trace(args):
@@ -81,25 +81,21 @@ def cmd_trace(args):
             print(f"- Service: {colors['dim'](lookup['service'])}")
         if lookup["traceId"]:
             print(f"- Cloud Trace ID: `{lookup['traceId']}`")
+            _print_primary_endpoint(lookup["endpointCandidates"])
+            _print_log_entries(
+                "### Matched Error Logs",
+                list(reversed(lookup["matchedEntries"])),
+                colors,
+            )
         else:
             print("- Cloud Trace ID: (not found)")
-        _print_endpoint_summary(lookup["endpointCandidates"])
-        _print_ranked_values("### Message Variants", lookup["messageVariants"], colors)
-        _print_ranked_values("### Logger Clues", lookup["loggerClues"], colors)
-        _print_log_entries(
-            "### Matched Error Logs",
-            list(reversed(lookup["matchedEntries"])),
-            colors,
-        )
+            _print_diagnostic_summary(lookup, colors)
 
     if not lookup["traceId"]:
         if args.json:
             print(json.dumps(result, indent=2, ensure_ascii=False))
         else:
-            print("\nCloud Trace ID was not found in the matched log entry.")
-            print(
-                "Request-lifecycle lookup is unavailable, but the matched error logs above can be used to inspect this hotspot."
-            )
+            print("\nCloud Trace ID was not found; Request Lifecycle is unavailable.")
         return
 
     try:
@@ -290,7 +286,7 @@ def _print_log_entries(title, entries, colors):
         )
 
 
-def _print_endpoint_summary(endpoint_candidates):
+def _print_primary_endpoint(endpoint_candidates):
     if not endpoint_candidates:
         print("- Endpoint: (not found)")
         return
@@ -300,21 +296,44 @@ def _print_endpoint_summary(endpoint_candidates):
     suffix = f" ({statuses})" if statuses else ""
     print(f"- Endpoint: `{primary['endpoint']}`{suffix}")
 
-    if len(endpoint_candidates) > 1:
-        print("\n### Endpoint Candidates\n")
-        for candidate in endpoint_candidates:
-            statuses = _format_http_statuses(candidate.get("httpStatuses", []))
-            detail = f" | {statuses}" if statuses else ""
-            print(f"  - `{candidate['endpoint']}` | {candidate['count']}{detail}")
-
 
 def _print_ranked_values(title, items, colors):
-    if not items:
-        return
-
     print(f"\n{colors['bold'](title)}\n")
+    if not items:
+        print("  - (not found)")
+        return
     for item in items:
         print(f"  - {item['value']} | {item['count']}")
+
+
+def _print_endpoint_candidates(title, endpoint_candidates, colors):
+    print(f"\n{colors['bold'](title)}\n")
+    if not endpoint_candidates:
+        print("  - (not found)")
+        return
+
+    for candidate in endpoint_candidates:
+        statuses = _format_http_statuses(candidate.get("httpStatuses", []))
+        detail = f" | {statuses}" if statuses else ""
+        print(f"  - `{candidate['endpoint']}` | {candidate['count']}{detail}")
+
+
+def _print_diagnostic_summary(lookup, colors):
+    print(f"\n{colors['bold']('### Diagnostic Summary')}\n")
+    service = (
+        lookup["service"]
+        if lookup["service"] and lookup["service"] != "unknown"
+        else "(unknown)"
+    )
+    print(f"- Service: {colors['dim'](service)}")
+    _print_endpoint_candidates(
+        "Endpoint Candidates", lookup["endpointCandidates"], colors
+    )
+    _print_ranked_values("Logger Clues", lookup["loggerClues"], colors)
+    _print_ranked_values("Message Variants", lookup["messageVariants"], colors)
+    _print_log_entries(
+        "### Matched Error Logs", list(reversed(lookup["matchedEntries"])), colors
+    )
 
 
 def _lookup_error_group(project, token, group_id):

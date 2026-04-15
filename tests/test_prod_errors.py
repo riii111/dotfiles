@@ -1113,15 +1113,20 @@ class ProdErrorsCommandTest(unittest.TestCase):
 
         output = stdout.getvalue()
         self.assertIn("## Error Group: g-trace", output)
-        self.assertIn("- Endpoint: (not found)", output)
+        self.assertIn("### Diagnostic Summary", output)
+        self.assertIn("- Service: svc-a", output)
+        self.assertIn("Endpoint Candidates", output)
+        self.assertIn("  - (not found)", output)
         self.assertIn("### Matched Error Logs", output)
         self.assertIn("[2026-04-05 09:00:00.000 JST]", output)
         self.assertIn("Cloud Trace ID: (not found)", output)
-        self.assertIn("Request-lifecycle lookup is unavailable", output)
+        self.assertIn(
+            "Cloud Trace ID was not found; Request Lifecycle is unavailable.", output
+        )
         self.assertNotIn("- Count:", output)
         self.assertNotIn("- First:", output)
         self.assertNotIn("- Last:", output)
-        self.assertIn("- Service: svc-a", output)
+        self.assertNotIn("### Request Lifecycle", output)
         self.assertNotIn("### Recent Events", output)
         self.assertNotIn("### Cloud Logging Lookup", output)
 
@@ -1215,9 +1220,14 @@ class ProdErrorsCommandTest(unittest.TestCase):
 
         output = stdout.getvalue()
         self.assertIn("- Cloud Trace ID: (not found)", output)
-        self.assertIn("- Endpoint: `/foo/bar?debug=true` (HTTP 503)", output)
+        self.assertIn("### Diagnostic Summary", output)
+        self.assertIn("Endpoint Candidates", output)
+        self.assertIn("`/foo/bar?debug=true` | 1 | HTTP 503", output)
         self.assertIn("### Matched Error Logs", output)
-        self.assertIn("Request-lifecycle lookup is unavailable", output)
+        self.assertIn(
+            "Cloud Trace ID was not found; Request Lifecycle is unavailable.", output
+        )
+        self.assertNotIn("### Request Lifecycle", output)
 
     @mock.patch("prod_errors.trace.get_token", return_value="token")
     @mock.patch("prod_errors.trace.api_get")
@@ -1277,18 +1287,19 @@ class ProdErrorsCommandTest(unittest.TestCase):
             cmd_trace(args)
 
         output = stdout.getvalue()
+        self.assertIn("### Diagnostic Summary", output)
         self.assertIn("- Service: svc-a", output)
-        self.assertIn("- Endpoint: `/foo` (HTTP 503, HTTP 500)", output)
-        self.assertIn("### Endpoint Candidates", output)
+        self.assertIn("Endpoint Candidates", output)
         self.assertIn("`/foo` | 2 | HTTP 503, HTTP 500", output)
         self.assertIn("`/bar` | 1 | HTTP 500", output)
-        self.assertIn("### Message Variants", output)
+        self.assertIn("Message Variants", output)
         self.assertIn("FooError: boom | 2", output)
         self.assertIn("BarError: timeout | 1", output)
-        self.assertIn("### Logger Clues", output)
+        self.assertIn("Logger Clues", output)
         self.assertIn("app | 2", output)
         self.assertIn("worker | 1", output)
         self.assertIn("### Matched Error Logs", output)
+        self.assertNotIn("### Request Lifecycle", output)
 
     def test_cmd_trace_json_uses_first_trace_id_found_in_matched_logs(self):
         payload = self._run_trace_json(
@@ -1409,6 +1420,7 @@ class ProdErrorsCommandTest(unittest.TestCase):
         )
 
         self.assertEqual(payload["cloudLogging"]["traceId"], None)
+        self.assertNotIn("lifecycle", payload)
         self.assertEqual(
             payload["cloudLogging"]["endpointCandidates"],
             [
@@ -1493,6 +1505,9 @@ class ProdErrorsCommandTest(unittest.TestCase):
         self.assertIn("- Endpoint: `/foo` (HTTP 500)", output)
         self.assertIn("### Retry Check", output)
         self.assertGreaterEqual(output.count("- Endpoint: `/foo`"), 2)
+        self.assertNotIn("### Diagnostic Summary", output)
+        self.assertNotIn("Logger Clues", output)
+        self.assertNotIn("Message Variants", output)
 
     def test_cmd_trace_json_ignores_retry_logs_without_http_status(self):
         payload = self._run_trace_json(
