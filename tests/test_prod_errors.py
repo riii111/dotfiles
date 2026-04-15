@@ -893,12 +893,15 @@ class ProdErrorsCommandTest(unittest.TestCase):
 
         output = stdout.getvalue()
         self.assertIn("## Error Group: g-trace", output)
-        self.assertIn("- First: 2026-04-01 09:00:00 JST", output)
-        self.assertIn("- Last:  2026-04-05 09:00:00 JST", output)
+        self.assertIn("- Endpoint: (not found)", output)
         self.assertIn("### Matched Error Logs", output)
         self.assertIn("[2026-04-05 09:00:00.000 JST]", output)
         self.assertIn("Cloud Trace ID: (not found)", output)
         self.assertIn("Request-lifecycle lookup is unavailable", output)
+        self.assertNotIn("- Count:", output)
+        self.assertNotIn("- First:", output)
+        self.assertNotIn("- Last:", output)
+        self.assertNotIn("- Service:", output)
         self.assertNotIn("### Recent Events", output)
         self.assertNotIn("### Cloud Logging Lookup", output)
 
@@ -949,6 +952,52 @@ class ProdErrorsCommandTest(unittest.TestCase):
         self.assertIn("### Recent Events (1)", output)
         self.assertIn("2026-04-05 09:00:00 JST", output)
         self.assertNotIn("### Matched Error Logs", output)
+
+    @mock.patch("prod_errors.trace.get_token", return_value="token")
+    @mock.patch("prod_errors.trace.api_get")
+    @mock.patch("prod_errors.trace.api_get_all_pages")
+    @mock.patch("prod_errors.trace.logging_read")
+    def test_cmd_trace_extracts_endpoint_from_matched_log_without_cloud_trace_id(
+        self,
+        mock_logging_read,
+        mock_api_get_all_pages,
+        mock_api_get,
+        _mock_get_token,
+    ):
+        mock_api_get_all_pages.return_value = self._DEFAULT_GROUPS
+        mock_api_get.return_value = self._DEFAULT_EVENTS
+        mock_logging_read.return_value = [
+            {
+                "timestamp": "2026-04-05T00:00:00.000000Z",
+                "severity": "ERROR",
+                "resource": {"labels": {"service_name": "svc-a"}},
+                "jsonPayload": {
+                    "message": "FooError: boom",
+                    "logger": "app",
+                    "request": {
+                        "path": "/foo/bar?debug=true",
+                        "status": 503,
+                    },
+                },
+            }
+        ]
+
+        args = argparse.Namespace(
+            project="demo",
+            group_id="g-trace",
+            json=False,
+            freshness="30d",
+        )
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            cmd_trace(args)
+
+        output = stdout.getvalue()
+        self.assertIn("- Cloud Trace ID: (not found)", output)
+        self.assertIn("- Endpoint: `/foo/bar?debug=true` (HTTP 503)", output)
+        self.assertIn("### Matched Error Logs", output)
+        self.assertIn("Request-lifecycle lookup is unavailable", output)
 
     def test_cmd_trace_json_includes_lifecycle_and_retry_check(self):
         payload = self._run_trace_json(

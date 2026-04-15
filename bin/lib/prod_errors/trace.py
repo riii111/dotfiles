@@ -1,6 +1,7 @@
 import json
 import re
 import sys
+from urllib.parse import urlparse
 
 from prod_errors.ansi import (
     _BOLD,
@@ -33,7 +34,7 @@ def cmd_trace(args):
     result, first_line, known_service = _build_trace_result(args.group_id, target)
 
     if not args.json:
-        _print_trace_header(args.group_id, target, known_service, colors)
+        _print_trace_header(args.group_id, colors)
 
     events = _load_recent_events(args.project, token, args.group_id)
     result["recentEvents"] = events
@@ -69,11 +70,22 @@ def cmd_trace(args):
         }
     )
     if not args.json:
-        print(f"- Service: {colors['bold'](lookup['service'])}")
         if lookup["traceId"]:
             print(f"- Cloud Trace ID: `{lookup['traceId']}`")
         else:
             print("- Cloud Trace ID: (not found)")
+        matched_endpoint, _, matched_http_status = _extract_retry_context(
+            [], lookup["logs"]
+        )
+        if matched_endpoint:
+            http_status_suffix = (
+                f" (HTTP {matched_http_status})"
+                if matched_http_status is not None
+                else ""
+            )
+            print(f"- Endpoint: `{matched_endpoint}`{http_status_suffix}")
+        else:
+            print("- Endpoint: (not found)")
         _print_log_entries(
             "### Matched Error Logs",
             list(reversed(lookup["matchedEntries"])),
@@ -305,20 +317,8 @@ def _build_trace_result(group_id, target):
     return result, first_line, known_service
 
 
-def _print_trace_header(group_id, target, known_service, colors):
+def _print_trace_header(group_id, colors):
     print(f"{colors['bold']('## Error Group:')} {colors['cyan'](group_id)}\n")
-    print(
-        f"- Message: {target.get('representative', {}).get('message', '').splitlines()[0][:120]}"
-    )
-    print(f"- Count: {target.get('count', '0')}")
-    print(
-        f"- First: {format_jst_timestamp(target.get('firstSeenTime', ''), include_seconds=True)}"
-    )
-    print(
-        f"- Last:  {format_jst_timestamp(target.get('lastSeenTime', ''), include_seconds=True)}"
-    )
-    if known_service:
-        print(f"- Service (from Error Reporting): {colors['dim'](known_service)}")
 
 
 def _load_recent_events(project, token, group_id):
@@ -450,6 +450,24 @@ _ACCESS_LOG_RE = re.compile(
 )
 _MAX_CONTEXT_DEPTH = 12
 
+_ENDPOINT_CANDIDATE_FIELDS = (
+    "path",
+    "requestPath",
+    "request_path",
+    "endpoint",
+    "uri",
+    "url",
+    "requestUrl",
+    "request_url",
+)
+_STATUS_CANDIDATE_FIELDS = (
+    "status",
+    "statusCode",
+    "status_code",
+    "httpStatus",
+    "http_status",
+)
+
 
 def _normalize_context_key(key):
     return re.sub(r"[^a-z0-9]", "", str(key).lower())
@@ -529,6 +547,75 @@ def _build_retry_contexts_by_trace_id(retry_logs):
     return contexts_by_trace_id
 
 
+def _coerce_http_status(value):
+    if value in (None, ""):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _normalize_endpoint_value(value):
+    if value in (None, ""):
+        return None
+
+    text = str(value).strip()
+    if not text:
+        return None
+
+    parsed = urlparse(text)
+    if parsed.scheme and parsed.netloc:
+        path = parsed.path or "/"
+        if parsed.query:
+            return f"{path}?{parsed.query}"
+        return path
+
+    return text
+
+
+def _extract_http_request_info(log_entry):
+    payload = log_entry.get("jsonPayload", {})
+    raw = payload.get("message", "") or log_entry.get("textPayload", "")
+    message = strip_ansi(raw)
+    match = _ACCESS_LOG_RE.search(message)
+    if match:
+        return {
+            "httpStatus": int(match.group(1)),
+            "endpoint": match.group(3).strip(),
+        }
+
+    candidates = [log_entry.get("httpRequest", {}), payload.get("httpRequest", {})]
+    if isinstance(payload.get("request"), dict):
+        candidates.append(payload["request"])
+    for candidate in candidates:
+        if not isinstance(candidate, dict):
+            continue
+        endpoint = next(
+            (
+                _normalize_endpoint_value(candidate.get(field))
+                for field in _ENDPOINT_CANDIDATE_FIELDS
+                if _normalize_endpoint_value(candidate.get(field))
+            ),
+            None,
+        )
+        http_status = next(
+            (
+                _coerce_http_status(candidate.get(field))
+                for field in _STATUS_CANDIDATE_FIELDS
+                if _coerce_http_status(candidate.get(field)) is not None
+            ),
+            None,
+        )
+        if endpoint:
+            return {
+                "httpStatus": http_status,
+                "endpoint": endpoint,
+            }
+
+    return None
+
+
 def _match_same_tenant(source_context, retry_context):
     source_tenant = source_context.get("tenantId")
     retry_tenant = retry_context.get("tenantId")
@@ -547,11 +634,8 @@ def _match_same_caller(source_context, retry_context):
 
 
 def _extract_retry_log_entry(log_entry, contexts_by_trace_id=None):
-    payload = log_entry.get("jsonPayload", {})
-    raw = payload.get("message", "") or log_entry.get("textPayload", "")
-    message = strip_ansi(raw)
-    match = _ACCESS_LOG_RE.search(message)
-    if not match:
+    request_info = _extract_http_request_info(log_entry)
+    if not request_info or request_info["endpoint"] is None:
         return None
 
     context = _extract_log_context(log_entry)
@@ -563,8 +647,8 @@ def _extract_retry_log_entry(log_entry, contexts_by_trace_id=None):
 
     return {
         "timestamp": log_entry.get("timestamp", ""),
-        "httpStatus": int(match.group(1)),
-        "endpoint": match.group(3).strip(),
+        "httpStatus": request_info["httpStatus"],
+        "endpoint": request_info["endpoint"],
         "context": context,
     }
 
@@ -574,22 +658,33 @@ def _extract_retry_context(trace_logs, logs):
     error_timestamp = None
     http_status = None
     error_timestamps = []
-    access_logs = []
+    trace_access_logs = []
+    matched_access_logs = []
 
     for trace_log in trace_logs:
         if trace_log.get("severity", "") in ("ERROR", "CRITICAL"):
             error_timestamps.append(trace_log.get("timestamp", ""))
         access_log = _extract_retry_log_entry(trace_log)
         if access_log:
-            access_logs.append(access_log)
+            trace_access_logs.append(access_log)
+
+    for log_entry in logs:
+        access_log = _extract_retry_log_entry(log_entry)
+        if access_log:
+            matched_access_logs.append(access_log)
 
     if error_timestamps:
         error_timestamp = error_timestamps[0]
     elif logs:
         error_timestamp = logs[0].get("timestamp", "")
 
+    access_logs = trace_access_logs or matched_access_logs
     if access_logs:
-        errors_5xx = [log for log in access_logs if log["httpStatus"] >= 500]
+        errors_5xx = [
+            log
+            for log in access_logs
+            if log["httpStatus"] is not None and log["httpStatus"] >= 500
+        ]
         chosen = errors_5xx[0] if errors_5xx else access_logs[0]
         endpoint = chosen["endpoint"]
         http_status = chosen["httpStatus"]
