@@ -176,7 +176,7 @@ def extract_review_pr_number(path, repo_root):
     path = path.resolve()
     repo_root = repo_root.resolve()
     pattern = rf"^{re.escape(repo_root.name)}-pr-(\d+)$"
-    if path.parent != repo_root.parent.resolve():
+    if path.parent != repo_root.parent:
         return None
     match = re.match(pattern, path.name)
     if match is None:
@@ -186,8 +186,9 @@ def extract_review_pr_number(path, repo_root):
 
 def parse_origin_repo():
     url = git_output("remote", "get-url", "origin")
-    if url.startswith("git@github.com:"):
-        path = url.split(":", 1)[1]
+    ssh_match = re.match(r"^git@[^:]*github\.com[^:]*:(.+)$", url)
+    if ssh_match is not None:
+        path = ssh_match.group(1)
     elif "github.com/" in url:
         path = url.split("github.com/", 1)[1]
     else:
@@ -315,15 +316,16 @@ def pr_states(pr_numbers):
     return states
 
 
-def review_pr_states_for_entries(entries, repo_root):
-    pr_numbers = []
+def review_pr_numbers_by_path(entries, repo_root):
+    pr_numbers_by_path = {}
     for entry in entries:
         if not entry["detached"]:
             continue
-        pr_number = extract_review_pr_number(Path(entry["path"]), repo_root)
+        path = str(Path(entry["path"]).resolve())
+        pr_number = extract_review_pr_number(Path(path), repo_root)
         if pr_number is not None:
-            pr_numbers.append(pr_number)
-    return pr_states(pr_numbers)
+            pr_numbers_by_path[path] = pr_number
+    return pr_numbers_by_path
 
 
 def candidate_reason(
@@ -399,7 +401,8 @@ def main(argv):
         entries = worktrees()
         branch_info = branch_details()
         base_branch, base_ref = default_branch()
-        review_pr_states = review_pr_states_for_entries(entries, repo_root)
+        review_pr_numbers = review_pr_numbers_by_path(entries, repo_root)
+        review_pr_states = pr_states(review_pr_numbers.values())
 
         lines = []
         removed = 0
@@ -411,9 +414,7 @@ def main(argv):
         for entry in entries:
             name = worktree_name(entry)
             path = Path(entry["path"]).resolve()
-            review_pr_number = (
-                extract_review_pr_number(path, repo_root) if entry["detached"] else None
-            )
+            review_pr_number = review_pr_numbers.get(str(path))
             reason = candidate_reason(
                 entry,
                 path,
@@ -435,7 +436,10 @@ def main(argv):
             if reason in {
                 REASON_GONE_BRANCH_WORKTREE,
                 REASON_MERGED_BRANCH_WORKTREE,
-            } or (reason == REASON_PRUNABLE and bool(entry["branch"])):
+            } or (
+                # Pruning stale worktree metadata still leaves the local branch behind.
+                reason == REASON_PRUNABLE and bool(entry["branch"])
+            ):
                 should_show_branch_hint = True
 
             if path == current:

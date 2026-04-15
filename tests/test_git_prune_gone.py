@@ -54,6 +54,9 @@ class GitPruneGoneTest(unittest.TestCase):
         self.git("add", name, cwd=cwd)
         self.git("commit", "-m", message, cwd=cwd)
 
+    def load_wt_module(self):
+        return load_script_module(self.id(), WT_SCRIPT)
+
     def create_tracked_branch(self, name):
         self.git("checkout", "-b", name)
         self.commit_file(f"{name}.txt", f"{name}\n", name)
@@ -61,6 +64,14 @@ class GitPruneGoneTest(unittest.TestCase):
 
     def delete_remote_branch(self, name):
         self.git("push", "origin", "--delete", name)
+
+    def create_gone_worktree(self, name, worktree_dir=None):
+        self.create_tracked_branch(name)
+        self.git("checkout", "main")
+        worktree_path = (worktree_dir or self.root) / name
+        self.git("worktree", "add", str(worktree_path), name)
+        self.delete_remote_branch(name)
+        return worktree_path
 
     def set_origin_head(self, branch="main"):
         subprocess.run(
@@ -184,6 +195,16 @@ class GitPruneGoneTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertEqual(result.stdout.strip(), "No stale branches found")
 
+    def test_branch_script_removes_orphan_slot_branch(self):
+        self.git("checkout", "-b", "_slot-abc123")
+        self.commit_file("slot.txt", "slot\n", "slot")
+        self.git("checkout", "main")
+
+        result = self.run_script(BR_SCRIPT, "--dry-run", "--no-fetch")
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("Would remove (orphan slot branch): _slot-abc123", result.stdout)
+
     def test_branch_script_ignores_non_stale_worktree_branch(self):
         self.create_tracked_branch("active-worktree-branch")
         self.git("checkout", "main")
@@ -204,11 +225,7 @@ class GitPruneGoneTest(unittest.TestCase):
         self.assertEqual(result.stdout.strip(), "No stale branches found")
 
     def test_worktree_script_removes_only_worktree(self):
-        self.create_tracked_branch("gone-worktree")
-        self.git("checkout", "main")
-        worktree_path = self.root / "gone-worktree"
-        self.git("worktree", "add", str(worktree_path), "gone-worktree")
-        self.delete_remote_branch("gone-worktree")
+        worktree_path = self.create_gone_worktree("gone-worktree")
 
         dry_run = self.run_script(WT_SCRIPT, "--dry-run")
         self.assertEqual(dry_run.returncode, 0)
@@ -234,11 +251,7 @@ class GitPruneGoneTest(unittest.TestCase):
         self.assertIn("gone-worktree", self.git("branch", "--list", "gone-worktree"))
 
     def test_worktree_script_skips_dirty_worktree(self):
-        self.create_tracked_branch("dirty-worktree")
-        self.git("checkout", "main")
-        worktree_path = self.root / "dirty-worktree"
-        self.git("worktree", "add", str(worktree_path), "dirty-worktree")
-        self.delete_remote_branch("dirty-worktree")
+        worktree_path = self.create_gone_worktree("dirty-worktree")
         (worktree_path / "dirty.txt").write_text("dirty\n", encoding="utf-8")
 
         result = self.run_script(WT_SCRIPT, "--dry-run")
@@ -248,12 +261,8 @@ class GitPruneGoneTest(unittest.TestCase):
         self.assertTrue(worktree_path.exists())
 
     def test_worktree_script_skips_locked_worktree(self):
-        self.create_tracked_branch("locked-worktree")
-        self.git("checkout", "main")
-        worktree_path = self.root / "locked-worktree"
-        self.git("worktree", "add", str(worktree_path), "locked-worktree")
+        worktree_path = self.create_gone_worktree("locked-worktree")
         self.git("worktree", "lock", str(worktree_path))
-        self.delete_remote_branch("locked-worktree")
 
         result = self.run_script(WT_SCRIPT, "--dry-run")
 
@@ -458,7 +467,7 @@ class GitPruneGoneTest(unittest.TestCase):
         self.assertEqual(result.stdout.strip(), "No gone worktrees found")
 
     def test_worktree_script_batches_pr_state_queries(self):
-        module = load_script_module("git_prune_gone_wt_test", WT_SCRIPT)
+        module = self.load_wt_module()
         calls = []
 
         def fake_run(args, **kwargs):
@@ -502,7 +511,7 @@ class GitPruneGoneTest(unittest.TestCase):
         self.assertEqual(len(graphql_calls), 1)
 
     def test_worktree_script_reads_github_users_from_json_status(self):
-        module = load_script_module("git_prune_gone_wt_test_auth", WT_SCRIPT)
+        module = self.load_wt_module()
         payload = {
             "hosts": {
                 "github.com": [
@@ -527,7 +536,7 @@ class GitPruneGoneTest(unittest.TestCase):
         self.assertEqual(users, ["riii111", "ichinose_sansan"])
 
     def test_worktree_script_warns_when_pr_state_lookup_fails(self):
-        module = load_script_module("git_prune_gone_wt_test_warning", WT_SCRIPT)
+        module = self.load_wt_module()
         stderr = io.StringIO()
 
         with (
@@ -552,10 +561,17 @@ class GitPruneGoneTest(unittest.TestCase):
         )
 
     def test_worktree_script_parses_origin_repo_urls(self):
-        module = load_script_module("git_prune_gone_wt_test_origin", WT_SCRIPT)
+        module = self.load_wt_module()
 
         with mock.patch.object(
             module, "git_output", return_value="git@github.com:owner/repo.git"
+        ):
+            self.assertEqual(module.parse_origin_repo(), ("owner", "repo"))
+
+        with mock.patch.object(
+            module,
+            "git_output",
+            return_value="git@github.com-riii111:owner/repo.git",
         ):
             self.assertEqual(module.parse_origin_repo(), ("owner", "repo"))
 
