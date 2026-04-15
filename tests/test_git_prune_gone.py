@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import subprocess
 import tempfile
 import unittest
@@ -60,7 +61,7 @@ class GitPruneGoneTest(unittest.TestCase):
     def delete_remote_branch(self, name):
         self.git("push", "origin", "--delete", name)
 
-    def set_stale_origin_head(self, branch="master"):
+    def set_origin_head(self, branch="main"):
         subprocess.run(
             [
                 "git",
@@ -152,9 +153,26 @@ class GitPruneGoneTest(unittest.TestCase):
         self.commit_file("merged-local.txt", "merged-local\n", "merged-local")
         self.git("checkout", "main")
         self.git("merge", "--ff-only", "merged-local")
-        self.set_stale_origin_head()
+        self.set_origin_head("master")
 
         result = self.run_script(BR_SCRIPT, "--dry-run")
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("Would remove (merged branch): merged-local", result.stdout)
+
+    def test_branch_script_uses_origin_head_when_local_default_branch_is_missing(self):
+        self.git("checkout", "-b", "current-feature")
+        self.git("checkout", "main")
+        self.git("checkout", "-b", "merged-local")
+        self.commit_file("merged-local.txt", "merged-local\n", "merged-local")
+        self.git("checkout", "main")
+        self.git("merge", "--ff-only", "merged-local")
+        self.git("push", "origin", "main")
+        self.git("checkout", "current-feature")
+        self.git("branch", "-D", "main")
+        self.set_origin_head("main")
+
+        result = self.run_script(BR_SCRIPT, "--dry-run", "--no-fetch")
 
         self.assertEqual(result.returncode, 0)
         self.assertIn("Would remove (merged branch): merged-local", result.stdout)
@@ -289,13 +307,38 @@ class GitPruneGoneTest(unittest.TestCase):
         self.commit_file("merged-codex.txt", "merged-codex\n", "merged-codex")
         self.git("checkout", "main")
         self.git("merge", "--ff-only", "merged-codex")
-        self.set_stale_origin_head()
+        self.set_origin_head("master")
 
         worktree_path = self.repo / ".codex" / "worktrees" / "merged-codex"
         worktree_path.parent.mkdir(parents=True, exist_ok=True)
         self.git("worktree", "add", str(worktree_path), "merged-codex")
 
         result = self.run_script(WT_SCRIPT, "--dry-run")
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn(
+            "Would remove (merged branch worktree): merged-codex", result.stdout
+        )
+
+    def test_worktree_script_uses_origin_head_when_local_default_branch_is_missing(
+        self,
+    ):
+        self.git("checkout", "-b", "current-feature")
+        self.git("checkout", "main")
+        self.git("checkout", "-b", "merged-codex")
+        self.commit_file("merged-codex.txt", "merged-codex\n", "merged-codex")
+        self.git("checkout", "main")
+        self.git("merge", "--ff-only", "merged-codex")
+        self.git("push", "origin", "main")
+        self.git("checkout", "current-feature")
+        self.git("branch", "-D", "main")
+        self.set_origin_head("main")
+
+        worktree_path = self.repo / ".codex" / "worktrees" / "merged-codex"
+        worktree_path.parent.mkdir(parents=True, exist_ok=True)
+        self.git("worktree", "add", str(worktree_path), "merged-codex")
+
+        result = self.run_script(WT_SCRIPT, "--dry-run", "--no-fetch")
 
         self.assertEqual(result.returncode, 0)
         self.assertIn(
@@ -328,6 +371,16 @@ class GitPruneGoneTest(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0)
         self.assertIn("Skipped (open pr): repo-pr-123", result.stdout)
+
+    def test_worktree_script_keeps_detached_managed_worktree(self):
+        worktree_path = self.repo / ".codex" / "worktrees" / "detached-codex"
+        worktree_path.parent.mkdir(parents=True, exist_ok=True)
+        self.git("worktree", "add", "--detach", str(worktree_path), "HEAD")
+
+        result = self.run_script(WT_SCRIPT, "--dry-run", "--no-fetch")
+
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout.strip(), "No gone worktrees found")
 
     def test_worktree_script_removes_closed_pr_review_worktree(self):
         worktree_path = self.root / f"{self.repo.name}-pr-123"
@@ -389,7 +442,7 @@ class GitPruneGoneTest(unittest.TestCase):
                 return subprocess.CompletedProcess(
                     args,
                     0,
-                    stdout=os.linesep.join([__import__("json").dumps(payload)]),
+                    stdout=os.linesep.join([json.dumps(payload)]),
                     stderr="",
                 )
             self.fail(f"unexpected subprocess.run call: {args}")
@@ -404,6 +457,31 @@ class GitPruneGoneTest(unittest.TestCase):
         self.assertEqual(states, {123: "OPEN", 456: "MERGED"})
         graphql_calls = [args for args in calls if args[:3] == ["gh", "api", "graphql"]]
         self.assertEqual(len(graphql_calls), 1)
+
+    def test_worktree_script_reads_github_users_from_json_status(self):
+        module = load_script_module("git_prune_gone_wt_test_auth", WT_SCRIPT)
+        payload = {
+            "hosts": {
+                "github.com": [
+                    {"login": "riii111", "active": True},
+                    {"login": "ichinose_sansan", "active": False},
+                ]
+            }
+        }
+
+        with mock.patch.object(
+            module.subprocess,
+            "run",
+            return_value=subprocess.CompletedProcess(
+                ["gh", "auth", "status", "--json", "hosts"],
+                0,
+                stdout=json.dumps(payload),
+                stderr="",
+            ),
+        ):
+            users = module.gh_auth_users()
+
+        self.assertEqual(users, ["riii111", "ichinose_sansan"])
 
     def test_worktree_script_reports_no_gone_worktrees(self):
         result = self.run_script(WT_SCRIPT, "--dry-run")

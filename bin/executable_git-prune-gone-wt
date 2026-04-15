@@ -136,10 +136,6 @@ def default_branch():
         if git_run("show-ref", "--verify", f"refs/heads/{candidate}").returncode == 0:
             return candidate, candidate
 
-    current = git_output("branch", "--show-current")
-    if current:
-        return current, current
-
     try:
         origin_head = git_output("symbolic-ref", "refs/remotes/origin/HEAD")
         prefix = "refs/remotes/origin/"
@@ -154,6 +150,10 @@ def default_branch():
                 return None, f"origin/{remote_branch}"
     except subprocess.CalledProcessError:
         pass
+
+    current = git_output("branch", "--show-current")
+    if current:
+        return current, current
 
     raise subprocess.CalledProcessError(
         returncode=1,
@@ -197,20 +197,25 @@ def parse_origin_repo():
 
 def gh_auth_users():
     result = subprocess.run(
-        ["gh", "auth", "status"],
+        ["gh", "auth", "status", "--json", "hosts"],
         text=True,
         check=False,
         stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
+        stderr=subprocess.PIPE,
     )
     if result.returncode != 0:
         return []
 
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return []
+
     users = []
-    prefix = "  ✓ Logged in to github.com account "
-    for line in result.stdout.splitlines():
-        if line.startswith(prefix):
-            users.append(line[len(prefix) :].split(" ", 1)[0])
+    for account in payload.get("hosts", {}).get("github.com", []):
+        login = account.get("login")
+        if login:
+            users.append(login)
     return users
 
 
@@ -294,6 +299,66 @@ def pr_states(pr_numbers):
     return states
 
 
+def review_pr_states_for_entries(entries, repo_root):
+    pr_numbers = []
+    for entry in entries:
+        if not entry["detached"]:
+            continue
+        pr_number = extract_review_pr_number(Path(entry["path"]), repo_root)
+        if pr_number is not None:
+            pr_numbers.append(pr_number)
+    return pr_states(pr_numbers)
+
+
+def candidate_reason(
+    entry, repo_root, branch_info, base_branch, base_ref, review_pr_states
+):
+    branch = entry["branch"]
+    path = Path(entry["path"]).resolve()
+    info = branch_info.get(branch or "", {"upstream": "", "track": ""})
+
+    if entry["prunable"]:
+        return "prunable"
+
+    if bool(branch) and info["track"] == "[gone]":
+        return "gone branch worktree"
+
+    if bool(branch) and is_managed_worktree_path(path, repo_root):
+        branch_name = branch.removeprefix("refs/heads/")
+        is_default_branch = base_branch is not None and branch_name == base_branch
+        if (
+            not info["upstream"]
+            and not is_default_branch
+            and is_merged_into(base_ref, branch_name)
+        ):
+            return "merged branch worktree"
+
+    if entry["detached"]:
+        pr_number = extract_review_pr_number(path, repo_root)
+        if pr_number is not None:
+            review_pr_state = review_pr_states.get(pr_number)
+            if review_pr_state in {"CLOSED", "MERGED"}:
+                return "closed pr worktree"
+
+    return None
+
+
+def skip_reason_for_non_candidate(entry, repo_root, review_pr_states):
+    if not entry["detached"]:
+        return None
+
+    pr_number = extract_review_pr_number(Path(entry["path"]), repo_root)
+    if pr_number is None:
+        return None
+
+    review_pr_state = review_pr_states.get(pr_number)
+    if review_pr_state == "OPEN":
+        return "open pr"
+    if review_pr_state is None:
+        return "unknown pr"
+    return None
+
+
 def main(argv):
     try:
         args = parse_args(argv)
@@ -318,14 +383,7 @@ def main(argv):
         entries = worktrees()
         branch_info = branch_details()
         base_branch, base_ref = default_branch()
-        review_pr_states = pr_states(
-            [
-                extract_review_pr_number(Path(entry["path"]), repo_root)
-                for entry in entries
-                if entry["detached"]
-                and extract_review_pr_number(Path(entry["path"]), repo_root) is not None
-            ]
-        )
+        review_pr_states = review_pr_states_for_entries(entries, repo_root)
 
         lines = []
         removed = 0
@@ -335,52 +393,21 @@ def main(argv):
         should_show_branch_hint = False
 
         for entry in entries:
-            branch = entry["branch"]
-            is_prunable = entry["prunable"]
-
             name = worktree_name(entry)
             path = Path(entry["path"]).resolve()
-            info = branch_info.get(branch or "", {"upstream": "", "track": ""})
-            is_managed_branch_worktree = bool(branch) and is_managed_worktree_path(
-                path, repo_root
+            reason = candidate_reason(
+                entry, repo_root, branch_info, base_branch, base_ref, review_pr_states
             )
-            is_gone_branch = bool(branch) and info["track"] == "[gone]"
-            is_merged_managed_branch = (
-                is_managed_branch_worktree
-                and not info["upstream"]
-                and branch != f"refs/heads/{base_branch}"
-                and is_merged_into(base_ref, branch.removeprefix("refs/heads/"))
-            )
-            review_pr_number = (
-                extract_review_pr_number(path, repo_root) if entry["detached"] else None
-            )
-            review_pr_state = (
-                review_pr_states.get(review_pr_number)
-                if review_pr_number is not None
-                else None
-            )
-            is_closed_review_worktree = review_pr_state in {"CLOSED", "MERGED"}
-
-            if not any(
-                (
-                    is_prunable,
-                    is_gone_branch,
-                    is_merged_managed_branch,
-                    is_closed_review_worktree,
+            if reason is None:
+                skip_reason = skip_reason_for_non_candidate(
+                    entry, repo_root, review_pr_states
                 )
-            ):
-                if review_pr_number is not None:
-                    if review_pr_state == "OPEN":
-                        lines.append(style(YELLOW, f"Skipped (open pr): {name}"))
-                        skipped += 1
-                    elif review_pr_state is None:
-                        lines.append(style(YELLOW, f"Skipped (unknown pr): {name}"))
-                        skipped += 1
+                if skip_reason is not None:
+                    lines.append(style(YELLOW, f"Skipped ({skip_reason}): {name}"))
+                    skipped += 1
                 continue
-            if (
-                is_gone_branch
-                or is_merged_managed_branch
-                or (is_prunable and bool(branch))
+            if reason in {"gone branch worktree", "merged branch worktree"} or (
+                reason == "prunable" and bool(entry["branch"])
             ):
                 should_show_branch_hint = True
 
@@ -396,7 +423,7 @@ def main(argv):
                 lines.append(style(YELLOW, f"Skipped (locked): {name}"))
                 skipped += 1
                 continue
-            if is_prunable:
+            if reason == "prunable":
                 if args.dry_run:
                     lines.append(style(GREEN, f"Would prune (worktree): {name}"))
                     removed += 1
@@ -407,14 +434,6 @@ def main(argv):
                 lines.append(style(YELLOW, f"Skipped (dirty): {name}"))
                 skipped += 1
                 continue
-
-            reason = "worktree"
-            if is_gone_branch:
-                reason = "gone branch worktree"
-            elif is_merged_managed_branch:
-                reason = "merged branch worktree"
-            elif is_closed_review_worktree:
-                reason = "closed pr worktree"
 
             if args.dry_run:
                 lines.append(style(GREEN, f"Would remove ({reason}): {name}"))

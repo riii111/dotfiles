@@ -69,10 +69,6 @@ def default_branch():
         if git_run("show-ref", "--verify", f"refs/heads/{candidate}").returncode == 0:
             return candidate, candidate
 
-    current = git_output("branch", "--show-current")
-    if current:
-        return current, current
-
     try:
         origin_head = git_output("symbolic-ref", "refs/remotes/origin/HEAD")
         prefix = "refs/remotes/origin/"
@@ -87,6 +83,10 @@ def default_branch():
                 return None, f"origin/{remote_branch}"
     except subprocess.CalledProcessError:
         pass
+
+    current = git_output("branch", "--show-current")
+    if current:
+        return current, current
 
     raise subprocess.CalledProcessError(
         returncode=1,
