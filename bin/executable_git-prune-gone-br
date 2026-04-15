@@ -129,10 +129,6 @@ def main(argv):
             branch = detail["branch"]
             if base_branch is not None and branch == base_branch:
                 continue
-            if branch in active_worktrees:
-                lines.append(style(YELLOW, f"Skipped (worktree): {branch}"))
-                skipped += 1
-                continue
 
             reason = None
             delete_args = ("branch", "-D", branch)
@@ -145,6 +141,10 @@ def main(argv):
                 reason = "orphan slot branch"
 
             if reason is None:
+                continue
+            if branch in active_worktrees:
+                lines.append(style(YELLOW, f"Skipped (worktree): {branch}"))
+                skipped += 1
                 continue
 
             if args.dry_run:

@@ -184,6 +184,17 @@ class GitPruneGoneTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertEqual(result.stdout.strip(), "No stale branches found")
 
+    def test_branch_script_ignores_non_stale_worktree_branch(self):
+        self.create_tracked_branch("active-worktree-branch")
+        self.git("checkout", "main")
+        worktree_path = self.root / "active-worktree-branch"
+        self.git("worktree", "add", str(worktree_path), "active-worktree-branch")
+
+        result = self.run_script(BR_SCRIPT, "--dry-run", "--no-fetch")
+
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout.strip(), "No stale branches found")
+
     def test_branch_script_skips_fetch_when_no_fetch_is_set(self):
         self.git("remote", "set-url", "origin", "ssh://invalid.example/repo.git")
 
