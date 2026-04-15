@@ -539,12 +539,12 @@ class ProdErrorsCommandTest(unittest.TestCase):
         "prod_errors.commands._find_prior_occurrences",
         return_value={"g-open": False},
     )
-    @mock.patch("prod_errors.commands.api_get_all_pages")
+    @mock.patch("prod_errors.commands.api_get_all_pages_with_progress")
     @mock.patch("prod_errors.commands.logging_list_all")
     def test_cmd_hotspots_json_filters_status_and_uses_buckets(
         self,
         mock_logging_list_all,
-        mock_api_get_all_pages,
+        mock_api_get_all_pages_with_progress,
         _mock_find_prior_occurrences,
         _mock_get_token,
     ):
@@ -559,7 +559,7 @@ class ProdErrorsCommandTest(unittest.TestCase):
                 "svc-b",
             ),
         ]
-        mock_api_get_all_pages.return_value = [
+        mock_api_get_all_pages_with_progress.return_value = [
             make_group(
                 "g-open",
                 "OPEN",
@@ -611,18 +611,18 @@ class ProdErrorsCommandTest(unittest.TestCase):
         "prod_errors.commands._find_prior_occurrences",
         return_value={"g-open": False},
     )
-    @mock.patch("prod_errors.commands.api_get_all_pages")
+    @mock.patch("prod_errors.commands.api_get_all_pages_with_progress")
     @mock.patch("prod_errors.commands.logging_list_all")
     def test_cmd_hotspots_output_uses_jst_and_relative_last_seen(
         self,
         mock_logging_list_all,
-        mock_api_get_all_pages,
+        mock_api_get_all_pages_with_progress,
         _mock_find_prior_occurrences,
         _mock_get_token,
         mock_now_utc,
     ):
         mock_now_utc.return_value = datetime(2026, 4, 5, 0, 18, tzinfo=timezone.utc)
-        mock_api_get_all_pages.return_value = [
+        mock_api_get_all_pages_with_progress.return_value = [
             make_group(
                 "g-open",
                 "OPEN",
@@ -668,12 +668,12 @@ class ProdErrorsCommandTest(unittest.TestCase):
         "prod_errors.commands._find_prior_occurrences",
         return_value={},
     )
-    @mock.patch("prod_errors.commands.api_get_all_pages", return_value=[])
+    @mock.patch("prod_errors.commands.api_get_all_pages_with_progress", return_value=[])
     @mock.patch("prod_errors.commands.logging_list_all", return_value=[])
     def test_cmd_hotspots_json_keeps_empty_summary_shape(
         self,
         _mock_logging_list_all,
-        _mock_api_get_all_pages,
+        _mock_api_get_all_pages_with_progress,
         _mock_find_prior_occurrences,
         _mock_get_token,
     ):
@@ -708,12 +708,12 @@ class ProdErrorsCommandTest(unittest.TestCase):
         "prod_errors.commands.api_get_optional",
         return_value={"groupId": "g-historical", "resolutionStatus": "OPEN"},
     )
-    @mock.patch("prod_errors.commands.api_get_all_pages", return_value=[])
+    @mock.patch("prod_errors.commands.api_get_all_pages_with_progress", return_value=[])
     @mock.patch("prod_errors.commands.logging_list_all")
     def test_cmd_hotspots_uses_group_get_fallback_for_historical_metadata(
         self,
         mock_logging_list_all,
-        _mock_api_get_all_pages,
+        _mock_api_get_all_pages_with_progress,
         _mock_api_get_optional,
         _mock_find_prior_occurrences,
         _mock_get_token,
@@ -749,12 +749,12 @@ class ProdErrorsCommandTest(unittest.TestCase):
 
     @mock.patch("prod_errors.commands.get_token", return_value="token")
     @mock.patch("prod_errors.commands.api_get_optional", return_value=None)
-    @mock.patch("prod_errors.commands.api_get_all_pages", return_value=[])
+    @mock.patch("prod_errors.commands.api_get_all_pages_with_progress", return_value=[])
     @mock.patch("prod_errors.commands.logging_list_all")
     def test_cmd_hotspots_reports_skipped_groups_when_metadata_missing(
         self,
         mock_logging_list_all,
-        _mock_api_get_all_pages,
+        _mock_api_get_all_pages_with_progress,
         _mock_api_get_optional,
         _mock_get_token,
     ):

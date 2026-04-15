@@ -333,18 +333,63 @@ def print_hotspot_overview(summary):
 
 
 def print_hotspot_bucket_summary(buckets):
+    is_tty = sys.stdout.isatty()
     print("Bucket Summary")
-    print(
-        "| Start | End | Active Groups | Active New | Active Recurring | Event Count |"
-    )
-    print(
-        "|-------|-----|---------------|------------|------------------|-------------|"
-    )
-    for bucket in buckets:
+
+    if not is_tty:
         print(
-            f"| {format_jst_timestamp(bucket['start'])} | {format_jst_timestamp(bucket['end'])} | "
-            f"{bucket['activeGroups']} | {bucket['activeNewGroups']} | {bucket['activeRecurringGroups']} | {bucket['eventCount']} |"
+            "| Start | End | Active Groups | Active New | Active Recurring | Event Count |"
         )
+        print(
+            "|-------|-----|---------------|------------|------------------|-------------|"
+        )
+        for bucket in buckets:
+            print(
+                f"| {format_jst_timestamp(bucket['start'])} | {format_jst_timestamp(bucket['end'])} | "
+                f"{bucket['activeGroups']} | {bucket['activeNewGroups']} | {bucket['activeRecurringGroups']} | {bucket['eventCount']} |"
+            )
+        return
+
+    header_color = color(_BOLD)
+    dim_color = color(_DIM)
+    rows = [
+        (
+            format_jst_timestamp(bucket["start"]),
+            format_jst_timestamp(bucket["end"]),
+            str(bucket["activeGroups"]),
+            str(bucket["activeNewGroups"]),
+            str(bucket["activeRecurringGroups"]),
+            str(bucket["eventCount"]),
+        )
+        for bucket in buckets
+    ]
+    headers = (
+        "Start",
+        "End",
+        "Active Groups",
+        "Active New",
+        "Active Recurring",
+        "Event Count",
+    )
+    widths = col_widths(rows, headers)
+    sep = "─" * (sum(widths) + 3 * (len(widths) - 1))
+
+    print(" │ ".join(header_color(pad_right(h, w)) for h, w in zip(headers, widths)))
+    print(sep)
+    for row in rows:
+        print(
+            " │ ".join(
+                [
+                    pad_right(row[0], widths[0]),
+                    pad_right(row[1], widths[1]),
+                    pad_left(row[2], widths[2]),
+                    pad_left(row[3], widths[3]),
+                    pad_left(row[4], widths[4]),
+                    dim_color(pad_left(row[5], widths[5])),
+                ]
+            )
+        )
+    print(sep)
 
 
 def _hotspot_type(item):

@@ -102,11 +102,19 @@ def api_get_optional(url, token, allowed_statuses=None):
 
 
 def api_get_all_pages(base_url, token, items_key):
+    return api_get_all_pages_with_progress(base_url, token, items_key)
+
+
+def api_get_all_pages_with_progress(base_url, token, items_key, progress=None):
     all_items = []
     url = base_url
+    pages = 0
     while True:
+        pages += 1
         data = api_get(url, token)
         all_items.extend(data.get(items_key, []))
+        if progress:
+            progress(page=pages, item_count=len(all_items))
         next_token = data.get("nextPageToken")
         if not next_token:
             break
@@ -178,6 +186,7 @@ def logging_list_all(
     order_by="timestamp asc",
     max_entries=DEFAULT_LOGGING_MAX_ENTRIES,
     max_pages=DEFAULT_LOGGING_MAX_PAGES,
+    progress=None,
 ):
     entries = []
     page_token = None
@@ -193,6 +202,8 @@ def logging_list_all(
             page_token=page_token,
         )
         entries.extend(data.get("entries", []))
+        if progress:
+            progress(page=pages, item_count=len(entries))
         if len(entries) > max_entries:
             raise LoggingError(
                 f"logging query returned more than {max_entries} entries; narrow the time range"

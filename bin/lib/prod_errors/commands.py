@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from prod_errors.client import (
     LoggingError,
     api_get_all_pages,
+    api_get_all_pages_with_progress,
     api_get_optional,
     build_group_url,
     build_group_stats_url,
@@ -39,6 +40,7 @@ PRIOR_OCCURRENCE_CHUNK_SIZE = 20
 PRIOR_OCCURRENCE_PAGE_SIZE = 200
 PRIOR_OCCURRENCE_MAX_PAGES = 10
 SKIPPED_GROUP_SAMPLE_SIZE = 10
+_PROGRESS_FRAMES = ("|", "/", "-", "\\")
 
 
 def cmd_summary(args):
@@ -196,6 +198,7 @@ def _validate_hotspot_bucket(since, until, bucket):
 
 
 def _build_hotspot_range_analysis(project, token, since, until, bucket, statuses):
+    progress = _make_progress_reporter()
     try:
         entries = logging_list_all(
             project,
@@ -203,8 +206,10 @@ def _build_hotspot_range_analysis(project, token, since, until, bucket, statuses
             f'errorGroups.id:* AND timestamp>="{since}" AND timestamp<"{until}"',
             limit=1000,
             order_by="timestamp asc",
+            progress=progress.stage("Scanning logs"),
         )
     except LoggingError as e:
+        progress.finish()
         print(f"hotspots data fetch failed: {e}", file=sys.stderr)
         sys.exit(1)
 
@@ -212,14 +217,19 @@ def _build_hotspot_range_analysis(project, token, since, until, bucket, statuses
     if not aggregated_groups:
         analysis = empty_hotspot_analysis(since, until, bucket)
         analysis["skippedGroups"] = {"count": 0, "groupIds": []}
+        progress.finish()
         return analysis
 
     group_ids = sorted(aggregated_groups)
     try:
         group_metadata, missing_group_ids = _fetch_group_metadata(
-            project, token, group_ids
+            project,
+            token,
+            group_ids,
+            progress=progress.stage("Fetching metadata"),
         )
     except LoggingError as e:
+        progress.finish()
         print(f"hotspots data fetch failed: {e}", file=sys.stderr)
         sys.exit(1)
     filtered_group_ids = [
@@ -245,8 +255,10 @@ def _build_hotspot_range_analysis(project, token, since, until, bucket, statuses
             filtered_group_ids,
             since,
             filtered_metadata,
+            progress=progress.stage("Checking history"),
         )
     except LoggingError as e:
+        progress.finish()
         print(f"hotspots data fetch failed: {e}", file=sys.stderr)
         sys.exit(1)
 
@@ -262,15 +274,16 @@ def _build_hotspot_range_analysis(project, token, since, until, bucket, statuses
         "count": len(missing_group_ids),
         "groupIds": missing_group_ids[:SKIPPED_GROUP_SAMPLE_SIZE],
     }
+    progress.finish()
     return analysis
 
 
-def _fetch_group_metadata(project, token, group_ids):
+def _fetch_group_metadata(project, token, group_ids, progress=None):
     metadata = {}
     missing = []
     for index in range(0, len(group_ids), GROUP_METADATA_CHUNK_SIZE):
         chunk = group_ids[index : index + GROUP_METADATA_CHUNK_SIZE]
-        groups = api_get_all_pages(
+        groups = api_get_all_pages_with_progress(
             build_group_stats_url(
                 project,
                 period="30d",
@@ -279,6 +292,7 @@ def _fetch_group_metadata(project, token, group_ids):
             ),
             token,
             "errorGroupStats",
+            progress=progress,
         )
         for group in groups:
             group_id = group.get("group", {}).get("groupId", "")
@@ -291,6 +305,11 @@ def _fetch_group_metadata(project, token, group_ids):
                 token,
                 allowed_statuses={404},
             )
+            if progress:
+                progress(
+                    page=(index // GROUP_METADATA_CHUNK_SIZE) + 1,
+                    item_count=len(metadata),
+                )
             if not group:
                 continue
             metadata[group_id] = {
@@ -304,7 +323,9 @@ def _fetch_group_metadata(project, token, group_ids):
     return metadata, missing
 
 
-def _find_prior_occurrences(project, token, group_ids, since, group_metadata):
+def _find_prior_occurrences(
+    project, token, group_ids, since, group_metadata, progress=None
+):
     prior_occurrences = {group_id: False for group_id in group_ids}
     since_dt = parse_timestamp(since)
     unresolved_group_ids = []
@@ -341,6 +362,8 @@ def _find_prior_occurrences(project, token, group_ids, since, group_metadata):
                 page_token=page_token,
             )
             entries = data.get("entries", [])
+            if progress:
+                progress(page=pages, item_count=len(seen))
             if not entries:
                 break
             for entry in entries:
@@ -357,3 +380,31 @@ def _find_prior_occurrences(project, token, group_ids, since, group_metadata):
 
 def _escape_logging_string(value):
     return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
+class _ProgressReporter:
+    def __init__(self):
+        self.enabled = sys.stderr.isatty()
+        self.active = False
+
+    def stage(self, label):
+        def report(page, item_count):
+            if not self.enabled:
+                return
+            frame = _PROGRESS_FRAMES[(page - 1) % len(_PROGRESS_FRAMES)]
+            self.active = True
+            sys.stderr.write(f"\r{frame} {label}... page={page} items={item_count}")
+            sys.stderr.flush()
+
+        return report
+
+    def finish(self):
+        if not self.enabled or not self.active:
+            return
+        sys.stderr.write("\r" + (" " * 80) + "\r")
+        sys.stderr.flush()
+        self.active = False
+
+
+def _make_progress_reporter():
+    return _ProgressReporter()
