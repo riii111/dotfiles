@@ -3,7 +3,7 @@ from collections import defaultdict
 from datetime import timedelta
 
 from prod_errors.client import get_service_from_group
-from prod_errors.timefmt import parse_timestamp
+from prod_errors.timefmt import isoformat_utc, parse_timestamp
 
 
 def find_related_groups(filtered):
@@ -202,25 +202,7 @@ def build_hotspot_data(filtered, since=None):
             }
         )
 
-    items.sort(
-        key=lambda entry: (
-            -entry["count"],
-            -entry["activeBuckets"],
-            -(
-                int(
-                    entry["lastSeenTime"]
-                    .replace("-", "")
-                    .replace(":", "")
-                    .replace("T", "")
-                    .replace("Z", "")
-                    .replace(".", "")
-                )
-                if entry["lastSeenTime"]
-                else 0
-            ),
-            entry["groupId"],
-        )
-    )
+    sort_hotspot_entries(items)
 
     rank_by_group_id = {
         entry["groupId"]: position for position, entry in enumerate(items, start=1)
@@ -238,10 +220,6 @@ def bucket_timedelta_for(value):
         "1d": timedelta(days=1),
         "7d": timedelta(days=7),
     }[value]
-
-
-def isoformat_utc(dt):
-    return dt.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
 def extract_log_group_ids(entry):
@@ -361,6 +339,8 @@ def build_hotspot_analysis(
                 "start": isoformat_utc(cursor),
                 "end": isoformat_utc(end),
                 "activeGroups": 0,
+                "activeNewGroups": 0,
+                "activeRecurringGroups": 0,
                 "newGroups": 0,
                 "recurringGroups": 0,
                 "eventCount": 0,
@@ -395,25 +375,7 @@ def build_hotspot_analysis(
         }
         errors.append(entry)
 
-    errors.sort(
-        key=lambda entry: (
-            -entry["count"],
-            -entry["activeBuckets"],
-            -(
-                int(
-                    entry["lastSeenTime"]
-                    .replace("-", "")
-                    .replace(":", "")
-                    .replace("T", "")
-                    .replace("Z", "")
-                    .replace(".", "")
-                )
-                if entry["lastSeenTime"]
-                else 0
-            ),
-            entry["groupId"],
-        )
-    )
+    sort_hotspot_entries(errors)
 
     rank_by_group_id = {
         entry["groupId"]: position for position, entry in enumerate(errors, start=1)
@@ -431,8 +393,10 @@ def build_hotspot_analysis(
             bucket_entry["activeGroups"] += 1
             bucket_entry["eventCount"] += event_count
             if entry["isNewInRange"]:
+                bucket_entry["activeNewGroups"] += 1
                 bucket_entry["newGroups"] += 1
             if entry["isRecurringInRange"]:
+                bucket_entry["activeRecurringGroups"] += 1
                 bucket_entry["recurringGroups"] += 1
 
     return {
@@ -447,3 +411,49 @@ def build_hotspot_analysis(
         "buckets": bucket_entries,
         "errors": errors,
     }
+
+
+def empty_hotspot_analysis(since, until, bucket):
+    since_dt = parse_timestamp(since)
+    until_dt = parse_timestamp(until)
+    bucket_span = bucket_timedelta_for(bucket)
+    buckets = []
+    cursor = since_dt
+    while cursor < until_dt:
+        end = min(cursor + bucket_span, until_dt)
+        buckets.append(
+            {
+                "start": isoformat_utc(cursor),
+                "end": isoformat_utc(end),
+                "activeGroups": 0,
+                "activeNewGroups": 0,
+                "activeRecurringGroups": 0,
+                "newGroups": 0,
+                "recurringGroups": 0,
+                "eventCount": 0,
+            }
+        )
+        cursor = end
+    return {
+        "summary": {
+            "totalGroups": 0,
+            "newGroups": 0,
+            "recurringGroups": 0,
+            "eventCount": 0,
+        },
+        "buckets": buckets,
+        "errors": [],
+    }
+
+
+def update_bucket_occurrence_labels(buckets):
+    for bucket in buckets:
+        bucket["newGroups"] = bucket["activeNewGroups"]
+        bucket["recurringGroups"] = bucket["activeRecurringGroups"]
+
+
+def sort_hotspot_entries(items):
+    items.sort(key=lambda entry: entry["groupId"])
+    items.sort(key=lambda entry: entry["lastSeenTime"] or "", reverse=True)
+    items.sort(key=lambda entry: entry["activeBuckets"], reverse=True)
+    items.sort(key=lambda entry: entry["count"], reverse=True)

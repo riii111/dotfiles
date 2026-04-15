@@ -12,6 +12,9 @@ from datetime import datetime, timedelta, timezone
 
 
 API_BASE = "https://clouderrorreporting.googleapis.com/v1beta1"
+DEFAULT_LOGGING_PAGE_SIZE = 1000
+DEFAULT_LOGGING_MAX_ENTRIES = 10000
+DEFAULT_LOGGING_MAX_PAGES = 20
 
 
 class LoggingError(Exception):
@@ -83,6 +86,21 @@ def api_get(url, token):
         sys.exit(1)
 
 
+def api_get_optional(url, token, allowed_statuses=None):
+    allowed = set(allowed_statuses or [])
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        if e.code in allowed:
+            return None
+        body = e.read().decode("utf-8", errors="replace")[:200]
+        raise LoggingError(f"HTTP {e.code} — {body}")
+    except urllib.error.URLError as e:
+        raise LoggingError(str(e.reason)[:200])
+
+
 def api_get_all_pages(base_url, token, items_key):
     all_items = []
     url = base_url
@@ -152,10 +170,20 @@ def logging_read(project, token, filt, limit=10, freshness="30d"):
     return data.get("entries", [])
 
 
-def logging_list_all(project, token, filt, limit=1000, order_by="timestamp asc"):
+def logging_list_all(
+    project,
+    token,
+    filt,
+    limit=DEFAULT_LOGGING_PAGE_SIZE,
+    order_by="timestamp asc",
+    max_entries=DEFAULT_LOGGING_MAX_ENTRIES,
+    max_pages=DEFAULT_LOGGING_MAX_PAGES,
+):
     entries = []
     page_token = None
+    pages = 0
     while True:
+        pages += 1
         data = logging_query(
             project,
             token,
@@ -165,6 +193,14 @@ def logging_list_all(project, token, filt, limit=1000, order_by="timestamp asc")
             page_token=page_token,
         )
         entries.extend(data.get("entries", []))
+        if len(entries) > max_entries:
+            raise LoggingError(
+                f"logging query returned more than {max_entries} entries; narrow the time range"
+            )
+        if pages > max_pages:
+            raise LoggingError(
+                f"logging query exceeded {max_pages} pages; narrow the time range"
+            )
         page_token = data.get("nextPageToken")
         if not page_token:
             return entries
@@ -265,3 +301,8 @@ def build_group_stats_url(
         f"{API_BASE}/projects/{project}/groupStats"
         f"?{urllib.parse.urlencode(params, doseq=True)}"
     )
+
+
+def build_group_url(project, group_id):
+    group_name = urllib.parse.quote(group_id, safe="")
+    return f"{API_BASE}/projects/{project}/groups/{group_name}"

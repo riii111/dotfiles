@@ -28,6 +28,13 @@ def parse_timestamp(value):
     return parsed.astimezone(timezone.utc)
 
 
+def isoformat_utc(value):
+    parsed = value if isinstance(value, datetime) else parse_timestamp(value)
+    if parsed is None:
+        return ""
+    return parsed.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+
 def format_jst_timestamp(value, include_seconds=False, include_millis=False):
     parsed = parse_timestamp(value)
     if parsed is None:

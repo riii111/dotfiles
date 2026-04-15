@@ -18,7 +18,13 @@ if str(LIB) not in sys.path:
 
 from prod_errors.cli import build_parser
 from prod_errors.ansi import display_width, pad_left, pad_right, trunc
-from prod_errors.commands import cmd_hotspots, cmd_summary, cmd_trace
+from prod_errors.client import logging_list_all
+from prod_errors.commands import (
+    _find_prior_occurrences,
+    cmd_hotspots,
+    cmd_summary,
+    cmd_trace,
+)
 from prod_errors.logic import (
     aggregate_hotspot_logs,
     build_hotspot_analysis,
@@ -247,6 +253,8 @@ class ProdErrorsLogicTest(unittest.TestCase):
         self.assertEqual(analysis["summary"]["recurringGroups"], 1)
         self.assertEqual(analysis["summary"]["eventCount"], 3)
         self.assertEqual(analysis["buckets"][0]["activeGroups"], 2)
+        self.assertEqual(analysis["buckets"][0]["activeNewGroups"], 1)
+        self.assertEqual(analysis["buckets"][0]["activeRecurringGroups"], 1)
         self.assertEqual(analysis["buckets"][0]["newGroups"], 1)
         self.assertEqual(analysis["buckets"][0]["recurringGroups"], 1)
         self.assertEqual(analysis["buckets"][1]["activeGroups"], 1)
@@ -395,6 +403,23 @@ class ProdErrorsTimefmtTest(unittest.TestCase):
         self.assertEqual(format_summary_last_seen(""), "")
 
 
+class ProdErrorsClientTest(unittest.TestCase):
+    @mock.patch("prod_errors.client.logging_query")
+    def test_logging_list_all_follows_pagination(self, mock_logging_query):
+        mock_logging_query.side_effect = [
+            {
+                "entries": [{"timestamp": "2026-04-01T00:00:00.000000Z"}],
+                "nextPageToken": "next",
+            },
+            {"entries": [{"timestamp": "2026-04-02T00:00:00.000000Z"}]},
+        ]
+
+        entries = logging_list_all("demo", "token", "severity>=ERROR", limit=1)
+
+        self.assertEqual(len(entries), 2)
+        self.assertEqual(mock_logging_query.call_count, 2)
+
+
 class ProdErrorsCliTest(unittest.TestCase):
     def test_build_parser_supports_hotspots(self):
         parser = build_parser()
@@ -433,6 +458,28 @@ class ProdErrorsCliTest(unittest.TestCase):
         )
 
         self.assertIn("Range start timestamp", since_action.help)
+
+
+class ProdErrorsCommandHelpersTest(unittest.TestCase):
+    @mock.patch("prod_errors.commands.logging_query")
+    def test_find_prior_occurrences_batches_groups(self, mock_logging_query):
+        mock_logging_query.return_value = {
+            "entries": [
+                make_hotspot_log(
+                    "2026-03-31T23:00:00.000000Z", "g-old", "FooError: old"
+                )
+            ]
+        }
+
+        prior = _find_prior_occurrences(
+            "demo",
+            "token",
+            ["g-old", "g-new"],
+            "2026-04-01T00:00:00.000000Z",
+        )
+
+        self.assertEqual(prior["g-old"], True)
+        self.assertEqual(prior["g-new"], False)
 
 
 class ProdErrorsCommandTest(unittest.TestCase):
@@ -509,14 +556,17 @@ class ProdErrorsCommandTest(unittest.TestCase):
         self.assertIn("2026-04-05 09:00 JST (18m ago)", output)
 
     @mock.patch("prod_errors.commands.get_token", return_value="token")
-    @mock.patch("prod_errors.commands.logging_has_entries", return_value=False)
+    @mock.patch(
+        "prod_errors.commands._find_prior_occurrences",
+        return_value={"g-open": False},
+    )
     @mock.patch("prod_errors.commands.api_get_all_pages")
     @mock.patch("prod_errors.commands.logging_list_all")
     def test_cmd_hotspots_json_filters_status_and_uses_buckets(
         self,
         mock_logging_list_all,
         mock_api_get_all_pages,
-        _mock_logging_has_entries,
+        _mock_find_prior_occurrences,
         _mock_get_token,
     ):
         mock_logging_list_all.return_value = [
@@ -568,6 +618,7 @@ class ProdErrorsCommandTest(unittest.TestCase):
 
         payload = json.loads(stdout.getvalue())
         self.assertEqual(payload["total"], 1)
+        self.assertEqual(payload["shown"], 1)
         self.assertEqual(payload["summary"]["totalGroups"], 1)
         self.assertEqual(payload["summary"]["newGroups"], 1)
         self.assertEqual(payload["buckets"][0]["activeGroups"], 1)
@@ -577,14 +628,17 @@ class ProdErrorsCommandTest(unittest.TestCase):
 
     @mock.patch("prod_errors.timefmt.now_utc")
     @mock.patch("prod_errors.commands.get_token", return_value="token")
-    @mock.patch("prod_errors.commands.logging_has_entries", return_value=False)
+    @mock.patch(
+        "prod_errors.commands._find_prior_occurrences",
+        return_value={"g-open": False},
+    )
     @mock.patch("prod_errors.commands.api_get_all_pages")
     @mock.patch("prod_errors.commands.logging_list_all")
     def test_cmd_hotspots_output_uses_jst_and_relative_last_seen(
         self,
         mock_logging_list_all,
         mock_api_get_all_pages,
-        _mock_logging_has_entries,
+        _mock_find_prior_occurrences,
         _mock_get_token,
         mock_now_utc,
     ):
@@ -629,6 +683,90 @@ class ProdErrorsCommandTest(unittest.TestCase):
         self.assertIn("Last", output)
         self.assertIn("2026-04-05 09:10 JST", output)
         self.assertIn("2026-04-05 09:10 JST (8m ago)", output)
+
+    @mock.patch("prod_errors.commands.get_token", return_value="token")
+    @mock.patch(
+        "prod_errors.commands._find_prior_occurrences",
+        return_value={},
+    )
+    @mock.patch("prod_errors.commands.api_get_all_pages", return_value=[])
+    @mock.patch("prod_errors.commands.logging_list_all", return_value=[])
+    def test_cmd_hotspots_json_keeps_empty_summary_shape(
+        self,
+        _mock_logging_list_all,
+        _mock_api_get_all_pages,
+        _mock_find_prior_occurrences,
+        _mock_get_token,
+    ):
+        args = argparse.Namespace(
+            project="demo",
+            status="OPEN,ACKNOWLEDGED,RESOLVED",
+            since="2026-04-01T00:00:00Z",
+            until="2026-04-02T00:00:00Z",
+            period="30d",
+            bucket="1d",
+            limit=20,
+            json=True,
+        )
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            cmd_hotspots(args)
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["summary"]["totalGroups"], 0)
+        self.assertEqual(payload["summary"]["newGroups"], 0)
+        self.assertEqual(payload["summary"]["recurringGroups"], 0)
+        self.assertEqual(payload["total"], 0)
+        self.assertEqual(len(payload["buckets"]), 1)
+
+    @mock.patch("prod_errors.commands.get_token", return_value="token")
+    @mock.patch(
+        "prod_errors.commands._find_prior_occurrences",
+        return_value={"g-historical": True},
+    )
+    @mock.patch(
+        "prod_errors.commands.api_get_optional",
+        return_value={"groupId": "g-historical", "resolutionStatus": "OPEN"},
+    )
+    @mock.patch("prod_errors.commands.api_get_all_pages", return_value=[])
+    @mock.patch("prod_errors.commands.logging_list_all")
+    def test_cmd_hotspots_uses_group_get_fallback_for_historical_metadata(
+        self,
+        mock_logging_list_all,
+        _mock_api_get_all_pages,
+        _mock_api_get_optional,
+        _mock_find_prior_occurrences,
+        _mock_get_token,
+    ):
+        mock_logging_list_all.return_value = [
+            make_hotspot_log(
+                "2026-01-15T00:10:00.000000Z",
+                "g-historical",
+                "OldError: boom",
+                "svc-legacy",
+            )
+        ]
+        args = argparse.Namespace(
+            project="demo",
+            status="OPEN",
+            since="2026-01-01T00:00:00Z",
+            until="2026-02-01T00:00:00Z",
+            period="30d",
+            bucket="7d",
+            limit=20,
+            json=True,
+        )
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            cmd_hotspots(args)
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["summary"]["totalGroups"], 1)
+        self.assertEqual(payload["errors"][0]["status"], "OPEN")
+        self.assertEqual(payload["errors"][0]["groupId"], "g-historical")
+        self.assertEqual(payload["errors"][0]["isRecurringInRange"], True)
 
     @mock.patch("prod_errors.trace.get_token", return_value="token")
     @mock.patch("prod_errors.trace.api_get")

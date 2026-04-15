@@ -5,9 +5,11 @@ from datetime import datetime, timezone
 from prod_errors.client import (
     LoggingError,
     api_get_all_pages,
+    api_get_optional,
+    build_group_url,
     build_group_stats_url,
     get_token,
-    logging_has_entries,
+    logging_query,
     logging_list_all,
     parse_time_arg,
     parse_since,
@@ -23,11 +25,18 @@ from prod_errors.formatters import (
 from prod_errors.logic import (
     aggregate_hotspot_logs,
     build_hotspot_analysis,
+    empty_hotspot_analysis,
     build_service_summary_data,
     build_summary_data,
+    update_bucket_occurrence_labels,
 )
-from prod_errors.timefmt import current_jst_date
+from prod_errors.timefmt import current_jst_date, isoformat_utc, parse_timestamp
 from prod_errors.trace import cmd_trace as trace_cmd
+
+GROUP_METADATA_CHUNK_SIZE = 50
+PRIOR_OCCURRENCE_CHUNK_SIZE = 20
+PRIOR_OCCURRENCE_PAGE_SIZE = 200
+PRIOR_OCCURRENCE_MAX_PAGES = 10
 
 
 def cmd_summary(args):
@@ -112,7 +121,8 @@ def cmd_hotspots(args):
                     "until": until,
                     "bucket": args.bucket,
                     "limit": args.limit,
-                    "total": len(hotspots),
+                    "total": analysis["summary"]["totalGroups"],
+                    "shown": len(hotspots),
                     "summary": analysis["summary"],
                     "buckets": analysis["buckets"],
                     "errors": hotspots,
@@ -147,26 +157,21 @@ def cmd_trace(args):
 
 def _resolve_hotspot_window(args):
     now = datetime.now(timezone.utc)
-    until_dt = (
-        parse_time_arg(args.until, option_name="--until")
+    until_dt_obj = (
+        parse_timestamp(parse_time_arg(args.until, option_name="--until"))
         if args.until
-        else isoformat_utc(now)
-    )
-    until_dt_obj = datetime.strptime(until_dt, "%Y-%m-%dT%H:%M:%S.%fZ").replace(
-        tzinfo=timezone.utc
+        else now
     )
 
     if args.since:
-        since = parse_since(args.since)
+        since_dt_obj = parse_timestamp(parse_since(args.since))
     else:
-        since = (until_dt_obj - period_timedelta_for(args.period)).strftime(
-            "%Y-%m-%dT%H:%M:%S.%fZ"
-        )
+        since_dt_obj = until_dt_obj - period_timedelta_for(args.period)
 
-    if since >= until_dt:
+    if since_dt_obj >= until_dt_obj:
         print("--since must be earlier than --until", file=sys.stderr)
         sys.exit(1)
-    return since, until_dt
+    return isoformat_utc(since_dt_obj), isoformat_utc(until_dt_obj)
 
 
 def _build_hotspot_range_analysis(project, token, since, until, bucket, statuses):
@@ -179,15 +184,19 @@ def _build_hotspot_range_analysis(project, token, since, until, bucket, statuses
             order_by="timestamp asc",
         )
     except LoggingError as e:
-        print(f"Cloud Logging query failed: {e}", file=sys.stderr)
+        print(f"hotspots data fetch failed: {e}", file=sys.stderr)
         sys.exit(1)
 
     aggregated_groups = aggregate_hotspot_logs(entries, since, until, bucket)
     if not aggregated_groups:
-        return {"summary": {}, "buckets": [], "errors": []}
+        return empty_hotspot_analysis(since, until, bucket)
 
     group_ids = sorted(aggregated_groups)
-    group_metadata = _fetch_group_metadata(project, token, group_ids)
+    try:
+        group_metadata = _fetch_group_metadata(project, token, group_ids)
+    except LoggingError as e:
+        print(f"hotspots data fetch failed: {e}", file=sys.stderr)
+        sys.exit(1)
     filtered_group_ids = [
         group_id
         for group_id in group_ids
@@ -204,19 +213,18 @@ def _build_hotspot_range_analysis(project, token, since, until, bucket, statuses
         for group_id in filtered_group_ids
         if group_id in group_metadata
     }
-    prior_occurrences = {}
-    for group_id in filtered_group_ids:
-        try:
-            prior_occurrences[group_id] = logging_has_entries(
-                project,
-                token,
-                f'errorGroups.id="{_escape_logging_string(group_id)}" AND timestamp<"{since}"',
-            )
-        except LoggingError as e:
-            print(f"Cloud Logging query failed: {e}", file=sys.stderr)
-            sys.exit(1)
+    try:
+        prior_occurrences = _find_prior_occurrences(
+            project,
+            token,
+            filtered_group_ids,
+            since,
+        )
+    except LoggingError as e:
+        print(f"hotspots data fetch failed: {e}", file=sys.stderr)
+        sys.exit(1)
 
-    return build_hotspot_analysis(
+    analysis = build_hotspot_analysis(
         filtered_groups,
         filtered_metadata,
         prior_occurrences,
@@ -224,12 +232,14 @@ def _build_hotspot_range_analysis(project, token, since, until, bucket, statuses
         until,
         bucket,
     )
+    update_bucket_occurrence_labels(analysis["buckets"])
+    return analysis
 
 
 def _fetch_group_metadata(project, token, group_ids):
     metadata = {}
-    for index in range(0, len(group_ids), 50):
-        chunk = group_ids[index : index + 50]
+    for index in range(0, len(group_ids), GROUP_METADATA_CHUNK_SIZE):
+        chunk = group_ids[index : index + GROUP_METADATA_CHUNK_SIZE]
         groups = api_get_all_pages(
             build_group_stats_url(
                 project,
@@ -244,12 +254,63 @@ def _fetch_group_metadata(project, token, group_ids):
             group_id = group.get("group", {}).get("groupId", "")
             if group_id:
                 metadata[group_id] = group
+        missing_group_ids = [group_id for group_id in chunk if group_id not in metadata]
+        for group_id in missing_group_ids:
+            group = api_get_optional(
+                build_group_url(project, group_id),
+                token,
+                allowed_statuses={404},
+            )
+            if not group:
+                continue
+            metadata[group_id] = {
+                "group": group,
+                "representative": {},
+                "affectedServices": [],
+            }
     return metadata
+
+
+def _find_prior_occurrences(project, token, group_ids, since):
+    prior_occurrences = {group_id: False for group_id in group_ids}
+    for index in range(0, len(group_ids), PRIOR_OCCURRENCE_CHUNK_SIZE):
+        chunk = group_ids[index : index + PRIOR_OCCURRENCE_CHUNK_SIZE]
+        seen = set()
+        page_token = None
+        pages = 0
+        filter_expr = " OR ".join(
+            f'errorGroups.id="{_escape_logging_string(group_id)}"' for group_id in chunk
+        )
+        filt = f'({filter_expr}) AND timestamp<"{since}"'
+
+        while len(seen) < len(chunk):
+            pages += 1
+            if pages > PRIOR_OCCURRENCE_MAX_PAGES:
+                raise LoggingError(
+                    f"prior occurrence lookup exceeded {PRIOR_OCCURRENCE_MAX_PAGES} pages; narrow the time range"
+                )
+            data = logging_query(
+                project,
+                token,
+                filt,
+                limit=PRIOR_OCCURRENCE_PAGE_SIZE,
+                order_by="timestamp desc",
+                page_token=page_token,
+            )
+            entries = data.get("entries", [])
+            if not entries:
+                break
+            for entry in entries:
+                for group in entry.get("errorGroups", []):
+                    group_id = group.get("id", "")
+                    if group_id in prior_occurrences:
+                        seen.add(group_id)
+                        prior_occurrences[group_id] = True
+            page_token = data.get("nextPageToken")
+            if not page_token:
+                break
+    return prior_occurrences
 
 
 def _escape_logging_string(value):
     return value.replace("\\", "\\\\").replace('"', '\\"')
-
-
-def isoformat_utc(dt):
-    return dt.strftime("%Y-%m-%dT%H:%M:%S.%fZ")

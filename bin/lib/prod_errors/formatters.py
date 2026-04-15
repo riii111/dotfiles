@@ -335,7 +335,7 @@ def print_hotspot_overview(summary):
 def print_hotspot_bucket_summary(buckets):
     print("Bucket Summary")
     print(
-        "| Start | End | Active Groups | New Groups | Recurring Groups | Event Count |"
+        "| Start | End | Active Groups | Active New | Active Recurring | Event Count |"
     )
     print(
         "|-------|-----|---------------|------------|------------------|-------------|"
@@ -343,7 +343,7 @@ def print_hotspot_bucket_summary(buckets):
     for bucket in buckets:
         print(
             f"| {format_jst_timestamp(bucket['start'])} | {format_jst_timestamp(bucket['end'])} | "
-            f"{bucket['activeGroups']} | {bucket['newGroups']} | {bucket['recurringGroups']} | {bucket['eventCount']} |"
+            f"{bucket['activeGroups']} | {bucket['activeNewGroups']} | {bucket['activeRecurringGroups']} | {bucket['eventCount']} |"
         )
 
 
