@@ -41,19 +41,6 @@ return {
 						quit_in_show = { "q", "<ESC>" },
 					},
 				},
-				definition = {
-					width = 0.6,
-					height = 0.5,
-					save_pos = false,
-					keys = {
-						edit = "<C-c>o",
-						vsplit = "<C-c>v",
-						split = "<C-c>s",
-						tabe = "<C-c>t",
-						quit = { "q", "<ESC>" },
-						close = { "q", "<ESC>" },
-					},
-				},
 				code_action = {
 					num_shortcut = true,
 					show_server_name = false,
@@ -100,7 +87,7 @@ return {
 			local function setup_lsp_keymaps()
 				local clients = vim.lsp.get_clients({ bufnr = 0 })
 				if #clients > 0 then
-					-- Core navigation keymaps
+					-- gd: 単一ヒットなら即ジャンプさせたいため、glance ではなく lspsaga を使用
 					vim.keymap.set(
 						"n",
 						"gd",
@@ -110,13 +97,13 @@ return {
 					vim.keymap.set(
 						"n",
 						"gp",
-						"<cmd>Lspsaga peek_definition<CR>",
+						"<cmd>Glance definitions<CR>",
 						vim.tbl_extend("force", opts, { desc = "Peek Definition", buffer = true })
 					)
 					vim.keymap.set(
 						"n",
 						"gt",
-						"<cmd>Lspsaga peek_type_definition<CR>",
+						"<cmd>Glance type_definitions<CR>",
 						vim.tbl_extend("force", opts, { desc = "Peek Type Definition", buffer = true })
 					)
 					vim.keymap.set(
@@ -128,13 +115,13 @@ return {
 					vim.keymap.set(
 						"n",
 						"gi",
-						vim.lsp.buf.implementation,
+						"<cmd>Glance implementations<CR>",
 						vim.tbl_extend("force", opts, { desc = "Go to Implementation", buffer = true })
 					)
 					vim.keymap.set(
 						"n",
 						"gr",
-						vim.lsp.buf.references,
+						"<cmd>Glance references<CR>",
 						vim.tbl_extend("force", opts, { desc = "Find References", buffer = true })
 					)
 
