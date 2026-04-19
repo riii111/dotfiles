@@ -3,7 +3,10 @@
     "RIPGREP_CONFIG_PATH": "{{ .chezmoi.homeDir }}/.ripgreprc",
     "GIT_OPTIONAL_LOCKS": "0",
     "DISABLE_TELEMETRY": "1",
-    "RUST_LOG": "info"
+    "RUST_LOG": "info",
+    "ANTHROPIC_CUSTOM_MODEL_OPTION": "claude-opus-4-5",
+    "ANTHROPIC_CUSTOM_MODEL_OPTION_NAME": "Opus 4.5",
+    "ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION": "Legacy Opus 4.5 (200k context)"
   },
   "includeCoAuthoredBy": false,
   "permissions": {
@@ -196,7 +199,7 @@
     "command": "{{ .chezmoi.homeDir }}/.claude/statusline-command.sh"
   },
   "alwaysThinkingEnabled": true,
-  "model": "opus[1m]",
+  "model": "claude-opus-4-6[1m]",
   "effortLevel": "medium",
   "skipDangerousModePermissionPrompt": {{ if eq .type "personal" }}true{{ else }}false{{ end }}
 }
