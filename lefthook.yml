@@ -1,3 +1,9 @@
+pre-commit:
+  commands:
+    shell-fast-check:
+      stage_fixed: true
+      run: ./bin/executable_dot lint-staged-shell
+
 post-merge:
   commands:
     chezmoi-apply:
