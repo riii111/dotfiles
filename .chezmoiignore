@@ -3,6 +3,8 @@ Brewfile
 README.md
 LICENSE
 .gitignore
+flake.nix
+flake.lock
 tests
 scripts
 

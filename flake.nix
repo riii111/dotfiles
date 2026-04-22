@@ -7,6 +7,7 @@
 
   outputs = { nixpkgs, ... }:
     let
+      # This dotfiles repo is macOS-only for now, so keep the shell darwin-only too.
       systems = [
         "aarch64-darwin"
         "x86_64-darwin"
@@ -22,8 +23,17 @@
         {
           default = pkgs.mkShell {
             packages = with pkgs; [
+              # Nix-native formatting and lint helpers.
               alejandra
               bashInteractive
+              nil
+              python3
+              shellcheck
+              shfmt
+              taplo
+              uv
+
+              # CLI tools kept in both Brew and Nix during additive rollout.
               bat
               delta
               eza
@@ -33,14 +43,9 @@
               ghq
               git
               jq
-              nil
               ripgrep
-              shellcheck
-              shfmt
-              taplo
               tmux
               tree
-              uv
               yq-go
             ];
 
