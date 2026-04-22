@@ -568,3 +568,14 @@ _detect_gh_target_user
 # ==========================================
 export GCP_PROJECT="{{ .gcp_project }}"
 {{ end }}
+
+# Nix (restore bin paths after this zshrc rebuilds PATH)
+if [[ -d /nix/var/nix/profiles/default/bin ]]; then
+  _nix_profile_bin="$HOME/.nix-profile/bin"
+  if [[ -d "$HOME/.local/state/nix/profile/bin" ]]; then
+    _nix_profile_bin="$HOME/.local/state/nix/profile/bin"
+  fi
+
+  path=("$_nix_profile_bin" /nix/var/nix/profiles/default/bin $path)
+  unset _nix_profile_bin
+fi
