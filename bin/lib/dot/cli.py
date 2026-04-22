@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import shlex
 import shutil
 import subprocess
@@ -8,9 +9,14 @@ import sys
 from pathlib import Path
 
 
-REQUIRED_COMMANDS = ("git", "python3", "chezmoi", "brew", "nvim", "lefthook")
+REQUIRED_COMMANDS = ("git", "python3", "chezmoi", "brew", "nvim", "lefthook", "nix")
 OPTIONAL_COMMANDS = ("shellcheck", "shfmt")
 LINTABLE_SHELLS = frozenset({"bash", "sh"})
+NIX_DOTFILES_PROFILE = (
+    Path.home() / ".local" / "state" / "nix" / "profiles" / "dotfiles-cli"
+)
+NIX_DOTFILES_PROFILE_NAME = "dotfiles-cli"
+NIX_DOTFILES_INSTALLABLE = ".#cli"
 
 
 def run_capture(*args: str, cwd: Path | None = None) -> str:
@@ -317,6 +323,59 @@ def command_lint_staged_shell(_: argparse.Namespace) -> int:
     return run_lint_shell_targets(repo_root, targets)
 
 
+def command_sync_nix_profile(_: argparse.Namespace) -> int:
+    repo_root = resolve_repo_root()
+    nix = shutil.which("nix")
+    if nix is None:
+        raise RuntimeError("nix is not installed")
+
+    NIX_DOTFILES_PROFILE.parent.mkdir(parents=True, exist_ok=True)
+    listing = json.loads(
+        run_capture(
+            nix,
+            "profile",
+            "list",
+            "--profile",
+            str(NIX_DOTFILES_PROFILE),
+            "--json",
+        )
+    )
+
+    if NIX_DOTFILES_PROFILE_NAME in listing.get("elements", {}):
+        result = run_command(
+            [
+                nix,
+                "profile",
+                "remove",
+                "--profile",
+                str(NIX_DOTFILES_PROFILE),
+                NIX_DOTFILES_PROFILE_NAME,
+            ],
+            repo_root,
+        )
+        if result.returncode != 0:
+            print_process_failure("nix profile remove", result)
+            return 1
+
+    result = run_command(
+        [
+            nix,
+            "profile",
+            "add",
+            "--profile",
+            str(NIX_DOTFILES_PROFILE),
+            NIX_DOTFILES_INSTALLABLE,
+        ],
+        repo_root,
+    )
+    if result.returncode != 0:
+        print_process_failure("nix profile add", result)
+        return 1
+
+    print(f"Nix CLI profile synced: {NIX_DOTFILES_PROFILE}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="dot")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -339,6 +398,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="format and lint staged bash/sh files",
     )
     lint_staged_shell_parser.set_defaults(func=command_lint_staged_shell)
+
+    nix_profile_parser = subparsers.add_parser(
+        "sync-nix-profile",
+        help="install/update the dotfiles Nix CLI profile",
+    )
+    nix_profile_parser.set_defaults(func=command_sync_nix_profile)
 
     return parser
 

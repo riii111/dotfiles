@@ -166,6 +166,9 @@ _wezterm_set_cwd
 # Completion
 # ==========================================
 if [[ -o zle ]]; then
+  if [[ -d "${XDG_STATE_HOME:-$HOME/.local/state}/nix/profiles/dotfiles-cli/share/zsh/site-functions" ]]; then
+    FPATH="${XDG_STATE_HOME:-$HOME/.local/state}/nix/profiles/dotfiles-cli/share/zsh/site-functions:$FPATH"
+  fi
   # Homebrew completions
   FPATH="/opt/homebrew/share/zsh/site-functions:$FPATH"
   fpath+=~/.zfunc
@@ -202,8 +205,11 @@ if [[ -o zle ]]; then
   zstyle ':completion:*' matcher-list 'm:{[:lower:][:upper:]}={[:upper:][:lower:]}'
 
   # zsh-autosuggestions
-  [[ -f /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh ]] && \
+  if [[ -f "${XDG_STATE_HOME:-$HOME/.local/state}/nix/profiles/dotfiles-cli/share/zsh-autosuggestions/zsh-autosuggestions.zsh" ]]; then
+    source "${XDG_STATE_HOME:-$HOME/.local/state}/nix/profiles/dotfiles-cli/share/zsh-autosuggestions/zsh-autosuggestions.zsh"
+  elif [[ -f /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh ]]; then
     source /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh
+  fi
   unset ZSH_AUTOSUGGEST_USE_ASYNC
 fi
 
@@ -214,7 +220,13 @@ export LG_CONFIG_FILE="$HOME/.config/lazygit/config.yml"
 
 _deferred_abbr_init() {
   unfunction _deferred_abbr_init
-  source /opt/homebrew/share/zsh-abbr/zsh-abbr.zsh
+  local zsh_abbr_script="${XDG_STATE_HOME:-$HOME/.local/state}/nix/profiles/dotfiles-cli/share/zsh-abbr/zsh-abbr.zsh"
+  if [[ ! -f "$zsh_abbr_script" ]]; then
+    zsh_abbr_script="/opt/homebrew/share/zsh-abbr/zsh-abbr.zsh"
+  fi
+  [[ -f "$zsh_abbr_script" ]] || return
+
+  source "$zsh_abbr_script"
 
   # Modern CLI Tools (--force: override same-name system commands)
   abbr -S -qq --force cat='bat'
@@ -574,7 +586,9 @@ export GCP_PROJECT="{{ .gcp_project }}"
 # ==========================================
 # Restore Nix bin paths after this zshrc rebuilds PATH.
 if [[ -d /nix/var/nix/profiles/default/bin ]]; then
-  if [[ -d "$HOME/.local/state/nix/profile/bin" ]]; then
+  if [[ -d "${XDG_STATE_HOME:-$HOME/.local/state}/nix/profiles/dotfiles-cli/bin" ]]; then
+    path=("${XDG_STATE_HOME:-$HOME/.local/state}/nix/profiles/dotfiles-cli/bin" /nix/var/nix/profiles/default/bin $path)
+  elif [[ -d "$HOME/.local/state/nix/profile/bin" ]]; then
     path=("$HOME/.local/state/nix/profile/bin" /nix/var/nix/profiles/default/bin $path)
   elif [[ -d "$HOME/.nix-profile/bin" ]]; then
     path=("$HOME/.nix-profile/bin" /nix/var/nix/profiles/default/bin $path)

@@ -12,6 +12,8 @@ brew install chezmoi
 chezmoi init --source ~/ghq/github.com/riii111/dotfiles
 chezmoi apply
 brew bundle --file ~/ghq/github.com/riii111/dotfiles/Brewfile
+~/bin/dot sync-nix-profile
+exec zsh
 ```
 
 ### Finder integration (optional)
@@ -27,9 +29,20 @@ Routing: text / code → Neovim, csv / tsv → csvlens, parquet / sqlite / jsonl
 
 Markdown clipboard-to-image paste: `<C-v>` in normal mode (uses `pngpaste`, already in Brewfile).
 
-## Optional: Nix dev shell
+## Nix
 
-Nix is used additively for CLI / lint / dev tools.
+Daily CLI tools are managed by a dedicated Nix profile.
+
+```bash
+~/bin/dot sync-nix-profile
+exec zsh
+```
+
+Homebrew stays for GUI / cask and macOS-specific packages.
+
+### Dev shell
+
+Use the repo shell when you want the flake-pinned toolchain explicitly.
 
 ```bash
 nix develop

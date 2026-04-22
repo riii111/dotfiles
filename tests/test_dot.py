@@ -322,6 +322,61 @@ class DotCliTest(unittest.TestCase):
         self.assertEqual(lint_shell.call_args.args[0], repo_root)
         self.assertEqual(lint_shell.call_args.args[1], [staged])
 
+    def test_command_sync_nix_profile_reinstalls_profile_package(self):
+        repo_root = Path("/repo")
+        profile_path = Path("/tmp/dotfiles-cli-profile")
+        calls = []
+
+        def fake_run_command(args, cwd):
+            calls.append((args, cwd))
+            return subprocess.CompletedProcess(args, 0, "", "")
+
+        with (
+            mock.patch.object(cli, "resolve_repo_root", return_value=repo_root),
+            mock.patch("shutil.which", return_value="/nix/var/nix/profiles/default/bin/nix"),
+            mock.patch.object(cli, "NIX_DOTFILES_PROFILE", profile_path),
+            mock.patch.object(
+                cli,
+                "run_capture",
+                return_value='{"elements":{"dotfiles-cli":{"active":true}},"version":3}',
+            ),
+            mock.patch.object(cli, "run_command", side_effect=fake_run_command),
+            mock.patch("sys.stdout", new=io.StringIO()),
+        ):
+            result = cli.command_sync_nix_profile(mock.Mock())
+
+        self.assertEqual(result, 0)
+        self.assertEqual(
+            calls[0][0],
+            [
+                "/nix/var/nix/profiles/default/bin/nix",
+                "profile",
+                "remove",
+                "--profile",
+                str(profile_path),
+                "dotfiles-cli",
+            ],
+        )
+        self.assertEqual(
+            calls[1][0],
+            [
+                "/nix/var/nix/profiles/default/bin/nix",
+                "profile",
+                "add",
+                "--profile",
+                str(profile_path),
+                ".#cli",
+            ],
+        )
+
+    def test_command_sync_nix_profile_requires_nix(self):
+        with (
+            mock.patch("shutil.which", return_value=None),
+            mock.patch.object(cli, "resolve_repo_root", return_value=Path("/repo")),
+        ):
+            with self.assertRaises(RuntimeError):
+                cli.command_sync_nix_profile(mock.Mock())
+
     def test_read_first_line_returns_empty_on_oserror(self):
         path = Path("/tmp/unreadable")
         with mock.patch.object(Path, "open", side_effect=PermissionError):
