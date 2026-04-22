@@ -16,14 +16,13 @@
       mkCli = system:
         let
           pkgs = import nixpkgs { inherit system; };
-          cliPackages = with pkgs; [
-            # Nix-native formatting and lint helpers.
+          dailyCliPackages = with pkgs; [
+            # Editor-integrated tooling that should exist in the normal shell too.
             nil
             python3
             shellcheck
             shfmt
             taplo
-            uv
 
             # Daily CLI tools owned by Nix.
             bat
@@ -52,9 +51,14 @@
             yq-go # Go implementation behind the `yq` command.
             zsh-autosuggestions
           ];
+          devShellOnlyPackages = with pkgs; [
+            alejandra
+            bashInteractive
+            uv
+          ];
           cliProfile = pkgs.buildEnv {
             name = "dotfiles-cli";
-            paths = cliPackages;
+            paths = dailyCliPackages;
             pathsToLink = [
               "/bin"
               "/share"
@@ -62,7 +66,7 @@
           };
         in
         {
-          inherit pkgs cliPackages cliProfile;
+          inherit pkgs dailyCliPackages devShellOnlyPackages cliProfile;
         };
     in
     {
@@ -84,7 +88,7 @@
         in
         {
           default = cli.pkgs.mkShell {
-            packages = [ cli.pkgs.alejandra cli.pkgs.bashInteractive ] ++ cli.cliPackages;
+            packages = cli.devShellOnlyPackages ++ cli.dailyCliPackages;
 
             shellHook = ''
               echo "Entered the dotfiles Nix shell."

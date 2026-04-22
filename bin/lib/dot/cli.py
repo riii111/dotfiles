@@ -12,6 +12,7 @@ from pathlib import Path
 REQUIRED_COMMANDS = ("git", "python3", "chezmoi", "brew", "nvim", "lefthook", "nix")
 OPTIONAL_COMMANDS = ("shellcheck", "shfmt")
 LINTABLE_SHELLS = frozenset({"bash", "sh"})
+# Keep in sync with NIX_DOTFILES_PROFILE in dot_zshrc.tmpl.
 NIX_DOTFILES_PROFILE = (
     Path.home() / ".local" / "state" / "nix" / "profiles" / "dotfiles-cli"
 )
@@ -346,7 +347,7 @@ def command_sync_nix_profile(_: argparse.Namespace) -> int:
             [
                 nix,
                 "profile",
-                "remove",
+                "upgrade",
                 "--profile",
                 str(NIX_DOTFILES_PROFILE),
                 NIX_DOTFILES_PROFILE_ELEMENT,
@@ -354,23 +355,23 @@ def command_sync_nix_profile(_: argparse.Namespace) -> int:
             repo_root,
         )
         if result.returncode != 0:
-            print_process_failure("nix profile remove", result)
+            print_process_failure("nix profile upgrade", result)
             return 1
-
-    result = run_command(
-        [
-            nix,
-            "profile",
-            "add",
-            "--profile",
-            str(NIX_DOTFILES_PROFILE),
-            NIX_DOTFILES_INSTALLABLE,
-        ],
-        repo_root,
-    )
-    if result.returncode != 0:
-        print_process_failure("nix profile add", result)
-        return 1
+    else:
+        result = run_command(
+            [
+                nix,
+                "profile",
+                "add",
+                "--profile",
+                str(NIX_DOTFILES_PROFILE),
+                NIX_DOTFILES_INSTALLABLE,
+            ],
+            repo_root,
+        )
+        if result.returncode != 0:
+            print_process_failure("nix profile add", result)
+            return 1
 
     print(f"Nix CLI profile synced: {NIX_DOTFILES_PROFILE}")
     return 0

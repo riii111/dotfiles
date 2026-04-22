@@ -12,6 +12,7 @@ brew install chezmoi
 chezmoi init --source ~/ghq/github.com/riii111/dotfiles
 chezmoi apply
 brew bundle --file ~/ghq/github.com/riii111/dotfiles/Brewfile
+# Install Nix first: https://nixos.org/download/
 ~/bin/dot sync-nix-profile
 exec zsh
 ```

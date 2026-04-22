@@ -323,7 +323,7 @@ class DotCliTest(unittest.TestCase):
         self.assertEqual(lint_shell.call_args.args[0], repo_root)
         self.assertEqual(lint_shell.call_args.args[1], [staged])
 
-    def test_command_sync_nix_profile_reinstalls_profile_package(self):
+    def test_command_sync_nix_profile_upgrades_existing_profile_package(self):
         repo_root = Path("/repo")
         profile_path = Path("/tmp/dotfiles-cli-profile")
         calls = []
@@ -352,23 +352,13 @@ class DotCliTest(unittest.TestCase):
             [
                 "/nix/var/nix/profiles/default/bin/nix",
                 "profile",
-                "remove",
+                "upgrade",
                 "--profile",
                 str(profile_path),
                 "cli",
             ],
         )
-        self.assertEqual(
-            calls[1][0],
-            [
-                "/nix/var/nix/profiles/default/bin/nix",
-                "profile",
-                "add",
-                "--profile",
-                str(profile_path),
-                ".#cli",
-            ],
-        )
+        self.assertEqual(len(calls), 1)
 
     def test_command_sync_nix_profile_installs_when_profile_is_empty(self):
         repo_root = Path("/repo")
