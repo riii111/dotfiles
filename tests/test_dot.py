@@ -82,6 +82,7 @@ class DotCliTest(unittest.TestCase):
                 "brew": "/opt/homebrew/bin/brew",
                 "nvim": "/opt/homebrew/bin/nvim",
                 "lefthook": "/opt/homebrew/bin/lefthook",
+                "nix": "/nix/var/nix/profiles/default/bin/nix",
             }.get(name)
 
         with (
@@ -338,7 +339,7 @@ class DotCliTest(unittest.TestCase):
             mock.patch.object(
                 cli,
                 "run_capture",
-                return_value='{"elements":{"dotfiles-cli":{"active":true}},"version":3}',
+                return_value='{"elements":{"cli":{"active":true}},"version":3}',
             ),
             mock.patch.object(cli, "run_command", side_effect=fake_run_command),
             mock.patch("sys.stdout", new=io.StringIO()),
@@ -354,11 +355,48 @@ class DotCliTest(unittest.TestCase):
                 "remove",
                 "--profile",
                 str(profile_path),
-                "dotfiles-cli",
+                "cli",
             ],
         )
         self.assertEqual(
             calls[1][0],
+            [
+                "/nix/var/nix/profiles/default/bin/nix",
+                "profile",
+                "add",
+                "--profile",
+                str(profile_path),
+                ".#cli",
+            ],
+        )
+
+    def test_command_sync_nix_profile_installs_when_profile_is_empty(self):
+        repo_root = Path("/repo")
+        profile_path = Path("/tmp/dotfiles-cli-profile")
+        calls = []
+
+        def fake_run_command(args, cwd):
+            calls.append((args, cwd))
+            return subprocess.CompletedProcess(args, 0, "", "")
+
+        with (
+            mock.patch.object(cli, "resolve_repo_root", return_value=repo_root),
+            mock.patch("shutil.which", return_value="/nix/var/nix/profiles/default/bin/nix"),
+            mock.patch.object(cli, "NIX_DOTFILES_PROFILE", profile_path),
+            mock.patch.object(
+                cli,
+                "run_capture",
+                return_value='{"elements":{},"version":3}',
+            ),
+            mock.patch.object(cli, "run_command", side_effect=fake_run_command),
+            mock.patch("sys.stdout", new=io.StringIO()),
+        ):
+            result = cli.command_sync_nix_profile(mock.Mock())
+
+        self.assertEqual(result, 0)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(
+            calls[0][0],
             [
                 "/nix/var/nix/profiles/default/bin/nix",
                 "profile",

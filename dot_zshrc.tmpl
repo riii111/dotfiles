@@ -5,6 +5,9 @@ export XDG_CONFIG_HOME="$HOME/.config"
 export XDG_DATA_HOME="$HOME/.local/share"
 export XDG_CACHE_HOME="$HOME/.cache"
 export XDG_STATE_HOME="$HOME/.local/state"
+export NIX_DOTFILES_PROFILE="${XDG_STATE_HOME}/nix/profiles/dotfiles-cli"
+export NIX_DOTFILES_BIN="${NIX_DOTFILES_PROFILE}/bin"
+export NIX_DOTFILES_SHARE="${NIX_DOTFILES_PROFILE}/share"
 
 # Disable XON/XOFF flow control so Ctrl+Q/Ctrl+S are available for keybindings
 stty -ixon
@@ -166,8 +169,8 @@ _wezterm_set_cwd
 # Completion
 # ==========================================
 if [[ -o zle ]]; then
-  if [[ -d "${XDG_STATE_HOME:-$HOME/.local/state}/nix/profiles/dotfiles-cli/share/zsh/site-functions" ]]; then
-    FPATH="${XDG_STATE_HOME:-$HOME/.local/state}/nix/profiles/dotfiles-cli/share/zsh/site-functions:$FPATH"
+  if [[ -d "${NIX_DOTFILES_SHARE}/zsh/site-functions" ]]; then
+    FPATH="${NIX_DOTFILES_SHARE}/zsh/site-functions:$FPATH"
   fi
   # Homebrew completions
   FPATH="/opt/homebrew/share/zsh/site-functions:$FPATH"
@@ -205,8 +208,8 @@ if [[ -o zle ]]; then
   zstyle ':completion:*' matcher-list 'm:{[:lower:][:upper:]}={[:upper:][:lower:]}'
 
   # zsh-autosuggestions
-  if [[ -f "${XDG_STATE_HOME:-$HOME/.local/state}/nix/profiles/dotfiles-cli/share/zsh-autosuggestions/zsh-autosuggestions.zsh" ]]; then
-    source "${XDG_STATE_HOME:-$HOME/.local/state}/nix/profiles/dotfiles-cli/share/zsh-autosuggestions/zsh-autosuggestions.zsh"
+  if [[ -f "${NIX_DOTFILES_SHARE}/zsh-autosuggestions/zsh-autosuggestions.zsh" ]]; then
+    source "${NIX_DOTFILES_SHARE}/zsh-autosuggestions/zsh-autosuggestions.zsh"
   elif [[ -f /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh ]]; then
     source /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh
   fi
@@ -220,10 +223,8 @@ export LG_CONFIG_FILE="$HOME/.config/lazygit/config.yml"
 
 _deferred_abbr_init() {
   unfunction _deferred_abbr_init
-  local zsh_abbr_script="${XDG_STATE_HOME:-$HOME/.local/state}/nix/profiles/dotfiles-cli/share/zsh-abbr/zsh-abbr.zsh"
-  if [[ ! -f "$zsh_abbr_script" ]]; then
-    zsh_abbr_script="/opt/homebrew/share/zsh-abbr/zsh-abbr.zsh"
-  fi
+  # zsh-abbr stays on Homebrew for now because nixpkgs marks it unfree.
+  local zsh_abbr_script="/opt/homebrew/share/zsh-abbr/zsh-abbr.zsh"
   [[ -f "$zsh_abbr_script" ]] || return
 
   source "$zsh_abbr_script"
@@ -316,7 +317,11 @@ export FZF_CTRL_R_OPTS="--preview 'echo {}' --preview-window=down:3:wrap"
 
 # fzf keybindings: Ctrl-R (history)
 if [[ -o zle ]]; then
-  source /opt/homebrew/opt/fzf/shell/key-bindings.zsh
+  if [[ -f "${NIX_DOTFILES_SHARE}/fzf/key-bindings.zsh" ]]; then
+    source "${NIX_DOTFILES_SHARE}/fzf/key-bindings.zsh"
+  elif [[ -f /opt/homebrew/opt/fzf/shell/key-bindings.zsh ]]; then
+    source /opt/homebrew/opt/fzf/shell/key-bindings.zsh
+  fi
   bindkey -r '^T'              # disable Ctrl-T (conflicts with Rectangle)
 fi
 
@@ -585,9 +590,10 @@ export GCP_PROJECT="{{ .gcp_project }}"
 # Nix
 # ==========================================
 # Restore Nix bin paths after this zshrc rebuilds PATH.
+# Fallbacks cover first-time setup before `dot sync-nix-profile` and legacy user profiles.
 if [[ -d /nix/var/nix/profiles/default/bin ]]; then
-  if [[ -d "${XDG_STATE_HOME:-$HOME/.local/state}/nix/profiles/dotfiles-cli/bin" ]]; then
-    path=("${XDG_STATE_HOME:-$HOME/.local/state}/nix/profiles/dotfiles-cli/bin" /nix/var/nix/profiles/default/bin $path)
+  if [[ -d "${NIX_DOTFILES_BIN}" ]]; then
+    path=("${NIX_DOTFILES_BIN}" /nix/var/nix/profiles/default/bin $path)
   elif [[ -d "$HOME/.local/state/nix/profile/bin" ]]; then
     path=("$HOME/.local/state/nix/profile/bin" /nix/var/nix/profiles/default/bin $path)
   elif [[ -d "$HOME/.nix-profile/bin" ]]; then

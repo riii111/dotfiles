@@ -34,7 +34,6 @@
             fzf
             gh
             ghq
-            git
             jq
             k6
             lazygit
@@ -50,7 +49,7 @@
             tmux
             tree
             visidata
-            yq-go
+            yq-go # Go implementation behind the `yq` command.
             zsh-autosuggestions
           ];
           cliProfile = pkgs.buildEnv {

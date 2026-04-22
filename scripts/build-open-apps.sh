@@ -9,16 +9,17 @@ set -euo pipefail
 # Idempotent: re-running overwrites existing installs.
 
 readonly DEST="$HOME/Library/Application Support/open-routing"
-readonly WEZTERM="/opt/homebrew/bin/wezterm"
-readonly NVIM="/opt/homebrew/bin/nvim"
-readonly VD="/opt/homebrew/bin/vd"
-readonly CSVLENS="/opt/homebrew/bin/csvlens"
 readonly LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister"
 
-[[ -x "$WEZTERM" ]] || { echo "ERROR: $WEZTERM not found (brew install --cask wezterm)"; exit 1; }
-[[ -x "$NVIM" ]] || { echo "ERROR: $NVIM not found (brew install neovim)"; exit 1; }
-[[ -x "$VD" ]] || { echo "ERROR: $VD not found (brew install visidata)"; exit 1; }
-[[ -x "$CSVLENS" ]] || { echo "ERROR: $CSVLENS not found (brew install csvlens)"; exit 1; }
+readonly WEZTERM="$(command -v wezterm || true)"
+readonly NVIM="$(command -v nvim || true)"
+readonly VD="$(command -v vd || true)"
+readonly CSVLENS="$(command -v csvlens || true)"
+
+[[ -n "$WEZTERM" ]] || { echo "ERROR: wezterm not found in PATH"; exit 1; }
+[[ -n "$NVIM" ]] || { echo "ERROR: nvim not found in PATH"; exit 1; }
+[[ -n "$VD" ]] || { echo "ERROR: vd not found in PATH"; exit 1; }
+[[ -n "$CSVLENS" ]] || { echo "ERROR: csvlens not found in PATH"; exit 1; }
 command -v osacompile >/dev/null || { echo "ERROR: osacompile missing"; exit 1; }
 
 mkdir -p "$DEST"

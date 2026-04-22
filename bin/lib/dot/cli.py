@@ -15,7 +15,7 @@ LINTABLE_SHELLS = frozenset({"bash", "sh"})
 NIX_DOTFILES_PROFILE = (
     Path.home() / ".local" / "state" / "nix" / "profiles" / "dotfiles-cli"
 )
-NIX_DOTFILES_PROFILE_NAME = "dotfiles-cli"
+NIX_DOTFILES_PROFILE_ELEMENT = "cli"
 NIX_DOTFILES_INSTALLABLE = ".#cli"
 
 
@@ -341,7 +341,7 @@ def command_sync_nix_profile(_: argparse.Namespace) -> int:
         )
     )
 
-    if NIX_DOTFILES_PROFILE_NAME in listing.get("elements", {}):
+    if NIX_DOTFILES_PROFILE_ELEMENT in listing.get("elements", {}):
         result = run_command(
             [
                 nix,
@@ -349,7 +349,7 @@ def command_sync_nix_profile(_: argparse.Namespace) -> int:
                 "remove",
                 "--profile",
                 str(NIX_DOTFILES_PROFILE),
-                NIX_DOTFILES_PROFILE_NAME,
+                NIX_DOTFILES_PROFILE_ELEMENT,
             ],
             repo_root,
         )
