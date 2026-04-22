@@ -29,22 +29,7 @@ Markdown clipboard-to-image paste: `<C-v>` in normal mode (uses `pngpaste`, alre
 
 ## Optional: Nix dev shell
 
-Use Nix as an additive toolchain for CLI / lint / dev tools.
-`chezmoi` stays responsible for config placement. Homebrew stays for GUI apps and macOS-specific tools.
-
-If Nix is not installed yet on macOS, use the official installer:
-
-```bash
-sh <(curl --proto '=https' --tlsv1.2 -L https://nixos.org/nix/install)
-```
-
-If `nix develop` complains about experimental features, add this to `~/.config/nix/nix.conf`:
-
-```txt
-experimental-features = nix-command flakes
-```
-
-Then restart the shell and enter the repo toolchain:
+Nix is used additively for CLI / lint / dev tools.
 
 ```bash
 nix develop
