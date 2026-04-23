@@ -28,7 +28,7 @@ bash ~/ghq/github.com/riii111/dotfiles/scripts/setup-default-apps.sh
 
 Routing: text / code → Neovim, csv / tsv → csvlens, parquet / sqlite / jsonl → VisiData, images / pdf → Preview (untouched).
 
-Markdown clipboard-to-image paste: `<C-v>` in normal mode (uses `pngpaste`, already in Brewfile).
+Markdown clipboard-to-image paste: `<C-v>` in normal mode (uses `pngpaste`, managed by the Nix CLI profile).
 
 ## Nix
 
