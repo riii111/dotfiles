@@ -407,6 +407,27 @@ return {
 			ignore = function(bufnr)
 				return vim.bo[bufnr].filetype == "oil"
 			end,
+			render_modes = { "n", "c" },
+			heading = {
+				icons = { "󰎤 ", "󰎧 ", "󰎪 ", "󰎭 ", "󰎱 ", "󰎳 " },
+				backgrounds = {
+					"RenderMarkdownH1Bg",
+					"RenderMarkdownH2Bg",
+					"RenderMarkdownH3Bg",
+					"RenderMarkdownH4Bg",
+					"RenderMarkdownH5Bg",
+					"RenderMarkdownH6Bg",
+				},
+			},
+			code = {
+				sign = false,
+				width = "block",
+				right_pad = 1,
+			},
+			pipe_table = {
+				style = "full",
+				cell = "padded",
+			},
 		},
 	},
 

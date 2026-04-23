@@ -69,7 +69,7 @@
 
 2) Language module
    - Create `lua/plugins/languages/<lang>.lua` and:
-     - Extend Treesitter parsers via `opts.ensure_installed`.
+     - Extend Treesitter parser/filetype registration via `utils.treesitter.extend`.
      - Configure LSP with `lspconfig` (root detection via `lspconfig.util.root_pattern`).
      - Register formatters/linters with null‑ls only if the LSP lacks them.
      - Add DAP adapter (optional) resolved from Mason.
@@ -91,13 +91,11 @@ return {
   {
     "nvim-treesitter/nvim-treesitter",
     opts = function(_, opts)
-      opts = opts or {}
-      local ensure = opts.ensure_installed or {}
-      for _, lang in ipairs({ "<lang>" }) do
-        if not vim.tbl_contains(ensure, lang) then table.insert(ensure, lang) end
-      end
-      opts.ensure_installed = ensure
-      return opts
+      return require("utils.treesitter").extend(opts, {
+        languages = { "<lang>" },
+        filetypes = { "<lang>" },
+        indent_filetypes = { "<lang>" },
+      })
     end,
   },
   {

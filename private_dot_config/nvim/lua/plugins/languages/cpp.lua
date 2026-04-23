@@ -2,16 +2,11 @@ return {
   {
     "nvim-treesitter/nvim-treesitter",
     opts = function(_, opts)
-      opts = opts or {}
-      local ensure = opts.ensure_installed or {}
-      local add = { "c", "cpp", "cmake", "make" }
-      for _, lang in ipairs(add) do
-        if not vim.tbl_contains(ensure, lang) then
-          table.insert(ensure, lang)
-        end
-      end
-      opts.ensure_installed = ensure
-      return opts
+      return require("utils.treesitter").extend(opts, {
+        languages = { "c", "cpp", "cmake", "make" },
+        filetypes = { "c", "cpp", "cmake", "make" },
+        indent_filetypes = { "c", "cpp", "cmake", "make" },
+      })
     end,
   },
 

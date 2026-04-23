@@ -2,12 +2,12 @@ return {
 	-- Treesitter
 	{
 		"nvim-treesitter/nvim-treesitter",
-		branch = "master",
+		branch = "main",
 		build = ":TSUpdate",
 		lazy = false,
 		opts = {
-			parser_install_dir = vim.fn.stdpath("data") .. "/site",
-			ensure_installed = {
+			install_dir = vim.fn.stdpath("data") .. "/site",
+			languages = {
 				"bash",
 				"c",
 				"diff",
@@ -15,7 +15,6 @@ return {
 				"javascript",
 				"jsdoc",
 				"json",
-				"jsonc",
 				"lua",
 				"luadoc",
 				"luap",
@@ -37,26 +36,106 @@ return {
 				"gosum",
 				"rust",
 			},
-			highlight = {
-				enable = true,
+			filetypes = {
+				"bash",
+				"c",
+				"cpp",
+				"diff",
+				"go",
+				"gomod",
+				"gosum",
+				"gowork",
+				"help",
+				"html",
+				"hcl",
+				"javascript",
+				"javascriptreact",
+				"json",
+				"jsonc",
+				"kotlin",
+				"lua",
+				"markdown",
+				"octo",
+				"python",
+				"query",
+				"rust",
+				"terraform",
+				"terraform-vars",
+				"toml",
+				"tsx",
+				"typescript",
+				"typescriptreact",
+				"vim",
+				"yaml",
 			},
-			indent = {
-				enable = true,
-				disable = { "rust" },
+			indent_filetypes = {
+				"bash",
+				"c",
+				"cpp",
+				"go",
+				"gomod",
+				"gosum",
+				"gowork",
+				"html",
+				"hcl",
+				"javascript",
+				"javascriptreact",
+				"json",
+				"jsonc",
+				"kotlin",
+				"lua",
+				"python",
+				"terraform",
+				"terraform-vars",
+				"toml",
+				"tsx",
+				"typescript",
+				"typescriptreact",
+				"vim",
+				"yaml",
 			},
 		},
 		config = function(_, opts)
-			vim.opt.runtimepath:append(opts.parser_install_dir)
-			require("nvim-treesitter.configs").setup(opts)
+			local treesitter = require("nvim-treesitter")
+			local treesitter_utils = require("utils.treesitter")
+			local install_languages = treesitter_utils.resolve_languages(opts.languages)
+			if type(treesitter.setup) == "function" then
+				treesitter.setup({
+					install_dir = opts.install_dir,
+				})
+			end
+
+			local installed = {}
+			if type(treesitter.get_installed) == "function" then
+				installed = treesitter.get_installed()
+			else
+				local ok, info = pcall(require, "nvim-treesitter.info")
+				if ok and type(info.installed_parsers) == "function" then
+					installed = info.installed_parsers()
+				end
+			end
+			local missing = vim.tbl_filter(function(language)
+				return not vim.tbl_contains(installed, language)
+			end, install_languages)
+			if #missing > 0 and type(treesitter.install) == "function" then
+				treesitter.install(missing)
+			end
 
 			vim.treesitter.language.register("markdown", "octo")
+
+			vim.api.nvim_create_autocmd("FileType", {
+				pattern = opts.filetypes,
+				callback = function(args)
+					treesitter_utils.start(args.buf, opts.indent_filetypes)
+				end,
+			})
 		end,
 	},
 
 	-- Treesitter textobjects
 	{
 		"nvim-treesitter/nvim-treesitter-textobjects",
-		branch = "master",
+		branch = "main",
 		enabled = false,
 		event = "VeryLazy",
 		dependencies = { "nvim-treesitter/nvim-treesitter" },
@@ -207,37 +286,4 @@ return {
 		},
 	},
 
-	-- Markdown rendering for Octo buffers (markview handles regular markdown)
-	{
-		"MeanderingProgrammer/render-markdown.nvim",
-		dependencies = { "nvim-treesitter/nvim-treesitter", "nvim-tree/nvim-web-devicons" },
-		ft = { "octo" },
-		config = function(_, opts)
-			require("render-markdown").setup(opts)
-		end,
-		opts = {
-			file_types = { "octo" },
-			render_modes = { "n", "c" },
-			heading = {
-				icons = { "󰎤 ", "󰎧 ", "󰎪 ", "󰎭 ", "󰎱 ", "󰎳 " },
-				backgrounds = {
-					"RenderMarkdownH1Bg",
-					"RenderMarkdownH2Bg",
-					"RenderMarkdownH3Bg",
-					"RenderMarkdownH4Bg",
-					"RenderMarkdownH5Bg",
-					"RenderMarkdownH6Bg",
-				},
-			},
-			code = {
-				sign = false,
-				width = "block",
-				right_pad = 1,
-			},
-			pipe_table = {
-				style = "full",
-				cell = "padded",
-			},
-		},
-	},
 }
