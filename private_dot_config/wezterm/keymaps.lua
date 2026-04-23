@@ -89,11 +89,6 @@ local keys = {
 	{ key = "r", mods = "CMD|SHIFT", action = act.SendKey({ key = "r", mods = "ALT|SHIFT" }) },
 
 	---------------------------------------------------------------
-	-- Let macOS handle Cmd+F1 (e.g. "next window of same app")
-	---------------------------------------------------------------
-	{ key = "F1", mods = "CMD", action = act.DisableDefaultAssignment },
-
-	---------------------------------------------------------------
 	-- JIS keyboard: Option+¥ for | and \
 	---------------------------------------------------------------
 	{ key = "¥", mods = "ALT", action = act.SendString("|") },
