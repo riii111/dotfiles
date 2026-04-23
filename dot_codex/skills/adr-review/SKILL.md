@@ -9,13 +9,6 @@ description: |
 
 Review an ADR pragmatically.
 
-Use a fixed pipeline:
-1. Triage the ADR and decide how deep the investigation should go.
-2. Build a claim table from the ADR before judging it.
-3. Gather evidence only for the claims that matter.
-4. Convert concerns into calibrated review items.
-5. Return postable comment drafts, not just raw concerns.
-
 ## Args
 - solo: single-agent review
 - pair: context-reader + architect-reviewer
@@ -64,24 +57,22 @@ Before assembling the team:
 
 ### Heavy vs light review
 
-Use a light flow when the ADR is narrow and mostly repo-local:
-- require `claim table`
-- confirm against `repo`
+Light flow:
+- always make a `claim table`
+- check `repo`
 - skip the full evidence matrix unless a claim stays ambiguous or high impact
 
-Use a heavy flow when the ADR is cross-cutting or makes operational claims:
-- expand to a full evidence matrix
+Heavy flow:
+- add the full evidence matrix
 - track dropped / weakened items
-- draft postable comments explicitly
+- return comment drafts explicitly
 
-Treat these as signals for a heavy flow:
+Signals for heavy flow:
 - performance, cost, migration, monitoring, rollback, or availability claims
 - claims about current pain such as "frequent", "high load", "alert-heavy", "costly", "slow", or "many incidents"
 - cross-repo dependencies or trust-boundary changes
 
 ## Claim table (required)
-
-Do this before gathering evidence or drafting review items.
 
 Break the ADR into **decision-relevant claims**, not sentences.
 - Split one sentence into multiple claims when it makes multiple assertions.
@@ -103,18 +94,13 @@ Example:
 
 ## Evidence collection
 
-For each claim, decide which evidence sources are needed before reviewing it.
-
-### Source selection rules
-
+Choose sources per claim:
 - `repo`: almost always required
 - `infra`: required when the ADR touches operations, monitoring, permissions, rollout, external integrations, or environment shape
 - `docs`: required when the ADR relies on vendor behavior, product limits, or external contracts
 - `live`: required only when the ADR makes claims about current reality using words like "frequent", "high", "many", "expensive", or "degraded"
 
 If the right source is still unclear after reading the ADR, ask the user a narrow question instead of guessing.
-
-### Evidence matrix
 
 Use a matrix when the ADR is heavy or cross-cutting. For each claim, record:
 - source checked: `repo / infra / docs / live`
@@ -133,14 +119,12 @@ Gather:
 - existing patterns / helpers / prior art
 - affected modules / layers / boundaries
 
-Start from the claim table, then gather evidence.
-
 For each claim, classify the current support level as:
 - **supported**: evidence backs the claim
 - **contradicted**: evidence conflicts with the claim
 - **unverified**: needed evidence is missing or outside the available context
 
-Then summarize the repo-relevant architecture and assumptions that later reviewers should inherit.
+Then hand later reviewers the relevant architecture and assumptions.
 
 ### architect-reviewer
 Review:
@@ -175,8 +159,6 @@ Review:
 - unsafe assumptions around trust boundaries
 
 ## Comment distillation (required)
-
-Do not turn a vague concern directly into a review comment.
 
 For each concern, walk this sequence:
 1. Identify the claim it targets.
@@ -261,9 +243,6 @@ The proposal is sound for the stated scope but relies on two unverified assumpti
 ## Review items
 - **MUST**: ADR assumes idempotent PUT on /billing/plans, but no contract or test confirms this. If not idempotent, the retry logic in §3 will cause duplicate charges.
 - **SHOULD**: Migration script lacks a rollback step — add one before merging.
-- **IMO**: Consider feature-flagging the new path to allow gradual rollout.
-- **NITS**: §2 "the service" is ambiguous — specify which service.
-- **Q**: §4 claims "performance is acceptable" — what benchmark target is this measured against?
 
 ## Comment drafts
 - Global comment: "The proposal direction looks reasonable, but two decision-critical assumptions remain unverified: billing API idempotency and rollback safety. Please either add evidence or narrow the claim."
