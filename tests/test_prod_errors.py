@@ -115,6 +115,43 @@ def make_request_log(
     }
 
 
+def make_access_log(timestamp, status, endpoint="/foo", trace_id=None, service="svc-a"):
+    return {
+        "timestamp": timestamp,
+        "severity": "INFO" if status < 500 else "ERROR",
+        "resource": {"labels": {"service_name": service}},
+        "trace": f"projects/demo/traces/{trace_id}" if trace_id else "",
+        "jsonPayload": {
+            "message": f"{status} request: POST - {endpoint} in 20ms",
+            "logger": "access",
+        },
+    }
+
+
+def make_request_info_log(
+    timestamp,
+    request_id,
+    file_ids,
+    endpoint="/foo",
+    trace_id=None,
+    service="svc-a",
+):
+    return {
+        "timestamp": timestamp,
+        "severity": "INFO",
+        "resource": {"labels": {"service_name": service}},
+        "trace": f"projects/demo/traces/{trace_id}" if trace_id else "",
+        "jsonPayload": {
+            "message": f"Request Information POST {endpoint}",
+            "logger": "app",
+            "requestBody": {
+                "id": request_id,
+                "files": [{"id": file_id} for file_id in file_ids],
+            },
+        },
+    }
+
+
 def make_hotspot_log(timestamp, group_id, message, service="svc-a"):
     return {
         "timestamp": timestamp,
@@ -263,6 +300,26 @@ class ProdErrorsTraceHelpersTest(unittest.TestCase):
         self.assertEqual(fingerprint["caller"]["tenantId"], "tenant-a")
         self.assertIn("request_id=20337152...", fingerprint["summary"])
 
+    def test_extract_request_fingerprint_reads_message_ids_without_file_id_leak(self):
+        entry = make_trace_log(
+            "2026-04-05T00:00:00.000000Z",
+            "INFO",
+            (
+                "Request Information POST /foo "
+                "requestBody.id=20337152-1406-4727-9e11-a67722f22be6 "
+                "files[].id=aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"
+            ),
+        )
+
+        fingerprint = extract_request_fingerprint(entry)
+
+        self.assertEqual(
+            fingerprint["requestId"], "20337152-1406-4727-9e11-a67722f22be6"
+        )
+        self.assertEqual(
+            fingerprint["fileIds"], ["aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"]
+        )
+
     def test_extract_context_from_object_reads_nested_aliases_and_strings(self):
         context = {}
 
@@ -342,6 +399,18 @@ class ProdErrorsTraceHelpersTest(unittest.TestCase):
         self.assertEqual(
             _extract_http_request_info(entry),
             {"httpStatus": 500, "endpoint": "/foo"},
+        )
+
+    def test_extract_http_request_info_reads_request_information_message(self):
+        entry = make_trace_log(
+            "2026-04-05T00:00:01.000000Z",
+            "INFO",
+            "Request Information POST /api/smart-hanko",
+        )
+
+        self.assertEqual(
+            _extract_http_request_info(entry),
+            {"httpStatus": None, "endpoint": "/api/smart-hanko"},
         )
 
     def test_extract_http_request_info_reads_http_request_fields(self):
@@ -1348,15 +1417,24 @@ class ProdErrorsCommandTest(unittest.TestCase):
         ]
         mock_correlation_logging_read.side_effect = [
             [
-                make_request_log(
+                make_access_log(
                     "2026-04-05T00:57:58.000000Z",
                     500,
+                    trace_id="trace-fail-1",
+                ),
+                make_request_info_log(
+                    "2026-04-05T00:57:58.100000Z",
                     request_id,
                     file_ids,
+                    trace_id="trace-fail-1",
                 ),
-                make_request_log(
+                make_access_log(
                     "2026-04-05T00:53:57.000000Z",
                     200,
+                    trace_id="trace-ok",
+                ),
+                make_request_info_log(
+                    "2026-04-05T00:53:57.100000Z",
                     request_id,
                     file_ids,
                     trace_id="trace-ok",
@@ -1400,6 +1478,8 @@ class ProdErrorsCommandTest(unittest.TestCase):
         self.assertEqual(correlation["replayCheck"]["verdict"], "likely_resubmit")
         self.assertEqual(len(correlation["relatedConstraintErrors"]), 1)
         self.assertEqual(correlation["correlatedRequests"][0]["requestId"], request_id)
+        self.assertEqual(correlation["correlatedRequests"][0]["status"], 200)
+        self.assertEqual(correlation["correlatedRequests"][1]["status"], 500)
 
     @mock.patch("prod_errors.trace.get_token", return_value="token")
     @mock.patch("prod_errors.trace.api_get")
@@ -1430,15 +1510,24 @@ class ProdErrorsCommandTest(unittest.TestCase):
         ]
         mock_correlation_logging_read.side_effect = [
             [
-                make_request_log(
+                make_access_log(
                     "2026-04-05T00:57:58.000000Z",
                     500,
+                    trace_id="trace-fail-1",
+                ),
+                make_request_info_log(
+                    "2026-04-05T00:57:58.100000Z",
                     "req-1",
                     ["aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"],
+                    trace_id="trace-fail-1",
                 ),
-                make_request_log(
+                make_access_log(
                     "2026-04-05T00:53:57.000000Z",
                     200,
+                    trace_id="trace-ok",
+                ),
+                make_request_info_log(
+                    "2026-04-05T00:53:57.100000Z",
                     "req-1",
                     ["aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"],
                     trace_id="trace-ok",
@@ -1465,6 +1554,63 @@ class ProdErrorsCommandTest(unittest.TestCase):
         self.assertIn("likely_resubmit", output)
         self.assertIn(
             "| timestamp | status | trace | request_id | fingerprint |", output
+        )
+
+    @mock.patch("prod_errors.trace.get_token", return_value="token")
+    @mock.patch("prod_errors.trace.api_get")
+    @mock.patch("prod_errors.trace.api_get_all_pages")
+    @mock.patch("prod_errors.trace.logging_read")
+    @mock.patch("prod_errors.correlation.logging_read")
+    def test_cmd_trace_requests_mode_marks_fingerprint_unavailable(
+        self,
+        mock_correlation_logging_read,
+        mock_logging_read,
+        mock_api_get_all_pages,
+        mock_api_get,
+        _mock_get_token,
+    ):
+        mock_api_get_all_pages.return_value = self._DEFAULT_GROUPS
+        mock_api_get.return_value = self._DEFAULT_EVENTS
+        mock_logging_read.return_value = [
+            {
+                "timestamp": "2026-04-05T00:57:58.000000Z",
+                "severity": "ERROR",
+                "resource": {"labels": {"service_name": "svc-a"}},
+                "jsonPayload": {
+                    "message": "FooError: boom",
+                    "logger": "app",
+                    "request": {"path": "/foo", "status": 500},
+                },
+            }
+        ]
+        mock_correlation_logging_read.side_effect = [
+            [
+                make_access_log("2026-04-05T00:53:57.000000Z", 200),
+                make_access_log("2026-04-05T00:57:58.000000Z", 500),
+            ],
+            [],
+        ]
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            cmd_trace(
+                argparse.Namespace(
+                    project="demo",
+                    group_id="g-trace",
+                    json=True,
+                    freshness="30d",
+                    mode="requests",
+                    window="5m",
+                )
+            )
+
+        payload = json.loads(stdout.getvalue())
+        correlation = payload["requestCorrelation"]
+        self.assertEqual(
+            correlation["replayCheck"]["verdict"], "fingerprint_unavailable"
+        )
+        self.assertIn(
+            "request fingerprint extraction failed", correlation["summary"]["text"]
         )
 
     @mock.patch("prod_errors.trace.get_token", return_value="token")

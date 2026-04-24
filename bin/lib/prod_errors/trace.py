@@ -52,11 +52,11 @@ def cmd_trace(args):
     events = _load_recent_events(args.project, token, args.group_id)
     result["recentEvents"] = events
 
-    filt = _build_cloud_logging_filter(first_line, known_service)
-    result["cloudLogging"] = {"filter": filt}
+    filters = _build_cloud_logging_filters(first_line, known_service, args.group_id)
+    result["cloudLogging"] = {"filters": filters}
 
     try:
-        lookup = _lookup_cloud_logging(args.project, token, filt, args.freshness)
+        lookup = _lookup_cloud_logging(args.project, token, filters, args.freshness)
     except LoggingError as exc:
         result["cloudLogging"]["error"] = str(exc)
         _print_trace_error_result(
@@ -80,6 +80,7 @@ def cmd_trace(args):
             "service": lookup["service"],
             "traceId": lookup["traceId"],
             "matchedEntries": lookup["matchedEntries"],
+            "filter": lookup["filter"],
             "endpointCandidates": lookup["endpointCandidates"],
             "messageVariants": lookup["messageVariants"],
             "loggerClues": lookup["loggerClues"],
@@ -376,7 +377,13 @@ def _print_request_correlation(correlation, colors):
 
     requests = correlation["correlatedRequests"]
     if not requests:
-        print("\nNo same-endpoint requests found in the selected window.")
+        window = correlation["window"]
+        print(
+            "\nNo same-endpoint requests found in the selected window. "
+            f"Window: {window['since']} -> {window['until']}."
+        )
+        if correlation["nextHints"]:
+            print(f"Next hint: {correlation['nextHints'][0]}")
         return
 
     print("\n| timestamp | status | trace | request_id | fingerprint |")
@@ -512,19 +519,34 @@ def _print_recent_events(events, colors):
         )
 
 
-def _build_cloud_logging_filter(first_line, known_service):
+def _build_cloud_logging_filters(first_line, known_service, group_id):
     search = first_line[:80].replace('"', '\\"')
+    filters = []
     if known_service:
-        return (
+        filters.append(
+            f'resource.labels.service_name="{known_service}" '
+            f'errorGroups.id="{group_id}" severity>=ERROR'
+        )
+        filters.append(
             f'resource.labels.service_name="{known_service}" "{search}" severity>=ERROR'
         )
-    return f'"{search}" severity>=ERROR'
+    filters.append(f'errorGroups.id="{group_id}" severity>=ERROR')
+    filters.append(f'"{search}" severity>=ERROR')
+    return filters
 
 
-def _lookup_cloud_logging(project, token, filt, freshness):
-    logs = logging_read(
-        project, token, filt, limit=_MATCHED_LOG_FETCH_LIMIT, freshness=freshness
-    )
+def _lookup_cloud_logging(project, token, filters, freshness):
+    if isinstance(filters, str):
+        filters = [filters]
+    logs = []
+    used_filter = None
+    for filt in filters:
+        logs = logging_read(
+            project, token, filt, limit=_MATCHED_LOG_FETCH_LIMIT, freshness=freshness
+        )
+        if logs:
+            used_filter = filt
+            break
     if not logs:
         return None
 
@@ -539,6 +561,7 @@ def _lookup_cloud_logging(project, token, filt, freshness):
     logger_clues = _collect_logger_clues(matched_logs)
     return {
         "logs": logs,
+        "filter": used_filter,
         "service": service,
         "matchedEntries": matched_logs,
         "traceId": trace_id or None,
@@ -622,6 +645,9 @@ _CONTEXT_VALUE_PATTERNS = {
 
 _ACCESS_LOG_RE = re.compile(
     r"(\d{3})\s+[\w ]+:\s+(GET|POST|PUT|PATCH|DELETE)\s+-\s+(.+?)\s+in\s+\d+ms"
+)
+_REQUEST_INFO_RE = re.compile(
+    r"(?:Request|Response) Information\s+(GET|POST|PUT|PATCH|DELETE)\s+(\S+)"
 )
 _MAX_CONTEXT_DEPTH = 12
 
@@ -838,6 +864,12 @@ def _extract_http_request_info(log_entry):
         return {
             "httpStatus": int(match.group(1)),
             "endpoint": match.group(3).strip(),
+        }
+    match = _REQUEST_INFO_RE.search(message)
+    if match:
+        return {
+            "httpStatus": None,
+            "endpoint": match.group(2).strip(),
         }
 
     candidates = [log_entry.get("httpRequest", {}), payload.get("httpRequest", {})]

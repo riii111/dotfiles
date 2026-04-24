@@ -7,6 +7,12 @@ _UUID_RE = re.compile(
     r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b"
 )
 _REQUEST_ID_KEYS = {"requestid", "request_id"}
+_REQUEST_ID_RE = re.compile(
+    r"(?i)(?:requestBody\.)?(?:requestId|request_id|id)[\"'=:\s]+([0-9a-f-]{36})"
+)
+_FILE_ID_RE = re.compile(
+    r"(?i)(?:files?\[\]?\.)?(?:fileId|file_id|fileUuid|file_uuid|id)[\"'=:\s]+([0-9a-f-]{36})"
+)
 _CALLER_KEYS = {
     "tenantId": {"tenantid", "tenant_id", "apptenantid", "xtenantid", "xapptenantid"},
     "userAccountId": {
@@ -25,7 +31,7 @@ def extract_request_fingerprint(entry):
     request_body = _extract_request_body(payload)
     source = request_body if isinstance(request_body, (dict, list)) else payload
     request_id = _extract_request_id(source)
-    file_ids = _extract_file_ids(source)
+    file_ids = [value for value in _extract_file_ids(source) if value != request_id]
     primary_ids = _extract_primary_ids(source, file_ids, request_id)
     caller = _extract_caller(entry)
 
@@ -82,6 +88,10 @@ def _extract_request_id(obj):
             found = _extract_request_id(value)
             if found:
                 return found
+    if isinstance(obj, str):
+        match = _REQUEST_ID_RE.search(obj)
+        if match:
+            return match.group(1)
     return None
 
 
@@ -112,6 +122,8 @@ def _collect_file_ids(obj, ids, inside_files=False):
     elif isinstance(obj, list):
         for value in obj:
             _collect_file_ids(value, ids, inside_files)
+    elif isinstance(obj, str):
+        ids.extend(match.group(1) for match in _FILE_ID_RE.finditer(obj))
 
 
 def _extract_primary_ids(obj, file_ids, request_id):

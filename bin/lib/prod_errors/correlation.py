@@ -2,7 +2,7 @@ from collections import Counter
 from datetime import timedelta
 import re
 
-from prod_errors.client import LoggingError, logging_read
+from prod_errors.client import LoggingError, extract_trace_id, logging_read
 from prod_errors.fingerprint import build_request_row
 from prod_errors.timefmt import isoformat_utc, parse_timestamp
 
@@ -73,25 +73,57 @@ def _build_request_filter(service, endpoint, since, until):
         else ""
     )
     return (
-        f'{service_filter}jsonPayload.message:"{escaped_endpoint}" '
-        f'timestamp>="{since}" timestamp<"{until}"'
+        f'{service_filter}"{escaped_endpoint}" timestamp>="{since}" timestamp<"{until}"'
     )
 
 
 def _build_request_rows(logs, target_endpoint, extract_http_request_info):
-    rows = []
+    grouped = {}
+    order = []
     for log_entry in reversed(logs):
         request_info = extract_http_request_info(log_entry)
         if not request_info or request_info["endpoint"] != target_endpoint:
             continue
-        rows.append(
-            build_request_row(
-                log_entry,
-                request_info["endpoint"],
-                request_info["httpStatus"],
-            )
+        row = build_request_row(
+            log_entry,
+            request_info["endpoint"],
+            request_info["httpStatus"],
         )
-    return rows
+        key = _request_group_key(row, log_entry)
+        if key not in grouped:
+            grouped[key] = row
+            order.append(key)
+            continue
+        _merge_request_row(grouped[key], row)
+    return [grouped[key] for key in order]
+
+
+def _request_group_key(row, log_entry):
+    if row["traceId"]:
+        return f"trace:{row['traceId']}"
+    if row["requestId"]:
+        return f"request:{row['requestId']}"
+    trace = extract_trace_id(log_entry)
+    if trace:
+        return f"trace:{trace}"
+    return f"entry:{row['timestamp']}"
+
+
+def _merge_request_row(base, incoming):
+    if base["status"] is None and incoming["status"] is not None:
+        base["status"] = incoming["status"]
+    if not base["traceId"] and incoming["traceId"]:
+        base["traceId"] = incoming["traceId"]
+    if not base["requestId"] and incoming["requestId"]:
+        base["requestId"] = incoming["requestId"]
+    if _fingerprint_score(incoming["fingerprint"]) > _fingerprint_score(
+        base["fingerprint"]
+    ):
+        base["fingerprint"] = incoming["fingerprint"]
+
+
+def _fingerprint_score(fingerprint):
+    return int(bool(fingerprint["requestId"])) + len(fingerprint["fileIds"])
 
 
 def _lookup_constraint_errors(project, token, service, since, until):
@@ -131,6 +163,7 @@ def _build_replay_check(requests):
     ]
     statuses = [row["status"] for row in requests if row["status"] is not None]
     signals = []
+    fingerprint_available = bool(request_ids or file_sets)
     if _has_duplicate(request_ids):
         signals.append("same_request_id")
     if _has_duplicate(file_sets):
@@ -140,7 +173,9 @@ def _build_replay_check(requests):
     if _has_success_then_failure(statuses):
         signals.append("success_then_failure")
 
-    if {"same_request_id", "same_file_ids", "success_then_failure"}.issubset(signals):
+    if requests and not fingerprint_available:
+        verdict = "fingerprint_unavailable"
+    elif {"same_request_id", "same_file_ids", "success_then_failure"}.issubset(signals):
         verdict = "likely_resubmit"
     elif {"same_request_id", "same_file_ids"}.issubset(signals):
         verdict = "same_payload_seen"
@@ -152,6 +187,7 @@ def _build_replay_check(requests):
     return {
         "signals": signals,
         "verdict": verdict,
+        "fingerprintAvailable": fingerprint_available,
         "sameRequestIdCount": _duplicate_value_count(request_ids),
         "sameFileIdsCount": _duplicate_value_count(file_sets),
     }
@@ -161,10 +197,8 @@ def _build_summary(requests, replay_check, window):
     success_count = sum(1 for row in requests if _is_success(row["status"]))
     failure_count = sum(1 for row in requests if _is_failure(row["status"]))
     return {
-        "text": (
-            f"{len(requests)} same-endpoint requests within {window}; "
-            f"{success_count} success / {failure_count} failure; "
-            f"replay={replay_check['verdict']}"
+        "text": _summary_text(
+            len(requests), success_count, failure_count, replay_check, window
         ),
         "requestCount": len(requests),
         "successCount": success_count,
@@ -175,6 +209,8 @@ def _build_summary(requests, replay_check, window):
 
 def _build_next_hints(requests, replay_check, constraint_errors):
     hints = []
+    if replay_check["verdict"] == "fingerprint_unavailable":
+        hints.append("inspect raw Request Information logs for requestBody shape")
     if replay_check["verdict"] in {"likely_resubmit", "same_payload_seen"}:
         hints.append("compare caller and UI retry/resubmit path")
     if constraint_errors:
@@ -182,6 +218,20 @@ def _build_next_hints(requests, replay_check, constraint_errors):
     if not requests:
         hints.append("broaden --window or verify endpoint extraction")
     return hints
+
+
+def _summary_text(request_count, success_count, failure_count, replay_check, window):
+    if request_count and replay_check["verdict"] == "fingerprint_unavailable":
+        return (
+            f"{request_count} same-endpoint requests within {window}; "
+            f"{success_count} success / {failure_count} failure; "
+            "comparison unavailable: request fingerprint extraction failed"
+        )
+    return (
+        f"{request_count} same-endpoint requests within {window}; "
+        f"{success_count} success / {failure_count} failure; "
+        f"replay={replay_check['verdict']}"
+    )
 
 
 def _has_duplicate(values):
