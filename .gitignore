@@ -10,3 +10,6 @@ __pycache__/
 
 # Built binaries
 dot_claude/statusline/executable_statusline-go
+
+# Nix build symlink
+result
