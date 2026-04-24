@@ -30,24 +30,36 @@
 
             # Daily CLI tools owned by Nix.
             bat
+            cmake
             csvlens
             delta
+            deno
+            docker
             eza
             fd
             fzf
+            gcc
+            gemini-cli
             gh
             ghq
             git
+            go
+            golangci-lint
+            inetutils # Provides telnet.
             jq
             k6
             lazygit
             lefthook
+            llvm
             mycli
             neovim
+            ninja
             pgcli
             pngpaste
+            pnpm
             pspg
             ripgrep
+            sccache
             sqlfluff
             sqruff
             tmux

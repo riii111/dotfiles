@@ -2,6 +2,7 @@ import io
 import subprocess
 import tempfile
 import unittest
+from types import SimpleNamespace
 from pathlib import Path
 from unittest import mock
 
@@ -16,7 +17,9 @@ class DotCliTest(unittest.TestCase):
             bash_script.write_text("#!/usr/bin/env bash\necho hi\n", encoding="utf-8")
 
             python_script = root / "tool"
-            python_script.write_text("#!/usr/bin/env python3\nprint('hi')\n", encoding="utf-8")
+            python_script.write_text(
+                "#!/usr/bin/env python3\nprint('hi')\n", encoding="utf-8"
+            )
 
             self.assertEqual(cli.detect_shell(bash_script), "bash")
             self.assertIsNone(cli.detect_shell(python_script))
@@ -46,7 +49,7 @@ class DotCliTest(unittest.TestCase):
             bash_script.write_text("#!/usr/bin/env bash\necho ok\n", encoding="utf-8")
 
             zsh_template = root / "dot_zshrc.tmpl"
-            zsh_template.write_text("{{ if eq .type \"work\" }}\n", encoding="utf-8")
+            zsh_template.write_text('{{ if eq .type "work" }}\n', encoding="utf-8")
 
             with mock.patch.object(
                 cli, "git_tracked_files", return_value=[bash_script, zsh_template]
@@ -119,7 +122,9 @@ class DotCliTest(unittest.TestCase):
             template = root / "dot_zshrc.tmpl"
             template.write_text("#!/bin/zsh\n{{ end }}\n", encoding="utf-8")
 
-            targets = cli.collect_lintable_shell_targets([bash_script, zsh_script, template])
+            targets = cli.collect_lintable_shell_targets(
+                [bash_script, zsh_script, template]
+            )
 
         self.assertEqual(targets, [bash_script])
 
@@ -151,7 +156,10 @@ class DotCliTest(unittest.TestCase):
             mock.patch.object(
                 cli,
                 "run_capture",
-                side_effect=[subprocess.CalledProcessError(1, ["git"]), "/tmp/dotfiles"],
+                side_effect=[
+                    subprocess.CalledProcessError(1, ["git"]),
+                    "/tmp/dotfiles",
+                ],
             ),
             mock.patch("shutil.which", return_value="/opt/homebrew/bin/chezmoi"),
         ):
@@ -173,7 +181,10 @@ class DotCliTest(unittest.TestCase):
 
     def test_command_test_runs_unittest_and_shell_checks(self):
         repo_root = Path("/repo")
-        targets = [(repo_root / "scripts/check.sh", "bash"), (repo_root / "bin/run", "sh")]
+        targets = [
+            (repo_root / "scripts/check.sh", "bash"),
+            (repo_root / "bin/run", "sh"),
+        ]
         calls = []
 
         def fake_run(args, **kwargs):
@@ -194,7 +205,9 @@ class DotCliTest(unittest.TestCase):
             result = cli.command_test(mock.Mock())
 
         self.assertEqual(result, 0)
-        self.assertEqual(calls[0][0], ("python3", "-m", "unittest", "discover", "tests"))
+        self.assertEqual(
+            calls[0][0], ("python3", "-m", "unittest", "discover", "tests")
+        )
         self.assertEqual(calls[1][0], ("/bin/bash", "-n", "/repo/scripts/check.sh"))
         self.assertEqual(calls[2][0], ("/bin/sh", "-n", "/repo/bin/run"))
 
@@ -314,7 +327,9 @@ class DotCliTest(unittest.TestCase):
             with (
                 mock.patch.object(cli, "resolve_repo_root", return_value=repo_root),
                 mock.patch.object(cli, "git_staged_files", return_value=[staged]),
-                mock.patch.object(cli, "run_lint_shell_targets", return_value=0) as lint_shell,
+                mock.patch.object(
+                    cli, "run_lint_shell_targets", return_value=0
+                ) as lint_shell,
             ):
                 result = cli.command_lint_staged_shell(mock.Mock())
 
@@ -334,7 +349,9 @@ class DotCliTest(unittest.TestCase):
 
         with (
             mock.patch.object(cli, "resolve_repo_root", return_value=repo_root),
-            mock.patch("shutil.which", return_value="/nix/var/nix/profiles/default/bin/nix"),
+            mock.patch(
+                "shutil.which", return_value="/nix/var/nix/profiles/default/bin/nix"
+            ),
             mock.patch.object(cli, "NIX_DOTFILES_PROFILE", profile_path),
             mock.patch.object(
                 cli,
@@ -371,7 +388,9 @@ class DotCliTest(unittest.TestCase):
 
         with (
             mock.patch.object(cli, "resolve_repo_root", return_value=repo_root),
-            mock.patch("shutil.which", return_value="/nix/var/nix/profiles/default/bin/nix"),
+            mock.patch(
+                "shutil.which", return_value="/nix/var/nix/profiles/default/bin/nix"
+            ),
             mock.patch.object(cli, "NIX_DOTFILES_PROFILE", profile_path),
             mock.patch.object(
                 cli,
@@ -404,6 +423,143 @@ class DotCliTest(unittest.TestCase):
         ):
             with self.assertRaises(RuntimeError):
                 cli.command_sync_nix_profile(mock.Mock())
+
+    def test_command_work_tools_install_uses_ghq_for_missing_repo(self):
+        calls = []
+        tool_path = Path("/tmp/prod-errors")
+
+        def fake_run_command(args, cwd):
+            calls.append((args, cwd))
+            return subprocess.CompletedProcess(args, 0, "", "")
+
+        with (
+            mock.patch.object(
+                cli,
+                "WORK_TOOL_REPOS",
+                {
+                    "prod-errors": {
+                        "repo": "git@example.com:prod-errors.git",
+                        "path": tool_path,
+                    }
+                },
+            ),
+            mock.patch.object(Path, "exists", return_value=False),
+            mock.patch.object(cli, "run_command", side_effect=fake_run_command),
+            mock.patch("sys.stdout", new=io.StringIO()),
+        ):
+            result = cli.command_work_tools_install(SimpleNamespace(name=None))
+
+        self.assertEqual(result, 0)
+        self.assertEqual(
+            calls,
+            [(["ghq", "get", "git@example.com:prod-errors.git"], Path.home())],
+        )
+
+    def test_command_work_tools_apply_runs_chezmoi_source_apply(self):
+        calls = []
+        tool_path = Path("/tmp/prod-errors")
+
+        def fake_run_command(args, cwd):
+            calls.append((args, cwd))
+            return subprocess.CompletedProcess(args, 0, "", "")
+
+        with (
+            mock.patch.object(
+                cli,
+                "WORK_TOOL_REPOS",
+                {
+                    "prod-errors": {
+                        "repo": "git@example.com:prod-errors.git",
+                        "path": tool_path,
+                    }
+                },
+            ),
+            mock.patch.object(Path, "exists", return_value=True),
+            mock.patch.object(cli, "run_command", side_effect=fake_run_command),
+        ):
+            result = cli.command_work_tools_apply(SimpleNamespace(name="prod-errors"))
+
+        self.assertEqual(result, 0)
+        self.assertEqual(
+            calls,
+            [
+                (
+                    [
+                        "chezmoi",
+                        "-S",
+                        str(tool_path),
+                        "apply",
+                        "--force",
+                        "--no-tty",
+                    ],
+                    tool_path,
+                )
+            ],
+        )
+
+    def test_command_work_tools_update_pulls_then_applies(self):
+        calls = []
+        tool_path = Path("/tmp/prod-errors")
+
+        def fake_run_command(args, cwd):
+            calls.append((args, cwd))
+            return subprocess.CompletedProcess(args, 0, "", "")
+
+        with (
+            mock.patch.object(
+                cli,
+                "WORK_TOOL_REPOS",
+                {
+                    "prod-errors": {
+                        "repo": "git@example.com:prod-errors.git",
+                        "path": tool_path,
+                    }
+                },
+            ),
+            mock.patch.object(Path, "exists", return_value=True),
+            mock.patch.object(cli, "run_command", side_effect=fake_run_command),
+        ):
+            result = cli.command_work_tools_update(SimpleNamespace(name=None))
+
+        self.assertEqual(result, 0)
+        self.assertEqual(
+            calls,
+            [
+                (["git", "pull", "--ff-only"], tool_path),
+                (
+                    [
+                        "chezmoi",
+                        "-S",
+                        str(tool_path),
+                        "apply",
+                        "--force",
+                        "--no-tty",
+                    ],
+                    tool_path,
+                ),
+            ],
+        )
+
+    def test_command_work_tools_apply_requires_installed_repo(self):
+        with (
+            mock.patch.object(
+                cli,
+                "WORK_TOOL_REPOS",
+                {
+                    "prod-errors": {
+                        "repo": "git@example.com:prod-errors.git",
+                        "path": Path("/tmp/prod-errors"),
+                    }
+                },
+            ),
+            mock.patch.object(Path, "exists", return_value=False),
+        ):
+            with self.assertRaises(RuntimeError):
+                cli.command_work_tools_apply(SimpleNamespace(name="prod-errors"))
+
+    def test_command_work_tools_rejects_unknown_name(self):
+        with self.assertRaises(RuntimeError):
+            cli.command_work_tools_apply(SimpleNamespace(name="unknown"))
 
     def test_read_first_line_returns_empty_on_oserror(self):
         path = Path("/tmp/unreadable")

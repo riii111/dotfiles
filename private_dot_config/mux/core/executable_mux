@@ -9,14 +9,15 @@
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")" && pwd)"
 
 # Source core library
+# shellcheck source=private_dot_config/mux/core/executable_mux-core.sh
 source "${SCRIPT_DIR}/mux-core.sh"
 
 #######################################
 # Print usage information
 #######################################
 usage() {
-    local project_name="${PROJECT_NAME:-mux}"
-    cat <<EOF
+	local project_name="${PROJECT_NAME:-mux}"
+	cat <<EOF
 ${BOLD}${project_name}${NC} - Development Environment TUI Helper
 
 ${BOLD}Usage:${NC}
@@ -66,15 +67,14 @@ EOF
 # Generate tmuxp config dynamically
 #######################################
 generate_tmuxp_config() {
-    local config_file="$1"
-    local output_file="${MUX_CONFIG_DIR}/${PROJECT_NAME}/session.yml"
+	local output_file="${MUX_CONFIG_DIR}/${PROJECT_NAME}/session.yml"
 
-    # Get services
-    local services
-    services=$(get_services)
+	# Get services
+	local services
+	services=$(get_services)
 
-    # Start YAML
-    cat > "$output_file" <<EOF
+	# Start YAML
+	cat >"$output_file" <<EOF
 session_name: ${SESSION_NAME}
 start_directory: ${PROJECT_ROOT}
 
@@ -99,11 +99,11 @@ windows:
           - ${SCRIPT_DIR}/mux-monitor ${PROJECT_NAME}
 EOF
 
-    # Add service windows
-    for service in $services; do
-        local dir
-        dir=$(get_service_dir "$service")
-        cat >> "$output_file" <<EOF
+	# Add service windows
+	for service in $services; do
+		local dir
+		dir=$(get_service_dir "$service")
+		cat >>"$output_file" <<EOF
 
   - window_name: ${service}
     start_directory: ${dir}
@@ -111,11 +111,11 @@ EOF
       - shell_command:
           - echo "=== ${service} ===" && echo "Waiting for start command..."
 EOF
-    done
+	done
 
-    # Add Docker window at the end if enabled
-    if [[ "$DOCKER_ENABLED" == "true" ]]; then
-        cat >> "$output_file" <<EOF
+	# Add Docker window at the end if enabled
+	if [[ "$DOCKER_ENABLED" == "true" ]]; then
+		cat >>"$output_file" <<EOF
 
   - window_name: docker
     start_directory: ${DOCKER_DIR}
@@ -123,433 +123,434 @@ EOF
       - shell_command:
           - echo "=== Docker Services ===" && echo "Waiting for start command..."
 EOF
-    fi
+	fi
 
-    echo "$output_file"
+	echo "$output_file"
 }
 
 #######################################
 # Start all services
 #######################################
 start_all() {
-    local start_profile="${1:-all}"
+	local start_profile="${1:-all}"
 
-    if [[ "$start_profile" == "docker" ]]; then
-        echo -e "${BOLD}Starting services (profile: docker only)...${NC}"
-    elif [[ "$start_profile" == "co-core" ]]; then
-        echo -e "${BOLD}Starting services (profile: CO CORE)...${NC}"
-    else
-        echo -e "${BOLD}Starting all services...${NC}"
-    fi
-    echo
+	if [[ "$start_profile" == "docker" ]]; then
+		echo -e "${BOLD}Starting services (profile: docker only)...${NC}"
+	elif [[ "$start_profile" == "co-core" ]]; then
+		echo -e "${BOLD}Starting services (profile: CO CORE)...${NC}"
+	else
+		echo -e "${BOLD}Starting all services...${NC}"
+	fi
+	echo
 
-    # Run prechecks
-    run_prechecks || return 1
-    echo
+	# Run prechecks
+	run_prechecks || return 1
+	echo
 
-    # Start Docker if enabled
-    if [[ "$DOCKER_ENABLED" == "true" ]]; then
-        echo -e "${BOLD}[Docker]${NC}"
-        start_docker
-        if ! wait_for_docker; then
-            echo -e "${RED}Error: Docker failed to start${NC}"
-            return 1
-        fi
-        echo
-    fi
+	# Start Docker if enabled
+	if [[ "$DOCKER_ENABLED" == "true" ]]; then
+		echo -e "${BOLD}[Docker]${NC}"
+		start_docker
+		if ! wait_for_docker; then
+			echo -e "${RED}Error: Docker failed to start${NC}"
+			return 1
+		fi
+		echo
+	fi
 
-    if [[ "$start_profile" == "docker" ]]; then
-        echo -e "${GREEN}Docker started${NC}"
-        echo -e "Use '${BOLD}${PROJECT_NAME} status${NC}' to check status"
-        return 0
-    fi
+	if [[ "$start_profile" == "docker" ]]; then
+		echo -e "${GREEN}Docker started${NC}"
+		echo -e "Use '${BOLD}${PROJECT_NAME} status${NC}' to check status"
+		return 0
+	fi
 
-    # Get phases from config
-    local phase_count
-    phase_count=$(parse_yaml_allow_null "$CONFIG_FILE" '.phases | length')
+	# Get phases from config
+	local phase_count
+	phase_count=$(parse_yaml_allow_null "$CONFIG_FILE" '.phases | length')
 
-    if [[ -z "$phase_count" || "$phase_count" == "0" || "$phase_count" == "null" ]]; then
-        # No phases defined, start all services
-        echo -e "${BOLD}[Services]${NC}"
-        local services
-        services=$(get_services)
-        for service in $services; do
-            start_service "$service"
-        done
-    else
-        # Process phases
-        local i=0
-        while [[ $i -lt $phase_count ]]; do
-            local phase_name phase_type groups wait_ports
+	if [[ -z "$phase_count" || "$phase_count" == "0" || "$phase_count" == "null" ]]; then
+		# No phases defined, start all services
+		echo -e "${BOLD}[Services]${NC}"
+		local services
+		services=$(get_services)
+		for service in $services; do
+			start_service "$service"
+		done
+	else
+		# Process phases
+		local i=0
+		while [[ $i -lt $phase_count ]]; do
+			local phase_name phase_type groups wait_ports
 
-            phase_name=$(parse_yaml "$CONFIG_FILE" ".phases[$i].name")
-            phase_type=$(parse_yaml_allow_null "$CONFIG_FILE" ".phases[$i].type // \"\"")
+			phase_name=$(parse_yaml "$CONFIG_FILE" ".phases[$i].name")
+			phase_type=$(parse_yaml_allow_null "$CONFIG_FILE" ".phases[$i].type // \"\"")
 
-            # Skip docker phase (already handled)
-            if [[ "$phase_type" == "docker" ]]; then
-                ((i++)) || true
-                continue
-            fi
+			# Skip docker phase (already handled)
+			if [[ "$phase_type" == "docker" ]]; then
+				((i++)) || true
+				continue
+			fi
 
-            echo -e "${BOLD}[${phase_name}]${NC}"
+			echo -e "${BOLD}[${phase_name}]${NC}"
 
-            # Handle command phase
-            if [[ "$phase_type" == "command" ]]; then
-                if ! run_command_phase "$i"; then
-                    return 1
-                fi
-                echo
-                ((i++)) || true
-                continue
-            fi
+			# Handle command phase
+			if [[ "$phase_type" == "command" ]]; then
+				if ! run_command_phase "$i" "$start_profile"; then
+					return 1
+				fi
+				echo
+				((i++)) || true
+				continue
+			fi
 
-            # Get groups for this phase
-            groups=$(parse_yaml_allow_null "$CONFIG_FILE" ".phases[$i].groups[]" 2>/dev/null || echo "")
+			# Get groups for this phase
+			groups=$(parse_yaml_allow_null "$CONFIG_FILE" ".phases[$i].groups[]" 2>/dev/null || echo "")
 
-            if [[ -n "$groups" ]]; then
-                for group in $groups; do
-                    local effective_group="$group"
+			if [[ -n "$groups" ]]; then
+				for group in $groups; do
+					local effective_group="$group"
 
-                    if [[ "$start_profile" == "co-core" && "$group" == "be" ]]; then
-                        effective_group="co-core"
-                    fi
+					if [[ "$start_profile" == "co-core" && "$group" == "be" ]]; then
+						effective_group="co-core"
+					fi
 
-                    # Get services in this group
-                    local group_services
-                    if ! group_services=$(resolve_group_alias "$effective_group"); then
-                        echo -e "${RED}Error: Unknown group '${effective_group}'${NC}"
-                        return 1
-                    fi
+					# Get services in this group
+					local group_services
+					if ! group_services=$(resolve_group_alias "$effective_group"); then
+						echo -e "${RED}Error: Unknown group '${effective_group}'${NC}"
+						return 1
+					fi
 
-                    for service in $group_services; do
-                        start_service "$service"
-                    done
-                done
-            fi
+					for service in $group_services; do
+						start_service "$service"
+					done
+				done
+			fi
 
-            # Wait for ports if specified
-            wait_ports=$(parse_yaml_allow_null "$CONFIG_FILE" ".phases[$i].wait_ports[]" 2>/dev/null || echo "")
-            if [[ -n "$wait_ports" ]]; then
-                echo -e "${DIM}Waiting for ports: ${wait_ports}...${NC}"
-                for port in $wait_ports; do
-                    wait_for_port "$port" 120 || true
-                done
-                echo -e "${GREEN}Ports ready${NC}"
-            fi
+			# Wait for ports if specified
+			wait_ports=$(parse_yaml_allow_null "$CONFIG_FILE" ".phases[$i].wait_ports[]" 2>/dev/null || echo "")
+			if [[ -n "$wait_ports" ]]; then
+				echo -e "${DIM}Waiting for ports: ${wait_ports}...${NC}"
+				for port in $wait_ports; do
+					wait_for_port "$port" 120 || true
+				done
+				echo -e "${GREEN}Ports ready${NC}"
+			fi
 
-            echo
-            ((i++)) || true
-        done
-    fi
+			echo
+			((i++)) || true
+		done
+	fi
 
-    echo -e "${GREEN}All services started!${NC}"
-    echo -e "Use '${BOLD}${PROJECT_NAME} status${NC}' to check status"
+	echo -e "${GREEN}All services started!${NC}"
+	echo -e "Use '${BOLD}${PROJECT_NAME} status${NC}' to check status"
 }
 
 #######################################
 # Stop all services
 #######################################
 stop_all() {
-    echo -e "${BOLD}Stopping all services (reverse order)...${NC}"
+	echo -e "${BOLD}Stopping all services (reverse order)...${NC}"
 
-    local services
-    services=$(get_services)
+	local services
+	services=$(get_services)
 
-    # Stop services in reverse order
-    local reversed=""
-    for service in $services; do
-        reversed="$service $reversed"
-    done
+	# Stop services in reverse order
+	local reversed=""
+	for service in $services; do
+		reversed="$service $reversed"
+	done
 
-    for service in $reversed; do
-        stop_service "$service"
-    done
+	for service in $reversed; do
+		stop_service "$service"
+	done
 
-    stop_docker
+	stop_docker
 
-    echo -e "${GREEN}All services stopped${NC}"
+	echo -e "${GREEN}All services stopped${NC}"
 }
 
 #######################################
 # Start tmuxp session
 #######################################
 start_session() {
-    local start_profile="${1:-all}"
+	local start_profile="${1:-all}"
 
-    if session_exists; then
-        echo -e "${YELLOW}Session already exists. Starting services...${NC}"
-        start_all "$start_profile"
-        echo -e "Attaching to session..."
-        sleep 1
-        attach_or_switch_session
-        return
-    fi
+	if session_exists; then
+		echo -e "${YELLOW}Session already exists. Starting services...${NC}"
+		start_all "$start_profile"
+		echo -e "Attaching to session..."
+		sleep 1
+		attach_or_switch_session
+		return
+	fi
 
-    echo -e "${CYAN}Starting ${PROJECT_NAME} TUI session...${NC}"
+	echo -e "${CYAN}Starting ${PROJECT_NAME} TUI session...${NC}"
 
-    # Generate tmuxp config
-    local tmuxp_config
-    tmuxp_config=$(generate_tmuxp_config "$CONFIG_FILE")
+	# Generate tmuxp config
+	local tmuxp_config
+	tmuxp_config=$(generate_tmuxp_config "$CONFIG_FILE")
 
-    # Load tmuxp session
-    tmuxp load -d "$tmuxp_config"
+	# Load tmuxp session
+	tmuxp load -d "$tmuxp_config"
 
-    # Wait for windows
-    sleep 2
+	# Wait for windows
+	sleep 2
 
-    # Make the mux session independent from global tmux prefix defaults.
-    tmux set-option -t "$SESSION_NAME" prefix C-q
+	# Make the mux session independent from global tmux prefix defaults.
+	tmux set-option -t "$SESSION_NAME" prefix C-q
 
-    # Hide window list by overriding status-format[0]
-    tmux set-option -t "$SESSION_NAME" status-format[0] '#[align=left]#{T;=/#{status-left-length}:status-left}#[align=right]#{T;=/#{status-right-length}:status-right}'
+	# Hide window list by overriding status-format[0]
+	tmux set-option -t "$SESSION_NAME" status-format[0] '#[align=left]#{T;=/#{status-left-length}:status-left}#[align=right]#{T;=/#{status-right-length}:status-right}'
 
-    # Setup dashboard mode toggle (Ctrl+q m)
-    tmux set-option -t "$SESSION_NAME" @mux_dash_mode all
-    tmux bind-key -T prefix m run-shell 'mode=$(tmux show-option -qv @mux_dash_mode); if [ "$mode" = "all" ]; then tmux set-option @mux_dash_mode bad; else tmux set-option @mux_dash_mode all; fi'
+	# Setup dashboard mode toggle (Ctrl+q m)
+	tmux set-option -t "$SESSION_NAME" @mux_dash_mode all
+	# shellcheck disable=SC2016
+	tmux bind-key -T prefix m run-shell 'mode=$(tmux show-option -qv @mux_dash_mode); if [ "$mode" = "all" ]; then tmux set-option @mux_dash_mode bad; else tmux set-option @mux_dash_mode all; fi'
 
-    # Follow current window's log (Ctrl+q f)
-    tmux bind-key -T prefix f run-shell "${PROJECT_NAME} follow \"#{window_name}\""
+	# Follow current window's log (Ctrl+q f)
+	tmux bind-key -T prefix f run-shell "${PROJECT_NAME} follow \"#{window_name}\""
 
-    # Setup logging
-    init_log_dir
-    setup_pipe_pane
+	# Setup logging
+	init_log_dir
+	setup_pipe_pane
 
-    start_all "$start_profile"
+	start_all "$start_profile"
 
-    echo
-    echo -e "${GREEN}Session ready!${NC}"
-    echo -e "Attaching to session..."
-    sleep 1
-    attach_or_switch_session
+	echo
+	echo -e "${GREEN}Session ready!${NC}"
+	echo -e "Attaching to session..."
+	sleep 1
+	attach_or_switch_session
 }
 
 #######################################
 # Kill tmuxp session
 #######################################
 kill_session() {
-    stop_docker
-    cleanup_pipe_pane
+	stop_docker
+	cleanup_pipe_pane
 
-    if session_exists; then
-        echo -e "${CYAN}Killing session...${NC}"
-        tmux kill-session -t "$SESSION_NAME"
-        echo -e "${GREEN}Session terminated${NC}"
-    else
-        echo -e "${YELLOW}Session not running${NC}"
-    fi
+	if session_exists; then
+		echo -e "${CYAN}Killing session...${NC}"
+		tmux kill-session -t "$SESSION_NAME"
+		echo -e "${GREEN}Session terminated${NC}"
+	else
+		echo -e "${YELLOW}Session not running${NC}"
+	fi
 }
 
 #######################################
 # Graceful shutdown
 #######################################
 graceful_shutdown() {
-    if ! session_exists; then
-        echo -e "${YELLOW}Session not running${NC}"
-        return 0
-    fi
+	if ! session_exists; then
+		echo -e "${YELLOW}Session not running${NC}"
+		return 0
+	fi
 
-    echo -e "${BOLD}Gracefully shutting down...${NC}"
-    stop_all
-    cleanup_pipe_pane
-    sleep 1
+	echo -e "${BOLD}Gracefully shutting down...${NC}"
+	stop_all
+	cleanup_pipe_pane
+	sleep 1
 
-    echo -e "${CYAN}Killing session...${NC}"
-    tmux kill-session -t "$SESSION_NAME"
-    echo -e "${GREEN}Bye!${NC}"
+	echo -e "${CYAN}Killing session...${NC}"
+	tmux kill-session -t "$SESSION_NAME"
+	echo -e "${GREEN}Bye!${NC}"
 }
 
 #######################################
 # Main command dispatcher
 #######################################
 main() {
-    # Determine how we were called
-    local script_name
-    script_name="$(basename "$0")"
+	# Determine how we were called
+	local script_name
+	script_name="$(basename "$0")"
 
-    local project
-    if [[ "$script_name" == "mux" ]]; then
-        # Called as 'mux <project> <command>'
-        project="${1:-}"
-        if [[ -z "$project" ]]; then
-            echo -e "${RED}Error: Project name required${NC}"
-            echo "Usage: mux <project> <command>"
-            echo "   or: <project> <command> (via symlink)"
-            exit 1
-        fi
-        shift  # Remove project name from args
-    else
-        # Called via symlink (e.g., 'myproject <command>')
-        project="$script_name"
-    fi
+	local project
+	if [[ "$script_name" == "mux" ]]; then
+		# Called as 'mux <project> <command>'
+		project="${1:-}"
+		if [[ -z "$project" ]]; then
+			echo -e "${RED}Error: Project name required${NC}"
+			echo "Usage: mux <project> <command>"
+			echo "   or: <project> <command> (via symlink)"
+			exit 1
+		fi
+		shift # Remove project name from args
+	else
+		# Called via symlink (e.g., 'myproject <command>')
+		project="$script_name"
+	fi
 
-    # Load configuration
-    if ! load_config "$project"; then
-        exit 1
-    fi
+	# Load configuration
+	if ! load_config "$project"; then
+		exit 1
+	fi
 
-    local cmd="${1:-}"
-    local arg="${2:-}"
+	local cmd="${1:-}"
+	local arg="${2:-}"
 
-    case "$cmd" in
-        hello)
-            acquire_lock "$project" || exit 1
-            local start_profile="all"
-            case "${arg:-}" in
-                "")
-                    ;;
-                --core)
-                    start_profile="co-core"
-                    ;;
-                --docker)
-                    start_profile="docker"
-                    ;;
-                *)
-                    echo -e "${RED}Error: Unknown hello option: ${arg}${NC}"
-                    echo "Usage: ${PROJECT_NAME} hello [--core|--docker]"
-                    exit 1
-                    ;;
-            esac
-            start_session "$start_profile"
-            ;;
-        bye)
-            acquire_lock "$project" || exit 1
-            graceful_shutdown
-            ;;
-        re)
-            acquire_lock "$project" || exit 1
-            # Detach first if running inside tmux session
-            if [[ -n "${TMUX:-}" ]]; then
-                tmux detach-client -E "${PROJECT_NAME} re"
-            else
-                graceful_shutdown
-                start_session
-            fi
-            ;;
-        attach)
-            if session_exists; then
-                attach_or_switch_session
-            else
-                echo -e "${RED}Session not running${NC}"
-                exit 1
-            fi
-            ;;
-        detach)
-            if [[ -n "${TMUX:-}" ]]; then
-                tmux detach-client
-            else
-                echo -e "${YELLOW}Not in tmux session${NC}"
-            fi
-            ;;
-        kill)
-            acquire_lock "$project" || exit 1
-            kill_session
-            ;;
-        up)
-            if [[ "$arg" == "--all" || -z "$arg" ]]; then
-                if ! session_exists; then
-                    echo -e "${RED}Error: Session not running. Run '${PROJECT_NAME} hello' first.${NC}"
-                    exit 1
-                fi
-                start_all
-            elif [[ "$arg" == "docker" ]]; then
-                start_docker
-            else
-                # Try to resolve as group alias first
-                local group_services
-                if group_services=$(resolve_group_alias "$arg"); then
-                    echo -e "${BOLD}Starting group '${arg}'...${NC}"
-                    for service in $group_services; do
-                        start_service "$service"
-                    done
-                else
-                    start_service "$arg"
-                fi
-            fi
-            ;;
-        stop)
-            if [[ "$arg" == "--all" || -z "$arg" ]]; then
-                stop_all
-            elif [[ "$arg" == "docker" ]]; then
-                stop_docker
-            else
-                # Try to resolve as group alias first
-                local group_services
-                if group_services=$(resolve_group_alias "$arg"); then
-                    echo -e "${BOLD}Stopping group '${arg}'...${NC}"
-                    for service in $group_services; do
-                        stop_service "$service"
-                    done
-                else
-                    stop_service "$arg"
-                fi
-            fi
-            ;;
-        restart)
-            if [[ -z "$arg" ]]; then
-                echo -e "${RED}Error: Service name required${NC}"
-                echo "Usage: ${PROJECT_NAME} restart <service|docker|group>"
-                exit 1
-            fi
-            if [[ "$arg" == "docker" ]]; then
-                stop_docker
-                sleep 2
-                start_docker
-            else
-                # Try to resolve as group alias first
-                local group_services
-                if group_services=$(resolve_group_alias "$arg"); then
-                    echo -e "${BOLD}Restarting group '${arg}'...${NC}"
-                    for service in $group_services; do
-                        restart_service "$service"
-                    done
-                else
-                    restart_service "$arg"
-                fi
-            fi
-            ;;
-        status)
-            show_status
-            ;;
-        logs)
-            if [[ -z "$arg" ]]; then
-                echo -e "${RED}Error: Service name required${NC}"
-                echo "Usage: ${PROJECT_NAME} logs <service>"
-                exit 1
-            fi
-            focus_logs "$arg"
-            ;;
-        follow)
-            follow_service "$arg"
-            ;;
-        list)
-            list_services
-            ;;
-        exec)
-            local container="${arg:-}"
-            if [[ -z "$container" ]]; then
-                echo -e "${RED}Error: Container name required${NC}"
-                echo "Usage: ${PROJECT_NAME} exec <container> [--shell]"
-                exit 1
-            fi
-            local use_shell="false"
-            if [[ "${3:-}" == "--shell" ]]; then
-                use_shell="true"
-            fi
-            docker_exec_container "$container" "$use_shell"
-            ;;
-        help|--help|-h)
-            usage
-            ;;
-        "")
-            usage
-            ;;
-        *)
-            echo -e "${RED}Unknown command: $cmd${NC}"
-            echo
-            usage
-            exit 1
-            ;;
-    esac
+	case "$cmd" in
+	hello)
+		acquire_lock "$project" || exit 1
+		local start_profile="all"
+		case "${arg:-}" in
+		"")
+			;;
+		--core)
+			start_profile="co-core"
+			;;
+		--docker)
+			start_profile="docker"
+			;;
+		*)
+			echo -e "${RED}Error: Unknown hello option: ${arg}${NC}"
+			echo "Usage: ${PROJECT_NAME} hello [--core|--docker]"
+			exit 1
+			;;
+		esac
+		start_session "$start_profile"
+		;;
+	bye)
+		acquire_lock "$project" || exit 1
+		graceful_shutdown
+		;;
+	re)
+		acquire_lock "$project" || exit 1
+		# Detach first if running inside tmux session
+		if [[ -n "${TMUX:-}" ]]; then
+			tmux detach-client -E "${PROJECT_NAME} re"
+		else
+			graceful_shutdown
+			start_session
+		fi
+		;;
+	attach)
+		if session_exists; then
+			attach_or_switch_session
+		else
+			echo -e "${RED}Session not running${NC}"
+			exit 1
+		fi
+		;;
+	detach)
+		if [[ -n "${TMUX:-}" ]]; then
+			tmux detach-client
+		else
+			echo -e "${YELLOW}Not in tmux session${NC}"
+		fi
+		;;
+	kill)
+		acquire_lock "$project" || exit 1
+		kill_session
+		;;
+	up)
+		if [[ "$arg" == "--all" || -z "$arg" ]]; then
+			if ! session_exists; then
+				echo -e "${RED}Error: Session not running. Run '${PROJECT_NAME} hello' first.${NC}"
+				exit 1
+			fi
+			start_all
+		elif [[ "$arg" == "docker" ]]; then
+			start_docker
+		else
+			# Try to resolve as group alias first
+			local group_services
+			if group_services=$(resolve_group_alias "$arg"); then
+				echo -e "${BOLD}Starting group '${arg}'...${NC}"
+				for service in $group_services; do
+					start_service "$service"
+				done
+			else
+				start_service "$arg"
+			fi
+		fi
+		;;
+	stop)
+		if [[ "$arg" == "--all" || -z "$arg" ]]; then
+			stop_all
+		elif [[ "$arg" == "docker" ]]; then
+			stop_docker
+		else
+			# Try to resolve as group alias first
+			local group_services
+			if group_services=$(resolve_group_alias "$arg"); then
+				echo -e "${BOLD}Stopping group '${arg}'...${NC}"
+				for service in $group_services; do
+					stop_service "$service"
+				done
+			else
+				stop_service "$arg"
+			fi
+		fi
+		;;
+	restart)
+		if [[ -z "$arg" ]]; then
+			echo -e "${RED}Error: Service name required${NC}"
+			echo "Usage: ${PROJECT_NAME} restart <service|docker|group>"
+			exit 1
+		fi
+		if [[ "$arg" == "docker" ]]; then
+			stop_docker
+			sleep 2
+			start_docker
+		else
+			# Try to resolve as group alias first
+			local group_services
+			if group_services=$(resolve_group_alias "$arg"); then
+				echo -e "${BOLD}Restarting group '${arg}'...${NC}"
+				for service in $group_services; do
+					restart_service "$service"
+				done
+			else
+				restart_service "$arg"
+			fi
+		fi
+		;;
+	status)
+		show_status
+		;;
+	logs)
+		if [[ -z "$arg" ]]; then
+			echo -e "${RED}Error: Service name required${NC}"
+			echo "Usage: ${PROJECT_NAME} logs <service>"
+			exit 1
+		fi
+		focus_logs "$arg"
+		;;
+	follow)
+		follow_service "$arg"
+		;;
+	list)
+		list_services
+		;;
+	exec)
+		local container="${arg:-}"
+		if [[ -z "$container" ]]; then
+			echo -e "${RED}Error: Container name required${NC}"
+			echo "Usage: ${PROJECT_NAME} exec <container> [--shell]"
+			exit 1
+		fi
+		local use_shell="false"
+		if [[ "${3:-}" == "--shell" ]]; then
+			use_shell="true"
+		fi
+		docker_exec_container "$container" "$use_shell"
+		;;
+	help | --help | -h)
+		usage
+		;;
+	"")
+		usage
+		;;
+	*)
+		echo -e "${RED}Unknown command: $cmd${NC}"
+		echo
+		usage
+		exit 1
+		;;
+	esac
 }
 
 main "$@"

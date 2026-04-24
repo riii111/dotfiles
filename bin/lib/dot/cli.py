@@ -18,6 +18,12 @@ NIX_DOTFILES_PROFILE = (
 )
 NIX_DOTFILES_PROFILE_ELEMENT = "cli"
 NIX_DOTFILES_INSTALLABLE = ".#cli"
+WORK_TOOL_REPOS = {
+    "prod-errors": {
+        "repo": "git@github.com:riii111/prod-errors.git",
+        "path": Path.home() / "ghq" / "github.com" / "riii111" / "prod-errors",
+    },
+}
 
 
 def run_capture(*args: str, cwd: Path | None = None) -> str:
@@ -215,7 +221,9 @@ def command_test(_: argparse.Namespace) -> int:
     repo_root = resolve_repo_root()
     failures = 0
 
-    test_result = run_command(["python3", "-m", "unittest", "discover", "tests"], repo_root)
+    test_result = run_command(
+        ["python3", "-m", "unittest", "discover", "tests"], repo_root
+    )
     if test_result.returncode != 0:
         failures += 1
         print_process_failure("python tests", test_result)
@@ -314,7 +322,9 @@ def command_check_env(_: argparse.Namespace) -> int:
 
 def command_lint_shell(args: argparse.Namespace) -> int:
     repo_root = resolve_repo_root()
-    targets = collect_lintable_shell_targets(resolve_candidate_paths(repo_root, args.paths))
+    targets = collect_lintable_shell_targets(
+        resolve_candidate_paths(repo_root, args.paths)
+    )
     return run_lint_shell_targets(repo_root, targets)
 
 
@@ -377,6 +387,83 @@ def command_sync_nix_profile(_: argparse.Namespace) -> int:
     return 0
 
 
+def select_work_tools(name: str | None) -> list[tuple[str, dict[str, object]]]:
+    if name is None:
+        return list(WORK_TOOL_REPOS.items())
+    try:
+        return [(name, WORK_TOOL_REPOS[name])]
+    except KeyError as exc:
+        available = ", ".join(WORK_TOOL_REPOS)
+        raise RuntimeError(
+            f"unknown work tool: {name} (available: {available})"
+        ) from exc
+
+
+def command_work_tools_install(args: argparse.Namespace) -> int:
+    failures = 0
+    for name, tool in select_work_tools(args.name):
+        path = tool["path"]
+        if not isinstance(path, Path):
+            raise RuntimeError(f"invalid work tool path: {name}")
+        if path.exists():
+            print(f"{name}: already installed")
+            continue
+
+        result = run_command(["ghq", "get", str(tool["repo"])], Path.home())
+        if result.returncode != 0:
+            print_process_failure(f"{name} install", result)
+            failures += 1
+
+    return 1 if failures else 0
+
+
+def apply_work_tool(name: str, tool: dict[str, object]) -> int:
+    path = tool["path"]
+    if not isinstance(path, Path):
+        raise RuntimeError(f"invalid work tool path: {name}")
+    if not path.exists():
+        raise RuntimeError(
+            f"{name} is not installed; run `dot work-tools install {name}`"
+        )
+
+    result = run_command(
+        ["chezmoi", "-S", str(path), "apply", "--force", "--no-tty"],
+        path,
+    )
+    if result.returncode != 0:
+        print_process_failure(f"{name} apply", result)
+        return 1
+    return 0
+
+
+def command_work_tools_apply(args: argparse.Namespace) -> int:
+    failures = 0
+    for name, tool in select_work_tools(args.name):
+        failures += apply_work_tool(name, tool)
+    return 1 if failures else 0
+
+
+def command_work_tools_update(args: argparse.Namespace) -> int:
+    failures = 0
+    for name, tool in select_work_tools(args.name):
+        path = tool["path"]
+        if not isinstance(path, Path):
+            raise RuntimeError(f"invalid work tool path: {name}")
+        if not path.exists():
+            raise RuntimeError(
+                f"{name} is not installed; run `dot work-tools install {name}`"
+            )
+
+        pull = run_command(["git", "pull", "--ff-only"], path)
+        if pull.returncode != 0:
+            print_process_failure(f"{name} update", pull)
+            failures += 1
+            continue
+        failures += apply_work_tool(name, tool)
+
+    return 1 if failures else 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="dot")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -405,6 +492,36 @@ def build_parser() -> argparse.ArgumentParser:
         help="install/update the dotfiles Nix CLI profile",
     )
     nix_profile_parser.set_defaults(func=command_sync_nix_profile)
+
+    work_tools_parser = subparsers.add_parser(
+        "work-tools",
+        help="install/update private work tool layers",
+    )
+    work_tools_subparsers = work_tools_parser.add_subparsers(
+        dest="work_tools_command",
+        required=True,
+    )
+
+    work_tools_install_parser = work_tools_subparsers.add_parser(
+        "install",
+        help="clone private work tool repositories",
+    )
+    work_tools_install_parser.add_argument("name", nargs="?")
+    work_tools_install_parser.set_defaults(func=command_work_tools_install)
+
+    work_tools_apply_parser = work_tools_subparsers.add_parser(
+        "apply",
+        help="apply private work tool chezmoi layers",
+    )
+    work_tools_apply_parser.add_argument("name", nargs="?")
+    work_tools_apply_parser.set_defaults(func=command_work_tools_apply)
+
+    work_tools_update_parser = work_tools_subparsers.add_parser(
+        "update",
+        help="pull and apply private work tool repositories",
+    )
+    work_tools_update_parser.add_argument("name", nargs="?")
+    work_tools_update_parser.set_defaults(func=command_work_tools_update)
 
     return parser
 
