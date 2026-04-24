@@ -59,7 +59,10 @@ def build_request_correlation(
         order_by="timestamp asc",
         max_entries=5000,
     )
-    requests = _build_request_rows(request_logs, endpoint, extract_http_request_info)
+    all_requests = _build_request_rows(
+        request_logs, endpoint, extract_http_request_info
+    )
+    requests = _select_relevant_cluster(all_requests, error_timestamp)
     failure_reason = _build_failure_reason(request_logs, requests, endpoint)
     constraint_errors = _lookup_constraint_errors(project, token, service, since, until)
     replay_check = _build_replay_check(requests)
@@ -70,6 +73,7 @@ def build_request_correlation(
         "window": {"since": since, "until": until, "duration": window},
         "filter": request_filter,
         "failureReason": failure_reason,
+        "candidateRequestCount": len(all_requests),
         "correlatedRequests": requests,
         "replayCheck": replay_check,
         "relatedConstraintErrors": constraint_errors,
@@ -118,6 +122,51 @@ def _build_failure_reason(logs, requests, endpoint):
     if endpoint:
         return "endpoint_extraction_failed_or_mismatch"
     return "endpoint_extraction_failed"
+
+
+def _select_relevant_cluster(requests, error_timestamp):
+    clusters = _build_fingerprint_clusters(requests)
+    if not clusters:
+        return requests
+
+    error_dt = parse_timestamp(error_timestamp)
+    best = None
+    for key, cluster in clusters.items():
+        score = _cluster_score(cluster, error_dt)
+        if best is None or score > best[0]:
+            best = (score, key, cluster)
+    return best[2] if best else requests
+
+
+def _build_fingerprint_clusters(requests):
+    clusters = {}
+    for request in requests:
+        key = _fingerprint_cluster_key(request)
+        if key:
+            clusters.setdefault(key, []).append(request)
+    return clusters
+
+
+def _fingerprint_cluster_key(request):
+    if request["requestId"]:
+        return ("request_id", request["requestId"])
+    file_ids = tuple(request["fingerprint"]["fileIds"])
+    if file_ids:
+        return ("file_ids", file_ids)
+    return None
+
+
+def _cluster_score(cluster, error_dt):
+    failures = sum(1 for row in cluster if _is_failure(row["status"]))
+    successes = sum(1 for row in cluster if _is_success(row["status"]))
+    duplicate_strength = len(cluster)
+    near_error = 0
+    if error_dt:
+        near_error = any(
+            (timestamp := parse_timestamp(row["timestamp"])) and timestamp >= error_dt
+            for row in cluster
+        )
+    return (failures > 0, near_error, successes > 0, duplicate_strength, failures)
 
 
 def _request_group_key(row, log_entry):

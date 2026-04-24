@@ -1419,6 +1419,17 @@ class ProdErrorsCommandTest(unittest.TestCase):
         ]
         mock_correlation_logging_list_all.return_value = [
             make_access_log(
+                "2026-04-05T00:50:00.000000Z",
+                200,
+                trace_id="trace-other",
+            ),
+            make_request_info_log(
+                "2026-04-05T00:50:00.100000Z",
+                "dd790000-0000-4000-8000-000000000000",
+                ["bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb"],
+                trace_id="trace-other",
+            ),
+            make_access_log(
                 "2026-04-05T00:53:57.000000Z",
                 200,
                 trace_id="trace-ok",
@@ -1492,6 +1503,8 @@ class ProdErrorsCommandTest(unittest.TestCase):
         self.assertEqual(correlation["correlatedRequests"][0]["status"], 200)
         self.assertEqual(correlation["correlatedRequests"][1]["status"], 500)
         self.assertEqual(correlation["correlatedRequests"][2]["status"], 500)
+        self.assertEqual(correlation["candidateRequestCount"], 4)
+        self.assertEqual(len(correlation["correlatedRequests"]), 3)
         self.assertEqual(
             mock_correlation_logging_list_all.call_args.kwargs["order_by"],
             "timestamp asc",
@@ -1530,6 +1543,17 @@ class ProdErrorsCommandTest(unittest.TestCase):
             }
         ]
         mock_correlation_logging_list_all.return_value = [
+            make_access_log(
+                "2026-04-05T00:50:00.000000Z",
+                200,
+                trace_id="trace-other",
+            ),
+            make_request_info_log(
+                "2026-04-05T00:50:00.100000Z",
+                "dd790000-0000-4000-8000-000000000000",
+                ["bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb"],
+                trace_id="trace-other",
+            ),
             make_access_log(
                 "2026-04-05T00:53:57.000000Z",
                 200,
@@ -1582,6 +1606,7 @@ class ProdErrorsCommandTest(unittest.TestCase):
         output = stdout.getvalue()
         self.assertIn("### Request Comparison", output)
         self.assertIn("likely_resubmit", output)
+        self.assertNotIn("endpoint_failures_seen", output)
         self.assertIn("1 success / 2 failure", output)
         self.assertIn(
             "| timestamp | status | trace | request_id | fingerprint |", output
