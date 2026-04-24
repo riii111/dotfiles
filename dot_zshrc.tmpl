@@ -449,9 +449,6 @@ HELP
   fi
 }
 
-# direnv
-eval "$(direnv hook zsh)"
-
 # asdf (lazy load)
 export PATH="$HOME/.asdf/shims:$HOME/.asdf/bin:$PATH"
 ASDF_SCRIPT="${HOMEBREW_PREFIX:-/opt/homebrew}/opt/asdf/libexec/asdf.sh"
@@ -602,4 +599,9 @@ if [[ -d /nix/var/nix/profiles/default/bin ]]; then
   else
     path=(/nix/var/nix/profiles/default/bin $path)
   fi
+fi
+
+# direnv
+if command -v direnv >/dev/null 2>&1; then
+  eval "$(direnv hook zsh)"
 fi

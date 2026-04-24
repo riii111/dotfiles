@@ -34,6 +34,7 @@
             csvlens
             delta
             deno
+            direnv
             docker
             eza
             fd
