@@ -2,7 +2,12 @@ from collections import Counter
 from datetime import timedelta
 import re
 
-from prod_errors.client import LoggingError, extract_trace_id, logging_read
+from prod_errors.client import (
+    LoggingError,
+    extract_trace_id,
+    logging_list_all,
+    logging_read,
+)
 from prod_errors.fingerprint import build_request_row
 from prod_errors.timefmt import isoformat_utc, parse_timestamp
 
@@ -46,18 +51,25 @@ def build_request_correlation(
     since = isoformat_utc(error_dt - window_delta)
     until = isoformat_utc(error_dt + window_delta)
     request_filter = _build_request_filter(service, endpoint, since, until)
-    request_logs = logging_read(
-        project, token, request_filter, limit=100, freshness=None
+    request_logs = logging_list_all(
+        project,
+        token,
+        request_filter,
+        limit=1000,
+        order_by="timestamp asc",
+        max_entries=5000,
     )
     requests = _build_request_rows(request_logs, endpoint, extract_http_request_info)
+    failure_reason = _build_failure_reason(request_logs, requests, endpoint)
     constraint_errors = _lookup_constraint_errors(project, token, service, since, until)
     replay_check = _build_replay_check(requests)
-    summary = _build_summary(requests, replay_check, window)
+    summary = _build_summary(requests, replay_check, window, failure_reason)
 
     return {
         "summary": summary,
         "window": {"since": since, "until": until, "duration": window},
         "filter": request_filter,
+        "failureReason": failure_reason,
         "correlatedRequests": requests,
         "replayCheck": replay_check,
         "relatedConstraintErrors": constraint_errors,
@@ -80,7 +92,7 @@ def _build_request_filter(service, endpoint, since, until):
 def _build_request_rows(logs, target_endpoint, extract_http_request_info):
     grouped = {}
     order = []
-    for log_entry in reversed(logs):
+    for log_entry in logs:
         request_info = extract_http_request_info(log_entry)
         if not request_info or request_info["endpoint"] != target_endpoint:
             continue
@@ -96,6 +108,16 @@ def _build_request_rows(logs, target_endpoint, extract_http_request_info):
             continue
         _merge_request_row(grouped[key], row)
     return [grouped[key] for key in order]
+
+
+def _build_failure_reason(logs, requests, endpoint):
+    if requests:
+        return None
+    if not logs:
+        return "window_no_candidates"
+    if endpoint:
+        return "endpoint_extraction_failed_or_mismatch"
+    return "endpoint_extraction_failed"
 
 
 def _request_group_key(row, log_entry):
@@ -193,7 +215,7 @@ def _build_replay_check(requests):
     }
 
 
-def _build_summary(requests, replay_check, window):
+def _build_summary(requests, replay_check, window, failure_reason=None):
     success_count = sum(1 for row in requests if _is_success(row["status"]))
     failure_count = sum(1 for row in requests if _is_failure(row["status"]))
     return {
@@ -204,6 +226,7 @@ def _build_summary(requests, replay_check, window):
         "successCount": success_count,
         "failureCount": failure_count,
         "replayVerdict": replay_check["verdict"],
+        "failureReason": failure_reason,
     }
 
 
@@ -216,7 +239,7 @@ def _build_next_hints(requests, replay_check, constraint_errors):
     if constraint_errors:
         hints.append("inspect related constraint error root cause")
     if not requests:
-        hints.append("broaden --window or verify endpoint extraction")
+        hints.append("verify endpoint extraction and request log shape")
     return hints
 
 

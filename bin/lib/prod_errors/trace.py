@@ -91,7 +91,8 @@ def cmd_trace(args):
             print(f"- Service: {colors['dim'](lookup['service'])}")
         if lookup["traceId"]:
             print(f"- Cloud Trace ID: `{lookup['traceId']}`")
-            _print_primary_endpoint(lookup["endpointCandidates"])
+            if lookup["endpointCandidates"]:
+                _print_primary_endpoint(lookup["endpointCandidates"])
             _print_log_entries(
                 "### Matched Error Logs",
                 list(reversed(lookup["matchedEntries"])),
@@ -105,6 +106,14 @@ def cmd_trace(args):
         endpoint, error_timestamp, _http_status = _extract_retry_context(
             [], lookup["logs"]
         )
+        if mode in ("auto", "requests") and not endpoint:
+            _attach_request_correlation_failure(
+                "endpoint_extraction_failed",
+                result,
+                args.json,
+                colors,
+            )
+            return
         if mode in ("auto", "requests") and endpoint and error_timestamp:
             if _attach_request_correlation(
                 args.project,
@@ -161,6 +170,14 @@ def cmd_trace(args):
         trace_logs, lookup["logs"]
     )
     if not endpoint or not error_timestamp:
+        if mode == "requests":
+            _attach_request_correlation_failure(
+                "endpoint_extraction_failed",
+                result,
+                args.json,
+                colors,
+            )
+            return
         result["retryCheck"] = {"status": "could_not_extract_endpoint"}
         if args.json:
             print(json.dumps(result, indent=2, ensure_ascii=False))
@@ -168,6 +185,9 @@ def cmd_trace(args):
             print(f"\n{colors['bold']('### Retry Check')}\n")
             print("Could not extract endpoint. Manual investigation needed.")
         return
+
+    if not args.json and not lookup["endpointCandidates"]:
+        print(f"- Endpoint: `{endpoint}`")
 
     if mode == "requests":
         if _attach_request_correlation(
@@ -321,6 +341,36 @@ def _attach_request_correlation(
     return True
 
 
+def _attach_request_correlation_failure(failure_reason, result, as_json, colors):
+    correlation = {
+        "summary": {
+            "text": f"Request comparison unavailable: {failure_reason}",
+            "requestCount": 0,
+            "successCount": 0,
+            "failureCount": 0,
+            "replayVerdict": "not_checked",
+            "failureReason": failure_reason,
+        },
+        "failureReason": failure_reason,
+        "correlatedRequests": [],
+        "replayCheck": {
+            "signals": [],
+            "verdict": "not_checked",
+            "fingerprintAvailable": False,
+            "sameRequestIdCount": 0,
+            "sameFileIdsCount": 0,
+        },
+        "relatedConstraintErrors": [],
+        "nextHints": ["verify endpoint extraction from matched or lifecycle logs"],
+    }
+    result["requestCorrelation"] = correlation
+    if as_json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    else:
+        _print_request_correlation(correlation, colors)
+    return True
+
+
 def _trace_colors():
     return {
         "bold": color(_BOLD),
@@ -377,11 +427,16 @@ def _print_request_correlation(correlation, colors):
 
     requests = correlation["correlatedRequests"]
     if not requests:
-        window = correlation["window"]
-        print(
-            "\nNo same-endpoint requests found in the selected window. "
-            f"Window: {window['since']} -> {window['until']}."
-        )
+        failure_reason = correlation.get("failureReason") or "window_no_candidates"
+        window = correlation.get("window")
+        if window:
+            print(
+                "\nNo same-endpoint requests found in the selected window. "
+                f"Reason: {failure_reason}. "
+                f"Window: {window['since']} -> {window['until']}."
+            )
+        else:
+            print(f"\nRequest comparison unavailable. Reason: {failure_reason}.")
         if correlation["nextHints"]:
             print(f"Next hint: {correlation['nextHints'][0]}")
         return

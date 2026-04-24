@@ -1391,8 +1391,10 @@ class ProdErrorsCommandTest(unittest.TestCase):
     @mock.patch("prod_errors.trace.api_get_all_pages")
     @mock.patch("prod_errors.trace.logging_read")
     @mock.patch("prod_errors.correlation.logging_read")
+    @mock.patch("prod_errors.correlation.logging_list_all")
     def test_cmd_trace_auto_json_correlates_nearby_requests_without_trace_id(
         self,
+        mock_correlation_logging_list_all,
         mock_correlation_logging_read,
         mock_logging_read,
         mock_api_get_all_pages,
@@ -1415,38 +1417,47 @@ class ProdErrorsCommandTest(unittest.TestCase):
                 },
             }
         ]
-        mock_correlation_logging_read.side_effect = [
-            [
-                make_access_log(
-                    "2026-04-05T00:57:58.000000Z",
-                    500,
-                    trace_id="trace-fail-1",
-                ),
-                make_request_info_log(
-                    "2026-04-05T00:57:58.100000Z",
-                    request_id,
-                    file_ids,
-                    trace_id="trace-fail-1",
-                ),
-                make_access_log(
-                    "2026-04-05T00:53:57.000000Z",
-                    200,
-                    trace_id="trace-ok",
-                ),
-                make_request_info_log(
-                    "2026-04-05T00:53:57.100000Z",
-                    request_id,
-                    file_ids,
-                    trace_id="trace-ok",
-                ),
-            ],
-            [
-                make_trace_log(
-                    "2026-04-05T00:57:59.000000Z",
-                    "ERROR",
-                    'duplicate key value violates unique constraint "foo_pkey"',
-                )
-            ],
+        mock_correlation_logging_list_all.return_value = [
+            make_access_log(
+                "2026-04-05T00:53:57.000000Z",
+                200,
+                trace_id="trace-ok",
+            ),
+            make_request_info_log(
+                "2026-04-05T00:53:57.100000Z",
+                request_id,
+                file_ids,
+                trace_id="trace-ok",
+            ),
+            make_access_log(
+                "2026-04-05T00:57:58.000000Z",
+                500,
+                trace_id="trace-fail-1",
+            ),
+            make_request_info_log(
+                "2026-04-05T00:57:58.100000Z",
+                request_id,
+                file_ids,
+                trace_id="trace-fail-1",
+            ),
+            make_access_log(
+                "2026-04-05T00:58:00.000000Z",
+                500,
+                trace_id="trace-fail-2",
+            ),
+            make_request_info_log(
+                "2026-04-05T00:58:00.100000Z",
+                request_id,
+                file_ids,
+                trace_id="trace-fail-2",
+            ),
+        ]
+        mock_correlation_logging_read.return_value = [
+            make_trace_log(
+                "2026-04-05T00:57:59.000000Z",
+                "ERROR",
+                'duplicate key value violates unique constraint "foo_pkey"',
+            )
         ]
 
         stdout = io.StringIO()
@@ -1465,7 +1476,7 @@ class ProdErrorsCommandTest(unittest.TestCase):
         payload = json.loads(stdout.getvalue())
         correlation = payload["requestCorrelation"]
         self.assertEqual(correlation["summary"]["successCount"], 1)
-        self.assertEqual(correlation["summary"]["failureCount"], 1)
+        self.assertEqual(correlation["summary"]["failureCount"], 2)
         self.assertEqual(
             correlation["replayCheck"]["signals"],
             [
@@ -1480,14 +1491,24 @@ class ProdErrorsCommandTest(unittest.TestCase):
         self.assertEqual(correlation["correlatedRequests"][0]["requestId"], request_id)
         self.assertEqual(correlation["correlatedRequests"][0]["status"], 200)
         self.assertEqual(correlation["correlatedRequests"][1]["status"], 500)
+        self.assertEqual(correlation["correlatedRequests"][2]["status"], 500)
+        self.assertEqual(
+            mock_correlation_logging_list_all.call_args.kwargs["order_by"],
+            "timestamp asc",
+        )
+        self.assertEqual(
+            mock_correlation_logging_list_all.call_args.kwargs["max_entries"], 5000
+        )
 
     @mock.patch("prod_errors.trace.get_token", return_value="token")
     @mock.patch("prod_errors.trace.api_get")
     @mock.patch("prod_errors.trace.api_get_all_pages")
     @mock.patch("prod_errors.trace.logging_read")
     @mock.patch("prod_errors.correlation.logging_read")
+    @mock.patch("prod_errors.correlation.logging_list_all")
     def test_cmd_trace_requests_mode_prints_request_comparison(
         self,
+        mock_correlation_logging_list_all,
         mock_correlation_logging_read,
         mock_logging_read,
         mock_api_get_all_pages,
@@ -1508,33 +1529,42 @@ class ProdErrorsCommandTest(unittest.TestCase):
                 },
             }
         ]
-        mock_correlation_logging_read.side_effect = [
-            [
-                make_access_log(
-                    "2026-04-05T00:57:58.000000Z",
-                    500,
-                    trace_id="trace-fail-1",
-                ),
-                make_request_info_log(
-                    "2026-04-05T00:57:58.100000Z",
-                    "req-1",
-                    ["aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"],
-                    trace_id="trace-fail-1",
-                ),
-                make_access_log(
-                    "2026-04-05T00:53:57.000000Z",
-                    200,
-                    trace_id="trace-ok",
-                ),
-                make_request_info_log(
-                    "2026-04-05T00:53:57.100000Z",
-                    "req-1",
-                    ["aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"],
-                    trace_id="trace-ok",
-                ),
-            ],
-            [],
+        mock_correlation_logging_list_all.return_value = [
+            make_access_log(
+                "2026-04-05T00:53:57.000000Z",
+                200,
+                trace_id="trace-ok",
+            ),
+            make_request_info_log(
+                "2026-04-05T00:53:57.100000Z",
+                "req-1",
+                ["aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"],
+                trace_id="trace-ok",
+            ),
+            make_access_log(
+                "2026-04-05T00:57:58.000000Z",
+                500,
+                trace_id="trace-fail-1",
+            ),
+            make_request_info_log(
+                "2026-04-05T00:57:58.100000Z",
+                "req-1",
+                ["aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"],
+                trace_id="trace-fail-1",
+            ),
+            make_access_log(
+                "2026-04-05T00:58:00.000000Z",
+                500,
+                trace_id="trace-fail-2",
+            ),
+            make_request_info_log(
+                "2026-04-05T00:58:00.100000Z",
+                "req-1",
+                ["aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"],
+                trace_id="trace-fail-2",
+            ),
         ]
+        mock_correlation_logging_read.return_value = []
 
         stdout = io.StringIO()
         with contextlib.redirect_stdout(stdout):
@@ -1552,6 +1582,7 @@ class ProdErrorsCommandTest(unittest.TestCase):
         output = stdout.getvalue()
         self.assertIn("### Request Comparison", output)
         self.assertIn("likely_resubmit", output)
+        self.assertIn("1 success / 2 failure", output)
         self.assertIn(
             "| timestamp | status | trace | request_id | fingerprint |", output
         )
@@ -1561,8 +1592,10 @@ class ProdErrorsCommandTest(unittest.TestCase):
     @mock.patch("prod_errors.trace.api_get_all_pages")
     @mock.patch("prod_errors.trace.logging_read")
     @mock.patch("prod_errors.correlation.logging_read")
+    @mock.patch("prod_errors.correlation.logging_list_all")
     def test_cmd_trace_requests_mode_marks_fingerprint_unavailable(
         self,
+        mock_correlation_logging_list_all,
         mock_correlation_logging_read,
         mock_logging_read,
         mock_api_get_all_pages,
@@ -1583,13 +1616,11 @@ class ProdErrorsCommandTest(unittest.TestCase):
                 },
             }
         ]
-        mock_correlation_logging_read.side_effect = [
-            [
-                make_access_log("2026-04-05T00:53:57.000000Z", 200),
-                make_access_log("2026-04-05T00:57:58.000000Z", 500),
-            ],
-            [],
+        mock_correlation_logging_list_all.return_value = [
+            make_access_log("2026-04-05T00:53:57.000000Z", 200),
+            make_access_log("2026-04-05T00:57:58.000000Z", 500),
         ]
+        mock_correlation_logging_read.return_value = []
 
         stdout = io.StringIO()
         with contextlib.redirect_stdout(stdout):
@@ -1612,6 +1643,59 @@ class ProdErrorsCommandTest(unittest.TestCase):
         self.assertIn(
             "request fingerprint extraction failed", correlation["summary"]["text"]
         )
+
+    @mock.patch("prod_errors.trace.get_token", return_value="token")
+    @mock.patch("prod_errors.trace.api_get")
+    @mock.patch("prod_errors.trace.api_get_all_pages")
+    @mock.patch("prod_errors.trace.logging_read")
+    def test_cmd_trace_prints_endpoint_from_lifecycle_when_matched_log_lacks_endpoint(
+        self,
+        mock_logging_read,
+        mock_api_get_all_pages,
+        mock_api_get,
+        _mock_get_token,
+    ):
+        mock_api_get_all_pages.return_value = self._DEFAULT_GROUPS
+        mock_api_get.return_value = self._DEFAULT_EVENTS
+        mock_logging_read.side_effect = [
+            [
+                {
+                    "timestamp": "2026-04-05T00:57:58.000000Z",
+                    "severity": "ERROR",
+                    "resource": {"labels": {"service_name": "svc-a"}},
+                    "jsonPayload": {
+                        "message": "FooError: boom",
+                        "logger": "app",
+                        "trace_id": "trace-123",
+                    },
+                }
+            ],
+            [
+                make_trace_log(
+                    "2026-04-05T00:57:58.000000Z",
+                    "ERROR",
+                    "500 request: POST - /api/smart-hanko in 20ms",
+                )
+            ],
+            [],
+        ]
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            cmd_trace(
+                argparse.Namespace(
+                    project="demo",
+                    group_id="g-trace",
+                    json=False,
+                    freshness="30d",
+                    mode="trace",
+                    window="5m",
+                )
+            )
+
+        output = stdout.getvalue()
+        self.assertIn("- Endpoint: `/api/smart-hanko`", output)
+        self.assertNotIn("- Endpoint: (not found)", output)
 
     @mock.patch("prod_errors.trace.get_token", return_value="token")
     @mock.patch("prod_errors.trace.api_get")
