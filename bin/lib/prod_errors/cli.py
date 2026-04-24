@@ -68,6 +68,17 @@ def build_parser():
         default="30d",
         help="Cloud Logging search window (default: 30d). Format: Nd where N is number of days (e.g. 7d, 30d, 90d)",
     )
+    trace.add_argument(
+        "--mode",
+        choices=["auto", "trace", "requests"],
+        default="auto",
+        help="Investigation mode (default: auto). requests focuses on nearby request comparison.",
+    )
+    trace.add_argument(
+        "--window",
+        default="5m",
+        help="Nearby request comparison window around the error (default: 5m). Format: Ns, Nm, or Nh.",
+    )
 
     hotspots = sub.add_parser(
         "hotspots", help="Rank frequent error groups for weekly improvement discovery"

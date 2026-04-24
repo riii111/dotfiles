@@ -19,6 +19,7 @@ if str(LIB) not in sys.path:
 from prod_errors.cli import build_parser
 from prod_errors.ansi import display_width, pad_left, pad_right, trunc
 from prod_errors.client import extract_trace_id, logging_list_all
+from prod_errors.correlation import parse_window
 from prod_errors.commands import (
     _find_prior_occurrences,
     _resolve_hotspot_window,
@@ -26,6 +27,7 @@ from prod_errors.commands import (
     cmd_summary,
     cmd_trace,
 )
+from prod_errors.fingerprint import extract_request_fingerprint
 from prod_errors.logic import (
     aggregate_hotspot_logs,
     build_hotspot_analysis,
@@ -81,6 +83,35 @@ def make_trace_log(timestamp, severity, message, logger="app", **payload):
         "timestamp": timestamp,
         "severity": severity,
         "jsonPayload": json_payload,
+    }
+
+
+def make_request_log(
+    timestamp,
+    status,
+    request_id,
+    file_ids,
+    trace_id=None,
+    endpoint="/foo",
+    service="svc-a",
+):
+    return {
+        "timestamp": timestamp,
+        "severity": "INFO" if status < 500 else "ERROR",
+        "resource": {"labels": {"service_name": service}},
+        "trace": f"projects/demo/traces/{trace_id}" if trace_id else "",
+        "jsonPayload": {
+            "message": f"{status} request: POST - {endpoint} in 20ms",
+            "logger": "access",
+            "requestBody": {
+                "id": request_id,
+                "files": [{"id": file_id} for file_id in file_ids],
+            },
+            "headers": {
+                "x-tenant-id": "tenant-a",
+                "x-user-account-id": "ua-1",
+            },
+        },
     }
 
 
@@ -201,6 +232,37 @@ class ProdErrorsLogicTest(unittest.TestCase):
 
 
 class ProdErrorsTraceHelpersTest(unittest.TestCase):
+    def test_parse_window_supports_seconds_minutes_and_hours(self):
+        self.assertEqual(parse_window("30s").total_seconds(), 30)
+        self.assertEqual(parse_window("5m").total_seconds(), 300)
+        self.assertEqual(parse_window("1h").total_seconds(), 3600)
+
+    def test_extract_request_fingerprint_reads_request_body_ids_and_caller(self):
+        entry = make_request_log(
+            "2026-04-05T00:00:00.000000Z",
+            200,
+            "20337152-1406-4727-9e11-a67722f22be6",
+            [
+                "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa",
+                "bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb",
+            ],
+        )
+
+        fingerprint = extract_request_fingerprint(entry)
+
+        self.assertEqual(
+            fingerprint["requestId"], "20337152-1406-4727-9e11-a67722f22be6"
+        )
+        self.assertEqual(
+            fingerprint["fileIds"],
+            [
+                "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa",
+                "bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb",
+            ],
+        )
+        self.assertEqual(fingerprint["caller"]["tenantId"], "tenant-a")
+        self.assertIn("request_id=20337152...", fingerprint["summary"])
+
     def test_extract_context_from_object_reads_nested_aliases_and_strings(self):
         context = {}
 
@@ -589,6 +651,26 @@ class ProdErrorsCliTest(unittest.TestCase):
         self.assertEqual(args.period, "7d")
         self.assertEqual(args.until, "2026-04-01T00:00:00Z")
         self.assertEqual(args.bucket, "7d")
+
+    def test_build_parser_supports_trace_request_mode(self):
+        parser = build_parser()
+
+        args = parser.parse_args(
+            [
+                "--project",
+                "demo",
+                "trace",
+                "g-trace",
+                "--mode",
+                "requests",
+                "--window",
+                "10m",
+            ]
+        )
+
+        self.assertEqual(args.command, "trace")
+        self.assertEqual(args.mode, "requests")
+        self.assertEqual(args.window, "10m")
 
     def test_hotspots_since_help_mentions_range_start(self):
         parser = build_parser()
@@ -1105,6 +1187,8 @@ class ProdErrorsCommandTest(unittest.TestCase):
             group_id="g-trace",
             json=False,
             freshness="30d",
+            mode="trace",
+            window="5m",
         )
 
         stdout = io.StringIO()
@@ -1166,6 +1250,8 @@ class ProdErrorsCommandTest(unittest.TestCase):
             group_id="g-trace",
             json=False,
             freshness="30d",
+            mode="trace",
+            window="5m",
         )
 
         stdout = io.StringIO()
@@ -1212,6 +1298,8 @@ class ProdErrorsCommandTest(unittest.TestCase):
             group_id="g-trace",
             json=False,
             freshness="30d",
+            mode="trace",
+            window="5m",
         )
 
         stdout = io.StringIO()
@@ -1228,6 +1316,156 @@ class ProdErrorsCommandTest(unittest.TestCase):
             "Cloud Trace ID was not found; Request Lifecycle is unavailable.", output
         )
         self.assertNotIn("### Request Lifecycle", output)
+
+    @mock.patch("prod_errors.trace.get_token", return_value="token")
+    @mock.patch("prod_errors.trace.api_get")
+    @mock.patch("prod_errors.trace.api_get_all_pages")
+    @mock.patch("prod_errors.trace.logging_read")
+    @mock.patch("prod_errors.correlation.logging_read")
+    def test_cmd_trace_auto_json_correlates_nearby_requests_without_trace_id(
+        self,
+        mock_correlation_logging_read,
+        mock_logging_read,
+        mock_api_get_all_pages,
+        mock_api_get,
+        _mock_get_token,
+    ):
+        request_id = "20337152-1406-4727-9e11-a67722f22be6"
+        file_ids = ["aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"]
+        mock_api_get_all_pages.return_value = self._DEFAULT_GROUPS
+        mock_api_get.return_value = self._DEFAULT_EVENTS
+        mock_logging_read.return_value = [
+            {
+                "timestamp": "2026-04-05T00:57:58.000000Z",
+                "severity": "ERROR",
+                "resource": {"labels": {"service_name": "svc-a"}},
+                "jsonPayload": {
+                    "message": "FooError: boom",
+                    "logger": "app",
+                    "request": {"path": "/foo", "status": 500},
+                },
+            }
+        ]
+        mock_correlation_logging_read.side_effect = [
+            [
+                make_request_log(
+                    "2026-04-05T00:57:58.000000Z",
+                    500,
+                    request_id,
+                    file_ids,
+                ),
+                make_request_log(
+                    "2026-04-05T00:53:57.000000Z",
+                    200,
+                    request_id,
+                    file_ids,
+                    trace_id="trace-ok",
+                ),
+            ],
+            [
+                make_trace_log(
+                    "2026-04-05T00:57:59.000000Z",
+                    "ERROR",
+                    'duplicate key value violates unique constraint "foo_pkey"',
+                )
+            ],
+        ]
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            cmd_trace(
+                argparse.Namespace(
+                    project="demo",
+                    group_id="g-trace",
+                    json=True,
+                    freshness="30d",
+                    mode="auto",
+                    window="5m",
+                )
+            )
+
+        payload = json.loads(stdout.getvalue())
+        correlation = payload["requestCorrelation"]
+        self.assertEqual(correlation["summary"]["successCount"], 1)
+        self.assertEqual(correlation["summary"]["failureCount"], 1)
+        self.assertEqual(
+            correlation["replayCheck"]["signals"],
+            [
+                "same_request_id",
+                "same_file_ids",
+                "same_endpoint",
+                "success_then_failure",
+            ],
+        )
+        self.assertEqual(correlation["replayCheck"]["verdict"], "likely_resubmit")
+        self.assertEqual(len(correlation["relatedConstraintErrors"]), 1)
+        self.assertEqual(correlation["correlatedRequests"][0]["requestId"], request_id)
+
+    @mock.patch("prod_errors.trace.get_token", return_value="token")
+    @mock.patch("prod_errors.trace.api_get")
+    @mock.patch("prod_errors.trace.api_get_all_pages")
+    @mock.patch("prod_errors.trace.logging_read")
+    @mock.patch("prod_errors.correlation.logging_read")
+    def test_cmd_trace_requests_mode_prints_request_comparison(
+        self,
+        mock_correlation_logging_read,
+        mock_logging_read,
+        mock_api_get_all_pages,
+        mock_api_get,
+        _mock_get_token,
+    ):
+        mock_api_get_all_pages.return_value = self._DEFAULT_GROUPS
+        mock_api_get.return_value = self._DEFAULT_EVENTS
+        mock_logging_read.return_value = [
+            {
+                "timestamp": "2026-04-05T00:57:58.000000Z",
+                "severity": "ERROR",
+                "resource": {"labels": {"service_name": "svc-a"}},
+                "jsonPayload": {
+                    "message": "FooError: boom",
+                    "logger": "app",
+                    "request": {"path": "/foo", "status": 500},
+                },
+            }
+        ]
+        mock_correlation_logging_read.side_effect = [
+            [
+                make_request_log(
+                    "2026-04-05T00:57:58.000000Z",
+                    500,
+                    "req-1",
+                    ["aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"],
+                ),
+                make_request_log(
+                    "2026-04-05T00:53:57.000000Z",
+                    200,
+                    "req-1",
+                    ["aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"],
+                    trace_id="trace-ok",
+                ),
+            ],
+            [],
+        ]
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            cmd_trace(
+                argparse.Namespace(
+                    project="demo",
+                    group_id="g-trace",
+                    json=False,
+                    freshness="30d",
+                    mode="requests",
+                    window="5m",
+                )
+            )
+
+        output = stdout.getvalue()
+        self.assertIn("### Request Comparison", output)
+        self.assertIn("likely_resubmit", output)
+        self.assertIn(
+            "| timestamp | status | trace | request_id | fingerprint |", output
+        )
 
     @mock.patch("prod_errors.trace.get_token", return_value="token")
     @mock.patch("prod_errors.trace.api_get")
@@ -1968,6 +2206,8 @@ class ProdErrorsCommandTest(unittest.TestCase):
                         group_id="g-trace",
                         json=True,
                         freshness="30d",
+                        mode="trace",
+                        window="5m",
                     )
                 )
             return json.loads(stdout.getvalue())

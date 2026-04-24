@@ -25,6 +25,7 @@ from prod_errors.client import (
     get_token,
     logging_read,
 )
+from prod_errors.correlation import build_request_correlation, parse_window
 from prod_errors.timefmt import format_jst_timestamp
 
 _MATCHED_LOG_FETCH_LIMIT = 5
@@ -32,6 +33,14 @@ _ANALYSIS_DISPLAY_LIMIT = 3
 
 
 def cmd_trace(args):
+    mode = getattr(args, "mode", "auto")
+    window = getattr(args, "window", "5m")
+    try:
+        parse_window(window)
+    except ValueError as exc:
+        print(f"--window {exc}", file=sys.stderr)
+        sys.exit(1)
+
     token = get_token()
     colors = _trace_colors()
     target = _lookup_error_group(args.project, token, args.group_id)
@@ -92,6 +101,22 @@ def cmd_trace(args):
             _print_diagnostic_summary(lookup, colors)
 
     if not lookup["traceId"]:
+        endpoint, error_timestamp, _http_status = _extract_retry_context(
+            [], lookup["logs"]
+        )
+        if mode in ("auto", "requests") and endpoint and error_timestamp:
+            if _attach_request_correlation(
+                args.project,
+                token,
+                lookup["service"],
+                endpoint,
+                error_timestamp,
+                window,
+                result,
+                args.json,
+                colors,
+            ):
+                return
         if args.json:
             print(json.dumps(result, indent=2, ensure_ascii=False))
         else:
@@ -142,6 +167,20 @@ def cmd_trace(args):
             print(f"\n{colors['bold']('### Retry Check')}\n")
             print("Could not extract endpoint. Manual investigation needed.")
         return
+
+    if mode == "requests":
+        if _attach_request_correlation(
+            args.project,
+            token,
+            lookup["service"],
+            endpoint,
+            error_timestamp,
+            window,
+            result,
+            args.json,
+            colors,
+        ):
+            return
 
     if http_status is not None and http_status < 500:
         result["retryCheck"] = {
@@ -243,6 +282,44 @@ def cmd_trace(args):
     print(f"  {result['retryCheck']['detail']}")
 
 
+def _attach_request_correlation(
+    project,
+    token,
+    service,
+    endpoint,
+    error_timestamp,
+    window,
+    result,
+    as_json,
+    colors,
+):
+    try:
+        correlation = build_request_correlation(
+            project,
+            token,
+            service,
+            endpoint,
+            error_timestamp,
+            window,
+            _extract_http_request_info,
+        )
+    except (LoggingError, ValueError) as exc:
+        result["requestCorrelation"] = {"error": str(exc)}
+        if as_json:
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+        else:
+            print(f"\n{colors['bold']('### Request Comparison')}\n")
+            print(f"Request comparison failed: {exc}")
+        return True
+
+    result["requestCorrelation"] = correlation
+    if as_json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    else:
+        _print_request_correlation(correlation, colors)
+    return True
+
+
 def _trace_colors():
     return {
         "bold": color(_BOLD),
@@ -284,6 +361,55 @@ def _print_log_entries(title, entries, colors):
             f"{colors['severity'].get(severity, color())(f'{severity:7s}')} "
             f"[{colors['dim'](log_entry['logger'])}] {log_entry['message']}"
         )
+
+
+def _print_request_correlation(correlation, colors):
+    print(f"\n{colors['bold']('### Request Comparison')}\n")
+    print(f"- Summary: {correlation['summary']['text']}")
+    replay = correlation["replayCheck"]
+    signals = ", ".join(replay["signals"]) if replay["signals"] else "(none)"
+    print(f"- Replay suspicion: {replay['verdict']} ({signals})")
+    if correlation["relatedConstraintErrors"]:
+        print(
+            f"- Related constraint errors: {len(correlation['relatedConstraintErrors'])}"
+        )
+
+    requests = correlation["correlatedRequests"]
+    if not requests:
+        print("\nNo same-endpoint requests found in the selected window.")
+        return
+
+    print("\n| timestamp | status | trace | request_id | fingerprint |")
+    print("| --- | ---: | --- | --- | --- |")
+    for row in requests:
+        timestamp = format_jst_timestamp(
+            row["timestamp"], include_seconds=True, include_millis=True
+        )
+        status = row["status"] if row["status"] is not None else ""
+        trace_id = _short_trace_id(row["traceId"])
+        request_id = _short_value(row["requestId"])
+        fingerprint = row["fingerprint"]["summary"]
+        print(f"| {timestamp} | {status} | {trace_id} | {request_id} | {fingerprint} |")
+
+    if correlation["relatedConstraintErrors"]:
+        print(f"\n{colors['bold']('Related Constraint Errors')}\n")
+        for error in correlation["relatedConstraintErrors"][:3]:
+            timestamp = format_jst_timestamp(
+                error["timestamp"], include_seconds=True, include_millis=True
+            )
+            print(f"- {timestamp} | {error['message']}")
+
+
+def _short_trace_id(value):
+    if not value:
+        return "(none)"
+    return _short_value(value)
+
+
+def _short_value(value):
+    if not value:
+        return ""
+    return value if len(value) <= 12 else f"{value[:8]}..."
 
 
 def _print_primary_endpoint(endpoint_candidates):
