@@ -13,3 +13,6 @@ dot_claude/statusline/executable_statusline-go
 
 # Nix build symlink
 result
+
+# Neovim headless logs
+nvim.log
