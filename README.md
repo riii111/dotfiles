@@ -17,6 +17,15 @@ brew bundle --file ~/ghq/github.com/riii111/dotfiles/Brewfile
 exec zsh
 ```
 
+### Work tools (optional)
+
+Private work tool layers are managed separately.
+
+```bash
+~/bin/dot work-tools install
+~/bin/dot work-tools update
+```
+
 ### Finder integration (optional)
 
 Route Finder double-clicks to WezTerm + Neovim / VisiData.
