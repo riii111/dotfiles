@@ -1608,9 +1608,7 @@ class ProdErrorsCommandTest(unittest.TestCase):
         self.assertIn("likely_resubmit", output)
         self.assertNotIn("endpoint_failures_seen", output)
         self.assertIn("1 success / 2 failure", output)
-        self.assertIn(
-            "| timestamp | status | trace | request_id | fingerprint |", output
-        )
+        self.assertIn("| Time | Status | Trace | Request | Fingerprint |", output)
 
     @mock.patch("prod_errors.trace.get_token", return_value="token")
     @mock.patch("prod_errors.trace.api_get")

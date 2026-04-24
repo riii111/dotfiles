@@ -11,8 +11,12 @@ from prod_errors.ansi import (
     _GREEN,
     _RED,
     _YELLOW,
+    col_widths,
     color,
+    pad_left,
+    pad_right,
     strip_ansi,
+    trunc,
 )
 from prod_errors.client import (
     API_BASE,
@@ -441,17 +445,7 @@ def _print_request_correlation(correlation, colors):
             print(f"Next hint: {correlation['nextHints'][0]}")
         return
 
-    print("\n| timestamp | status | trace | request_id | fingerprint |")
-    print("| --- | ---: | --- | --- | --- |")
-    for row in requests:
-        timestamp = format_jst_timestamp(
-            row["timestamp"], include_seconds=True, include_millis=True
-        )
-        status = row["status"] if row["status"] is not None else ""
-        trace_id = _short_trace_id(row["traceId"])
-        request_id = _short_value(row["requestId"])
-        fingerprint = row["fingerprint"]["summary"]
-        print(f"| {timestamp} | {status} | {trace_id} | {request_id} | {fingerprint} |")
+    _print_request_table(requests, colors)
 
     if correlation["relatedConstraintErrors"]:
         print(f"\n{colors['bold']('Related Constraint Errors')}\n")
@@ -472,6 +466,52 @@ def _short_value(value):
     if not value:
         return ""
     return value if len(value) <= 12 else f"{value[:8]}..."
+
+
+def _print_request_table(requests, colors):
+    headers = ("Time", "Status", "Trace", "Request", "Fingerprint")
+    rows = [_request_table_row(row) for row in requests]
+
+    if not sys.stdout.isatty():
+        header = "| Time | Status | Trace | Request | Fingerprint |"
+        print(f"\n{header}")
+        print("-" * len(header))
+        for row in rows:
+            print(f"| {row[0]} | {row[1]} | {row[2]} | {row[3]} | {row[4]} |")
+        return
+
+    header_color = colors["bold"]
+    dim_color = colors["dim"]
+    widths = col_widths(rows, headers)
+    sep = "─" * (sum(widths) + 3 * (len(widths) - 1))
+    print()
+    print(" │ ".join(header_color(pad_right(h, w)) for h, w in zip(headers, widths)))
+    print(sep)
+    for row in rows:
+        print(
+            " │ ".join(
+                [
+                    pad_right(row[0], widths[0]),
+                    pad_left(row[1], widths[1]),
+                    dim_color(pad_right(row[2], widths[2])),
+                    pad_right(row[3], widths[3]),
+                    pad_right(row[4], widths[4]),
+                ]
+            )
+        )
+    print(sep)
+
+
+def _request_table_row(row):
+    return (
+        format_jst_timestamp(
+            row["timestamp"], include_seconds=True, include_millis=True
+        ),
+        str(row["status"]) if row["status"] is not None else "",
+        _short_trace_id(row["traceId"]),
+        _short_value(row["requestId"]),
+        trunc(row["fingerprint"]["summary"], 64),
+    )
 
 
 def _print_primary_endpoint(endpoint_candidates):
