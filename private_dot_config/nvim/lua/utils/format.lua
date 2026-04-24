@@ -15,6 +15,7 @@ M.config = {
   javascriptreact = "null-ls",
   json = "null-ls",
   jsonc = "null-ls",
+  nix = "null-ls",
   rust = "rust-analyzer",
   go = "gopls",
   terraform = "null-ls",

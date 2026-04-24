@@ -5,7 +5,8 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
   };
 
-  outputs = { nixpkgs, ... }:
+  outputs =
+    { nixpkgs, ... }:
     let
       # This dotfiles repo is macOS-only for now, so keep the shell darwin-only too.
       systems = [
@@ -13,12 +14,15 @@
         "x86_64-darwin"
       ];
       forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f system);
-      mkCli = system:
+      mkCli =
+        system:
         let
           pkgs = import nixpkgs { inherit system; };
           dailyCliPackages = with pkgs; [
             # Editor-integrated tooling that should exist in the normal shell too.
             nil
+            nixd
+            nixfmt
             python3
             shellcheck
             shfmt
@@ -33,6 +37,7 @@
             fzf
             gh
             ghq
+            git
             jq
             k6
             lazygit
@@ -66,7 +71,12 @@
           };
         in
         {
-          inherit pkgs dailyCliPackages devShellOnlyPackages cliProfile;
+          inherit
+            pkgs
+            dailyCliPackages
+            devShellOnlyPackages
+            cliProfile
+            ;
         };
     in
     {
@@ -95,6 +105,14 @@
             '';
           };
         }
+      );
+
+      formatter = forAllSystems (
+        system:
+        let
+          cli = mkCli system;
+        in
+        cli.pkgs.nixfmt-tree
       );
     };
 }
