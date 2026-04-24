@@ -580,10 +580,15 @@ run_prechecks() {
 
 run_command_phase() {
     local phase_idx="$1"
+    local start_profile="${2:-all}"
     local name command dir on_fail
 
     name=$(parse_yaml "$CONFIG_FILE" ".phases[$phase_idx].name")
-    command=$(parse_yaml "$CONFIG_FILE" ".phases[$phase_idx].command")
+    command=$(parse_yaml_allow_null "$CONFIG_FILE" ".phases[$phase_idx].commands.\"$start_profile\" // .phases[$phase_idx].command")
+    if [[ -z "$command" || "$command" == "null" ]]; then
+        echo -e "${RED}Error: Command phase '${name}' has no command for profile '${start_profile}'${NC}" >&2
+        return 1
+    fi
     dir=$(parse_yaml_allow_null "$CONFIG_FILE" ".phases[$phase_idx].dir // \"\"")
     on_fail=$(parse_yaml_allow_null "$CONFIG_FILE" ".phases[$phase_idx].on_fail // \"abort\"")
 

@@ -21,10 +21,11 @@ phases:
   - name: Docker
     type: docker
 
-  - name: Share Build
+  - name: Backend Precompile
     type: command
-    command: direnv exec . ./gradlew --no-daemon :share:build -x test
-    dir: backend
+    commands:
+      all: task be:precompile:all
+      co-core: task be:precompile:dev
     on_fail: abort
 
   - name: Backend

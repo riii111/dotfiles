@@ -195,7 +195,7 @@ start_all() {
 
             # Handle command phase
             if [[ "$phase_type" == "command" ]]; then
-                if ! run_command_phase "$i"; then
+                if ! run_command_phase "$i" "$start_profile"; then
                     return 1
                 fi
                 echo
