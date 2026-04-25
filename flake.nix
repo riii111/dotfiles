@@ -39,7 +39,6 @@
             eza
             fd
             fzf
-            gcc
             gemini-cli
             gh
             ghq
