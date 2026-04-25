@@ -6,6 +6,14 @@ vim.tbl_flatten = function(t)
   return vim.iter(t):flatten(math.huge):totable()
 end
 
+-- Suppress Nvim 0.12.1 internal deprecation warnings (client.request etc.)
+-- Neovim's own runtime calls deprecated LSP client methods; nothing we can fix.
+local _orig_deprecate = vim.deprecate
+vim.deprecate = function(name, ...)
+  if name and name:match("^client%.") then return end
+  return _orig_deprecate(name, ...)
+end
+
 -- Bootstrap lazy.nvim
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
 if not (vim.uv or vim.loop).fs_stat(lazypath) then
