@@ -67,12 +67,12 @@ local function notify_lsp_buffer_changed(bufnr)
 
   for _, client in pairs(vim.lsp.get_clients({ bufnr = bufnr })) do
     -- Close and reopen to force full content sync
-    client.notify("textDocument/didClose", {
+    client:notify("textDocument/didClose", {
       textDocument = { uri = uri }
     })
 
     local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-    client.notify("textDocument/didOpen", {
+    client:notify("textDocument/didOpen", {
       textDocument = {
         uri = uri,
         languageId = filetype,
