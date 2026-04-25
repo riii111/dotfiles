@@ -69,7 +69,7 @@ function M.format(bufnr, opts)
     return
   end
 
-  client.request("textDocument/formatting", params, function(err, result)
+  client:request("textDocument/formatting", params, function(err, result)
     vim.schedule(function()
       if not vim.api.nvim_buf_is_valid(bufnr) then return end
       if vim.b[bufnr].format_request_id ~= request_id then return end
