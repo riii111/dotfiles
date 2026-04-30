@@ -61,11 +61,11 @@ on open theFiles
 	repeat with f in theFiles
 		set fileList to fileList & space & quoted form of POSIX path of (f as alias)
 	end repeat
-	do shell script "{ ${WEZTERM} cli spawn --new-window -- ${cmd}" & fileList & " 2>/dev/null || ${WEZTERM} start -- ${cmd}" & fileList & " 2>/dev/null; } &"
+	do shell script "{ ${WEZTERM} cli spawn --new-window -- ${cmd}" & fileList & " 2>/dev/null || ${WEZTERM} start -- ${cmd}" & fileList & " 2>/dev/null || echo '${name} failed:'" & fileList & " >> ~/Library/Logs/open-routing.log; } &"
 end open
 
 on run
-	do shell script "{ ${WEZTERM} cli spawn --new-window -- ${cmd} 2>/dev/null || ${WEZTERM} start -- ${cmd} 2>/dev/null; } &"
+	do shell script "{ ${WEZTERM} cli spawn --new-window -- ${cmd} 2>/dev/null || ${WEZTERM} start -- ${cmd} 2>/dev/null || echo '${name} failed' >> ~/Library/Logs/open-routing.log; } &"
 end run
 APPLESCRIPT
 
