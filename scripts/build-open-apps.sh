@@ -11,16 +11,35 @@ set -euo pipefail
 readonly DEST="$HOME/Library/Application Support/open-routing"
 readonly LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister"
 
-readonly WEZTERM="$(command -v wezterm || true)"
-readonly NVIM="$(command -v nvim || true)"
-readonly VD="$(command -v vd || true)"
-readonly CSVLENS="$(command -v csvlens || true)"
+WEZTERM="$(command -v wezterm || true)"
+readonly WEZTERM
+NVIM="$(command -v nvim || true)"
+readonly NVIM
+VD="$(command -v vd || true)"
+readonly VD
+CSVLENS="$(command -v csvlens || true)"
+readonly CSVLENS
 
-[[ -n "$WEZTERM" ]] || { echo "ERROR: wezterm not found in PATH"; exit 1; }
-[[ -n "$NVIM" ]] || { echo "ERROR: nvim not found in PATH"; exit 1; }
-[[ -n "$VD" ]] || { echo "ERROR: vd not found in PATH"; exit 1; }
-[[ -n "$CSVLENS" ]] || { echo "ERROR: csvlens not found in PATH"; exit 1; }
-command -v osacompile >/dev/null || { echo "ERROR: osacompile missing"; exit 1; }
+[[ -n "$WEZTERM" ]] || {
+	echo "ERROR: wezterm not found in PATH"
+	exit 1
+}
+[[ -n "$NVIM" ]] || {
+	echo "ERROR: nvim not found in PATH"
+	exit 1
+}
+[[ -n "$VD" ]] || {
+	echo "ERROR: vd not found in PATH"
+	exit 1
+}
+[[ -n "$CSVLENS" ]] || {
+	echo "ERROR: csvlens not found in PATH"
+	exit 1
+}
+command -v osacompile >/dev/null || {
+	echo "ERROR: osacompile missing"
+	exit 1
+}
 
 mkdir -p "$DEST"
 
@@ -40,13 +59,13 @@ build_app() {
 on open theFiles
 	set fileList to ""
 	repeat with f in theFiles
-		set fileList to fileList & space & quoted form of POSIX path of f
+		set fileList to fileList & space & quoted form of POSIX path of (f as alias)
 	end repeat
-	do shell script "${WEZTERM} cli spawn --new-window -- ${cmd}" & fileList & " >/dev/null 2>&1 || ${WEZTERM} start -- ${cmd}" & fileList & " >/dev/null 2>&1 &"
+	do shell script "{ ${WEZTERM} cli spawn --new-window -- ${cmd}" & fileList & " 2>/dev/null || ${WEZTERM} start -- ${cmd}" & fileList & " 2>/dev/null; } &"
 end open
 
 on run
-	do shell script "${WEZTERM} cli spawn --new-window -- ${cmd} >/dev/null 2>&1 || ${WEZTERM} start -- ${cmd} >/dev/null 2>&1 &"
+	do shell script "{ ${WEZTERM} cli spawn --new-window -- ${cmd} 2>/dev/null || ${WEZTERM} start -- ${cmd} 2>/dev/null; } &"
 end run
 APPLESCRIPT
 
@@ -54,9 +73,9 @@ APPLESCRIPT
 
 	local plist="$staged/Contents/Info.plist"
 	# osacompile doesn't set CFBundleIdentifier; add it, fall back to set if it ever appears.
-	/usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string ${bundle_id}" "$plist" 2>/dev/null || \
+	/usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string ${bundle_id}" "$plist" 2>/dev/null ||
 		/usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier ${bundle_id}" "$plist"
-	/usr/libexec/PlistBuddy -c "Add :LSUIElement bool true" "$plist" 2>/dev/null || \
+	/usr/libexec/PlistBuddy -c "Add :LSUIElement bool true" "$plist" 2>/dev/null ||
 		/usr/libexec/PlistBuddy -c "Set :LSUIElement true" "$plist"
 	/usr/libexec/PlistBuddy -c "Add :NSHighResolutionCapable bool true" "$plist" 2>/dev/null || true
 
