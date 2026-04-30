@@ -1,0 +1,3 @@
+if [[ -f "${NIX_DOTFILES_SHARE}/nix-direnv/direnvrc" ]]; then
+  source "${NIX_DOTFILES_SHARE}/nix-direnv/direnvrc"
+fi

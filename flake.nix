@@ -54,6 +54,7 @@
             mycli
             neovim
             ninja
+            nix-direnv
             pgcli
             pngpaste
             pnpm
