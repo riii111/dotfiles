@@ -20,10 +20,10 @@
       KeyRepeat = 2;
       "com.apple.keyboard.fnState" = true;
       NSAutomaticSpellingCorrectionEnabled = false;
-      NSAutomaticCapitalizationEnabled = true;
-      NSAutomaticDashSubstitutionEnabled = true;
-      NSAutomaticPeriodSubstitutionEnabled = true;
-      NSAutomaticQuoteSubstitutionEnabled = true;
+      NSAutomaticCapitalizationEnabled = false;
+      NSAutomaticDashSubstitutionEnabled = false;
+      NSAutomaticPeriodSubstitutionEnabled = false;
+      NSAutomaticQuoteSubstitutionEnabled = false;
     };
 
     dock = {
