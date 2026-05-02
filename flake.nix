@@ -156,14 +156,12 @@
 
       darwinConfigurations = {
         personal = nix-darwin.lib.darwinSystem {
-          system = "aarch64-darwin";
           modules = [
             ./darwin/hosts/personal.nix
           ];
         };
 
         work = nix-darwin.lib.darwinSystem {
-          system = "aarch64-darwin";
           modules = [
             ./darwin/hosts/work.nix
           ];
