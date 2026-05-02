@@ -1,5 +1,3 @@
-tap "olets/tap"
-brew "olets/tap/zsh-abbr"
 cask "codex"
 cask "font-droid-sans-mono-nerd-font"
 cask "font-hack-nerd-font"

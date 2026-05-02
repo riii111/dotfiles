@@ -17,7 +17,11 @@
       mkCli =
         system:
         let
-          pkgs = import nixpkgs { inherit system; };
+          pkgs = import nixpkgs {
+            inherit system;
+            config.allowUnfreePredicate =
+              pkg: builtins.elem (nixpkgs.lib.getName pkg) [ "zsh-abbr" ];
+          };
           selectedGoTools = pkgs.runCommand "selected-go-tools" { } ''
             mkdir -p "$out/bin"
             for bin in callgraph goimports gonew; do
@@ -102,6 +106,7 @@
             tree
             visidata
             yq-go # Go implementation behind the `yq` command.
+            zsh-abbr
             zsh-autosuggestions
           ];
           devShellOnlyPackages = with pkgs; [
