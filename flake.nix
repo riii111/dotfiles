@@ -24,7 +24,7 @@
           };
           selectedGoTools = pkgs.runCommand "selected-go-tools" { } ''
             mkdir -p "$out/bin"
-            for bin in callgraph goimports gonew; do
+            for bin in goimports; do
               ln -s "${pkgs.gotools}/bin/$bin" "$out/bin/$bin"
             done
           '';
@@ -39,7 +39,6 @@
             taplo
 
             # Daily CLI tools owned by Nix.
-            apacheHttpd
             bat
             chezmoi
             cmake
@@ -52,36 +51,20 @@
             eza
             fd
             fzf
-            gemini-cli
             gh
             ghq
             git
             gnupg
             go
             delve
-            ginkgo
-            gofumpt
-            golines
-            gomodifytags
             golangci-lint
             gopls
-            gosec
-            gotests
-            gotestsum
             selectedGoTools
-            govulncheck
             inetutils # Provides telnet.
-            iferr
-            impl
             jq
-            k6
             lazygit
             lefthook
             llvm
-            mariadb.client
-            mise
-            mockgen
-            mycli
             neovim
             ninja
             nix-direnv
@@ -93,12 +76,8 @@
             postgresql_18
             pspg
             qemu
-            reftools # Provides fillswitch and related refactoring helpers.
             ripgrep
-            richgo
             sccache
-            sql-migrate
-            sqlc
             sqlfluff
             sqls
             sqruff
