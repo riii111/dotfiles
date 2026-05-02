@@ -10,11 +10,17 @@ set -euo pipefail
 #
 # PDF is intentionally left alone (macOS Preview.app stays the default).
 
-command -v duti >/dev/null || { echo "ERROR: duti not installed (brew bundle)"; exit 1; }
+command -v duti >/dev/null || {
+	echo "ERROR: duti not installed (dot sync-nix-profile)"
+	exit 1
+}
 
 readonly APPS_DIR="$HOME/Library/Application Support/open-routing"
 for app in OpenInNvim OpenInCsvLens OpenInVisiData; do
-	[[ -d "$APPS_DIR/$app.app" ]] || { echo "ERROR: $app.app missing under $APPS_DIR. Run scripts/build-open-apps.sh first."; exit 1; }
+	[[ -d "$APPS_DIR/$app.app" ]] || {
+		echo "ERROR: $app.app missing under $APPS_DIR. Run scripts/build-open-apps.sh first."
+		exit 1
+	}
 done
 
 readonly NVIM_ID="com.riii111.openinnvim"
@@ -44,8 +50,7 @@ for uti in \
 	public.yaml \
 	org.tomlunity.toml \
 	public.rust-source \
-	com.apple.property-list \
-	; do
+	com.apple.property-list; do
 	assign_uti "$NVIM_ID" "$uti"
 done
 

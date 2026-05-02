@@ -18,6 +18,12 @@
         system:
         let
           pkgs = import nixpkgs { inherit system; };
+          selectedGoTools = pkgs.runCommand "selected-go-tools" { } ''
+            mkdir -p "$out/bin"
+            for bin in callgraph goimports gonew; do
+              ln -s "${pkgs.gotools}/bin/$bin" "$out/bin/$bin"
+            done
+          '';
           dailyCliPackages = with pkgs; [
             # Editor-integrated tooling that should exist in the normal shell too.
             nil
@@ -29,13 +35,16 @@
             taplo
 
             # Daily CLI tools owned by Nix.
+            apacheHttpd
             bat
+            chezmoi
             cmake
             csvlens
             delta
             deno
             direnv
             docker
+            duti
             eza
             fd
             fzf
@@ -43,6 +52,7 @@
             gh
             ghq
             git
+            gnupg
             go
             delve
             ginkgo
@@ -54,7 +64,7 @@
             gosec
             gotests
             gotestsum
-            gotools # Provides goimports, callgraph, gonew, and related Go tools.
+            selectedGoTools
             govulncheck
             inetutils # Provides telnet.
             iferr
@@ -64,15 +74,21 @@
             lazygit
             lefthook
             llvm
+            mariadb.client
+            mise
             mockgen
             mycli
             neovim
             ninja
             nix-direnv
+            openjdk
             pgcli
+            pinentry_mac
             pngpaste
             pnpm
+            postgresql_18
             pspg
+            qemu
             reftools # Provides fillswitch and related refactoring helpers.
             ripgrep
             richgo

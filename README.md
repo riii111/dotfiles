@@ -48,7 +48,7 @@ Daily CLI tools are managed by a dedicated Nix profile.
 exec zsh
 ```
 
-Homebrew stays for GUI / cask and macOS-specific packages.
+Homebrew stays for GUI / cask packages and zsh-abbr.
 
 ### Dev shell
 
