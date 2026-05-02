@@ -3,8 +3,6 @@
 {
   nixpkgs.hostPlatform = "aarch64-darwin";
 
-  system.primaryUser = "a81803";
-
   nix.settings.experimental-features = [
     "nix-command"
     "flakes"

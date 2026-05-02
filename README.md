@@ -13,7 +13,7 @@ chezmoi init --source ~/ghq/github.com/riii111/dotfiles
 chezmoi apply
 # Install Nix first: https://nixos.org/download/
 ~/bin/dot sync-nix-profile
-sudo nix run nix-darwin/master#darwin-rebuild -- switch --flake ~/ghq/github.com/riii111/dotfiles#riii111
+sudo nix run nix-darwin/master#darwin-rebuild -- switch --flake ~/ghq/github.com/riii111/dotfiles#personal
 exec zsh
 ```
 
