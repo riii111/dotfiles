@@ -1,6 +1,10 @@
 { ... }:
 
 {
+  imports = [
+    ./keyboard-shortcuts.nix
+  ];
+
   nixpkgs.hostPlatform = "aarch64-darwin";
 
   nix.settings.experimental-features = [
