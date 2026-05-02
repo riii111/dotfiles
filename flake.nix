@@ -44,13 +44,27 @@
             ghq
             git
             go
+            delve
+            ginkgo
+            gofumpt
+            golines
+            gomodifytags
             golangci-lint
+            gopls
+            gosec
+            gotests
+            gotestsum
+            gotools # Provides goimports, callgraph, gonew, and related Go tools.
+            govulncheck
             inetutils # Provides telnet.
+            iferr
+            impl
             jq
             k6
             lazygit
             lefthook
             llvm
+            mockgen
             mycli
             neovim
             ninja
@@ -59,9 +73,14 @@
             pngpaste
             pnpm
             pspg
+            reftools # Provides fillswitch and related refactoring helpers.
             ripgrep
+            richgo
             sccache
+            sql-migrate
+            sqlc
             sqlfluff
+            sqls
             sqruff
             tmux
             tree
