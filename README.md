@@ -11,9 +11,9 @@ Dev environment for macOS, managed by chezmoi.
 brew install chezmoi
 chezmoi init --source ~/ghq/github.com/riii111/dotfiles
 chezmoi apply
-brew bundle --file ~/ghq/github.com/riii111/dotfiles/Brewfile
 # Install Nix first: https://nixos.org/download/
 ~/bin/dot sync-nix-profile
+sudo nix run nix-darwin/master#darwin-rebuild -- switch --flake ~/ghq/github.com/riii111/dotfiles#riii111
 exec zsh
 ```
 
@@ -48,7 +48,7 @@ Daily CLI tools are managed by a dedicated Nix profile.
 exec zsh
 ```
 
-Homebrew stays for GUI / cask packages.
+Homebrew stays for GUI / cask packages and is managed by nix-darwin.
 
 ### Dev shell
 

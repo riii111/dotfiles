@@ -3,10 +3,18 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    nix-darwin = {
+      url = "github:nix-darwin/nix-darwin/master";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
-    { nixpkgs, ... }:
+    {
+      nixpkgs,
+      nix-darwin,
+      ...
+    }:
     let
       # This dotfiles repo is macOS-only for now, so keep the shell darwin-only too.
       systems = [
@@ -19,8 +27,7 @@
         let
           pkgs = import nixpkgs {
             inherit system;
-            config.allowUnfreePredicate =
-              pkg: builtins.elem (nixpkgs.lib.getName pkg) [ "zsh-abbr" ];
+            config.allowUnfreePredicate = pkg: builtins.elem (nixpkgs.lib.getName pkg) [ "zsh-abbr" ];
           };
           selectedGoTools = pkgs.runCommand "selected-go-tools" { } ''
             mkdir -p "$out/bin"
@@ -146,5 +153,12 @@
         in
         cli.pkgs.nixfmt-tree
       );
+
+      darwinConfigurations.riii111 = nix-darwin.lib.darwinSystem {
+        system = "aarch64-darwin";
+        modules = [
+          ./darwin/configuration.nix
+        ];
+      };
     };
 }
