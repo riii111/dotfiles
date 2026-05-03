@@ -53,6 +53,7 @@
             delta
             deno
             direnv
+            colima
             docker
             duti
             eza
