@@ -364,6 +364,26 @@ return {
 				hidden = true,
 			})
 
+			local ghui_term = Terminal:new({
+				cmd = "ghui",
+				direction = "float",
+				float_opts = {
+					border = "rounded",
+					width = function()
+						return vim.o.columns
+					end,
+					height = function()
+						return vim.o.lines - 2
+					end,
+					row = 0,
+					col = 0,
+				},
+				on_open = function(term)
+					pcall(vim.keymap.del, "t", "<esc>", { buffer = term.bufnr })
+				end,
+				hidden = true,
+			})
+
 			-- Key mappings for different layouts
 			vim.keymap.set("n", "<Leader>tf", function()
 				float_term:toggle()
@@ -371,6 +391,9 @@ return {
 			vim.keymap.set("n", "<Leader>lg", function()
 				lazygit_term:toggle()
 			end, { desc = "Lazygit" })
+			vim.keymap.set("n", "<Leader>gh", function()
+				ghui_term:toggle()
+			end, { desc = "GitHub UI" })
 			vim.keymap.set("n", "<Leader>th", function()
 				horizontal_term:toggle()
 			end, { desc = "Horizontal terminal" })
@@ -400,10 +423,10 @@ return {
 	-- Markdown rendering
 	{
 		"MeanderingProgrammer/render-markdown.nvim",
-		ft = { "markdown", "octo" },
+		ft = { "markdown" },
 		dependencies = { "nvim-treesitter/nvim-treesitter", "nvim-tree/nvim-web-devicons" },
 		opts = {
-			file_types = { "markdown", "octo" },
+			file_types = { "markdown" },
 			ignore = function(bufnr)
 				return vim.bo[bufnr].filetype == "oil"
 			end,

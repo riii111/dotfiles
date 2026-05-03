@@ -55,7 +55,6 @@ return {
 				"kotlin",
 				"lua",
 				"markdown",
-				"octo",
 				"python",
 				"query",
 				"rust",
@@ -120,8 +119,6 @@ return {
 			if #missing > 0 and type(treesitter.install) == "function" then
 				treesitter.install(missing)
 			end
-
-			vim.treesitter.language.register("markdown", "octo")
 
 			vim.api.nvim_create_autocmd("FileType", {
 				pattern = opts.filetypes,

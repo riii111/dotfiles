@@ -412,7 +412,7 @@ return {
 				{ "<leader>cp", desc = "Copy path to clipboard" },
 				{ "<leader>g", group = "+git" },
 				{ "<leader>gd", desc = "Branch diff with difit" },
-				{ "<leader>gh", group = "+file history" },
+				{ "<leader>gh", desc = "GitHub UI" },
 				{ "<leader>gA", group = "+actions history" },
 				{ "<leader>gB", group = "+actions history by PR" },
 				{ "<leader>gX", group = "+actions dispatch" },
