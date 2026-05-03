@@ -90,6 +90,7 @@
             sqls
             sqruff
             tmux
+            tmuxp
             tree
             visidata
             yq-go # Go implementation behind the `yq` command.
