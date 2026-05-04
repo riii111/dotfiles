@@ -90,6 +90,7 @@
             neovim
             ninja
             nix-direnv
+            nodejs
             openjdk
             pgcli
             pinentry_mac
