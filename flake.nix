@@ -96,6 +96,8 @@
             yq-go # Go implementation behind the `yq` command.
             zsh-abbr
             zsh-autosuggestions
+            sqlfluff
+            tbls
           ];
           devShellOnlyPackages = with pkgs; [
             alejandra
