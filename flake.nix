@@ -28,6 +28,20 @@
           pkgs = import nixpkgs {
             inherit system;
             config.allowUnfreePredicate = pkg: builtins.elem (nixpkgs.lib.getName pkg) [ "zsh-abbr" ];
+            overlays = [
+              (final: prev: {
+                tbls = prev.tbls.overrideAttrs (old: rec {
+                  version = "1.92.3";
+                  src = prev.fetchFromGitHub {
+                    owner = "k1LoW";
+                    repo = "tbls";
+                    rev = "v${version}";
+                    hash = "sha256-/1yulnT+HDZGO8S8xk59sKXxoFaw5Hoa1XXAwp5z7eM=";
+                  };
+                  vendorHash = "sha256-DnXftqcjk2fKWytmqdg9eWjsofaOTsHOpxTeIbXqMlw=";
+                });
+              })
+            ];
           };
           selectedGoTools = pkgs.runCommand "selected-go-tools" { } ''
             mkdir -p "$out/bin"
