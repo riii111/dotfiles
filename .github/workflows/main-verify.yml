@@ -16,4 +16,4 @@ jobs:
           python-version: "3.12"
 
       - name: Run repo verification
-        run: ./bin/executable_dot test
+        run: ./bin/executable_dotctl test

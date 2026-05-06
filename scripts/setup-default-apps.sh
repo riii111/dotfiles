@@ -11,7 +11,7 @@ set -euo pipefail
 # PDF is intentionally left alone (macOS Preview.app stays the default).
 
 command -v duti >/dev/null || {
-	echo "ERROR: duti not installed (dot sync-nix-profile)"
+	echo "ERROR: duti not installed (dotctl sync-nix-profile)"
 	exit 1
 }
 
