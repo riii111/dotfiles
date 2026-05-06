@@ -224,6 +224,8 @@ config.key_tables = {
 							color_scheme = label,
 							window_background_gradient = { colors = { bg } },
 							window_frame = {
+								font = wezterm.font("DroidSansM Nerd Font Mono", { weight = "Bold" }),
+								font_size = 12.0,
 								active_titlebar_bg = bg,
 								inactive_titlebar_bg = bg,
 							},
