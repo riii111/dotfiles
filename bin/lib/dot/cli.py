@@ -423,7 +423,7 @@ def apply_work_tool(name: str, tool: dict[str, object]) -> int:
         raise RuntimeError(f"invalid work tool path: {name}")
     if not path.exists():
         raise RuntimeError(
-            f"{name} is not installed; run `dot work-tools install {name}`"
+            f"{name} is not installed; run `dotctl work-tools install {name}`"
         )
 
     result = run_command(
@@ -451,7 +451,7 @@ def command_work_tools_update(args: argparse.Namespace) -> int:
             raise RuntimeError(f"invalid work tool path: {name}")
         if not path.exists():
             raise RuntimeError(
-                f"{name} is not installed; run `dot work-tools install {name}`"
+                f"{name} is not installed; run `dotctl work-tools install {name}`"
             )
 
         pull = run_command(["git", "pull", "--ff-only"], path)
@@ -465,7 +465,7 @@ def command_work_tools_update(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="dot")
+    parser = argparse.ArgumentParser(prog="dotctl")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     test_parser = subparsers.add_parser("test", help="run repo verification")

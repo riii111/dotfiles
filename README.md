@@ -12,7 +12,7 @@ brew install chezmoi
 chezmoi init --source ~/ghq/github.com/riii111/dotfiles
 chezmoi apply
 # Install Nix first: https://nixos.org/download/
-~/bin/dot sync-nix-profile
+~/bin/dotctl sync-nix-profile
 sudo nix run nix-darwin/master#darwin-rebuild -- switch --flake ~/ghq/github.com/riii111/dotfiles#personal
 exec zsh
 ```
@@ -22,8 +22,8 @@ exec zsh
 Private work tool layers are managed separately.
 
 ```bash
-~/bin/dot work-tools install
-~/bin/dot work-tools update
+~/bin/dotctl work-tools install
+~/bin/dotctl work-tools update
 ```
 
 ### Finder integration (optional)
@@ -44,7 +44,7 @@ Markdown clipboard-to-image paste: `<C-v>` in normal mode (uses `pngpaste`, mana
 Daily CLI tools are managed by a dedicated Nix profile.
 
 ```bash
-~/bin/dot sync-nix-profile
+~/bin/dotctl sync-nix-profile
 exec zsh
 ```
 
@@ -56,7 +56,7 @@ Use the repo shell when you want the flake-pinned toolchain explicitly.
 
 ```bash
 nix develop
-nix develop -c ./bin/executable_dot test
+nix develop -c ./bin/executable_dotctl test
 ```
 
 ## Features

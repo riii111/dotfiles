@@ -2,7 +2,7 @@ pre-commit:
   commands:
     shell-fast-check:
       stage_fixed: true
-      run: ./bin/executable_dot lint-staged-shell
+      run: ./bin/executable_dotctl lint-staged-shell
 
 post-merge:
   commands:
