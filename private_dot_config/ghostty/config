@@ -33,8 +33,13 @@ keybind = super+alt+left=unbind
 keybind = super+shift+v=unbind
 keybind = super+alt+down=unbind
 keybind = super+alt+up=unbind
-keybind = super+alt+j=unbind
-keybind = super+alt+k=unbind
+
+# Pane navigation
+keybind = super+alt+h=resize_split:left,10
+keybind = super+alt+j=resize_split:down,10
+keybind = super+alt+k=resize_split:up,10
+keybind = super+alt+l=resize_split:right,10
+keybind = super+z=toggle_split_zoom
 # Claude Code shortcuts (Alt+T=thinking, Alt+P=model switch)
 macos-option-as-alt = true
 # JIS keyboard: Option+¥ produces | and \ (broken by macos-option-as-alt)
