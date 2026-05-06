@@ -18,8 +18,8 @@ config.font_size = 14.0
 ---------------------------------------------------------------
 -- Window
 ---------------------------------------------------------------
-config.window_background_opacity = 0.35
-config.macos_window_background_blur = 40
+config.window_background_opacity = 0.45
+config.macos_window_background_blur = 20
 config.window_decorations = "RESIZE|MACOS_FORCE_ENABLE_SHADOW"
 config.window_padding = {
 	left = 20,
@@ -63,10 +63,9 @@ config.colors = {
 }
 
 ---------------------------------------------------------------
--- Background: layered frosted-glass effect
+-- Background: layered frosted-glass effect (Kanagawa Dragon only)
 ---------------------------------------------------------------
-config.background = {
-	-- Base layer: warm dark gradient aligned with Kanagawa Dragon
+local KANAGAWA_BACKGROUND = {
 	{
 		source = {
 			Gradient = {
@@ -78,7 +77,6 @@ config.background = {
 		height = "100%",
 		opacity = 0.82,
 	},
-	-- Accent layer: warm purple wash for depth
 	{
 		source = {
 			Gradient = {
@@ -220,9 +218,10 @@ config.key_tables = {
 						schemes["Kanagawa Dragon"] = require("colors.kanagawa_dragon").colors
 						local scheme = schemes[label]
 						local bg = scheme and scheme.background or "#181616"
+						local use_gradient = label == "Kanagawa Dragon"
 						window:set_config_overrides({
 							color_scheme = label,
-							window_background_gradient = { colors = { bg } },
+							background = use_gradient and KANAGAWA_BACKGROUND or {},
 							window_frame = {
 								font = wezterm.font("DroidSansM Nerd Font Mono", { weight = "Bold" }),
 								font_size = 12.0,
