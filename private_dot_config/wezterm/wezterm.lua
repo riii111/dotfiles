@@ -212,6 +212,7 @@ config.key_tables = {
 					{ label = "Catppuccin Frappe" },
 					{ label = "Catppuccin Latte" },
 					{ label = "duckbones" },
+					{ label = "Black Metal (Bathory) (base16)" },
 				},
 				action = wezterm.action_callback(function(window, _, _, label)
 					if label then
@@ -242,7 +243,7 @@ local kanagawa_dragon = require("colors.kanagawa_dragon")
 config.color_schemes = {
 	["Kanagawa Dragon"] = kanagawa_dragon.colors,
 }
-config.color_scheme = "Kanagawa Dragon"
+config.color_scheme = "Black Metal (Bathory) (base16)"
 
 ---------------------------------------------------------------
 -- Misc
