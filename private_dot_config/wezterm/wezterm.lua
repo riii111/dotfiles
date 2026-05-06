@@ -18,7 +18,7 @@ config.font_size = 14.0
 ---------------------------------------------------------------
 -- Window
 ---------------------------------------------------------------
-config.window_background_opacity = 0.45
+config.window_background_opacity = 0.85
 config.macos_window_background_blur = 20
 config.window_decorations = "RESIZE|MACOS_FORCE_ENABLE_SHADOW"
 config.window_padding = {
