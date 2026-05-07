@@ -45,69 +45,73 @@ wezterm.on("open-scrollback-in-nvim", function(window, pane)
 	)
 end)
 
+-- Kanagawa Dragon background gradients
+local KANAGAWA_BG_TRANSPARENT = {
+	{
+		source = {
+			Gradient = {
+				orientation = { Linear = { angle = -45.0 } },
+				colors = { "#181616", "#1e1e22", "#221c24", "#1c1a20" },
+			},
+		},
+		width = "100%",
+		height = "100%",
+		opacity = 0.70,
+	},
+	{
+		source = {
+			Gradient = {
+				orientation = { Linear = { angle = 60.0 } },
+				colors = { "#221e26", "#181616", "#261e24" },
+			},
+		},
+		width = "100%",
+		height = "100%",
+		opacity = 0.45,
+	},
+}
+
+local KANAGAWA_BG_OPAQUE = {
+	{
+		source = {
+			Gradient = {
+				orientation = { Linear = { angle = -45.0 } },
+				colors = { "#0e0e10", "#141416", "#18141a", "#121014" },
+			},
+		},
+		width = "100%",
+		height = "100%",
+		opacity = 0.82,
+	},
+	{
+		source = {
+			Gradient = {
+				orientation = { Linear = { angle = 60.0 } },
+				colors = { "#221e26", "#181616", "#261e24" },
+			},
+		},
+		width = "100%",
+		height = "100%",
+		opacity = 0.25,
+	},
+}
+
 -- Toggle window opacity
 wezterm.on("toggle-opacity", function(window, _)
 	local overrides = window:get_config_overrides() or {}
-	if not overrides.window_background_opacity then
-		overrides.window_background_opacity = 0.65
-		overrides.macos_window_background_blur = 10
-		if overrides.color_scheme == "Kanagawa Dragon" then
-			overrides.background = {
-				{
-					source = {
-						Gradient = {
-							orientation = { Linear = { angle = -45.0 } },
-							colors = { "#181616", "#1e1e22", "#221c24", "#1c1a20" },
-						},
-					},
-					width = "100%",
-					height = "100%",
-					opacity = 0.70,
-				},
-				{
-					source = {
-						Gradient = {
-							orientation = { Linear = { angle = 60.0 } },
-							colors = { "#221e26", "#181616", "#261e24" },
-						},
-					},
-					width = "100%",
-					height = "100%",
-					opacity = 0.45,
-				},
-			}
-		end
-	else
-		-- Restore defaults (Kanagawa Dragon: switch back to dark gradient)
+	local is_on = overrides.window_background_opacity ~= nil
+	local is_kanagawa = window:effective_config().color_scheme == "Kanagawa Dragon"
+
+	if is_on then
 		overrides.window_background_opacity = nil
 		overrides.macos_window_background_blur = nil
-		if overrides.color_scheme == "Kanagawa Dragon" then
-			overrides.background = {
-				{
-					source = {
-						Gradient = {
-							orientation = { Linear = { angle = -45.0 } },
-							colors = { "#0e0e10", "#141416", "#18141a", "#121014" },
-						},
-					},
-					width = "100%",
-					height = "100%",
-					opacity = 0.82,
-				},
-				{
-					source = {
-						Gradient = {
-							orientation = { Linear = { angle = 60.0 } },
-							colors = { "#221e26", "#181616", "#261e24" },
-						},
-					},
-					width = "100%",
-					height = "100%",
-					opacity = 0.25,
-				},
-			}
-		end
+		overrides.background = is_kanagawa and KANAGAWA_BG_OPAQUE or nil
+	else
+		overrides.window_background_opacity = 0.55
+		overrides.macos_window_background_blur = 5
+		overrides.background = is_kanagawa and KANAGAWA_BG_TRANSPARENT or nil
 	end
+
 	window:set_config_overrides(overrides)
 end)
 
