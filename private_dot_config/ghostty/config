@@ -1,4 +1,4 @@
-theme = duckbones
+theme = Black Metal (Bathory)
 
 #font-family = UDEV Gothic
 font-family = DroidSansM Nerd Font Mono
@@ -35,10 +35,10 @@ keybind = super+alt+down=unbind
 keybind = super+alt+up=unbind
 
 # Pane navigation
-keybind = super+alt+h=resize_split:left,10
-keybind = super+alt+j=resize_split:down,10
-keybind = super+alt+k=resize_split:up,10
-keybind = super+alt+l=resize_split:right,10
+keybind = super+alt+h=resize_split:left,40
+keybind = super+alt+j=resize_split:down,40
+keybind = super+alt+k=resize_split:up,40
+keybind = super+alt+l=resize_split:right,40
 keybind = super+z=toggle_split_zoom
 # Claude Code shortcuts (Alt+T=thinking, Alt+P=model switch)
 macos-option-as-alt = true
