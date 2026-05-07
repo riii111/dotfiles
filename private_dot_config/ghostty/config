@@ -4,6 +4,8 @@ theme = Black Metal (Bathory)
 font-family = DroidSansM Nerd Font Mono
 font-family = Hiragino Sans
 font-size = 14
+font-thicken = true
+font-thicken-strength = 255
 
 window-padding-x = 20
 window-padding-y = 5
