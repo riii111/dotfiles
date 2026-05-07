@@ -104,11 +104,9 @@ wezterm.on("toggle-opacity", function(window, _)
 
 	if is_on then
 		overrides.window_background_opacity = nil
-		overrides.macos_window_background_blur = nil
 		overrides.background = is_kanagawa and KANAGAWA_BG_OPAQUE or nil
 	else
 		overrides.window_background_opacity = 0.55
-		overrides.macos_window_background_blur = 5
 		overrides.background = is_kanagawa and KANAGAWA_BG_TRANSPARENT or nil
 	end
 
