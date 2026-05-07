@@ -2,6 +2,7 @@ theme = Black Metal (Bathory)
 
 #font-family = UDEV Gothic
 font-family = DroidSansM Nerd Font Mono
+font-family = Hiragino Sans
 font-size = 14
 
 window-padding-x = 20
