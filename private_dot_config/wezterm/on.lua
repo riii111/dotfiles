@@ -49,7 +49,7 @@ end)
 wezterm.on("toggle-opacity", function(window, _)
 	local overrides = window:get_config_overrides() or {}
 	if not overrides.window_background_opacity then
-		overrides.window_background_opacity = 0.80
+		overrides.window_background_opacity = 0.65
 		overrides.macos_window_background_blur = 10
 		if overrides.color_scheme == "Kanagawa Dragon" then
 			overrides.background = {
