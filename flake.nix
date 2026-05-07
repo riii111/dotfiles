@@ -81,6 +81,7 @@
             delve
             golangci-lint
             gopls
+            graphviz
             selectedGoTools
             inetutils # Provides telnet.
             jq
