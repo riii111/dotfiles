@@ -79,7 +79,6 @@
             git
             gnupg
             go
-            go-task
             delve
             golangci-lint
             gopls
@@ -89,7 +88,6 @@
             jq
             k6
             lazygit
-            lazydocker
             lefthook
             llvm
             neovim
