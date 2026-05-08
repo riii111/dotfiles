@@ -27,7 +27,8 @@
         let
           pkgs = import nixpkgs {
             inherit system;
-            config.allowUnfreePredicate = pkg: builtins.elem (nixpkgs.lib.getName pkg) [ "zsh-abbr" ];
+            config.allowUnfreePredicate =
+              pkg: builtins.elem (nixpkgs.lib.getName pkg) [ "terraform" "zsh-abbr" ];
             overlays = [
               (final: prev: {
                 tbls = prev.tbls.overrideAttrs (old: rec {
@@ -78,6 +79,7 @@
             git
             gnupg
             go
+            go-task
             delve
             golangci-lint
             gopls
@@ -85,7 +87,9 @@
             selectedGoTools
             inetutils # Provides telnet.
             jq
+            k6
             lazygit
+            lazydocker
             lefthook
             llvm
             neovim
@@ -105,6 +109,7 @@
             sqlfluff
             sqls
             sqruff
+            terraform
             tmux
             tmuxp
             tree
@@ -112,13 +117,13 @@
             yq-go # Go implementation behind the `yq` command.
             zsh-abbr
             zsh-autosuggestions
-            sqlfluff
+            ruff
             tbls
+            uv
           ];
           devShellOnlyPackages = with pkgs; [
             alejandra
             bashInteractive
-            uv
           ];
           cliProfile = pkgs.buildEnv {
             name = "dotfiles-cli";
