@@ -1,0 +1,4 @@
+interface:
+  display_name: "ADR Craft"
+  short_description: "Craft focused ADRs with clear scope, decisions, and tradeoffs."
+  default_prompt: "Use adr-craft to draft or refine an ADR from the given context."

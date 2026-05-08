@@ -1,4 +1,0 @@
-interface:
-  display_name: "ADR Create"
-  short_description: "Draft focused ADRs with clear scope, decisions, and tradeoffs."
-  default_prompt: "Use adr-create to draft or refine an ADR from the given context."
