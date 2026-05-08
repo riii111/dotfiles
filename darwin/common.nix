@@ -49,8 +49,6 @@
     casks = [
       "codex"
       "font-droid-sans-mono-nerd-font"
-      "font-hack-nerd-font"
-      "font-udev-gothic"
       "gcloud-cli"
       "ghostty"
       "homerow"
