@@ -28,7 +28,11 @@
           pkgs = import nixpkgs {
             inherit system;
             config.allowUnfreePredicate =
-              pkg: builtins.elem (nixpkgs.lib.getName pkg) [ "terraform" "zsh-abbr" ];
+              pkg:
+              builtins.elem (nixpkgs.lib.getName pkg) [
+                "terraform"
+                "zsh-abbr"
+              ];
             overlays = [
               (final: prev: {
                 tbls = prev.tbls.overrideAttrs (old: rec {
@@ -50,6 +54,12 @@
               ln -s "${pkgs.gotools}/bin/$bin" "$out/bin/$bin"
             done
           '';
+          selectedRustupTools = pkgs.runCommand "selected-rustup-tools" { } ''
+            mkdir -p "$out/bin"
+            for bin in cargo cargo-clippy cargo-fmt cargo-miri clippy-driver rls rust-gdb rust-gdbgui rust-lldb rustc rustdoc rustfmt rustup; do
+              ln -s "${pkgs.rustup}/bin/$bin" "$out/bin/$bin"
+            done
+          '';
           dailyCliPackages = with pkgs; [
             # Editor-integrated tooling that should exist in the normal shell too.
             nil
@@ -61,6 +71,7 @@
             taplo
 
             # Daily CLI tools owned by Nix.
+            asdf-vm
             bat
             chezmoi
             cmake
@@ -103,6 +114,8 @@
             pspg
             qemu
             ripgrep
+            rust-analyzer
+            selectedRustupTools
             sccache
             sqlfluff
             sqls

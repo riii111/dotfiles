@@ -450,15 +450,6 @@ HELP
 
 # asdf (lazy load)
 export PATH="$HOME/.asdf/shims:$HOME/.asdf/bin:$PATH"
-ASDF_SCRIPT="${HOMEBREW_PREFIX:-/opt/homebrew}/opt/asdf/libexec/asdf.sh"
-
-if [[ -f "$ASDF_SCRIPT" ]]; then
-  asdf() {
-    unfunction asdf
-    . "$ASDF_SCRIPT"
-    asdf "$@"
-  }
-fi
 {{ end }}
 
 # ==========================================
