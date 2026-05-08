@@ -1,0 +1,4 @@
+interface:
+  display_name: "Code Review"
+  short_description: "Review implemented changes for correctness, consistency, and quality."
+  default_prompt: "Use code-review to review this change and separate blocking from non-blocking findings."

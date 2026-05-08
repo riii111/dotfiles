@@ -1,0 +1,4 @@
+interface:
+  display_name: "ADR Review"
+  short_description: "Review ADRs with evidence-backed, pragmatic design critique."
+  default_prompt: "Use adr-review to review this ADR and produce actionable findings."

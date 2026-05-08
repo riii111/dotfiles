@@ -1,0 +1,4 @@
+interface:
+  display_name: "Explore"
+  short_description: "Investigate repository structure, impact, and implementation patterns."
+  default_prompt: "Use explore to investigate this repository question without making code changes."
