@@ -87,6 +87,7 @@
             fzf
             gh
             ghq
+            google-cloud-sdk
             git
             gnupg
             go

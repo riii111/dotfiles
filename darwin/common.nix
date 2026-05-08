@@ -49,7 +49,6 @@
     casks = [
       "codex"
       "font-droid-sans-mono-nerd-font"
-      "gcloud-cli"
       "ghostty"
       "homerow"
       "karabiner-elements"
