@@ -1,0 +1,4 @@
+interface:
+  display_name: "Empirical Prompt Tuning"
+  short_description: "fresh subagentでprompt/skillを実証的に調整する。"
+  default_prompt: "empirical-prompt-tuningを使って、このprompt/skillをsubagent評価で改善してください。"
