@@ -3,6 +3,83 @@ local function get_visual_selection()
 	return vim.fn.getreg("a"):gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
 end
 
+local function select_diff_base(callback)
+	local branches_raw = vim.fn.system("git branch --format='%(refname:short)' 2>/dev/null")
+	local current = vim.fn.system("git branch --show-current 2>/dev/null"):gsub("%s+", "")
+	local branches = {}
+	for line in branches_raw:gmatch("[^\n]+") do
+		local branch = line:gsub("%s+", "")
+		if branch ~= "" and branch ~= current then
+			table.insert(branches, branch)
+		end
+	end
+	table.insert(branches, "(manual input)")
+
+	vim.ui.select(branches, { prompt = "Base branch for diff:" }, function(choice)
+		if not choice then
+			return
+		end
+
+		local base = choice
+		if choice == "(manual input)" then
+			base = vim.fn.input("Base branch: ")
+			if base == "" then
+				return
+			end
+		end
+
+		local diff_range = base .. "..HEAD"
+		local diff_check = vim.fn.system({ "git", "diff", "--quiet", "--exit-code", diff_range })
+		if vim.v.shell_error == 0 then
+			vim.notify("No diff from " .. base, vim.log.levels.INFO)
+			return
+		end
+		if vim.v.shell_error ~= 1 then
+			local msg = vim.trim(diff_check)
+			if msg == "" then
+				msg = "Failed to diff against " .. base
+			end
+			vim.notify(msg, vim.log.levels.ERROR)
+			return
+		end
+
+		callback(diff_range)
+	end)
+end
+
+local function open_branch_diff_with_difit()
+	select_diff_base(function(diff_range)
+		local cmd = "git diff " .. vim.fn.shellescape(diff_range) .. " | difit"
+		vim.fn.jobstart(cmd, { cwd = vim.fn.getcwd(), detach = true })
+	end)
+end
+
+local function open_branch_diff_with_hunk()
+	select_diff_base(function(diff_range)
+		local Terminal = require("toggleterm.terminal").Terminal
+		local hunk_term = Terminal:new({
+			cmd = "hunk diff " .. vim.fn.shellescape(diff_range),
+			direction = "float",
+			float_opts = {
+				border = "rounded",
+				width = function()
+					return vim.o.columns
+				end,
+				height = function()
+					return vim.o.lines - 2
+				end,
+				row = 0,
+				col = 0,
+			},
+			on_open = function(term)
+				pcall(vim.keymap.del, "t", "<esc>", { buffer = term.bufnr })
+			end,
+			hidden = true,
+		})
+		hunk_term:toggle()
+	end)
+end
+
 local function setup_keymaps()
 	local mappings = {
 		n = {
@@ -210,50 +287,16 @@ local function setup_keymaps()
 			},
 
 			-- Git diff tools
+			["<Leader>df"] = {
+				open_branch_diff_with_difit,
+				desc = "Branch diff GUI (difit)",
+			},
+			["<Leader>dF"] = {
+				open_branch_diff_with_hunk,
+				desc = "Branch diff TUI (hunk)",
+			},
 			["<Leader>gd"] = {
-				function()
-					local branches_raw = vim.fn.system("git branch --format='%(refname:short)' 2>/dev/null")
-					local current = vim.fn.system("git branch --show-current 2>/dev/null"):gsub("%s+", "")
-					local branches = {}
-					for line in branches_raw:gmatch("[^\n]+") do
-						local b = line:gsub("%s+", "")
-						if b ~= "" and b ~= current then
-							table.insert(branches, b)
-						end
-					end
-					table.insert(branches, "(manual input)")
-
-					vim.ui.select(branches, { prompt = "Base branch for diff:" }, function(choice)
-						if not choice then
-							return
-						end
-						local base
-						if choice == "(manual input)" then
-							base = vim.fn.input("Base branch: ")
-							if base == "" then
-								return
-							end
-						else
-							base = choice
-						end
-						local diff_range = base .. "..HEAD"
-						local diff_check = vim.fn.system({ "git", "diff", "--quiet", "--exit-code", diff_range })
-						if vim.v.shell_error == 0 then
-							vim.notify("No diff from " .. base, vim.log.levels.INFO)
-							return
-						end
-						if vim.v.shell_error ~= 1 then
-							local msg = vim.trim(diff_check)
-							if msg == "" then
-								msg = "Failed to diff against " .. base
-							end
-							vim.notify(msg, vim.log.levels.ERROR)
-							return
-						end
-						local cmd = "git diff " .. vim.fn.shellescape(diff_range) .. " | difit"
-						vim.fn.jobstart(cmd, { cwd = vim.fn.getcwd(), detach = true })
-					end)
-				end,
+				open_branch_diff_with_difit,
 				desc = "Branch diff with difit (no PR needed)",
 			},
 			-- Copy file path to clipboard
@@ -410,6 +453,9 @@ return {
 				{ "<M-S-v>", group = "+preview" },
 				{ "<M-CR>", group = "+code action" },
 				{ "<leader>cp", desc = "Copy path to clipboard" },
+				{ "<leader>d", group = "+diff" },
+				{ "<leader>df", desc = "Branch diff GUI (difit)" },
+				{ "<leader>dF", desc = "Branch diff TUI (hunk)" },
 				{ "<leader>g", group = "+git" },
 				{ "<leader>gd", desc = "Branch diff with difit" },
 				{ "<leader>gh", desc = "GitHub UI" },
