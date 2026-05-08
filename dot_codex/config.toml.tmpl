@@ -1,8 +1,8 @@
 # =============================================================================
 # Global Defaults
 # =============================================================================
-plan_mode_reasoning_effort = "high"
-review_model = "gpt-5.4"
+plan_mode_reasoning_effort = "medium"
+review_model = "gpt-5.5"
 personality = "pragmatic"
 project_doc_max_bytes = 65536
 profile = "default"
@@ -19,8 +19,8 @@ approval_policy = { granular = {
 } }
 
 sandbox_mode = "danger-full-access"
-model = "gpt-5.4"
-model_reasoning_effort = "high"
+model = "gpt-5.5"
+model_reasoning_effort = "medium"
 model_verbosity = "low"
 model_reasoning_summary = "concise"
 hide_agent_reasoning = true
@@ -43,7 +43,7 @@ experimental_use_profile = true
 # Profiles
 # =============================================================================
 [profiles.default]
-model = "gpt-5.4"
+model = "gpt-5.5"
 model_provider = "openai"
 model_reasoning_effort = "medium"
 model_verbosity = "low"
@@ -52,7 +52,7 @@ service_tier = "fast"
 web_search = "cached"
 
 [profiles.alert_check]
-model = "gpt-5.4"
+model = "gpt-5.5"
 model_provider = "openai"
 model_reasoning_effort = "medium"
 model_verbosity = "low"
