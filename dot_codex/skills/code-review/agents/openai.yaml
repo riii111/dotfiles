@@ -1,4 +1,4 @@
 interface:
   display_name: "Code Review"
-  short_description: "Review implemented changes for correctness, consistency, and quality."
-  default_prompt: "Use code-review to review this change and separate blocking from non-blocking findings."
+  short_description: "変更をレビューし、指摘と調査メモを分ける。"
+  default_prompt: "code-reviewを使ってこの変更をレビューし、blocking/non-blockingの指摘とverification noteを分けてください。"

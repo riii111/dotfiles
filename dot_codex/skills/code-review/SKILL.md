@@ -1,77 +1,93 @@
 ---
 description: |
-  Review an implemented change for correctness, consistency, and pragmatic quality.
-  Team/sec subagents are mandatory when the selected review mode requires them.
+  実装済みの変更を、正しさ・一貫性・実用上の品質の観点でレビューする。
+  指摘と調査メモを混ぜず、投稿すべきレビューコメントを明確に分ける。
 argument-hint: "[-sec] [-lite]"
 ---
 
 # code-review
 
-Do review only.
+レビューだけを行う。実装はしない。
 
 ## Args
-- -sec: add security-reviewer (for auth/input/secrets/network sensitive work)
-- -lite: blocking-focused output, short — skip Phase 0 and use Quick mode
+- `-sec`: auth / 入力 / secret / network などの安全性に関わる変更で security-reviewer を追加する
+- `-lite`: blocker 中心の短い出力にする。Phase 0 を省略して Quick として扱う
 
-## Phase 0: Confirm review mode
+## Phase 0: レビューモード確認
 
-If -lite is set, skip this phase and use Quick mode.
+`-lite` の場合は省略して Quick にする。
 
-Otherwise, ask the user:
-1. **Review mode**: Quick / Standard / Deep
-2. **Focus areas** (optional, free-form)
+それ以外はユーザーに確認する:
+1. Review mode: Quick / Standard / Deep
+2. Focus areas: 任意
 
-Mode mapping:
-- **Quick** → solo review
-- **Standard** → team review (code-reviewer + consistency-reviewer subagents)
-- **Deep** → team review + security-reviewer subagent
+モード対応:
+- Quick: solo review
+- Standard: code-reviewer + consistency-reviewer subagents
+- Deep: team review + security-reviewer subagent
 
-If -sec flag was passed, add security-reviewer regardless of mode choice.
+`-sec` がある場合は、モードに関係なく security-reviewer を追加する。
 
 ## Review team
 
-### Quick (single-agent review)
-No subagents. You perform the review yourself covering both correctness and consistency.
+### Quick
+subagent は使わない。自分で correctness と consistency を見る。
 
-### Standard (code-reviewer + consistency-reviewer subagents)
-Use when: multiple modules/layers changed, new abstraction or API shape introduced, broader consistency issues are plausible, code works but may not fit the repo cleanly.
+### Standard
+複数モジュール・複数レイヤー、新しい抽象/API、repo全体の一貫性リスクがありそうな場合に使う。
 
-#### code-reviewer focus
+#### code-reviewer
 - correctness
 - readability
-- unnecessary branching/fallbacks
-- fallback paths not justified by real failure modes
-- defensive code that adds noise without meaningful risk reduction
-- test/validation gaps
+- 不要な分岐やfallback
+- 実際の failure mode に基づかない defensive code
+- test / validation gap
 
-#### consistency-reviewer focus
+#### consistency-reviewer
 - naming consistency
 - layering / responsibility fit
 - duplication vs reuse
-- whether the touched area now looks inconsistent with surrounding code
-- whether a small local refactor would materially improve coherence
-- whether nearby code should be lightly aligned in the same change
-- whether the implementation is locally convenient but globally off-pattern
+- 近傍コードとの不整合
+- 小さな局所リファクタで一貫性が上がるか
+- 局所的には便利でも repo 全体では off-pattern になっていないか
 
-### +sec (added in Deep mode, or when -sec specified)
+### security-reviewer
+Deep、または `-sec` のときに追加する。
 
-#### security-reviewer focus
-- auth/authz
+見る観点:
+- auth / authz
 - input validation
-- secret/config handling
-- unsafe file/network behavior
+- secret / config handling
+- unsafe file / network behavior
 
 ## Output format
-Return:
+
+通常は次の枠で返す:
 - Blocking
 - Non-blocking
 - Consistency / refactor opportunities
 - Fix now vs later
+- Notes / verification
 
-If -lite is set:
-- return only Blocking
-- then up to 3 high-value non-blocking comments
+`-lite` の場合:
+- Blocking を先に出し、その後に価値の高い Non-blocking comment を最大3件だけ出す
+- 指摘かどうかの混乱を避ける必要がある場合だけ Notes / verification を出す
+
+### Findings vs notes
+
+`Blocking`、`Non-blocking`、`Consistency / refactor opportunities` には、actionable なレビューコメントだけを書く。
+
+以下は finding にしない:
+- 実装が妥当だと確認できた調査結果
+- 修正を求めない subagent summary
+- 実行していない test / check
+- 具体的な変更要求ではない前提・注意点・product/dashboard 依存
+
+それらは `Notes / verification` に置く。merge 前に確認すべき caveat なら、具体的な `Blocking` または `Non-blocking` comment として書く。
+
+投稿すべきレビューコメントはそれと分かる形にする。単なる文脈情報は note として明示する。
 
 ## Review style
-Be pragmatic. Suggest only what is clearly worth doing now.
-Distinguish "blocks this task" from "improves the codebase."
+
+明確に今やる価値があるものだけ提案する。
+「このタスクを止めるもの」と「後で改善できるもの」を分ける。
