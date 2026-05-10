@@ -96,21 +96,36 @@ local KANAGAWA_BG_OPAQUE = {
 	},
 }
 
--- Toggle window opacity
-wezterm.on("toggle-opacity", function(window, _)
-	local overrides = window:get_config_overrides() or {}
-	local is_on = overrides.window_background_opacity ~= nil
-	local is_kanagawa = window:effective_config().color_scheme == "Kanagawa Dragon"
+local OPACITY_MIN = 0.35
+local OPACITY_MAX = 1.0
+local OPACITY_BASE = 0.7
+local OPACITY_STEP = 0.05
 
-	if is_on then
-		overrides.window_background_opacity = nil
-		overrides.background = is_kanagawa and KANAGAWA_BG_OPAQUE or nil
-	else
-		overrides.window_background_opacity = 0.55
-		overrides.background = is_kanagawa and KANAGAWA_BG_TRANSPARENT or nil
-	end
+local function clamp(value, min, max)
+	return math.max(min, math.min(max, value))
+end
+
+local function adjust_opacity(window, delta)
+	local overrides = window:get_config_overrides() or {}
+	local effective = window:effective_config()
+	local current = overrides.window_background_opacity or effective.window_background_opacity or OPACITY_MAX
+	local next_opacity = clamp(current + delta, OPACITY_MIN, OPACITY_MAX)
+	local is_kanagawa = effective.color_scheme == "Kanagawa Dragon"
+
+	overrides.window_background_opacity = next_opacity
+	overrides.background = is_kanagawa
+			and (next_opacity >= OPACITY_BASE and KANAGAWA_BG_OPAQUE or KANAGAWA_BG_TRANSPARENT)
+		or nil
 
 	window:set_config_overrides(overrides)
+end
+
+wezterm.on("decrease-opacity", function(window, _)
+	adjust_opacity(window, -OPACITY_STEP)
+end)
+
+wezterm.on("increase-opacity", function(window, _)
+	adjust_opacity(window, OPACITY_STEP)
 end)
 
 -- Toggle background blur

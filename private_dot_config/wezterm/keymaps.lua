@@ -50,9 +50,10 @@ local keys = {
 	{ key = "w", mods = "CMD|SHIFT", action = act.CloseCurrentTab({ confirm = true }) },
 
 	---------------------------------------------------------------
-	-- Toggle opacity / blur
+	-- Opacity / blur
 	---------------------------------------------------------------
-	{ key = "o", mods = "CMD|CTRL", action = act.EmitEvent("toggle-opacity") },
+	{ key = "[", mods = "CMD|CTRL", action = act.EmitEvent("decrease-opacity") },
+	{ key = "]", mods = "CMD|CTRL", action = act.EmitEvent("increase-opacity") },
 	{ key = "b", mods = "CMD|CTRL", action = act.EmitEvent("toggle-blur") },
 
 
