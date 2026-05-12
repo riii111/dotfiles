@@ -4,7 +4,6 @@
   imports = [
     ./default-apps.nix
     ./keyboard-shortcuts.nix
-    ./mouse.nix
   ];
 
   nixpkgs.hostPlatform = "aarch64-darwin";
