@@ -50,6 +50,17 @@ exec zsh
 
 Homebrew stays for GUI / cask packages and is managed by nix-darwin.
 
+### Store maintenance
+
+nix-darwin runs weekly store maintenance for every host: GC deletes profile generations older than 30 days at 03:15 on Sunday, and store optimisation hard-links duplicate files at 04:15 on Sunday.
+
+```bash
+nix-collect-garbage --delete-older-than 30d --dry-run
+# After darwin-rebuild switch:
+sudo launchctl print system/org.nixos.nix-gc
+sudo launchctl print system/org.nixos.nix-optimise
+```
+
 ### Dev shell
 
 Use the repo shell when you want the flake-pinned toolchain explicitly.
