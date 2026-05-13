@@ -19,7 +19,7 @@ return {
               },
               cargo = {
                 extraEnv = {
-                  CARGO_TARGET_DIR = ".nvim/target",
+                  CARGO_TARGET_DIR = vim.fn.stdpath("cache") .. "/cargo-target",
                 },
               },
               procMacro = {
