@@ -89,7 +89,16 @@ export VISUAL=nvim
 export MANPAGER='nvim +Man!'
 
 # Docker (Colima)
-export DOCKER_HOST="unix://${XDG_CONFIG_HOME}/colima/default/docker.sock"
+for colima_socket in \
+  "${XDG_CONFIG_HOME}/colima/default/docker.sock" \
+  "${HOME}/.colima/default/docker.sock"
+do
+  if [[ -S "$colima_socket" ]]; then
+    export DOCKER_HOST="unix://${colima_socket}"
+    break
+  fi
+done
+unset colima_socket
 
 # ==========================================
 # Homebrew (static: replaces slow `eval "$(brew shellenv)"`)
