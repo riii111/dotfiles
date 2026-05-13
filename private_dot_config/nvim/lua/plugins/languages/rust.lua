@@ -5,6 +5,8 @@ return {
     lazy = false,
     init = function()
       -- Configure rustaceanvim before loading
+      local rust_analyzer_target = vim.fn.stdpath("cache") .. "/rust-analyzer-target"
+
       vim.g.rustaceanvim = {
         server = {
           load_vscode_settings = false,
@@ -12,15 +14,12 @@ return {
             ["rust-analyzer"] = {
               checkOnSave = true,
               check = {
-                command = "clippy",  -- ファイル保存時にclippyを自動実行
-                -- 重かったら以下に変更
-                -- command = "check",
-                -- allTargets = false, -- ビルドターゲットを制限するだけ
+                command = "check",
+                allTargets = false,
               },
               cargo = {
-                extraEnv = {
-                  CARGO_TARGET_DIR = vim.fn.stdpath("cache") .. "/cargo-target",
-                },
+                allTargets = false,
+                targetDir = rust_analyzer_target,
               },
               procMacro = {
                 enable = true,
@@ -28,6 +27,13 @@ return {
               diagnostics = {
                 enable = true,
                 enableExperimental = true,
+              },
+              files = {
+                exclude = {
+                  ".direnv",
+                  ".nvim",
+                  "target",
+                },
               },
               inlayHints = {
                 bindingModeHints = { enable = false },
