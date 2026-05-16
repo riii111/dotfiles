@@ -38,6 +38,7 @@ memories = true
 [shell_environment_policy]
 inherit = "core"
 experimental_use_profile = true
+set = { PATH = "{{ .chezmoi.homeDir }}/.local/state/nix/profiles/dotfiles-cli/bin:{{ .chezmoi.homeDir }}/.cargo/bin:/run/current-system/sw/bin:/nix/var/nix/profiles/default/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin" }
 
 # =============================================================================
 # Profiles
