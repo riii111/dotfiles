@@ -18,11 +18,11 @@ let
     (writeShortcut "11" "1" "65535, 97, 8650752")
     (writeShortcut "12" "1" "65535, 122, 8650752")
     (writeShortcut "13" "1" "65535, 98, 8650752")
-    (writeShortcut "27" "1" "65535, 122, 9437184")
     (writeShortcut "57" "1" "65535, 100, 8650752")
     (writeShortcut "59" "1" "65535, 96, 9437184")
 
     # Keyboard focus shortcuts.
+    (writeShortcut "27" "1" "65535, 122, 9437184")
     (writeShortcut "15" "1" "56, 28, 1572864")
     (writeShortcut "17" "1" "61, 24, 1572864")
     (writeShortcut "19" "1" "45, 27, 1572864")
@@ -51,6 +51,7 @@ let
     (writeShortcut "56" "1" "65535, 113, 8912896")
     (writeShortcut "64" "0" "32, 49, 1048576")
     (writeShortcut "65" "1" "32, 49, 1572864")
+    (writeShortcut "160" "1" "108, 37, 655360")
   ];
 in
 {

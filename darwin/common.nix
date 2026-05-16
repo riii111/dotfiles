@@ -66,6 +66,10 @@
       NSAutomaticQuoteSubstitutionEnabled = false;
     };
 
+    CustomUserPreferences.NSGlobalDomain = {
+      "com.apple.mouse.linear" = true;
+    };
+
     dock = {
       autohide = true;
       show-recents = false;
