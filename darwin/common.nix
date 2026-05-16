@@ -1,4 +1,4 @@
-{ ... }:
+{ config, ... }:
 
 {
   imports = [
@@ -11,6 +11,18 @@
   nix.settings.experimental-features = [
     "nix-command"
     "flakes"
+  ];
+
+  launchd.user.envVariables.PATH = [
+    "/Users/${config.system.primaryUser}/.local/state/nix/profiles/dotfiles-cli/bin"
+    "/Users/${config.system.primaryUser}/.cargo/bin"
+    "/run/current-system/sw/bin"
+    "/nix/var/nix/profiles/default/bin"
+    "/usr/local/bin"
+    "/usr/bin"
+    "/bin"
+    "/usr/sbin"
+    "/sbin"
   ];
 
   nix.gc = {
