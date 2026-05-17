@@ -1,5 +1,5 @@
 [build]
-rustc-wrapper = "{{ .chezmoi.homeDir }}/.local/state/nix/profiles/dotfiles-cli/bin/sccache"
+rustc-wrapper = "sccache"
 
 [target.x86_64-apple-darwin]
 rustflags = ["-C", "target-cpu=native"]
