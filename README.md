@@ -41,7 +41,7 @@ Markdown clipboard-to-image paste: `<C-v>` in normal mode (uses `pngpaste`, mana
 
 ## Nix
 
-Daily CLI tools are managed by a dedicated Nix profile.
+Daily CLI tools are managed by the default user Nix profile.
 
 ```bash
 ~/bin/dotctl sync-nix-profile

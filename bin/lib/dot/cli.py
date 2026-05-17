@@ -13,9 +13,7 @@ REQUIRED_COMMANDS = ("git", "python3", "chezmoi", "brew", "nvim", "lefthook", "n
 OPTIONAL_COMMANDS = ("shellcheck", "shfmt")
 LINTABLE_SHELLS = frozenset({"bash", "sh"})
 # Keep in sync with NIX_DOTFILES_PROFILE in dot_zshrc.tmpl.
-NIX_DOTFILES_PROFILE = (
-    Path.home() / ".local" / "state" / "nix" / "profiles" / "dotfiles-cli"
-)
+NIX_DOTFILES_PROFILE = Path.home() / ".nix-profile"
 NIX_DOTFILES_PROFILE_ELEMENT = "cli"
 NIX_DOTFILES_INSTALLABLE = ".#cli"
 WORK_TOOL_REPOS = {
