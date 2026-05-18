@@ -1,0 +1,4 @@
+interface:
+  display_name: "Missing Tools"
+  short_description: "Run unavailable CLI tools with Nix without global installs."
+  default_prompt: "Use missing-tools to resolve an unavailable command without installing it globally."
