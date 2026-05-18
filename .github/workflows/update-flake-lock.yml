@@ -1,0 +1,39 @@
+name: Update flake.lock
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * 1"
+
+jobs:
+  lockfile:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+
+      - name: Update flake.lock
+        run: nix flake update
+
+      - name: Validate updated flake
+        run: nix flake check --no-build
+
+      - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          commit-message: "chore: update flake.lock"
+          title: "chore: update flake.lock"
+          branch: update-flake-lock
+          delete-branch: true
+          labels: dependencies
+          body: |
+            Automated `nix flake update`. Validated with `nix flake check --no-build` before this PR was opened.
+
+            After merge:
+            ```
+            ~/bin/dotctl sync-nix-profile
+            sudo nix run nix-darwin/master#darwin-rebuild -- switch --flake .#personal
+            ```
