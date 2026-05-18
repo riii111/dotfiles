@@ -64,6 +64,7 @@
           dailyCliPackages = with pkgs; [
             # Editor-integrated tooling that should exist in the normal shell too.
             _1password-cli
+            bashInteractive
             nil
             nixd
             nixfmt
@@ -137,7 +138,6 @@
           ];
           devShellOnlyPackages = with pkgs; [
             alejandra
-            bashInteractive
           ];
           cliProfile = pkgs.buildEnv {
             name = "dotfiles-cli";
