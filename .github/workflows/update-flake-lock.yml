@@ -16,18 +16,24 @@ jobs:
 
       - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
 
-      - uses: DeterminateSystems/update-flake-lock@834c491b2ece4de0bbd00d85214bb5e83b4da5c6 # v28
+      - name: Update flake.lock
+        run: nix flake update
+
+      - name: Validate updated flake
+        run: nix flake check --no-build
+
+      - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
-          pr-title: "chore: update flake.lock"
-          pr-labels: dependencies
-          pr-body: |
-            Automated `nix flake update`.
+          commit-message: "chore: update flake.lock"
+          title: "chore: update flake.lock"
+          branch: update-flake-lock
+          delete-branch: true
+          labels: dependencies
+          body: |
+            Automated `nix flake update`. Validated with `nix flake check --no-build` before this PR was opened.
 
             After merge:
             ```
             ~/bin/dotctl sync-nix-profile
             sudo nix run nix-darwin/master#darwin-rebuild -- switch --flake .#personal
             ```
-
-      - name: Validate updated flake
-        run: nix flake check --no-build
