@@ -73,11 +73,12 @@
     enable = true;
     onActivation.cleanup = "check";
     casks = [
+      "arc"
       "codex"
       "font-droid-sans-mono-nerd-font"
       "ghostty"
       "karabiner-elements"
-      "temurin@21"
+      "meetingbar"
       "wezterm"
       "wireshark-app"
       "zed"

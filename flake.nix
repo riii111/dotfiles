@@ -30,6 +30,7 @@
             config.allowUnfreePredicate =
               pkg:
               builtins.elem (nixpkgs.lib.getName pkg) [
+                "1password-cli"
                 "terraform"
                 "zsh-abbr"
               ];
@@ -62,6 +63,7 @@
           '';
           dailyCliPackages = with pkgs; [
             # Editor-integrated tooling that should exist in the normal shell too.
+            _1password-cli
             nil
             nixd
             nixfmt
