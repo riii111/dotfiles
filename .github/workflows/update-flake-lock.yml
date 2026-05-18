@@ -1,0 +1,30 @@
+name: Update flake.lock
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * 1"
+
+jobs:
+  lockfile:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: DeterminateSystems/nix-installer-action@main
+
+      - uses: DeterminateSystems/update-flake-lock@main
+        with:
+          pr-title: "chore: update flake.lock"
+          pr-labels: dependencies
+          pr-body: |
+            Automated `nix flake update`.
+
+            After merge:
+            ```
+            ~/bin/dotctl sync-nix-profile
+            sudo nix run nix-darwin/master#darwin-rebuild -- switch --flake .#personal
+            ```
