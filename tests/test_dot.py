@@ -340,7 +340,7 @@ class DotCliTest(unittest.TestCase):
 
     def test_command_sync_nix_profile_upgrades_existing_profile_package(self):
         repo_root = Path("/repo")
-        profile_path = Path("/tmp/dotfiles-cli-profile")
+        profile_path = Path("/tmp/nix-profile")
         calls = []
 
         def fake_run_command(args, cwd):
@@ -379,7 +379,7 @@ class DotCliTest(unittest.TestCase):
 
     def test_command_sync_nix_profile_installs_when_profile_is_empty(self):
         repo_root = Path("/repo")
-        profile_path = Path("/tmp/dotfiles-cli-profile")
+        profile_path = Path("/tmp/nix-profile")
         calls = []
 
         def fake_run_command(args, cwd):
