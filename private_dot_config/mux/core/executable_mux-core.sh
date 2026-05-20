@@ -199,6 +199,35 @@ get_service_prop() {
 	fi
 }
 
+resolve_start_profile_option() {
+	local option="$1"
+	local key="${option#--}"
+	local profile
+
+	if [[ "$key" == "$option" || -z "$key" ]]; then
+		return 1
+	fi
+
+	profile=$(parse_yaml_allow_null "$CONFIG_FILE" ".start_profiles.\"$key\".profile")
+	if [[ -z "$profile" || "$profile" == "null" ]]; then
+		return 1
+	fi
+
+	echo "$profile"
+}
+
+get_start_profile_label() {
+	local profile="$1"
+	local label
+
+	label=$(parse_yaml_allow_null "$CONFIG_FILE" ".start_profiles[] | select(.profile == \"$profile\") | .label" | head -1)
+	if [[ -n "$label" && "$label" != "null" ]]; then
+		echo "$label"
+	else
+		echo "$profile"
+	fi
+}
+
 get_start_command() {
 	local service="$1"
 	local runtime command

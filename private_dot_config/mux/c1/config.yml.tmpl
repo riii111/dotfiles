@@ -17,6 +17,11 @@ prechecks:
     on_fail: warn
     hint: "gcloud auth login && gcloud auth application-default login"
 
+start_profiles:
+  core:
+    profile: co-core
+    label: core services
+
 phases:
   - name: Docker
     type: docker

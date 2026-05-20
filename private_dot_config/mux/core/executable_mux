@@ -136,8 +136,10 @@ start_all() {
 
 	if [[ "$start_profile" == "docker" ]]; then
 		echo -e "${BOLD}Starting services (profile: docker only)...${NC}"
-	elif [[ "$start_profile" == "co-core" ]]; then
-		echo -e "${BOLD}Starting services (profile: CO CORE)...${NC}"
+	elif [[ "$start_profile" != "all" ]]; then
+		local profile_label
+		profile_label=$(get_start_profile_label "$start_profile")
+		echo -e "${BOLD}Starting services (profile: ${profile_label})...${NC}"
 	else
 		echo -e "${BOLD}Starting all services...${NC}"
 	fi
@@ -398,15 +400,19 @@ main() {
 		case "${arg:-}" in
 		"")
 			;;
-		--core)
-			start_profile="co-core"
-			;;
 		--docker)
 			start_profile="docker"
 			;;
+		--*)
+			if ! start_profile=$(resolve_start_profile_option "$arg"); then
+				echo -e "${RED}Error: Unknown hello option: ${arg}${NC}"
+				echo "Usage: ${PROJECT_NAME} hello [--docker|--<profile>]"
+				exit 1
+			fi
+			;;
 		*)
 			echo -e "${RED}Error: Unknown hello option: ${arg}${NC}"
-			echo "Usage: ${PROJECT_NAME} hello [--core|--docker]"
+			echo "Usage: ${PROJECT_NAME} hello [--docker|--<profile>]"
 			exit 1
 			;;
 		esac
