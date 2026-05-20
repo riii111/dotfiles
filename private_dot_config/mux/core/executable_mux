@@ -211,11 +211,8 @@ start_all() {
 
 			if [[ -n "$groups" ]]; then
 				for group in $groups; do
-					local effective_group="$group"
-
-					if [[ "$start_profile" == "co-core" && "$group" == "be" ]]; then
-						effective_group="co-core"
-					fi
+					local effective_group
+					effective_group=$(resolve_phase_group "$start_profile" "$group")
 
 					# Get services in this group
 					local group_services

@@ -228,6 +228,18 @@ get_start_profile_label() {
 	fi
 }
 
+resolve_phase_group() {
+	local start_profile="$1" group="$2"
+	local override
+
+	override=$(parse_yaml_allow_null "$CONFIG_FILE" ".start_profiles[] | select(.profile == \"$start_profile\") | .group_overrides.\"$group\"" | head -1)
+	if [[ -n "$override" && "$override" != "null" ]]; then
+		echo "$override"
+	else
+		echo "$group"
+	fi
+}
+
 get_start_command() {
 	local service="$1"
 	local runtime command
