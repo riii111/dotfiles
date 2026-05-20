@@ -10,6 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")" && 
 
 # Source core library
 # shellcheck source=private_dot_config/mux/core/executable_mux-core.sh
+# shellcheck disable=SC1091
 source "${SCRIPT_DIR}/mux-core.sh"
 
 #######################################
@@ -24,7 +25,7 @@ ${BOLD}Usage:${NC}
     ${project_name} <command> [options]
 
 ${BOLD}Commands:${NC}
-    hello [--core|--docker] Start session + services + attach
+    hello [--docker|--<profile>] Start session + services + attach
     bye                 Graceful shutdown (stop all → kill session)
     re                  bye + hello (restart entire session)
     attach              Attach to existing session
@@ -41,18 +42,18 @@ ${BOLD}Commands:${NC}
 
 ${BOLD}Examples:${NC}
     ${project_name} hello           # Start session + all services
-    ${project_name} hello --core    # Start session + CO CORE + frontend + BFF
+    ${project_name} hello --backend # Start session + configured profile
     ${project_name} hello --docker  # Start session + docker only
     ${project_name} bye             # Graceful shutdown
     ${project_name} attach          # Attach only (no start)
-    ${project_name} up co-core      # Start CO CORE services
-    ${project_name} stop co-core    # Stop CO CORE services
-    ${project_name} restart co-core # Restart CO CORE services
+    ${project_name} up backend      # Start group services
+    ${project_name} stop backend    # Stop group services
+    ${project_name} restart backend # Restart group services
     ${project_name} restart docker  # Restart docker services
     ${project_name} status          # Show all status
-    ${project_name} logs app-api    # Focus on service window
-    ${project_name} exec local-db   # Enter container (default cmd)
-    ${project_name} exec local-db --shell  # Enter with bash
+    ${project_name} logs service    # Focus on service window
+    ${project_name} exec container  # Enter container (default cmd)
+    ${project_name} exec container --shell  # Enter with bash
 
 ${BOLD}Keybindings (in tmux session):${NC}
     Ctrl+q f           Follow current window's log in nvim
