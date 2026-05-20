@@ -16,11 +16,54 @@ jobs:
 
       - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
 
+      - name: Capture current Neovim version
+        id: neovim-before
+        run: |
+          echo "version=$(nix eval --raw --inputs-from . nixpkgs#neovim.version)" >> "$GITHUB_OUTPUT"
+
       - name: Update flake.lock
         run: nix flake update
 
+      - name: Capture updated Neovim version
+        id: neovim-after
+        run: |
+          echo "version=$(nix eval --raw --inputs-from . nixpkgs#neovim.version)" >> "$GITHUB_OUTPUT"
+
       - name: Validate updated flake
         run: nix flake check --no-build
+
+      - name: Prepare pull request body
+        id: pr-body
+        env:
+          BEFORE: ${{ steps.neovim-before.outputs.version }}
+          AFTER: ${{ steps.neovim-after.outputs.version }}
+        run: |
+          body="$RUNNER_TEMP/update-flake-lock-body.md"
+          {
+            echo 'Automated `nix flake update`. Validated with `nix flake check --no-build` before this PR was opened.'
+            echo
+            if [ "$BEFORE" != "$AFTER" ]; then
+              echo '## Neovim changed'
+              echo
+              echo "\`neovim\` changed from \`$BEFORE\` to \`$AFTER\`."
+              echo
+              echo 'Before applying locally, run a focused Neovim smoke check:'
+              echo
+              echo '```'
+              echo 'nvim --headless +qa'
+              echo '```'
+              echo
+            else
+              echo "Neovim unchanged: \`$AFTER\`."
+              echo
+            fi
+            echo 'After merge:'
+            echo '```'
+            echo '~/bin/dotctl sync-nix-profile'
+            echo 'sudo nix run nix-darwin/master#darwin-rebuild -- switch --flake .#personal'
+            echo '```'
+          } > "$body"
+          echo "path=$body" >> "$GITHUB_OUTPUT"
 
       - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
@@ -29,11 +72,4 @@ jobs:
           branch: update-flake-lock
           delete-branch: true
           labels: dependencies
-          body: |
-            Automated `nix flake update`. Validated with `nix flake check --no-build` before this PR was opened.
-
-            After merge:
-            ```
-            ~/bin/dotctl sync-nix-profile
-            sudo nix run nix-darwin/master#darwin-rebuild -- switch --flake .#personal
-            ```
+          body-path: ${{ steps.pr-body.outputs.path }}
