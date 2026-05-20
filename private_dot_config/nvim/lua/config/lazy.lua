@@ -10,7 +10,7 @@ require("lazy").setup({
     version = false,
   },
   install = { colorscheme = { "habamax" } },
-  checker = { enabled = true },
+  checker = { enabled = false },
   rocks = { enabled = false },
   performance = {
     rtp = {
