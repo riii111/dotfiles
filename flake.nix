@@ -72,6 +72,8 @@
             shellcheck
             shfmt
             taplo
+            zig
+            zls
 
             # Daily CLI tools owned by Nix.
             asdf-vm

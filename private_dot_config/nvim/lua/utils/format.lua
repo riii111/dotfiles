@@ -21,6 +21,9 @@ M.config = {
   terraform = "null-ls",
   hcl = "null-ls",
   ["terraform-vars"] = "null-ls",
+  zig = "zls",
+  zir = "zls",
+  zon = "zls",
 }
 
 -- opts.save: true → auto-save after format (default for on-save)
