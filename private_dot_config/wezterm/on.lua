@@ -3,6 +3,24 @@ local act = wezterm.action
 local io = require("io")
 local os = require("os")
 
+local function file_exists(path)
+	local f = io.open(path, "r")
+	if f then
+		f:close()
+		return true
+	end
+	return false
+end
+
+local function nvim_command()
+	local home = os.getenv("HOME") or ""
+	local path = home .. "/.nix-profile/bin/nvim"
+	if file_exists(path) then
+		return path
+	end
+	return "nvim"
+end
+
 -- Scrollback pager: open in nvim with ANSI colors
 wezterm.on("open-scrollback-in-nvim", function(window, pane)
 	local dims = pane:get_dimensions()
@@ -27,7 +45,7 @@ wezterm.on("open-scrollback-in-nvim", function(window, pane)
 	window:perform_action(
 		act.SpawnCommandInNewTab({
 			args = {
-				"/opt/homebrew/bin/nvim",
+				nvim_command(),
 				"--clean",
 				"-c",
 				"let g:scrollback_cursor_x = " .. cursor.x,
