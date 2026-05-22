@@ -3,6 +3,7 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    zigpkgs.url = "github:NixOS/nixpkgs/d233902339c02a9c334e7e593de68855ad26c4cb";
     nix-darwin = {
       url = "github:nix-darwin/nix-darwin/master";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -12,6 +13,7 @@
   outputs =
     {
       nixpkgs,
+      zigpkgs,
       nix-darwin,
       ...
     }:
@@ -25,6 +27,7 @@
       mkCli =
         system:
         let
+          zigTools = import zigpkgs { inherit system; };
           pkgs = import nixpkgs {
             inherit system;
             config.allowUnfreePredicate =
@@ -36,6 +39,8 @@
               ];
             overlays = [
               (final: prev: {
+                zig = zigTools.zig;
+                zls = zigTools.zls;
                 tbls = prev.tbls.overrideAttrs (old: rec {
                   version = "1.92.3";
                   src = prev.fetchFromGitHub {
