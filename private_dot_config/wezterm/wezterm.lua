@@ -111,14 +111,9 @@ config.macos_forward_to_ime_modifier_mask = "SHIFT|CTRL"
 ---------------------------------------------------------------
 local act = wezterm.action
 
--- TODO: SSH/nested tmux では foreground process を検出できない。必要になったら user var 方式に拡張する。
 local function is_tmux(pane)
 	local user_vars = pane:get_user_vars() or {}
-	if user_vars.TMUX_ACTIVE == "1" then
-		return true
-	end
-	local proc = pane:get_foreground_process_name() or ""
-	return proc:match("tmux$") ~= nil
+	return user_vars.TMUX_ACTIVE == "1"
 end
 
 table.insert(keymaps, {
