@@ -113,8 +113,7 @@ local act = wezterm.action
 
 local function is_tmux(pane)
 	local user_vars = pane:get_user_vars() or {}
-	local proc = pane:get_foreground_process_name() or ""
-	return user_vars.TMUX_ACTIVE == "1" and proc:match("tmux$") ~= nil
+	return user_vars.TMUX_ACTIVE == "1"
 end
 
 table.insert(keymaps, {
