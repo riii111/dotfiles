@@ -1,0 +1,22 @@
+export NIX_DOTFILES_PROFILE="${NIX_DOTFILES_PROFILE:-$HOME/.nix-profile}"
+export NIX_DOTFILES_BIN="${NIX_DOTFILES_PROFILE}/bin"
+export NIX_DOTFILES_SHARE="${NIX_DOTFILES_PROFILE}/share"
+
+_dotfiles_prepend_nix_path() {
+  local -a nix_paths
+
+  [[ -d "${NIX_DOTFILES_BIN}" ]] && nix_paths+=("${NIX_DOTFILES_BIN}")
+  [[ -d "$HOME/.local/state/nix/profiles/profile/bin" ]] && nix_paths+=("$HOME/.local/state/nix/profiles/profile/bin")
+  [[ -d /nix/var/nix/profiles/default/bin ]] && nix_paths+=(/nix/var/nix/profiles/default/bin)
+
+  (( ${#nix_paths} )) || return 0
+
+  typeset -gU path PATH
+  for nix_path in "${nix_paths[@]}"; do
+    path=("${(@)path:#$nix_path}")
+  done
+  path=("${nix_paths[@]}" $path)
+  export PATH
+}
+
+_dotfiles_prepend_nix_path
