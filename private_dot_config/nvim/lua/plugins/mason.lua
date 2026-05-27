@@ -24,7 +24,6 @@ return {
         "basedpyright",
         "sqls",
         "terraform-ls",
-        "kotlin-language-server",
 
         -- Formatters
         "stylua",
