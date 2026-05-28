@@ -81,7 +81,6 @@
       "meetingbar"
       "wezterm"
       "wireshark-app"
-      "zed"
     ];
   };
 
