@@ -5,7 +5,6 @@ plan_mode_reasoning_effort = "medium"
 review_model = "gpt-5.5"
 personality = "pragmatic"
 project_doc_max_bytes = 65536
-profile = "default"
 
 # =============================================================================
 # Global Approval Policy
@@ -20,9 +19,12 @@ approval_policy = { granular = {
 
 sandbox_mode = "danger-full-access"
 model = "gpt-5.5"
-model_reasoning_effort = "medium"
+model_provider = "openai"
+model_reasoning_effort = "high"
 model_verbosity = "low"
 model_reasoning_summary = "concise"
+service_tier = "fast"
+web_search = "cached"
 hide_agent_reasoning = true
 
 # =============================================================================
@@ -38,27 +40,6 @@ memories = true
 [shell_environment_policy]
 inherit = "core"
 experimental_use_profile = true
-
-# =============================================================================
-# Profiles
-# =============================================================================
-[profiles.default]
-model = "gpt-5.5"
-model_provider = "openai"
-model_reasoning_effort = "medium"
-model_verbosity = "low"
-model_reasoning_summary = "concise"
-service_tier = "fast"
-web_search = "cached"
-
-[profiles.alert_check]
-model = "gpt-5.5"
-model_provider = "openai"
-model_reasoning_effort = "medium"
-model_verbosity = "low"
-model_reasoning_summary = "concise"
-service_tier = "fast"
-web_search = "cached"
 
 # =============================================================================
 # MCP Servers
