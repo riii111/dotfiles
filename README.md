@@ -109,6 +109,8 @@ Delta for modern diffs. `|` key toggles split/unified view.
 main: Codex
 sub: Claude Code
 
+`~/.codex/config.toml` is rewritten by the Codex desktop app, so it is `.chezmoiignore`d and not applied. `dot_codex/config.toml.tmpl` is kept only as a hand-maintained reference for base settings; edit the live file directly.
+
 ## Trade-offs
 
 - macOS only (AppleScript, pbcopy, etc.)
