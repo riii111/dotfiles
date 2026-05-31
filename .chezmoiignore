@@ -33,7 +33,7 @@ scripts
 # App-managed: rewritten by the Codex desktop app (desktop/plugins/marketplaces/
 # node_repl sections). chezmoi apply would clobber those, so config.toml is not
 # applied. dot_codex/config.toml.tmpl is kept in-repo as a reference for base
-# settings only. See its header comment.
+# settings and selected desktop preferences. See its header comment.
 .codex/config.toml
 
 # Auto-generated files

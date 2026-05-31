@@ -4,8 +4,9 @@
 # The live ~/.codex/config.toml is rewritten by the Codex desktop app (it owns
 # the desktop/plugins/marketplaces/node_repl sections), so this file is listed
 # in .chezmoiignore and never applied. It is kept here as a hand-maintained
-# reference for the base settings below. To change real config, edit the live
-# ~/.codex/config.toml directly; mirror it here if you want the reference fresh.
+# reference for base settings and desktop preferences worth preserving. To
+# change real config, edit the live ~/.codex/config.toml directly; mirror it
+# here if you want the reference fresh.
 # Maintained occasionally, may drift from live.
 # =============================================================================
 
@@ -82,3 +83,55 @@ trust_level = "trusted"
 
 [tui]
 status_line = ["model-with-reasoning", "git-branch", "context-remaining", "five-hour-limit", "weekly-limit"]
+
+# =============================================================================
+# Desktop Preferences
+# =============================================================================
+[desktop]
+composerEnterBehavior = "cmdIfMultiline"
+appearanceLightCodeThemeId = "linear"
+appearanceDarkCodeThemeId = "sentry"
+appearanceTheme = "system"
+git-branch-prefix = ""
+git-pr-instructions = """
+- .github配下にpull request templateがあればそれに準拠。
+- 内容について
+  変更内容は、diffを見ればわかるレベルの内容は冗長なので書かない。物理レベルではなく論理レベルでの情報を記述する。"""
+git-commit-instructions = """
+Conventional Commitに準拠。
+bodyは指示されない限りは書かない。タイトルだけで表現"""
+default-service-tier = "priority"
+
+[desktop.open-in-target-preferences]
+global = "ghostty"
+
+[desktop.appearanceLightChromeTheme]
+accent = "#5e6ad2"
+contrast = 40
+ink = "#1b1b1b"
+opaqueWindows = false
+surface = "#f7f7f7"
+
+[desktop.appearanceLightChromeTheme.fonts]
+ui = "Inter"
+code = '"Geist Mono", ui-monospace, "SFMono-Regular"'
+
+[desktop.appearanceLightChromeTheme.semanticColors]
+diffAdded = "#52a450"
+diffRemoved = "#c94446"
+skill = "#8160d8"
+
+[desktop.appearanceDarkChromeTheme]
+accent = "#7055f6"
+contrast = 60
+ink = "#e6dff9"
+opaqueWindows = false
+surface = "#1a171f"
+
+[desktop.appearanceDarkChromeTheme.fonts]
+ui = "Inter"
+
+[desktop.appearanceDarkChromeTheme.semanticColors]
+diffAdded = "#8ee6d7"
+diffRemoved = "#fa423e"
+skill = "#7055f6"
