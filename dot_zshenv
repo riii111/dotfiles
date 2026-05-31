@@ -20,3 +20,20 @@ _dotfiles_prepend_nix_path() {
 }
 
 _dotfiles_prepend_nix_path
+
+_dotfiles_set_terminfo_dirs() {
+  local -a terminfo_dirs
+
+  [[ -d "${NIX_DOTFILES_SHARE}/terminfo" ]] && terminfo_dirs+=("${NIX_DOTFILES_SHARE}/terminfo")
+  [[ -d "$HOME/.local/state/nix/profiles/profile/share/terminfo" ]] && terminfo_dirs+=("$HOME/.local/state/nix/profiles/profile/share/terminfo")
+  [[ -d /run/current-system/sw/share/terminfo ]] && terminfo_dirs+=(/run/current-system/sw/share/terminfo)
+  [[ -d /nix/var/nix/profiles/default/share/terminfo ]] && terminfo_dirs+=(/nix/var/nix/profiles/default/share/terminfo)
+  [[ -d /usr/share/terminfo ]] && terminfo_dirs+=(/usr/share/terminfo)
+
+  (( ${#terminfo_dirs} )) || return 0
+
+  typeset -gU terminfo_dirs
+  export TERMINFO_DIRS="${(j.:.)terminfo_dirs}"
+}
+
+_dotfiles_set_terminfo_dirs

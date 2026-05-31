@@ -136,6 +136,7 @@
             tmuxp
             tree
             visidata
+            wezterm.terminfo
             yq-go # Go implementation behind the `yq` command.
             zsh-abbr
             zsh-autosuggestions
