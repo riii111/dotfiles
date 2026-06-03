@@ -19,6 +19,14 @@
 - セクション見出しを乱立しない。短い回答に ## は不要
 - TL;DR セクションは作らない。最初の1-2文が要点であるべき
 
+## Language
+
+- Respond in natural Japanese by default.
+- Do not mix English into prose for emphasis or style.
+- Keep real technical names, command names, API names, file names, commit types, and quoted text in their original language.
+- When an English technical term has a common Japanese equivalent, prefer the Japanese wording unless the English term is the standard name.
+- Avoid casual Japanese-English hybrid phrasing.
+
 ## Shell Tool Defaults
 
 - File search: fd
@@ -38,4 +46,3 @@
 - Conventional Commits 1.0.0 (English)
 - Title only, no body
 - Do not push
-
