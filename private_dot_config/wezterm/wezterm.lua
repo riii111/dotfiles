@@ -102,7 +102,8 @@ config.inactive_pane_hsb = {
 -- IME / Input
 ---------------------------------------------------------------
 config.use_ime = true
-config.macos_forward_to_ime_modifier_mask = "SHIFT|CTRL"
+-- Keep CTRL with macOS so Mission Control space switching is not sent to the pane.
+config.macos_forward_to_ime_modifier_mask = "SHIFT"
 
 ---------------------------------------------------------------
 -- Ctrl+Q: tmux-aware prefix / leader

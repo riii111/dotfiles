@@ -3,6 +3,12 @@ local act = wezterm.action
 
 local keys = {
 	---------------------------------------------------------------
+	-- macOS Spaces shortcuts are handled outside terminal apps.
+	---------------------------------------------------------------
+	{ key = "LeftArrow", mods = "CTRL", action = act.Nop },
+	{ key = "RightArrow", mods = "CTRL", action = act.Nop },
+
+	---------------------------------------------------------------
 	-- Pane: Split (same as Ghostty)
 	---------------------------------------------------------------
 	{ key = "d", mods = "CMD", action = act.SplitHorizontal({ domain = "CurrentPaneDomain" }) },
