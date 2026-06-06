@@ -2,8 +2,11 @@ export NIX_DOTFILES_PROFILE="${NIX_DOTFILES_PROFILE:-$HOME/.nix-profile}"
 export NIX_DOTFILES_BIN="${NIX_DOTFILES_PROFILE}/bin"
 export NIX_DOTFILES_SHARE="${NIX_DOTFILES_PROFILE}/share"
 
-_dotfiles_prepend_nix_path() {
+_dotfiles_place_nix_path() {
   local -a nix_paths
+  local -a lower_priority_paths
+  local -i path_index
+  local -i insert_at=0
 
   [[ -d "${NIX_DOTFILES_BIN}" ]] && nix_paths+=("${NIX_DOTFILES_BIN}")
   [[ -d "$HOME/.local/state/nix/profiles/profile/bin" ]] && nix_paths+=("$HOME/.local/state/nix/profiles/profile/bin")
@@ -15,11 +18,39 @@ _dotfiles_prepend_nix_path() {
   for nix_path in "${nix_paths[@]}"; do
     path=("${(@)path:#$nix_path}")
   done
-  path=("${nix_paths[@]}" $path)
+
+  lower_priority_paths=(
+    /opt/homebrew/bin
+    /opt/homebrew/sbin
+    /usr/local/bin
+    /usr/bin
+    /bin
+    /usr/sbin
+    /sbin
+  )
+
+  for (( path_index = 1; path_index <= ${#path}; path_index++ )); do
+    for lower_priority_path in "${lower_priority_paths[@]}"; do
+      if [[ "${path[$path_index]}" == "$lower_priority_path" ]]; then
+        insert_at=$path_index
+        break 2
+      fi
+    done
+  done
+
+  # Project-local tools belong in each repository via direnv/asdf; dotfiles-wide
+  # Nix tools only outrank Homebrew and macOS defaults.
+  if (( insert_at == 1 )); then
+    path=("${nix_paths[@]}" "${path[@]}")
+  elif (( insert_at > 1 )); then
+    path=("${(@)path[1,insert_at - 1]}" "${nix_paths[@]}" "${(@)path[insert_at,-1]}")
+  else
+    path+=("${nix_paths[@]}")
+  fi
   export PATH
 }
 
-_dotfiles_prepend_nix_path
+_dotfiles_place_nix_path
 
 _dotfiles_set_terminfo_dirs() {
   local -a terminfo_dirs

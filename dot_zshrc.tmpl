@@ -157,8 +157,9 @@ export BUN_INSTALL="$HOME/.bun"
 export PATH="$BUN_INSTALL/bin:$PATH"
 export PATH="$HOME/.local/bin:$PATH"
 
-# Restore Nix bin paths after this zshrc rebuilds PATH.
-_dotfiles_prepend_nix_path
+# Keep dotfiles-wide Nix tools above Homebrew/macOS without overriding
+# project-local toolchains managed by asdf or direnv.
+_dotfiles_place_nix_path
 
 # ==========================================
 # Interactive Shell Only
@@ -579,7 +580,7 @@ _detect_gh_target_user
 export GCP_PROJECT="{{ .gcp_project }}"
 {{ end }}
 
-_dotfiles_prepend_nix_path
+_dotfiles_place_nix_path
 
 # direnv
 if command -v direnv >/dev/null 2>&1; then
