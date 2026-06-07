@@ -14,8 +14,6 @@ scripts
 
 # Personal machine only
 {{ if ne .type "personal" }}
-.local/bin/nodex
-.config/mux/nodex
 .gitconfig-side-work
 {{ end }}
 
@@ -23,7 +21,6 @@ scripts
 {{ if ne .type "work" }}
 .gitconfig-riii111
 .claude/skills/deploy-preflight
-.config/mux/c1
 {{ end }}
 
 # Build artifacts (auto-built by statusline-command.sh)

@@ -133,7 +133,6 @@
             sqruff
             terraform
             tmux
-            tmuxp
             tree
             visidata
             wezterm.terminfo

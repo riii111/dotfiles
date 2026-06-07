@@ -54,7 +54,7 @@ build_app() {
 
 	# Prefer `wezterm cli spawn --new-window` so the file opens as a new window
 	# inside the running WezTerm (no Dock duplication). Fall back to `wezterm start`
-	# when no mux server is running (cold start).
+	# when no existing WezTerm instance is available (cold start).
 	cat >"$src" <<APPLESCRIPT
 on open theFiles
 	set fileList to ""
