@@ -66,6 +66,7 @@
               ln -s "${pkgs.rustup}/bin/$bin" "$out/bin/$bin"
             done
           '';
+          mkVersionEntry = name: value: { inherit name value; };
           dailyCliPackages = with pkgs; [
             # Editor-integrated tooling that should exist in the normal shell too.
             _1password-cli
@@ -146,6 +147,28 @@
           devShellOnlyPackages = with pkgs; [
             alejandra
           ];
+          directToolVersions = nixpkgs.lib.concatMap
+            (package:
+              let
+                name = nixpkgs.lib.getName package;
+              in
+              if builtins.elem name [
+                "selected-go-tools"
+                "selected-rustup-tools"
+                "wezterm-terminfo"
+              ] then
+                [ ]
+              else
+                [ (mkVersionEntry name (package.version or "unknown")) ])
+            (dailyCliPackages ++ devShellOnlyPackages);
+          toolVersions = builtins.listToAttrs (
+            directToolVersions
+            ++ [
+              (mkVersionEntry "goimports" pkgs.gotools.version)
+              (mkVersionEntry "rustup shims" pkgs.rustup.version)
+              (mkVersionEntry "wezterm-terminfo" pkgs.wezterm.version)
+            ]
+          );
           cliProfile = pkgs.buildEnv {
             name = "dotfiles-cli";
             paths = dailyCliPackages;
@@ -158,6 +181,7 @@
         {
           inherit
             pkgs
+            toolVersions
             dailyCliPackages
             devShellOnlyPackages
             cliProfile
@@ -198,6 +222,14 @@
           cli = mkCli system;
         in
         cli.pkgs.nixfmt-tree
+      );
+
+      lib.toolVersions = forAllSystems (
+        system:
+        let
+          cli = mkCli system;
+        in
+        cli.toolVersions
       );
 
       darwinConfigurations = {

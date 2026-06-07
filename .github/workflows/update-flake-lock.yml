@@ -16,45 +16,85 @@ jobs:
 
       - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
 
-      - name: Capture current Neovim version
-        id: neovim-before
+      - name: Detect current system
+        id: system
         run: |
-          echo "version=$(nix eval --raw --inputs-from . nixpkgs#neovim.version)" >> "$GITHUB_OUTPUT"
+          echo "value=$(nix eval --impure --raw --expr builtins.currentSystem)" >> "$GITHUB_OUTPUT"
+
+      - name: Capture current tool versions
+        id: tools-before
+        env:
+          SYSTEM: ${{ steps.system.outputs.value }}
+        run: |
+          nix eval --json ".#lib.toolVersions.${SYSTEM}" > "$RUNNER_TEMP/tool-versions-before.json"
+          echo "path=$RUNNER_TEMP/tool-versions-before.json" >> "$GITHUB_OUTPUT"
 
       - name: Update flake.lock
         run: nix flake update
 
-      - name: Capture updated Neovim version
-        id: neovim-after
+      - name: Capture updated tool versions
+        id: tools-after
+        env:
+          SYSTEM: ${{ steps.system.outputs.value }}
         run: |
-          echo "version=$(nix eval --raw --inputs-from . nixpkgs#neovim.version)" >> "$GITHUB_OUTPUT"
+          nix eval --json ".#lib.toolVersions.${SYSTEM}" > "$RUNNER_TEMP/tool-versions-after.json"
+          echo "path=$RUNNER_TEMP/tool-versions-after.json" >> "$GITHUB_OUTPUT"
 
       - name: Validate updated flake
         run: nix flake check --no-build
 
+      - name: Build tool version summary
+        id: tool-summary
+        env:
+          BEFORE_PATH: ${{ steps.tools-before.outputs.path }}
+          AFTER_PATH: ${{ steps.tools-after.outputs.path }}
+        run: |
+          {
+            jq -r -s '
+              def format_change($before; $after):
+                "- `\(.key)`: `\($before)` -> `\($after)`";
+              (.[0] // {}) as $before
+              | (.[1] // {}) as $after
+              | ($after | to_entries | sort_by(.key)) as $entries
+              | [
+                  $entries[]
+                  | select(($before[.key] // null) != .value)
+                  | format_change(($before[.key] // "missing"); .value)
+                ]
+              | if length == 0 then
+                  "No direct tool version changes detected."
+                else
+                  join("\n")
+                end
+            ' "$BEFORE_PATH" "$AFTER_PATH"
+          } > "$RUNNER_TEMP/updated-tools.md"
+          if jq -e -s '.[0].neovim != .[1].neovim' "$BEFORE_PATH" "$AFTER_PATH" > /dev/null; then
+            echo "neovim_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "neovim_changed=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "updated_path=$RUNNER_TEMP/updated-tools.md" >> "$GITHUB_OUTPUT"
+
       - name: Prepare pull request body
         id: pr-body
         env:
-          BEFORE: ${{ steps.neovim-before.outputs.version }}
-          AFTER: ${{ steps.neovim-after.outputs.version }}
+          UPDATED_PATH: ${{ steps.tool-summary.outputs.updated_path }}
+          NEOVIM_CHANGED: ${{ steps.tool-summary.outputs.neovim_changed }}
         run: |
           body="$RUNNER_TEMP/update-flake-lock-body.md"
           {
             echo 'Automated `nix flake update`. Validated with `nix flake check --no-build` before this PR was opened.'
             echo
-            if [ "$BEFORE" != "$AFTER" ]; then
-              echo '## Neovim changed'
-              echo
-              echo "\`neovim\` changed from \`$BEFORE\` to \`$AFTER\`."
-              echo
+            echo '## Updated tools'
+            echo
+            cat "$UPDATED_PATH"
+            echo
+            if [ "$NEOVIM_CHANGED" = "true" ]; then
               echo 'Before applying locally, run a focused Neovim smoke check:'
               echo
               echo '```'
               echo 'nvim --headless +qa'
               echo '```'
-              echo
-            else
-              echo "Neovim unchanged: \`$AFTER\`."
               echo
             fi
             echo 'After merge:'
