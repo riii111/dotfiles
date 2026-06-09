@@ -3,7 +3,7 @@
 
 -- Result display
 \pset null '[NULL]'
-\pset expanded auto
+\pset expanded off
 \pset border 1
 
 -- Pager behavior

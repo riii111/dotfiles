@@ -17,7 +17,7 @@ destructive_statements_require_transaction = True
 on_error = STOP
 
 # Result display
-auto_expand = True
+auto_expand = False
 table_format = psql_unicode
 null_string = [NULL]
 timing = True
