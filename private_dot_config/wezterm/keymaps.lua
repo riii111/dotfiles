@@ -27,6 +27,7 @@ local keys = {
 	{ key = "RightArrow", mods = "CMD", action = act.SendKey({ key = "RightArrow", mods = "CTRL|SHIFT" }) },
 	{ key = "LeftArrow", mods = "ALT", action = act.SendString("\x1bb") },
 	{ key = "RightArrow", mods = "ALT", action = act.SendString("\x1bf") },
+	{ key = "Backspace", mods = "ALT", action = act.SendString("\x1b\x7f") }, -- backward-kill-word として扱われる
 	{ key = "LeftArrow", mods = "CMD|ALT", action = act.SendKey({ key = "LeftArrow", mods = "ALT|SHIFT" }) },
 	{ key = "RightArrow", mods = "CMD|ALT", action = act.SendKey({ key = "RightArrow", mods = "ALT|SHIFT" }) },
 
