@@ -328,6 +328,8 @@ if [[ -o zle ]]; then
   elif [[ -f /opt/homebrew/opt/fzf/shell/key-bindings.zsh ]]; then
     source /opt/homebrew/opt/fzf/shell/key-bindings.zsh
   fi
+  bindkey '^B' backward-char
+  bindkey '^F' forward-char
   bindkey -r '^T'              # disable Ctrl-T (conflicts with Rectangle)
 fi
 
@@ -352,7 +354,6 @@ git-switch-fzf() {
   git swf
 }
 if [[ -o zle ]]; then
-  bindkey -r '^B'
   bindkey -s '\e[20012~' 'git-switch-fzf\n'
 fi
 
