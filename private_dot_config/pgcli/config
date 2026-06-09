@@ -26,6 +26,7 @@ timing = True
 enable_pager = True
 
 # Prompt and startup noise
+show_bottom_toolbar = True
 less_chatty = True
 prompt = '\u@\h:\p/\d> '
 
