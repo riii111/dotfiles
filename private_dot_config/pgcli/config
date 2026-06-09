@@ -7,7 +7,7 @@ wider_completion_menu = True
 keyword_casing = upper
 
 # Input
-vi = True
+vi = False
 multi_line = True
 multi_line_mode = psql
 
