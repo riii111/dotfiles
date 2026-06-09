@@ -7,14 +7,6 @@ user=tenant
 password=tenant
 options=--search_path=common
 
-[{{ .work_project }}-local-migration]
-host=localhost
-port=55432
-dbname=local
-user=root
-password=root
-options=--search_path=common
-
 [{{ .work_project }}-stg]
 # Run `co-cli db/connect --env stg` first and keep it running.
 host=localhost
