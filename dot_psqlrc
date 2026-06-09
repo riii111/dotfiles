@@ -1,0 +1,27 @@
+-- Keep startup quiet while this file applies display settings
+\set QUIET on
+
+-- Result display
+\pset null '[NULL]'
+\pset expanded auto
+\pset border 1
+
+-- Pager behavior
+\pset pager on
+\pset pager_min_lines 100
+
+-- History and completion
+\set HISTCONTROL ignoreboth
+\set HISTSIZE 10000
+\set HISTFILE ~/.psql_history-:DBNAME
+\set COMP_KEYWORD_CASE upper
+
+-- Error detail
+\set VERBOSITY default
+
+-- Prompt
+\set PROMPT1 '%[%033[1;36m%]%s%[%033[0m%] %n@%m:%>%/%R%x%# '
+\set PROMPT2 '%w'
+
+-- Restore normal interactive output
+\unset QUIET
