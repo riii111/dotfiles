@@ -88,6 +88,8 @@ local keys = {
 
 	-- Cmd+F for buffer search in Neovim (disable WezTerm's search)
 	{ key = "f", mods = "CMD", action = act.SendKey({ key = "f", mods = "ALT" }) },
+	{ key = "g", mods = "CMD", action = act.SendString("\x1b[20011~") },
+	{ key = "b", mods = "CMD", action = act.SendString("\x1b[20012~") },
 
 	-- Cmd+Shift combinations (for Telescope etc.)
 	{ key = "f", mods = "CMD|SHIFT", action = act.SendKey({ key = "f", mods = "CTRL|SHIFT" }) },
