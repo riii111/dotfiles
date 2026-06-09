@@ -328,7 +328,6 @@ if [[ -o zle ]]; then
   elif [[ -f /opt/homebrew/opt/fzf/shell/key-bindings.zsh ]]; then
     source /opt/homebrew/opt/fzf/shell/key-bindings.zsh
   fi
-  bindkey '^B' backward-char
   bindkey '^F' forward-char
   bindkey -r '^T'              # disable Ctrl-T (conflicts with Rectangle)
 fi
@@ -338,24 +337,20 @@ fi
 # ==========================================
 export GHQ_ROOT="$HOME/ghq"
 
-# ghq × fzf: jump to repository (Cmd-G via WezTerm)
+# ghq × fzf: jump to repository (Ctrl-G)
 cghq() {
   local repo
   repo="$(ghq list | fzf --preview 'eza --tree --level=3 --icons --color=always $(ghq root)/{}')" || return
   cd "$(ghq root)/$repo"
 }
-if [[ -o zle ]]; then
-  bindkey -r '^G'
-  bindkey -s '\e[20011~' 'cghq\n'
-fi
+[[ -o zle ]] && bindkey -s '^G' 'cghq\n'
 
-# git switch branch with fzf (Cmd-B via WezTerm)
+# git switch branch with fzf (Ctrl-B)
 git-switch-fzf() {
   git swf
 }
-if [[ -o zle ]]; then
-  bindkey -s '\e[20012~' 'git-switch-fzf\n'
-fi
+# Overrides backward-char; kept for reachability because Ctrl-B is not used for cursor movement here.
+[[ -o zle ]] && bindkey -s '^B' 'git-switch-fzf\n'
 
 # ==========================================
 # PostgreSQL service file
