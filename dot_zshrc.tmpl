@@ -350,6 +350,53 @@ git-switch-fzf() {
 }
 [[ -o zle ]] && bindkey -s '^B' 'git-switch-fzf\n'
 
+# ==========================================
+# PostgreSQL service file
+# ==========================================
+pgservice() {
+  local service_file="${PGSERVICEFILE:-$HOME/.pg_service.conf}"
+
+  case "${1:-}" in
+    list)
+      [[ -r "$service_file" ]] || {
+        printf 'pgservice: service file not found: %s\n' "$service_file" >&2
+        return 1
+      }
+
+      # Only print service names; connection parameters can expose internal hosts or users
+      awk '
+        /^[[:space:]]*\[[^]]+\][[:space:]]*$/ {
+          line = $0
+          sub(/^[[:space:]]*\[/, "", line)
+          sub(/\][[:space:]]*$/, "", line)
+          print line
+        }
+      ' "$service_file"
+      ;;
+    path)
+      printf '%s\n' "$service_file"
+      ;;
+    edit)
+      command "${EDITOR:-vi}" "$service_file"
+      ;;
+    *)
+      printf 'usage: pgservice {list|path|edit}\n' >&2
+      return 2
+      ;;
+  esac
+}
+
+_pgservice() {
+  local -a commands
+  commands=(
+    'list:print service names'
+    'path:print service file path'
+    'edit:open service file'
+  )
+  _describe -t commands 'pgservice command' commands
+}
+[[ -o zle ]] && compdef _pgservice pgservice
+
 # Launch Claude Code as implementation AI with tmux pane named "impl"
 # Usage: cc-impl [session-name] [claude options...]
 # Examples:
