@@ -1,0 +1,34 @@
+# vi: ft=dosini
+[main]
+
+# Completion
+smart_completion = True
+wider_completion_menu = True
+keyword_casing = upper
+
+# Input
+vi = True
+multi_line = True
+multi_line_mode = psql
+
+# Safety
+destructive_warning = drop, shutdown, delete, truncate, alter, update, unconditional_update
+destructive_statements_require_transaction = True
+on_error = STOP
+
+# Result display
+auto_expand = True
+table_format = psql_unicode
+null_string = [NULL]
+timing = True
+
+# Pager
+enable_pager = True
+
+# Prompt and startup noise
+less_chatty = True
+prompt = '\u@\h:\p/\d> '
+
+# pgcli DSN aliases
+# Keep this empty; shared connection profiles live in pg_service.conf
+[alias_dsn]
