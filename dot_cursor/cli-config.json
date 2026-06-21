@@ -81,6 +81,8 @@
       "Shell(gh:workflow view*)",
       "Shell(gh:release list*)",
       "Shell(gh:release view*)",
+      "Shell(gh:search issues*)",
+      "Shell(gh:search prs*)",
       "Shell(gcloud:storage ls*)",
       "Shell(gcloud:run jobs list*)",
       "Shell(gcloud:run jobs describe*)",
