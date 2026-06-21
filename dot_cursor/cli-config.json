@@ -1,6 +1,15 @@
 {
   "permissions": {
     "allow": [
+      "Mcp(linear:get_*)",
+      "Mcp(linear:list_*)",
+      "Mcp(linear:read_*)",
+      "Mcp(linear:search_*)",
+      "Mcp(linear:view_*)",
+
+      "Read(**)",
+      "Write(**)",
+
       "Shell(cargo:build*)",
       "Shell(cargo:check*)",
       "Shell(cargo:clippy*)",
@@ -8,6 +17,7 @@
       "Shell(cargo:audit*)",
       "Shell(cargo:test*)",
       "Shell(cargo:run*)",
+
       "Shell(go:build*)",
       "Shell(go:mod*)",
       "Shell(go:vet*)",
@@ -15,18 +25,22 @@
       "Shell(go:test*)",
       "Shell(golangci-lint)",
       "Shell(goimports)",
+
       "Shell(npm:run*)",
       "Shell(npm:test*)",
+
       "Shell(terraform:fmt*)",
       "Shell(terraform:validate*)",
       "Shell(terraform:show*)",
       "Shell(terraform:output*)",
       "Shell(terraform:state list*)",
+
       "Shell(make:test-unit*)",
       "Shell(make:test*)",
       "Shell(make:build*)",
       "Shell(make:lint*)",
       "Shell(make:fmt*)",
+
       "Shell(git:status*)",
       "Shell(git:diff*)",
       "Shell(git:log*)",
@@ -50,6 +64,7 @@
       "Shell(git:cherry-pick*)",
       "Shell(git:switch*)",
       "Shell(git:pull*)",
+
       "Shell(rg)",
       "Shell(fd)",
       "Shell(bat)",
@@ -64,6 +79,7 @@
       "Shell(stat)",
       "Shell(which)",
       "Shell(pwd)",
+
       "Shell(gh:auth*)",
       "Shell(gh:pr view*)",
       "Shell(gh:pr list*)",
@@ -83,6 +99,7 @@
       "Shell(gh:release view*)",
       "Shell(gh:search issues*)",
       "Shell(gh:search prs*)",
+
       "Shell(gcloud:storage ls*)",
       "Shell(gcloud:run jobs list*)",
       "Shell(gcloud:run jobs describe*)",
@@ -91,6 +108,7 @@
       "Shell(gcloud:auth list*)",
       "Shell(gcloud:config list*)",
       "Shell(gcloud:config configurations list*)",
+
       "Shell(pe)",
       "Shell(echo)",
       "Shell(date)",
@@ -107,6 +125,7 @@
       "Shell(du)",
       "Shell(ps)",
       "Shell(top:-l 1*)",
+
       "Shell(jq)",
       "Shell(yq)",
       "Shell(sort)",
@@ -121,28 +140,24 @@
       "Shell(diff)",
       "Shell(md5)",
       "Shell(shasum)",
+
       "Shell(mkdir)",
       "Shell(cd)",
       "Shell(touch)",
       "Shell(cp)",
       "Shell(mv)",
+
       "Shell(tmux:list-panes -a -F*)",
       "Shell(tmux:list-sessions*)",
-      "Read(**)",
-      "Write(**)",
+
       "WebFetch(cursor.com)",
       "WebFetch(docs.cursor.com)",
       "WebFetch(docs.github.com)",
       "WebFetch(github.com)",
       "WebFetch(api.github.com)",
-      "WebFetch(linear.app)",
       "WebFetch(docs.rs)",
       "WebFetch(crates.io)",
-      "Mcp(linear:get_*)",
-      "Mcp(linear:list_*)",
-      "Mcp(linear:read_*)",
-      "Mcp(linear:search_*)",
-      "Mcp(linear:view_*)"
+      "WebFetch(linear.app)"
     ],
     "deny": [
       "Shell(rm)",
@@ -151,13 +166,16 @@
       "Shell(chmod:777*)",
       "Shell(sudo)",
       "Shell(su)",
+
       "Shell(git:add -f*)",
       "Shell(git:add --force*)",
       "Shell(git:push --force*)",
       "Shell(git:push -f*)",
       "Shell(git:reset --hard*)",
+
       "Shell(terraform:apply*)",
       "Shell(terraform:destroy*)",
+
       "Read(**/.env*)",
       "Read(**/*.key)",
       "Read(**/*.pem)",
@@ -167,6 +185,7 @@
       "Read(/Users/a81803/.ssh/**)",
       "Read(/Users/a81803/.gnupg/**)",
       "Read(/Users/a81803/.config/gh/hosts.yml)",
+
       "Write(**/.env*)",
       "Write(**/*.key)",
       "Write(**/*.pem)",
