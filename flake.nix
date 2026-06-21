@@ -130,7 +130,6 @@
             selectedRustupTools
             sccache
             sqlfluff
-            sqls
             sqruff
             terraform
             tmux

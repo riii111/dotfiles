@@ -22,7 +22,6 @@ return {
         "gopls",
         "typescript-language-server", -- ts_ls用
         "basedpyright",
-        "sqls",
         "terraform-ls",
 
         -- Formatters

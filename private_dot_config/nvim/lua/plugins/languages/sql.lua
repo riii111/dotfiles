@@ -1,21 +1,11 @@
 return {
-  -- SQL LSP configuration
-  -- NOTE: Using a wrapper plugin instead of extending "neovim/nvim-lspconfig" directly
-  --       because lazy.nvim may skip this config function when lspconfig is already loaded.
+  -- Register sqruff linter + formatter via none-ls (once)
   {
-    name = "sql-lsp-setup",
+    name = "sql-tools-setup",
     dir = vim.fn.stdpath("config"),
     ft = { "sql", "mysql", "plsql" },
-    dependencies = { "neovim/nvim-lspconfig" },
+    dependencies = { "nvimtools/none-ls.nvim" },
     config = function()
-      vim.lsp.config("sqls", {
-        cmd = { "sqls" },
-        filetypes = { "sql", "mysql", "plsql" },
-        root_markers = { ".git", ".sqls.yaml" },
-      })
-      vim.lsp.enable("sqls")
-
-      -- Register sqruff linter + formatter via none-ls (once)
       local null_ls_ok, null_ls = pcall(require, "null-ls")
       if null_ls_ok and not vim.g._sql_null_ls_registered then
         vim.g._sql_null_ls_registered = true
