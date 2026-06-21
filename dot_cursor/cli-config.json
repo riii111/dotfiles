@@ -17,6 +17,7 @@
       "Shell(cargo:audit*)",
       "Shell(cargo:test*)",
       "Shell(cargo:run*)",
+      "Shell(cargo nextest)",
 
       "Shell(go:build*)",
       "Shell(go:mod*)",
@@ -28,6 +29,8 @@
 
       "Shell(npm:run*)",
       "Shell(npm:test*)",
+
+      "Shell(nix)",
 
       "Shell(terraform:fmt*)",
       "Shell(terraform:validate*)",
