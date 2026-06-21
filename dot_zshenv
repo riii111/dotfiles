@@ -4,6 +4,10 @@ export NIX_DOTFILES_SHARE="${NIX_DOTFILES_PROFILE}/share"
 export PSQL_PAGER="${PSQL_PAGER:-pspg}"
 export PSQL_WATCH_PAGER="${PSQL_WATCH_PAGER:-pspg --stream}"
 
+typeset -gU path PATH
+[[ -d "$HOME/.local/bin" ]] && path=("$HOME/.local/bin" "${path[@]}")
+export PATH
+
 _dotfiles_place_nix_path() {
   local -a nix_paths
   local -a lower_priority_paths
