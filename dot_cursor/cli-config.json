@@ -153,14 +153,7 @@
       "Shell(tmux:list-panes -a -F*)",
       "Shell(tmux:list-sessions*)",
 
-      "WebFetch(cursor.com)",
-      "WebFetch(docs.cursor.com)",
-      "WebFetch(docs.github.com)",
-      "WebFetch(github.com)",
-      "WebFetch(api.github.com)",
-      "WebFetch(docs.rs)",
-      "WebFetch(crates.io)",
-      "WebFetch(linear.app)"
+      "WebFetch(**)"
     ],
     "deny": [
       "Shell(rm)",
