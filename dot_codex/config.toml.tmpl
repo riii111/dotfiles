@@ -21,15 +21,23 @@ project_doc_max_bytes = 65536
 # =============================================================================
 # Global Approval Policy
 # =============================================================================
+sandbox_mode = "workspace-write"
+approvals_reviewer = "auto_review"
+
 approval_policy = { granular = {
   sandbox_approval = true,
   rules = true,
   mcp_elicitations = false,
-  request_permissions = false,
+  request_permissions = true,
   skill_approval = false,
 } }
 
-sandbox_mode = "danger-full-access"
+[sandbox_workspace_write]
+network_access = true
+writable_roots = [
+  "{{ .chezmoi.homeDir }}/ghq/github.com",
+]
+
 model = "gpt-5.5"
 model_provider = "openai"
 model_reasoning_effort = "high"
