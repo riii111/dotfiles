@@ -16,8 +16,17 @@ fi
 mkdir -p "${HOME}/bin"
 ln -sfn "${install_root}/bin/git-prune-gone" "${HOME}/bin/git-prune-gone"
 
-rm -f \
-	"${HOME}/bin/git-prune-gone-br" \
-	"${HOME}/bin/git-prune-gone-wt" \
-	"${install_root}/bin/git-prune-gone-br" \
-	"${install_root}/bin/git-prune-gone-wt"
+cat >"${install_root}/bin/git-prune-gone-br" <<'EOF'
+#!/bin/sh
+exec git-prune-gone branch "$@"
+EOF
+chmod +x "${install_root}/bin/git-prune-gone-br"
+
+cat >"${install_root}/bin/git-prune-gone-wt" <<'EOF'
+#!/bin/sh
+exec git-prune-gone worktree "$@"
+EOF
+chmod +x "${install_root}/bin/git-prune-gone-wt"
+
+ln -sfn "${install_root}/bin/git-prune-gone-br" "${HOME}/bin/git-prune-gone-br"
+ln -sfn "${install_root}/bin/git-prune-gone-wt" "${HOME}/bin/git-prune-gone-wt"
