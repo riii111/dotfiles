@@ -121,9 +121,6 @@
 	# Safe force push (use instead of --force)
 	pushf = push --force-with-lease
 
-	# Legacy entrypoint kept only to redirect users to the explicit branch/worktree commands
-	prune-gone = "!sh -c 'echo \"Error: git prune-gone is disabled. Use git prune-gone-br or git prune-gone-wt.\" >&2; exit 1'"
-
 	# History fzf - GitHub Desktop History tab like experience
 	# - ⬆ mark for unpushed commits
 	# - Preview shows changed files + diff
