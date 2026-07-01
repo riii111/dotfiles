@@ -90,7 +90,8 @@
     "context7": {
       "type": "local",
       "command": ["npx", "-y", "@upstash/context7-mcp"],
-      "enabled": true
+      "enabled": true,
+      "timeout": 20000
     },
     "linear": {
       "type": "remote",
