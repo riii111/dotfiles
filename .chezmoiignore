@@ -42,3 +42,7 @@ scripts
 !.config/colima/
 !.config/colima/_templates/
 !.config/colima/_templates/default.yaml
+
+.config/herdr/**
+!.config/herdr/
+!.config/herdr/config.toml

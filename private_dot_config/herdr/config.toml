@@ -1,0 +1,155 @@
+[update]
+channel = "stable"
+
+version_check = false
+
+# agent検出manifestの更新チェック。新しいCLI agent対応を拾いやすくする。
+manifest_check = true
+
+[terminal]
+default_shell = "zsh"
+
+shell_mode = "auto"
+
+# 新規pane/tab/workspaceのcwd方針。
+# follow: 元pane/workspaceのcwdを引き継ぐ。repo作業ではこれが一番自然。
+new_cwd = "follow"
+
+[worktrees]
+# HerdrのGit worktree作成先。
+# repo内を汚したくないなら外側に置く。好みに応じて ~/src/worktrees 等へ変更。
+directory = "~/worktrees"
+
+[remote]
+# herdr --remote時に一時SSH configを作り、keepalive fallbackを足す。
+# 自前SSH configだけで完全制御したいならfalse。
+manage_ssh_config = true
+
+[keys]
+prefix = "ctrl+k"
+
+focus_pane_left  = ["prefix+h", "ctrl+alt+h"]
+focus_pane_down  = ["prefix+j", "ctrl+alt+j"]
+focus_pane_up    = ["prefix+k", "ctrl+alt+k"]
+focus_pane_right = ["prefix+l", "ctrl+alt+l"]
+
+# tab移動。prefixでも直接でも使える。
+previous_tab = ["prefix+p"]
+next_tab     = ["prefix+n"]
+
+# tab作成とsplit。直接shortcutがagent/neovimと衝突したらprefixだけに戻す。
+new_tab          = ["prefix+c", "ctrl+alt+c"]
+split_vertical   = ["prefix+v", "ctrl+alt+d"]          # 右にsplit
+split_horizontal = ["prefix+minus", "ctrl+alt+shift+d"] # 下にsplit
+
+# pane拡大。
+zoom = ["prefix+;", "ctrl+alt+z"]
+
+# workspace/gotoは誤爆しにくいprefixだけでよい。
+workspace_picker = "prefix+w"
+goto = "prefix+g"
+
+# remote attach時のraw Ctrl-v画像pasteを無効化。
+# neovimのvisual blockやshell操作を優先するなら空文字が安全。
+remote_image_paste = ""
+
+[theme]
+name = "terminal"
+
+[ui]
+# sidebar幅。混在agentを見るには少し狭めで十分。
+sidebar_width = 28
+sidebar_min_width = 18
+sidebar_max_width = 36
+
+# 狭いterminalでmobile layoutへ切り替わる閾値。
+mobile_width_threshold = 64
+
+# 最初はtrue推奨。クリック/右クリック/dragで操作を覚えやすい。
+# WezTermのCmd-click URL等を最優先したいならfalseを試す。
+mouse_capture = true
+
+# Ctrl+右クリックはpane内appへ渡す。右クリック単体はHerdr menu。
+right_click_passthrough_modifier = "ctrl"
+
+# terminal復帰時に全体再描画する。表示崩れ対策を優先。
+redraw_on_focus_gained = true
+
+# mouse wheel 1ノッチあたりのscrollback行数。
+mouse_scroll_lines = 3
+
+# workspace/pane誤close対策。
+confirm_close = true
+
+# 新規tab名を毎回聞かない。必要なら後でrename。
+prompt_new_tab_name = false
+
+# pane境界は残すが、隙間は詰める。
+pane_borders = true
+pane_gaps = false
+
+# split pane上にclaude/codex/cursor等のagent labelを出す。
+# 視覚ノイズが気になるならfalse。
+show_agent_labels_on_pane_borders = true
+
+# sidebarのagent panelを「要対応順」にする。
+# repo/workspace順で見たいなら "spaces"。
+agent_panel_sort = "priority"
+
+# UI accent。theme = terminalでもaccentだけ軽く指定できる。
+accent = "cyan"
+
+[ui.toast]
+# Herdr内toastが欲しくなったら "herdr"、WezTerm通知なら "terminal" を試す。
+delivery = "herdr"
+
+# 通知を有効にした場合、状態変化から何秒待って出すか。
+delay_seconds = 1
+
+[ui.toast.herdr]
+# delivery = "herdr" の時だけ使う。
+position = "bottom-right"
+
+[ui.toast.clipboard]
+# copy完了toast。邪魔ならfalse。
+enabled = true
+position = "bottom-center"
+
+[ui.sound]
+enabled = false   # agent完了音・要入力音。静かな作業環境優先でoff。
+
+[advanced]
+# 新規paneのscrollback上限。defaultは10MiB。
+# agentやtest logを読むなら20MiBくらいに増やす。
+scrollback_limit_bytes = 20971520
+
+[session]
+# Herdr server再起動後、integrationがsession参照を持つagentをnative resumeする。
+resume_agents_on_restore = true
+
+[experimental]
+# pane内容をserver restart後にも保存する機能。
+# secret/token/promptが保存されうるので、最初はfalse推奨。
+pane_history = false
+
+# Herdr内Herdr起動の保護。testing以外はfalse。
+allow_nested = false
+
+# Kitty graphics実験機能。WezTerm通常運用ではoff。
+kitty_graphics = false
+
+# macOS + 日本語入力向け。
+# agent TUIがcursorを隠すとIME候補位置がズレることがあるため、対象agentだけcursor anchorを出す。
+reveal_hidden_cursor_for_cjk_ime = true
+cjk_ime_agents = ["claude", "codex", "cursor", "pi"]
+cjk_ime_cursor_shape = "steady_block"
+
+# macOS + 日本語入力向け。
+# prefix mode中だけASCII入力sourceへ切り替え、抜けたら戻す。
+switch_ascii_input_source_in_prefix = true
+
+[[keys.command]]
+key = "prefix+g"
+type = "pane"
+command = "lazygit"
+description = "run lazygit"
