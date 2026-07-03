@@ -33,6 +33,7 @@
     "make build",
     "make lint",
     "make fmt",
+    "git -C",
     "git status",
     "git diff",
     "git log",
