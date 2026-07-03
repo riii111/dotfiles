@@ -41,12 +41,11 @@ split_horizontal = ["prefix+minus", "ctrl+alt+shift+d"] # 下split
 zoom = ["prefix+;", "ctrl+alt+z"]  # pane拡大
 
 workspace_picker = "prefix+w"  # 誤爆防止のためprefixのみ
-goto = "prefix+g"
 
 remote_image_paste = ""  # remote attach時のraw Ctrl-v画像paste無効（neovim/shell優先）
 
-[theme]
-name = "terminal"
+# [theme]
+# name = "catpuccin"
 
 [ui]
 sidebar_width = 28      # 混在agent表示。少し狭めで十分
@@ -107,7 +106,7 @@ cjk_ime_cursor_shape = "steady_block"
 switch_ascii_input_source_in_prefix = true  # macOS+CJK: prefix mode中だけASCII入力sourceへ
 
 [[keys.command]]
-key = "prefix+l"
+key = "prefix+g"
 type = "pane"
 command = "lazygit"
 description = "run lazygit"
