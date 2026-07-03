@@ -1,10 +1,6 @@
 {
   "mcpAllowlist": [
-    "linear:get_*",
-    "linear:list_*",
-    "linear:read_*",
-    "linear:search_*",
-    "linear:view_*"
+    "linear:*"
   ],
   "terminalAllowlist": [
     "cargo build",
@@ -23,6 +19,10 @@
     "goimports",
     "npm run",
     "npm test",
+    "pnpm run",
+    "pnpm test",
+    "pnpm exec",
+    "pnpm dlx",
     "terraform fmt",
     "terraform validate",
     "terraform show",
@@ -44,6 +44,11 @@
     "git fetch",
     "git cherry",
     "git merge-tree",
+    "git commit",
+    "git add",
+    "git stash",
+    "git checkout -b",
+    "git switch -c",
     "git config --get",
     "git config --list",
     "git config --global --get",
@@ -121,6 +126,19 @@
     "touch",
     "cp",
     "mv",
+    "nix develop",
+    "nix build",
+    "nix flake show",
+    "nix flake check",
+    "nix flake metadata",
+    "chezmoi diff",
+    "chezmoi status",
+    "chezmoi data",
+    "chezmoi managed",
+    "docker ps",
+    "docker logs",
+    "docker compose ps",
+    "docker compose logs",
     "tmux list-panes -a -F",
     "tmux list-sessions"
   ],
@@ -129,7 +147,8 @@
       "Allow read-only repository inspection commands such as file search, file viewing, git history inspection, and status checks.",
       "Allow local build, lint, format, and test commands for the current project when they do not install dependencies or contact production services.",
       "Allow read-only GitHub, Linear, Terraform, gcloud, and local system inspection commands.",
-      "Allow creating or moving ordinary files inside the current workspace when the user has asked for file edits."
+      "Allow creating or moving ordinary files inside the current workspace when the user has asked for file edits.",
+      "Allow web search and documentation fetch for answering technical questions."
     ],
     "block_instructions": [
       "Ask before any command that deletes files or directories, changes ownership or permissions, or rewrites git history.",

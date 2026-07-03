@@ -8,6 +8,10 @@
       url = "github:nix-darwin/nix-darwin/master";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    herdr = {
+      url = "github:ogulcancelik/herdr/v0.7.1";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -15,6 +19,7 @@
       nixpkgs,
       zigpkgs,
       nix-darwin,
+      herdr,
       ...
     }:
     let
@@ -67,6 +72,7 @@
             done
           '';
           mkVersionEntry = name: value: { inherit name value; };
+          herdrPkg = herdr.packages.${system}.default;
           dailyCliPackages = with pkgs; [
             # Editor-integrated tooling that should exist in the normal shell too.
             _1password-cli
@@ -142,6 +148,7 @@
             ruff
             tbls
             uv
+            herdrPkg
           ];
           devShellOnlyPackages = with pkgs; [
             alejandra
