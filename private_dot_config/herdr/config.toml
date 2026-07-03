@@ -107,7 +107,7 @@ cjk_ime_cursor_shape = "steady_block"
 switch_ascii_input_source_in_prefix = true  # macOS+CJK: prefix mode中だけASCII入力sourceへ
 
 [[keys.command]]
-key = "prefix+g"
+key = "prefix+l"
 type = "pane"
 command = "lazygit"
 description = "run lazygit"
