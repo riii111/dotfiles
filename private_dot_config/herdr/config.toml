@@ -2,8 +2,8 @@
 # - 対象が違っても、同じ種類の操作は同じキー体系に寄せる。
 #   例) pane / tab / workspace / agent の移動、作成、終了、前後移動。
 # - よく使う移動や表示切替、かつ、誤操作の影響が小さいものは1キーにする。
-# - 状態を大きく変える操作はShift付きにする。
-#   例) 終了、切断、広い文脈の切替。
+# - 作成と終了は対象リソース名の頭文字に揃え、終了はShift付きにする。
+#   例) pane: p / Shift+p, tab: t / Shift+t, workspace: w / Shift+w。
 # - lazygit など外部TUIの起動は、pane内アプリの通常操作と区別するためOption付きにする。
 # - q のように外部TUIで頻出するキーは、Herdr側の終了・切断操作に使わない。
 # - WezTerm / tmux と近い割当を保ち、どの操作レイヤーでも手癖がずれないようにする。
@@ -30,16 +30,16 @@ manage_ssh_config = true  # --remote時に一時SSH config + keepalive fallback
 [keys]
 prefix = "ctrl+semicolon"
 
-focus_pane_left  = ["prefix+h", "ctrl+alt+h"]
-focus_pane_down  = ["prefix+j", "ctrl+alt+j"]
-focus_pane_up    = ["prefix+k", "ctrl+alt+k"]
-focus_pane_right = ["prefix+l", "ctrl+alt+l"]
+focus_pane_left  = ["prefix+h"]
+focus_pane_down  = ["prefix+j"]
+focus_pane_up    = ["prefix+k"]
+focus_pane_right = ["prefix+l"]
 
-previous_tab = ["prefix+p"]
-next_tab     = ["prefix+n"]
+previous_tab = ["prefix+["]
+next_tab     = ["prefix+]"]
 
-previous_workspace = "prefix+["
-next_workspace = "prefix+]"
+previous_workspace = "prefix+shift+["
+next_workspace = "prefix+shift+]"
 
 previous_agent = "prefix+,"
 next_agent = "prefix+."
@@ -47,9 +47,10 @@ next_agent = "prefix+."
 switch_workspace = "prefix+shift+1..9"
 
 # agent/neovimと衝突したら直接shortcutを外してprefixのみに
-new_tab          = ["prefix+c", "ctrl+alt+c"]
-split_vertical   = ["prefix+d", "ctrl+alt+d"]
-split_horizontal = ["prefix+shift+d", "ctrl+alt+shift+d"]
+new_workspace    = "prefix+w"
+new_tab          = ["prefix+t"]
+split_vertical   = ["prefix+p"]
+split_horizontal = ["prefix+shift+d"]
 
 copy_mode = "prefix+v"
 edit_scrollback = "prefix+shift+v"
@@ -61,7 +62,7 @@ close_workspace = "prefix+shift+w"
 zoom = ["prefix+z"]
 resize_mode = "prefix+r"
 
-workspace_picker = "prefix+w"  # 誤爆防止のためprefixのみ
+workspace_picker = "prefix+space"  # 誤爆防止のためprefixのみ
 rename_pane = ""      # close_pane の prefix+shift+p と既定値が衝突するため無効化
 rename_tab = ""       # close_tab の prefix+shift+t と既定値が衝突するため無効化
 rename_workspace = "" # close_workspace の prefix+shift+w と既定値が衝突するため無効化

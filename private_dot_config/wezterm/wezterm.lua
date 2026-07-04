@@ -310,14 +310,15 @@ config.key_tables = {
 		{ key = "K", mods = "SHIFT", action = herdr_resize_key("k") },
 		{ key = "L", mods = "SHIFT", action = herdr_resize_key("l") },
 
-		{ key = "p", action = herdr_key("p") },
-		{ key = "n", action = herdr_key("n") },
 		{ key = "[", action = herdr_key("[") },
 		{ key = "]", action = herdr_key("]") },
+		{ key = "{", mods = "SHIFT", action = herdr_shift_key("[") },
+		{ key = "}", mods = "SHIFT", action = herdr_shift_key("]") },
 		{ key = ",", action = herdr_key(",") },
 		{ key = ".", action = herdr_key(".") },
 
-		{ key = "c", action = herdr_key("c") },
+		{ key = "p", action = herdr_key("p") },
+		{ key = "t", action = herdr_key("t") },
 		{ key = "v", action = herdr_key_table("v", herdr_mode.modes.copy) },
 		{ key = "V", mods = "SHIFT", action = herdr_shift_key("v") },
 		{ key = "d", action = herdr_key("d") },
@@ -328,6 +329,7 @@ config.key_tables = {
 
 		{ key = "w", action = herdr_key_table("w", herdr_mode.modes.passthrough) },
 		{ key = "W", mods = "SHIFT", action = herdr_shift_key("w") },
+		{ key = "Space", action = herdr_key_table("Space", herdr_mode.modes.passthrough) },
 		{ key = "g", action = herdr_key_table("g", herdr_mode.modes.passthrough) },
 		{ key = "g", mods = "ALT", action = herdr_key_table("g", herdr_mode.modes.passthrough, "ALT") },
 		{ key = "?", action = herdr_key_table("?", herdr_mode.modes.passthrough) },
