@@ -2,6 +2,7 @@ local wezterm = require("wezterm")
 local act = wezterm.action
 local io = require("io")
 local os = require("os")
+local herdr_mode = require("herdr_mode")
 
 local function file_exists(path)
 	local f = io.open(path, "r")
@@ -157,28 +158,13 @@ wezterm.on("toggle-blur", function(window, _)
 	window:set_config_overrides(overrides)
 end)
 
-local HERDR_TAB_STYLES = {
-	herdr_mode = {
-		bg = "#2f4a38",
-		fg = "#c8facc",
-	},
-	herdr_passthrough_mode = {
-		bg = "#2f4a38",
-		fg = "#c8facc",
-	},
-	herdr_resize_mode = {
-		bg = "#4a3f24",
-		fg = "#e6c384",
-	},
-}
-
 -- Tab title: show process name instead of shell-set title
 wezterm.on("format-tab-title", function(tab)
 	local pane = tab.active_pane
 	local process = pane.foreground_process_name or ""
 	local name = process:match("([^/]+)$") or pane.title
 
-	local style = tab.is_active and HERDR_TAB_STYLES[wezterm.GLOBAL.herdr_active_mode] or nil
+	local style = tab.is_active and herdr_mode.styles[herdr_mode.active_mode_for_tab(tab)] or nil
 	if style then
 		return {
 			{ Background = { Color = style.bg } },
@@ -322,16 +308,12 @@ local function render_right_status(window, pane)
 		wezterm.log_error("right-status: " .. tostring(err))
 	end
 
-	if
-		active_key_table == "herdr_mode"
-		or active_key_table == "herdr_passthrough_mode"
-		or active_key_table == "herdr_resize_mode"
-	then
-		local is_resize = active_key_table == "herdr_resize_mode"
-		table.insert(segments, { Background = { Color = is_resize and "#4a3f24" or "#2f4a38" } })
-		table.insert(segments, { Foreground = { Color = is_resize and "#e6c384" or "#c8facc" } })
+	local herdr_style = herdr_mode.styles[active_key_table]
+	if herdr_style then
+		table.insert(segments, { Background = { Color = herdr_style.bg } })
+		table.insert(segments, { Foreground = { Color = herdr_style.fg } })
 		table.insert(segments, { Attribute = { Intensity = "Bold" } })
-		table.insert(segments, { Text = is_resize and " HERDR:RESIZE " or " HERDR " })
+		table.insert(segments, { Text = herdr_style.label })
 		table.insert(segments, "ResetAttributes")
 		table.insert(segments, { Background = { Color = STATUS_BG } })
 	end
@@ -392,7 +374,7 @@ wezterm.on("window-focus-changed", function(window, pane)
 end)
 
 wezterm.on("window-config-reloaded", function(window, pane)
-	wezterm.GLOBAL.herdr_active_mode = nil
+	herdr_mode.clear_all_modes()
 	pane = pane or window:active_pane()
 	if pane then
 		render_right_status(window, pane)

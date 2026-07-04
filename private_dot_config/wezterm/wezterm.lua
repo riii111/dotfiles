@@ -2,6 +2,7 @@ local wezterm = require("wezterm")
 local config = wezterm.config_builder()
 
 local keymaps = require("keymaps")
+local herdr_mode = require("herdr_mode")
 require("on")
 require("zen-mode")
 
@@ -115,27 +116,8 @@ local function is_tmux(pane)
 	return user_vars.TMUX_ACTIVE == "1"
 end
 
-local HERDR_PREFIX = "\x1b[59;5u"
-local HERDR_MODES = {
-	herdr_mode = true,
-	herdr_passthrough_mode = true,
-	herdr_resize_mode = true,
-}
-
 local function refresh_right_status(window, pane)
 	window:perform_action(act.EmitEvent("render-right-status"), pane)
-end
-
-local function show_herdr_visuals(window, mode_name)
-	if not HERDR_MODES[mode_name] then
-		return
-	end
-
-	wezterm.GLOBAL.herdr_active_mode = mode_name
-end
-
-local function clear_herdr_visuals(window)
-	wezterm.GLOBAL.herdr_active_mode = nil
 end
 
 local function activate_herdr_table(name)
@@ -144,7 +126,7 @@ local function activate_herdr_table(name)
 			act.ActivateKeyTable({ name = name, one_shot = false, replace_current = true }),
 			pane
 		)
-		show_herdr_visuals(window, name)
+		herdr_mode.set_active_mode(window, name)
 		refresh_right_status(window, pane)
 	end)
 end
@@ -152,28 +134,28 @@ end
 local function pop_herdr_table()
 	return wezterm.action_callback(function(window, pane)
 		window:perform_action(act.PopKeyTable, pane)
-		clear_herdr_visuals(window)
+		herdr_mode.clear_active_mode(window)
 		refresh_right_status(window, pane)
 	end)
 end
 
 local function herdr_key(key, mods)
 	return act.Multiple({
-		act.SendString(HERDR_PREFIX),
+		act.SendString(herdr_mode.prefix),
 		act.SendKey({ key = key, mods = mods or "NONE" }),
 	})
 end
 
 local function herdr_shift_number(n)
 	return act.Multiple({
-		act.SendString(HERDR_PREFIX),
+		act.SendString(herdr_mode.prefix),
 		act.SendString("\x1b[" .. string.byte(n) .. ";2u"),
 	})
 end
 
 local function herdr_shift_key(key)
 	return act.Multiple({
-		act.SendString(HERDR_PREFIX),
+		act.SendString(herdr_mode.prefix),
 		act.SendString("\x1b[" .. string.byte(key) .. ";2u"),
 	})
 end
@@ -185,7 +167,7 @@ local function herdr_key_table(key, table_name, mods)
 			act.ActivateKeyTable({ name = table_name, one_shot = false, replace_current = true }),
 			pane
 		)
-		show_herdr_visuals(window, table_name)
+		herdr_mode.set_active_mode(window, table_name)
 		refresh_right_status(window, pane)
 	end)
 end
@@ -194,12 +176,24 @@ local function exit_herdr_passthrough_mode(key, mods)
 	return wezterm.action_callback(function(window, pane)
 		window:perform_action(act.SendKey({ key = key, mods = mods or "NONE" }), pane)
 		window:perform_action(
-			act.ActivateKeyTable({ name = "herdr_mode", one_shot = false, replace_current = true }),
+			act.ActivateKeyTable({ name = herdr_mode.modes.main, one_shot = false, replace_current = true }),
 			pane
 		)
-		show_herdr_visuals(window, "herdr_mode")
+		herdr_mode.set_active_mode(window, herdr_mode.modes.main)
 		refresh_right_status(window, pane)
 	end)
+end
+
+local function herdr_exit_bindings(keys)
+	local bindings = {}
+	for _, key_spec in ipairs(keys) do
+		table.insert(bindings, {
+			key = key_spec.key,
+			mods = key_spec.mods,
+			action = exit_herdr_passthrough_mode(key_spec.send_key or key_spec.key, key_spec.send_mods or key_spec.mods),
+		})
+	end
+	return bindings
 end
 
 local function herdr_resize_key(key)
@@ -207,10 +201,10 @@ local function herdr_resize_key(key)
 		window:perform_action(herdr_key("r"), pane)
 		window:perform_action(act.SendKey({ key = key, mods = "NONE" }), pane)
 		window:perform_action(
-			act.ActivateKeyTable({ name = "herdr_resize_mode", one_shot = false, replace_current = true }),
+			act.ActivateKeyTable({ name = herdr_mode.modes.resize, one_shot = false, replace_current = true }),
 			pane
 		)
-		show_herdr_visuals(window, "herdr_resize_mode")
+		herdr_mode.set_active_mode(window, herdr_mode.modes.resize)
 		refresh_right_status(window, pane)
 	end)
 end
@@ -219,10 +213,10 @@ local function exit_herdr_resize_mode()
 	return wezterm.action_callback(function(window, pane)
 		window:perform_action(act.SendKey({ key = "Escape" }), pane)
 		window:perform_action(
-			act.ActivateKeyTable({ name = "herdr_mode", one_shot = false, replace_current = true }),
+			act.ActivateKeyTable({ name = herdr_mode.modes.main, one_shot = false, replace_current = true }),
 			pane
 		)
-		show_herdr_visuals(window, "herdr_mode")
+		herdr_mode.set_active_mode(window, herdr_mode.modes.main)
 		refresh_right_status(window, pane)
 	end)
 end
@@ -232,13 +226,13 @@ table.insert(keymaps, {
 	mods = "CTRL",
 	action = wezterm.action_callback(function(window, pane)
 		if is_tmux(pane) then
-			window:perform_action(act.SendString(HERDR_PREFIX), pane)
+			window:perform_action(act.SendString(herdr_mode.prefix), pane)
 		else
 			window:perform_action(
-				act.ActivateKeyTable({ name = "herdr_mode", one_shot = false, replace_current = true }),
+				act.ActivateKeyTable({ name = herdr_mode.modes.main, one_shot = false, replace_current = true }),
 				pane
 			)
-			show_herdr_visuals(window, "herdr_mode")
+			herdr_mode.set_active_mode(window, herdr_mode.modes.main)
 			refresh_right_status(window, pane)
 		end
 	end),
@@ -302,9 +296,9 @@ table.insert(copy_mode, {
 
 config.key_tables = {
 	copy_mode = copy_mode,
-	herdr_mode = {
+	[herdr_mode.modes.main] = {
 		{ key = "Escape", action = pop_herdr_table() },
-		{ key = ";", mods = "CTRL", action = activate_herdr_table("herdr_mode") },
+		{ key = ";", mods = "CTRL", action = activate_herdr_table(herdr_mode.modes.main) },
 
 		{ key = "h", action = herdr_key("h") },
 		{ key = "j", action = herdr_key("j") },
@@ -324,20 +318,20 @@ config.key_tables = {
 		{ key = ".", action = herdr_key(".") },
 
 		{ key = "c", action = herdr_key("c") },
-		{ key = "v", action = herdr_key_table("v", "herdr_passthrough_mode") },
+		{ key = "v", action = herdr_key_table("v", herdr_mode.modes.copy) },
 		{ key = "V", mods = "SHIFT", action = herdr_shift_key("v") },
 		{ key = "d", action = herdr_key("d") },
 		{ key = "D", mods = "SHIFT", action = herdr_shift_key("d") },
 		{ key = "X", mods = "SHIFT", action = herdr_shift_key("x") },
 		{ key = "z", action = herdr_key("z") },
 
-		{ key = "w", action = herdr_key_table("w", "herdr_passthrough_mode") },
+		{ key = "w", action = herdr_key_table("w", herdr_mode.modes.passthrough) },
 		{ key = "W", mods = "SHIFT", action = herdr_shift_key("w") },
-		{ key = "g", action = herdr_key_table("g", "herdr_passthrough_mode") },
-		{ key = "g", mods = "ALT", action = herdr_key_table("g", "herdr_passthrough_mode", "ALT") },
-		{ key = "?", action = herdr_key_table("?", "herdr_passthrough_mode") },
-		{ key = "s", action = herdr_key_table("s", "herdr_passthrough_mode") },
-		{ key = "r", action = herdr_key_table("r", "herdr_resize_mode") },
+		{ key = "g", action = herdr_key_table("g", herdr_mode.modes.passthrough) },
+		{ key = "g", mods = "ALT", action = herdr_key_table("g", herdr_mode.modes.passthrough, "ALT") },
+		{ key = "?", action = herdr_key_table("?", herdr_mode.modes.passthrough) },
+		{ key = "s", action = herdr_key_table("s", herdr_mode.modes.passthrough) },
+		{ key = "r", action = herdr_key_table("r", herdr_mode.modes.resize) },
 		{ key = "R", mods = "SHIFT", action = herdr_shift_key("r") },
 		{ key = "O", mods = "SHIFT", action = herdr_shift_key("o") },
 		{ key = "E", mods = "SHIFT", action = herdr_shift_key("e") },
@@ -352,12 +346,9 @@ config.key_tables = {
 		{ key = "8", action = herdr_shift_number("8") },
 		{ key = "9", action = herdr_shift_number("9") },
 	},
-	herdr_passthrough_mode = {
-		{ key = "Escape", action = exit_herdr_passthrough_mode("Escape") },
-		{ key = "Enter", action = exit_herdr_passthrough_mode("Enter") },
-		{ key = "q", action = exit_herdr_passthrough_mode("q") },
-	},
-	herdr_resize_mode = {
+	[herdr_mode.modes.copy] = herdr_exit_bindings(herdr_mode.copy_exit_keys),
+	[herdr_mode.modes.passthrough] = herdr_exit_bindings(herdr_mode.passthrough_exit_keys),
+	[herdr_mode.modes.resize] = {
 		{ key = "Escape", action = exit_herdr_resize_mode() },
 		{ key = "Enter", action = exit_herdr_resize_mode() },
 		{ key = ";", mods = "CTRL", action = exit_herdr_resize_mode() },
