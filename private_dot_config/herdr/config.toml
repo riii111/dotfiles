@@ -51,6 +51,7 @@ new_tab          = ["prefix+c", "ctrl+alt+c"]
 split_vertical   = ["prefix+d", "ctrl+alt+d"]           # 右split
 split_horizontal = ["prefix+shift+d", "ctrl+alt+shift+d"] # 下split
 
+copy_mode = "prefix+v"
 edit_scrollback = "prefix+shift+v"
 detach = "prefix+shift+o"
 close_pane = "prefix+shift+x"

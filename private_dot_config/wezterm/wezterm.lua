@@ -311,7 +311,7 @@ config.key_tables = {
 		{ key = ".", action = herdr_key(".") },
 
 		{ key = "c", action = herdr_key("c") },
-		{ key = "v", action = act.ActivateCopyMode },
+		{ key = "v", action = herdr_key("v") },
 		{ key = "V", mods = "SHIFT", action = herdr_shift_key("v") },
 		{ key = "d", action = herdr_key("d") },
 		{ key = "D", mods = "SHIFT", action = herdr_shift_key("d") },
