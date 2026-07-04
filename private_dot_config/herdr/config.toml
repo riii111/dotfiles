@@ -38,7 +38,7 @@ new_tab          = ["prefix+c", "ctrl+alt+c"]
 split_vertical   = ["prefix+v", "ctrl+alt+d"]           # 右split
 split_horizontal = ["prefix+minus", "ctrl+alt+shift+d"] # 下split
 
-zoom = ["prefix+;", "ctrl+alt+z"]  # pane拡大
+zoom = ["prefix+z"]  # pane拡大
 
 workspace_picker = "prefix+w"  # 誤爆防止のためprefixのみ
 
