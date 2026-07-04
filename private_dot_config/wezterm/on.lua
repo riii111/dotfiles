@@ -284,6 +284,7 @@ end
 
 local function render_right_status(window, pane)
 	local segments = {}
+	local active_key_table = window:active_key_table()
 	local git_info = nil
 	local ok, err = pcall(function()
 		local cwd = cwd_to_path(pane:get_current_working_dir())
@@ -294,7 +295,17 @@ local function render_right_status(window, pane)
 		wezterm.log_error("right-status: " .. tostring(err))
 	end
 
+	if active_key_table == "herdr_mode" then
+		table.insert(segments, { Foreground = { Color = "#9ece6a" } })
+		table.insert(segments, { Text = " HERDR" })
+	end
+
 	if git_info then
+		if #segments > 0 then
+			table.insert(segments, { Foreground = { Color = "#565f89" } })
+			table.insert(segments, { Text = "  " .. SEP .. "  " })
+		end
+
 		table.insert(segments, { Foreground = { Color = "#c0caf5" } })
 		table.insert(segments, { Text = "  " .. git_info.repo })
 

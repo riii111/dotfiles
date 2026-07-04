@@ -132,6 +132,28 @@ table.insert(keymaps, {
 	end),
 })
 
+local HERDR_PREFIX = "\x1b[59;5u"
+
+local function herdr_key(key, mods)
+	return act.Multiple({
+		act.SendString(HERDR_PREFIX),
+		act.SendKey({ key = key, mods = mods or "NONE" }),
+	})
+end
+
+local function herdr_shift_number(n)
+	return act.Multiple({
+		act.SendString(HERDR_PREFIX),
+		act.SendString("\x1b[" .. string.byte(n) .. ";2u"),
+	})
+end
+
+table.insert(keymaps, {
+	key = ";",
+	mods = "CTRL",
+	action = act.ActivateKeyTable({ name = "herdr_mode", one_shot = false }),
+})
+
 ---------------------------------------------------------------
 -- Key bindings
 ---------------------------------------------------------------
@@ -190,6 +212,43 @@ table.insert(copy_mode, {
 
 config.key_tables = {
 	copy_mode = copy_mode,
+	herdr_mode = {
+		{ key = "Escape", action = "PopKeyTable" },
+		{ key = "q", action = "PopKeyTable" },
+
+		{ key = "h", action = herdr_key("h") },
+		{ key = "j", action = herdr_key("j") },
+		{ key = "k", action = herdr_key("k") },
+		{ key = "l", action = herdr_key("l") },
+
+		{ key = "p", action = herdr_key("p") },
+		{ key = "n", action = herdr_key("n") },
+		{ key = ",", action = herdr_key(",") },
+		{ key = ".", action = herdr_key(".") },
+
+		{ key = "c", action = herdr_key("c") },
+		{ key = "v", action = herdr_key("v") },
+		{ key = "-", action = herdr_key("-") },
+		{ key = "x", action = herdr_key("x") },
+		{ key = "z", action = herdr_key("z") },
+
+		{ key = "w", action = herdr_key("w") },
+		{ key = "g", action = herdr_key("g") },
+		{ key = "?", action = herdr_key("?") },
+		{ key = "s", action = herdr_key("s") },
+		{ key = "r", action = herdr_key("r") },
+		{ key = "d", action = herdr_key("q") },
+
+		{ key = "1", action = herdr_shift_number("1") },
+		{ key = "2", action = herdr_shift_number("2") },
+		{ key = "3", action = herdr_shift_number("3") },
+		{ key = "4", action = herdr_shift_number("4") },
+		{ key = "5", action = herdr_shift_number("5") },
+		{ key = "6", action = herdr_shift_number("6") },
+		{ key = "7", action = herdr_shift_number("7") },
+		{ key = "8", action = herdr_shift_number("8") },
+		{ key = "9", action = herdr_shift_number("9") },
+	},
 	leader = {
 		{ key = "f", action = act.Search("CurrentSelectionOrEmptyString") },
 		{ key = "v", action = act.ActivateCopyMode },
