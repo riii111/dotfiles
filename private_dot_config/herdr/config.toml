@@ -89,7 +89,7 @@ redraw_on_focus_gained = true  # terminal復帰時の表示崩れ対策
 mouse_scroll_lines = 3  # wheel 1ノッチあたりのscrollback行数
 
 confirm_close = true        # workspace/pane誤close対策
-prompt_new_tab_name = false # 新規tab名は後でrename
+# prompt_new_tab_name = false # 新規tab名は後でrename
 
 pane_borders = true  # 境界は残す
 pane_gaps = false    # 隙間は詰める
