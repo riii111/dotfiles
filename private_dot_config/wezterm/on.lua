@@ -157,16 +157,39 @@ wezterm.on("toggle-blur", function(window, _)
 	window:set_config_overrides(overrides)
 end)
 
+local HERDR_TAB_STYLES = {
+	herdr_mode = {
+		bg = "#2f4a38",
+		fg = "#c8facc",
+	},
+	herdr_resize_mode = {
+		bg = "#4a3f24",
+		fg = "#e6c384",
+	},
+}
+
 -- Tab title: show process name instead of shell-set title
 wezterm.on("format-tab-title", function(tab)
 	local pane = tab.active_pane
 	local process = pane.foreground_process_name or ""
 	local name = process:match("([^/]+)$") or pane.title
+
+	local style = tab.is_active and HERDR_TAB_STYLES[wezterm.GLOBAL.herdr_active_mode] or nil
+	if style then
+		return {
+			{ Background = { Color = style.bg } },
+			{ Foreground = { Color = style.fg } },
+			{ Attribute = { Intensity = "Bold" } },
+			{ Text = " " .. name .. " " },
+		}
+	end
+
 	return " " .. name .. " "
 end)
 
 -- Right status: repo, git ref, flags, time
 local SEP = "\u{e0b3}"
+local STATUS_BG = "#1f1f28"
 local git_info_cache = {}
 local git_info_cache_last_gc = 0
 
@@ -296,8 +319,13 @@ local function render_right_status(window, pane)
 	end
 
 	if active_key_table == "herdr_mode" or active_key_table == "herdr_resize_mode" then
-		table.insert(segments, { Foreground = { Color = "#9ece6a" } })
-		table.insert(segments, { Text = active_key_table == "herdr_resize_mode" and " HERDR:RESIZE" or " HERDR" })
+		local is_resize = active_key_table == "herdr_resize_mode"
+		table.insert(segments, { Background = { Color = is_resize and "#4a3f24" or "#2f4a38" } })
+		table.insert(segments, { Foreground = { Color = is_resize and "#e6c384" or "#c8facc" } })
+		table.insert(segments, { Attribute = { Intensity = "Bold" } })
+		table.insert(segments, { Text = is_resize and " HERDR:RESIZE " or " HERDR " })
+		table.insert(segments, "ResetAttributes")
+		table.insert(segments, { Background = { Color = STATUS_BG } })
 	end
 
 	if git_info then
@@ -356,6 +384,7 @@ wezterm.on("window-focus-changed", function(window, pane)
 end)
 
 wezterm.on("window-config-reloaded", function(window, pane)
+	wezterm.GLOBAL.herdr_active_mode = nil
 	pane = pane or window:active_pane()
 	if pane then
 		render_right_status(window, pane)

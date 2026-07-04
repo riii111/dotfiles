@@ -38,8 +38,14 @@ switch_workspace = "prefix+shift+1..9"
 
 # agent/neovimと衝突したら直接shortcutを外してprefixのみに
 new_tab          = ["prefix+c", "ctrl+alt+c"]
-split_vertical   = ["prefix+v", "ctrl+alt+d"]           # 右split
-split_horizontal = ["prefix+minus", "ctrl+alt+shift+d"] # 下split
+split_vertical   = ["prefix+d", "ctrl+alt+d"]           # 右split
+split_horizontal = ["prefix+shift+d", "ctrl+alt+shift+d"] # 下split
+
+edit_scrollback = "prefix+shift+v"
+detach = "prefix+shift+o"
+close_pane = "prefix+shift+x"
+close_tab = "prefix+shift+w"
+close_workspace = "prefix+shift+e"
 
 zoom = ["prefix+z"]  # pane拡大
 resize_mode = "prefix+r"
@@ -111,7 +117,7 @@ cjk_ime_cursor_shape = "steady_block"
 switch_ascii_input_source_in_prefix = true  # macOS+CJK: prefix mode中だけASCII入力sourceへ
 
 [[keys.command]]
-key = "prefix+g"
+key = "prefix+alt+g"
 type = "pane"
 command = "lazygit"
 description = "run lazygit"

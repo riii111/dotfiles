@@ -106,9 +106,7 @@ config.use_ime = true
 config.macos_forward_to_ime_modifier_mask = "SHIFT"
 
 ---------------------------------------------------------------
--- Ctrl+Q: tmux-aware prefix / leader
--- In tmux  → pass through as tmux prefix
--- Outside → activate WezTerm leader key table
+-- Ctrl+; routes to the active multiplexer layer.
 ---------------------------------------------------------------
 local act = wezterm.action
 
@@ -117,25 +115,26 @@ local function is_tmux(pane)
 	return user_vars.TMUX_ACTIVE == "1"
 end
 
-table.insert(keymaps, {
-	key = "q",
-	mods = "CTRL",
-	action = wezterm.action_callback(function(window, pane)
-		if is_tmux(pane) then
-			window:perform_action(act.SendKey({ key = "q", mods = "CTRL" }), pane)
-		else
-			window:perform_action(
-				act.ActivateKeyTable({ name = "leader", one_shot = true, timeout_milliseconds = 2000 }),
-				pane
-			)
-		end
-	end),
-})
-
 local HERDR_PREFIX = "\x1b[59;5u"
+local HERDR_MODES = {
+	herdr_mode = true,
+	herdr_resize_mode = true,
+}
 
 local function refresh_right_status(window, pane)
 	window:perform_action(act.EmitEvent("render-right-status"), pane)
+end
+
+local function show_herdr_visuals(window, mode_name)
+	if not HERDR_MODES[mode_name] then
+		return
+	end
+
+	wezterm.GLOBAL.herdr_active_mode = mode_name
+end
+
+local function clear_herdr_visuals(window)
+	wezterm.GLOBAL.herdr_active_mode = nil
 end
 
 local function activate_herdr_table(name)
@@ -144,6 +143,7 @@ local function activate_herdr_table(name)
 			act.ActivateKeyTable({ name = name, one_shot = false, replace_current = true }),
 			pane
 		)
+		show_herdr_visuals(window, name)
 		refresh_right_status(window, pane)
 	end)
 end
@@ -151,6 +151,7 @@ end
 local function pop_herdr_table()
 	return wezterm.action_callback(function(window, pane)
 		window:perform_action(act.PopKeyTable, pane)
+		clear_herdr_visuals(window)
 		refresh_right_status(window, pane)
 	end)
 end
@@ -183,6 +184,7 @@ local function herdr_key_table(key, table_name)
 			act.ActivateKeyTable({ name = table_name, one_shot = false, replace_current = true }),
 			pane
 		)
+		show_herdr_visuals(window, table_name)
 		refresh_right_status(window, pane)
 	end)
 end
@@ -195,6 +197,7 @@ local function herdr_resize_key(key)
 			act.ActivateKeyTable({ name = "herdr_resize_mode", one_shot = false, replace_current = true }),
 			pane
 		)
+		show_herdr_visuals(window, "herdr_resize_mode")
 		refresh_right_status(window, pane)
 	end)
 end
@@ -202,7 +205,11 @@ end
 local function exit_herdr_resize_mode()
 	return wezterm.action_callback(function(window, pane)
 		window:perform_action(act.SendKey({ key = "Escape" }), pane)
-		window:perform_action(act.PopKeyTable, pane)
+		window:perform_action(
+			act.ActivateKeyTable({ name = "herdr_mode", one_shot = false, replace_current = true }),
+			pane
+		)
+		show_herdr_visuals(window, "herdr_mode")
 		refresh_right_status(window, pane)
 	end)
 end
@@ -210,7 +217,18 @@ end
 table.insert(keymaps, {
 	key = ";",
 	mods = "CTRL",
-	action = activate_herdr_table("herdr_mode"),
+	action = wezterm.action_callback(function(window, pane)
+		if is_tmux(pane) then
+			window:perform_action(act.SendString(HERDR_PREFIX), pane)
+		else
+			window:perform_action(
+				act.ActivateKeyTable({ name = "herdr_mode", one_shot = false, replace_current = true }),
+				pane
+			)
+			show_herdr_visuals(window, "herdr_mode")
+			refresh_right_status(window, pane)
+		end
+	end),
 })
 
 ---------------------------------------------------------------
@@ -293,19 +311,22 @@ config.key_tables = {
 		{ key = ".", action = herdr_key(".") },
 
 		{ key = "c", action = herdr_key("c") },
-		{ key = "v", action = herdr_key("v") },
-		{ key = "-", action = herdr_key("-") },
-		{ key = "x", action = herdr_key("x") },
+		{ key = "v", action = act.ActivateCopyMode },
+		{ key = "V", mods = "SHIFT", action = herdr_shift_key("v") },
+		{ key = "d", action = herdr_key("d") },
+		{ key = "D", mods = "SHIFT", action = herdr_shift_key("d") },
+		{ key = "X", mods = "SHIFT", action = herdr_shift_key("x") },
 		{ key = "z", action = herdr_key("z") },
 
 		{ key = "w", action = herdr_key("w") },
-		{ key = "g", action = herdr_key("g") },
+		{ key = "W", mods = "SHIFT", action = herdr_shift_key("w") },
+		{ key = "g", mods = "ALT", action = herdr_key("g", "ALT") },
 		{ key = "?", action = herdr_key("?") },
 		{ key = "s", action = herdr_key("s") },
 		{ key = "r", action = herdr_key_table("r", "herdr_resize_mode") },
 		{ key = "R", mods = "SHIFT", action = herdr_shift_key("r") },
-		{ key = "q", action = herdr_key("q") },
-		{ key = "d", action = herdr_key("q") },
+		{ key = "O", mods = "SHIFT", action = herdr_shift_key("o") },
+		{ key = "E", mods = "SHIFT", action = herdr_shift_key("e") },
 
 		{ key = "1", action = herdr_shift_number("1") },
 		{ key = "2", action = herdr_shift_number("2") },
