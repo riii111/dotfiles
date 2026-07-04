@@ -28,6 +28,9 @@ focus_pane_right = ["prefix+l", "ctrl+alt+l"]
 previous_tab = ["prefix+p"]  # prefixまたは直接
 next_tab     = ["prefix+n"]
 
+previous_workspace = "prefix+["
+next_workspace = "prefix+]"
+
 previous_agent = "prefix+,"
 next_agent = "prefix+."
 
@@ -39,13 +42,15 @@ split_vertical   = ["prefix+v", "ctrl+alt+d"]           # 右split
 split_horizontal = ["prefix+minus", "ctrl+alt+shift+d"] # 下split
 
 zoom = ["prefix+z"]  # pane拡大
+resize_mode = "prefix+r"
 
 workspace_picker = "prefix+w"  # 誤爆防止のためprefixのみ
 
 remote_image_paste = ""  # remote attach時のraw Ctrl-v画像paste無効（neovim/shell優先）
 
-# [theme]
-# name = "catpuccin"
+[theme]
+name = "rose-pine"
+auto_switch = false
 
 [ui]
 sidebar_width = 28      # 混在agent表示。少し狭めで十分

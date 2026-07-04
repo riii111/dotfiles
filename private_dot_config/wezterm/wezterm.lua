@@ -134,6 +134,27 @@ table.insert(keymaps, {
 
 local HERDR_PREFIX = "\x1b[59;5u"
 
+local function refresh_right_status(window, pane)
+	window:perform_action(act.EmitEvent("render-right-status"), pane)
+end
+
+local function activate_herdr_table(name)
+	return wezterm.action_callback(function(window, pane)
+		window:perform_action(
+			act.ActivateKeyTable({ name = name, one_shot = false, replace_current = true }),
+			pane
+		)
+		refresh_right_status(window, pane)
+	end)
+end
+
+local function pop_herdr_table()
+	return wezterm.action_callback(function(window, pane)
+		window:perform_action(act.PopKeyTable, pane)
+		refresh_right_status(window, pane)
+	end)
+end
+
 local function herdr_key(key, mods)
 	return act.Multiple({
 		act.SendString(HERDR_PREFIX),
@@ -148,10 +169,48 @@ local function herdr_shift_number(n)
 	})
 end
 
+local function herdr_shift_key(key)
+	return act.Multiple({
+		act.SendString(HERDR_PREFIX),
+		act.SendString("\x1b[" .. string.byte(key) .. ";2u"),
+	})
+end
+
+local function herdr_key_table(key, table_name)
+	return wezterm.action_callback(function(window, pane)
+		window:perform_action(herdr_key(key), pane)
+		window:perform_action(
+			act.ActivateKeyTable({ name = table_name, one_shot = false, replace_current = true }),
+			pane
+		)
+		refresh_right_status(window, pane)
+	end)
+end
+
+local function herdr_resize_key(key)
+	return wezterm.action_callback(function(window, pane)
+		window:perform_action(herdr_key("r"), pane)
+		window:perform_action(act.SendKey({ key = key, mods = "NONE" }), pane)
+		window:perform_action(
+			act.ActivateKeyTable({ name = "herdr_resize_mode", one_shot = false, replace_current = true }),
+			pane
+		)
+		refresh_right_status(window, pane)
+	end)
+end
+
+local function exit_herdr_resize_mode()
+	return wezterm.action_callback(function(window, pane)
+		window:perform_action(act.SendKey({ key = "Escape" }), pane)
+		window:perform_action(act.PopKeyTable, pane)
+		refresh_right_status(window, pane)
+	end)
+end
+
 table.insert(keymaps, {
 	key = ";",
 	mods = "CTRL",
-	action = act.ActivateKeyTable({ name = "herdr_mode", one_shot = false }),
+	action = activate_herdr_table("herdr_mode"),
 })
 
 ---------------------------------------------------------------
@@ -213,16 +272,23 @@ table.insert(copy_mode, {
 config.key_tables = {
 	copy_mode = copy_mode,
 	herdr_mode = {
-		{ key = "Escape", action = "PopKeyTable" },
-		{ key = "q", action = "PopKeyTable" },
+		{ key = "Escape", action = pop_herdr_table() },
+		{ key = ";", mods = "CTRL", action = activate_herdr_table("herdr_mode") },
 
 		{ key = "h", action = herdr_key("h") },
 		{ key = "j", action = herdr_key("j") },
 		{ key = "k", action = herdr_key("k") },
 		{ key = "l", action = herdr_key("l") },
 
+		{ key = "H", mods = "SHIFT", action = herdr_resize_key("h") },
+		{ key = "J", mods = "SHIFT", action = herdr_resize_key("j") },
+		{ key = "K", mods = "SHIFT", action = herdr_resize_key("k") },
+		{ key = "L", mods = "SHIFT", action = herdr_resize_key("l") },
+
 		{ key = "p", action = herdr_key("p") },
 		{ key = "n", action = herdr_key("n") },
+		{ key = "[", action = herdr_key("[") },
+		{ key = "]", action = herdr_key("]") },
 		{ key = ",", action = herdr_key(",") },
 		{ key = ".", action = herdr_key(".") },
 
@@ -236,7 +302,9 @@ config.key_tables = {
 		{ key = "g", action = herdr_key("g") },
 		{ key = "?", action = herdr_key("?") },
 		{ key = "s", action = herdr_key("s") },
-		{ key = "r", action = herdr_key("r") },
+		{ key = "r", action = herdr_key_table("r", "herdr_resize_mode") },
+		{ key = "R", mods = "SHIFT", action = herdr_shift_key("r") },
+		{ key = "q", action = herdr_key("q") },
 		{ key = "d", action = herdr_key("q") },
 
 		{ key = "1", action = herdr_shift_number("1") },
@@ -248,6 +316,21 @@ config.key_tables = {
 		{ key = "7", action = herdr_shift_number("7") },
 		{ key = "8", action = herdr_shift_number("8") },
 		{ key = "9", action = herdr_shift_number("9") },
+	},
+	herdr_resize_mode = {
+		{ key = "Escape", action = exit_herdr_resize_mode() },
+		{ key = "Enter", action = exit_herdr_resize_mode() },
+		{ key = ";", mods = "CTRL", action = exit_herdr_resize_mode() },
+		{ key = "r", action = exit_herdr_resize_mode() },
+
+		{ key = "h", action = act.SendKey({ key = "h" }) },
+		{ key = "j", action = act.SendKey({ key = "j" }) },
+		{ key = "k", action = act.SendKey({ key = "k" }) },
+		{ key = "l", action = act.SendKey({ key = "l" }) },
+		{ key = "LeftArrow", action = act.SendKey({ key = "LeftArrow" }) },
+		{ key = "DownArrow", action = act.SendKey({ key = "DownArrow" }) },
+		{ key = "UpArrow", action = act.SendKey({ key = "UpArrow" }) },
+		{ key = "RightArrow", action = act.SendKey({ key = "RightArrow" }) },
 	},
 	leader = {
 		{ key = "f", action = act.Search("CurrentSelectionOrEmptyString") },

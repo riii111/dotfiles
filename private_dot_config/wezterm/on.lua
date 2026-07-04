@@ -295,9 +295,9 @@ local function render_right_status(window, pane)
 		wezterm.log_error("right-status: " .. tostring(err))
 	end
 
-	if active_key_table == "herdr_mode" then
+	if active_key_table == "herdr_mode" or active_key_table == "herdr_resize_mode" then
 		table.insert(segments, { Foreground = { Color = "#9ece6a" } })
-		table.insert(segments, { Text = " HERDR" })
+		table.insert(segments, { Text = active_key_table == "herdr_resize_mode" and " HERDR:RESIZE" or " HERDR" })
 	end
 
 	if git_info then
@@ -345,6 +345,10 @@ end
 
 wezterm.on("update-right-status", function(window, pane)
 	render_right_status(window, pane)
+end)
+
+wezterm.on("render-right-status", function(window, pane)
+	render_right_status(window, pane or window:active_pane())
 end)
 
 wezterm.on("window-focus-changed", function(window, pane)
