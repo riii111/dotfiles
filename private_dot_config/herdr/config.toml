@@ -22,7 +22,7 @@ shell_mode = "auto"
 new_cwd = "follow"  # 元pane/workspaceのcwdを引き継ぐ（repo作業向け）
 
 [worktrees]
-directory = "~/worktrees"  # Git worktree作成先。repo内を汚さないなら外側（~/src/worktrees 等）
+directory = "~/worktrees"
 
 [remote]
 manage_ssh_config = true  # --remote時に一時SSH config + keepalive fallback。自前管理ならfalse
@@ -35,7 +35,7 @@ focus_pane_down  = ["prefix+j", "ctrl+alt+j"]
 focus_pane_up    = ["prefix+k", "ctrl+alt+k"]
 focus_pane_right = ["prefix+l", "ctrl+alt+l"]
 
-previous_tab = ["prefix+p"]  # prefixまたは直接
+previous_tab = ["prefix+p"]
 next_tab     = ["prefix+n"]
 
 previous_workspace = "prefix+["
@@ -48,8 +48,8 @@ switch_workspace = "prefix+shift+1..9"
 
 # agent/neovimと衝突したら直接shortcutを外してprefixのみに
 new_tab          = ["prefix+c", "ctrl+alt+c"]
-split_vertical   = ["prefix+d", "ctrl+alt+d"]           # 右split
-split_horizontal = ["prefix+shift+d", "ctrl+alt+shift+d"] # 下split
+split_vertical   = ["prefix+d", "ctrl+alt+d"]
+split_horizontal = ["prefix+shift+d", "ctrl+alt+shift+d"]
 
 copy_mode = "prefix+v"
 edit_scrollback = "prefix+shift+v"
@@ -58,7 +58,7 @@ close_pane = "prefix+shift+x"
 close_tab = "prefix+shift+w"
 close_workspace = "prefix+shift+e"
 
-zoom = ["prefix+z"]  # pane拡大
+zoom = ["prefix+z"]
 resize_mode = "prefix+r"
 
 workspace_picker = "prefix+w"  # 誤爆防止のためprefixのみ
