@@ -12,20 +12,20 @@
 channel = "stable"
 
 version_check = false
-manifest_check = true  # agent manifest更新チェック（新CLI対応を拾う）
+manifest_check = true  # 新CLI対応を拾う
 
 [terminal]
 default_shell = "zsh"
 
 shell_mode = "auto"
 
-new_cwd = "follow"  # 元pane/workspaceのcwdを引き継ぐ（repo作業向け）
+new_cwd = "follow"  # 元pane/workspaceのcwdを引き継ぐ
 
 [worktrees]
 directory = "~/worktrees"
 
 [remote]
-manage_ssh_config = true  # --remote時に一時SSH config + keepalive fallback。自前管理ならfalse
+manage_ssh_config = true  # --remote時に一時SSH config + keepalive fallback
 
 [keys]
 prefix = "ctrl+semicolon"
@@ -71,7 +71,7 @@ name = "rose-pine"
 auto_switch = false
 
 [ui]
-sidebar_width = 28      # 混在agent表示。少し狭めで十分
+sidebar_width = 28      # 少し狭めで十分
 sidebar_min_width = 18
 sidebar_max_width = 36
 
@@ -105,14 +105,14 @@ delay_seconds = 1
 position = "bottom-right"  # delivery="herdr" の時のみ
 
 [ui.toast.clipboard]
-enabled = true             # copy完了toast。邪魔ならfalse
+enabled = true             # copy完了toast
 position = "bottom-center"
 
 [ui.sound]
 enabled = false
 
 [advanced]
-scrollback_limit_bytes = 20971520  # default 10MiB。agent/test log読むなら20MiB程度
+scrollback_limit_bytes = 20971520  # agent/test log読むなら20MiB程度まで引き上げとく
 
 [session]
 resume_agents_on_restore = true  # server再起動後、session参照を持つagentをnative resume
