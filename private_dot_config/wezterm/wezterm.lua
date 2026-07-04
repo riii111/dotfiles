@@ -322,7 +322,8 @@ config.key_tables = {
 		{ key = "V", mods = "SHIFT", action = herdr_shift_key("v") },
 		{ key = "d", action = herdr_key("d") },
 		{ key = "D", mods = "SHIFT", action = herdr_shift_key("d") },
-		{ key = "X", mods = "SHIFT", action = herdr_shift_key("x") },
+		{ key = "P", mods = "SHIFT", action = herdr_shift_key("p") },
+		{ key = "T", mods = "SHIFT", action = herdr_shift_key("t") },
 		{ key = "z", action = herdr_key("z") },
 
 		{ key = "w", action = herdr_key_table("w", herdr_mode.modes.passthrough) },
@@ -334,7 +335,6 @@ config.key_tables = {
 		{ key = "r", action = herdr_key_table("r", herdr_mode.modes.resize) },
 		{ key = "R", mods = "SHIFT", action = herdr_shift_key("r") },
 		{ key = "O", mods = "SHIFT", action = herdr_shift_key("o") },
-		{ key = "E", mods = "SHIFT", action = herdr_shift_key("e") },
 
 		{ key = "1", action = herdr_shift_number("1") },
 		{ key = "2", action = herdr_shift_number("2") },
