@@ -118,6 +118,10 @@ end
 
 local function refresh_right_status(window, pane)
 	window:perform_action(act.EmitEvent("render-right-status"), pane)
+	-- Herdr focus hooks update the git cache just after key handling.
+	wezterm.time.call_after(0.2, function()
+		window:perform_action(act.EmitEvent("render-right-status"), pane)
+	end)
 end
 
 local function activate_herdr_table(name)

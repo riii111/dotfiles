@@ -180,68 +180,17 @@ end)
 -- Right status: repo, git ref, flags, time
 local SEP = "\u{e0b3}"
 local STATUS_BG = "#1f1f28"
-local git_info_cache = {}
-local git_info_cache_last_gc = 0
-local herdr_cwd_cache = { at = 0, cwd = nil }
+local git_info_by_pane = {}
+local herdr_git_info_by_pane_id = {}
+local herdr_focused_git_info = nil
+local herdr_focused_payload_at = nil
+local GIT_INFO_MAX_ENTRIES = 200
+local GIT_INFO_MAX_AGE_SECONDS = 3600
 
 local FLAG_BADGES = {
 	R = { text = " REBASE", color = "#ff9e64" },
 	C = { text = " PICK", color = "#ff9e64" },
 }
-
-local function prune_git_info_cache(now)
-	if now - git_info_cache_last_gc < 300 then
-		return
-	end
-
-	for cwd, entry in pairs(git_info_cache) do
-		if now - entry.at > 60 then
-			git_info_cache[cwd] = nil
-		end
-	end
-
-	git_info_cache_last_gc = now
-end
-
-local function cwd_to_path(cwd_uri)
-	if not cwd_uri then
-		return nil
-	end
-
-	if type(cwd_uri) == "table" or type(cwd_uri) == "userdata" then
-		return cwd_uri.file_path or cwd_uri.path
-	end
-
-	local cwd = tostring(cwd_uri)
-	if cwd:match("^file://") then
-		cwd = cwd:gsub("^file://[^/]*", "")
-		cwd = cwd:gsub("%%(%x%x)", function(hex)
-			return string.char(tonumber(hex, 16))
-		end)
-	end
-	return cwd
-end
-
-local function command_path(name)
-	local home = os.getenv("HOME") or ""
-	local candidates = {
-		home .. "/.nix-profile/bin/" .. name,
-		"/opt/homebrew/bin/" .. name,
-		"/usr/local/bin/" .. name,
-		name,
-	}
-
-	for _, path in ipairs(candidates) do
-		if path == name or file_exists(path) then
-			return path
-		end
-	end
-	return nil
-end
-
-local function unescape_json_string(value)
-	return value:gsub("\\/", "/"):gsub('\\"', '"'):gsub("\\\\", "\\")
-end
 
 local function get_foreground_process_name(pane)
 	local ok, process = pcall(function()
@@ -257,107 +206,193 @@ local function is_herdr_pane(pane)
 	return get_foreground_process_name(pane) == "herdr"
 end
 
-local function get_focused_herdr_cwd()
-	local now = os.time()
-	if now - herdr_cwd_cache.at < 2 then
-		return herdr_cwd_cache.cwd
+local function pane_key(pane)
+	local ok, pane_id = pcall(function()
+		return pane:pane_id()
+	end)
+	if ok and pane_id ~= nil then
+		return tostring(pane_id)
 	end
-
-	herdr_cwd_cache.at = now
-	herdr_cwd_cache.cwd = nil
-
-	local herdr = command_path("herdr")
-	if not herdr then
-		return nil
-	end
-
-	local success, stdout = wezterm.run_child_process({ herdr, "pane", "list" })
-	if not success then
-		return nil
-	end
-
-	local cwd = stdout:match('"focused"%s*:%s*true.-"foreground_cwd"%s*:%s*"([^"]+)"')
-		or stdout:match('"focused"%s*:%s*true.-"cwd"%s*:%s*"([^"]+)"')
-	if not cwd then
-		return nil
-	end
-
-	herdr_cwd_cache.cwd = unescape_json_string(cwd)
-	return herdr_cwd_cache.cwd
+	return tostring(pane)
 end
 
-local function get_git_info(cwd)
-	if not cwd or #cwd == 0 then
-		return nil
+local function split_tabs(value)
+	local fields = {}
+	for field in (value .. "\t"):gmatch("([^\t]*)\t") do
+		table.insert(fields, field)
 	end
+	return fields
+end
 
-	local now = os.time()
-	prune_git_info_cache(now)
+local function prune_git_info_table(entries, now)
+	local count = 0
+	local oldest_key = nil
+	local oldest_at = nil
 
-	local cached = git_info_cache[cwd]
-	if cached and now - cached.at < 5 then
-		return cached.info
-	end
-
-	local success, stdout = wezterm.run_child_process({
-		"/bin/sh",
-		"-c",
-		[[
-cwd="$1"
-
-root=$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null) || exit 1
-git_dir=$(git -C "$cwd" rev-parse --git-dir 2>/dev/null) || exit 1
-common_dir=$(git -C "$cwd" rev-parse --git-common-dir 2>/dev/null) || exit 1
-ref=$(git -C "$cwd" symbolic-ref --short HEAD 2>/dev/null) && detached=0 || {
-  ref=$(git -C "$cwd" rev-parse --short HEAD 2>/dev/null) || exit 1
-  detached=1
-}
-
-# Dirty detection: avoid git status --porcelain (full working-tree scan)
-# which can block WezTerm's synchronous run_child_process for seconds.
-# git diff --quiet short-circuits on first diff and uses the stat cache.
-dirty=0
-git -C "$cwd" diff --quiet 2>/dev/null || dirty=1
-[ "$dirty" = 0 ] && { git -C "$cwd" diff --quiet --cached 2>/dev/null || dirty=1; }
-[ "$dirty" = 0 ] && [ -n "$(git -C "$cwd" ls-files --others --exclude-standard --directory --no-empty-directory 2>/dev/null | head -n 1)" ] && dirty=1
-
-[ "${git_dir#/}" = "$git_dir" ] && git_dir="$root/$git_dir"
-[ "${common_dir#/}" = "$common_dir" ] && common_dir="$root/$common_dir"
-
-flags=""
-[ "$detached" = 1 ] && flags="${flags}D"
-[ "$dirty" = 1 ] && flags="${flags}d"
-[ "$(realpath "$git_dir")" != "$(realpath "$common_dir")" ] && flags="${flags}w"
-{ [ -d "$git_dir/rebase-merge" ] || [ -d "$git_dir/rebase-apply" ]; } && flags="${flags}R"
-[ -f "$git_dir/CHERRY_PICK_HEAD" ] && flags="${flags}C"
-
-printf 'repo=%s\n' "${root##*/}"
-printf 'ref=%s\n' "$ref"
-printf 'flags=%s\n' "$flags"
-]],
-		"sh",
-		cwd,
-	})
-
-	if not success then
-		git_info_cache[cwd] = { at = now, info = nil }
-		return nil
-	end
-
-	local info = { repo = nil, ref = nil, flags = "" }
-	for line in stdout:gmatch("[^\r\n]+") do
-		local key, value = line:match("^(%w+)=(.*)$")
-		if key and value then
-			info[key] = value
+	for key, entry in pairs(entries) do
+		local seen_at = entry.seen_at or 0
+		if now - seen_at > GIT_INFO_MAX_AGE_SECONDS then
+			entries[key] = nil
+		else
+			count = count + 1
+			if not oldest_at or seen_at < oldest_at then
+				oldest_key = key
+				oldest_at = seen_at
+			end
 		end
 	end
 
-	if not info.repo or not info.ref then
-		info = nil
+	if count > GIT_INFO_MAX_ENTRIES and oldest_key then
+		entries[oldest_key] = nil
+	end
+end
+
+local function parse_git_payload(value)
+	if not value or value == "" then
+		return nil
 	end
 
-	git_info_cache[cwd] = { at = now, info = info }
+	local fields = split_tabs(value)
+	if fields[1] ~= "wezgit1" then
+		return nil
+	end
+
+	local at = tonumber(fields[2])
+	if not at then
+		return nil
+	end
+
+	local present = fields[4] == "1"
+	local info = {
+		at = at,
+		cwd = fields[3] or "",
+		present = present,
+		repo = present and fields[5] or nil,
+		ref = present and fields[6] or nil,
+		flags = fields[7] or "",
+		herdr_pane_id = fields[8] or "",
+	}
+
+	if present and (not info.repo or info.repo == "" or not info.ref or info.ref == "") then
+		return nil
+	end
+
 	return info
+end
+
+local function parse_herdr_payload(value)
+	if not value or value == "" then
+		return nil
+	end
+
+	local fields = split_tabs(value)
+	if fields[1] ~= "herdrgit1" then
+		return nil
+	end
+
+	local at = tonumber(fields[2])
+	if not at then
+		return nil
+	end
+
+	local present = fields[5] == "1"
+	local info = {
+		at = at,
+		herdr_pane_id = fields[3] or "",
+		cwd = fields[4] or "",
+		present = present,
+		repo = present and fields[6] or nil,
+		ref = present and fields[7] or nil,
+		flags = fields[8] or "",
+	}
+
+	if present and (not info.repo or info.repo == "" or not info.ref or info.ref == "") then
+		return nil
+	end
+
+	return info
+end
+
+local function accept_git_info_for_pane(pane, info)
+	if not info then
+		return
+	end
+
+	local now = os.time()
+	info.seen_at = now
+	prune_git_info_table(git_info_by_pane, now)
+	prune_git_info_table(herdr_git_info_by_pane_id, now)
+
+	if is_herdr_pane(pane) then
+		if not info.herdr_pane_id or info.herdr_pane_id == "" then
+			return
+		end
+		local existing = herdr_git_info_by_pane_id[info.herdr_pane_id]
+		if existing and info.at < existing.at then
+			return
+		end
+		herdr_git_info_by_pane_id[info.herdr_pane_id] = info
+		return
+	end
+
+	local key = pane_key(pane)
+	local existing = git_info_by_pane[key]
+	if existing and info.at < existing.at then
+		return
+	end
+	git_info_by_pane[key] = info
+end
+
+local function herdr_cache_path()
+	local cache_home = os.getenv("XDG_CACHE_HOME")
+	if not cache_home or cache_home == "" then
+		local home = os.getenv("HOME") or ""
+		cache_home = home .. "/.cache"
+	end
+	return cache_home .. "/wezterm/herdr-git-info"
+end
+
+local function read_herdr_focused_git_info()
+	local path = herdr_cache_path()
+	local f = io.open(path, "r")
+	if not f then
+		return herdr_focused_git_info
+	end
+
+	local value = f:read("*l")
+	f:close()
+	local info = parse_herdr_payload(value)
+	if not info then
+		return herdr_focused_git_info
+	end
+
+	if not herdr_focused_payload_at or info.at >= herdr_focused_payload_at then
+		herdr_focused_payload_at = info.at
+		herdr_focused_git_info = info
+	end
+	return herdr_focused_git_info
+end
+
+local function get_git_info_from_user_vars(pane)
+	local user_vars = pane:get_user_vars() or {}
+	accept_git_info_for_pane(pane, parse_git_payload(user_vars.WEZ_GIT_INFO))
+	return git_info_by_pane[pane_key(pane)]
+end
+
+local function get_git_info(pane)
+	if is_herdr_pane(pane) then
+		local focused = read_herdr_focused_git_info()
+		if focused and focused.herdr_pane_id and focused.herdr_pane_id ~= "" then
+			local from_shell = herdr_git_info_by_pane_id[focused.herdr_pane_id]
+			if from_shell and from_shell.at >= focused.at then
+				return from_shell.present and from_shell or nil
+			end
+		end
+		return focused and focused.present and focused or nil
+	end
+
+	local info = get_git_info_from_user_vars(pane)
+	return info and info.present and info or nil
 end
 
 local function render_right_status(window, pane)
@@ -365,11 +400,7 @@ local function render_right_status(window, pane)
 	local active_key_table = window:active_key_table()
 	local git_info = nil
 	local ok, err = pcall(function()
-		local cwd = cwd_to_path(pane:get_current_working_dir())
-		if is_herdr_pane(pane) then
-			cwd = get_focused_herdr_cwd() or cwd
-		end
-		git_info = get_git_info(cwd)
+		git_info = get_git_info(pane)
 	end)
 
 	if not ok then
@@ -435,6 +466,24 @@ end)
 
 wezterm.on("render-right-status", function(window, pane)
 	render_right_status(window, pane or window:active_pane())
+end)
+
+wezterm.on("user-var-changed", function(window, pane, name, value)
+	if name ~= "WEZ_GIT_INFO" then
+		return
+	end
+
+	local ok, err = pcall(function()
+		accept_git_info_for_pane(pane, parse_git_payload(value))
+		local active_pane = window:active_pane()
+		if active_pane and pane_key(active_pane) == pane_key(pane) then
+			render_right_status(window, active_pane)
+		end
+	end)
+
+	if not ok then
+		wezterm.log_error("right-status user-var: " .. tostring(err))
+	end
 end)
 
 wezterm.on("window-focus-changed", function(window, pane)

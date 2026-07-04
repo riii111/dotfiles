@@ -46,3 +46,7 @@ scripts
 .config/herdr/**
 !.config/herdr/
 !.config/herdr/config.toml
+!.config/herdr/plugins/
+!.config/herdr/plugins/wezterm-status/
+!.config/herdr/plugins/wezterm-status/herdr-plugin.toml
+!.config/herdr/plugins/wezterm-status/update-status
