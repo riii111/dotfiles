@@ -229,6 +229,10 @@ table.insert(keymaps, {
 	key = ";",
 	mods = "CTRL",
 	action = wezterm.action_callback(function(window, pane)
+		if not herdr_mode.is_herdr_pane(pane) then
+			return
+		end
+
 		if is_tmux(pane) then
 			window:perform_action(act.SendString(herdr_mode.prefix), pane)
 		else

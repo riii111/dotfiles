@@ -84,4 +84,18 @@ function M.clear_all_modes()
 	wezterm.GLOBAL.herdr_active_modes = {}
 end
 
+function M.foreground_process_name(pane)
+	local ok, process = pcall(function()
+		return pane:get_foreground_process_name()
+	end)
+	if not ok or not process then
+		return ""
+	end
+	return process:match("([^/]+)$") or process
+end
+
+function M.is_herdr_pane(pane)
+	return M.foreground_process_name(pane) == "herdr"
+end
+
 return M

@@ -192,20 +192,6 @@ local FLAG_BADGES = {
 	C = { text = " PICK", color = "#ff9e64" },
 }
 
-local function get_foreground_process_name(pane)
-	local ok, process = pcall(function()
-		return pane:get_foreground_process_name()
-	end)
-	if not ok or not process then
-		return ""
-	end
-	return (process:match("([^/]+)$") or process)
-end
-
-local function is_herdr_pane(pane)
-	return get_foreground_process_name(pane) == "herdr"
-end
-
 local function pane_key(pane)
 	local ok, pane_id = pcall(function()
 		return pane:pane_id()
@@ -323,7 +309,7 @@ local function accept_git_info_for_pane(pane, info)
 	prune_git_info_table(git_info_by_pane, now)
 	prune_git_info_table(herdr_git_info_by_pane_id, now)
 
-	if is_herdr_pane(pane) then
+	if herdr_mode.is_herdr_pane(pane) then
 		if not info.herdr_pane_id or info.herdr_pane_id == "" then
 			return
 		end
@@ -380,7 +366,7 @@ local function get_git_info_from_user_vars(pane)
 end
 
 local function get_git_info(pane)
-	if is_herdr_pane(pane) then
+	if herdr_mode.is_herdr_pane(pane) then
 		local focused = read_herdr_focused_git_info()
 		if focused and focused.herdr_pane_id and focused.herdr_pane_id ~= "" then
 			local from_shell = herdr_git_info_by_pane_id[focused.herdr_pane_id]
