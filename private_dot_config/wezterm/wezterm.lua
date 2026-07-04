@@ -135,6 +135,18 @@ local function activate_herdr_table(name)
 	end)
 end
 
+local function activate_wezterm_leader(window, pane)
+	window:perform_action(
+		act.ActivateKeyTable({
+			name = "leader",
+			one_shot = true,
+			timeout_milliseconds = 2000,
+			replace_current = true,
+		}),
+		pane
+	)
+end
+
 local function pop_herdr_table()
 	return wezterm.action_callback(function(window, pane)
 		window:perform_action(act.PopKeyTable, pane)
@@ -229,19 +241,17 @@ table.insert(keymaps, {
 	key = ";",
 	mods = "CTRL",
 	action = wezterm.action_callback(function(window, pane)
-		if not herdr_mode.is_herdr_pane(pane) then
-			return
-		end
-
 		if is_tmux(pane) then
 			window:perform_action(act.SendString(herdr_mode.prefix), pane)
-		else
+		elseif herdr_mode.is_herdr_pane(pane) then
 			window:perform_action(
 				act.ActivateKeyTable({ name = herdr_mode.modes.main, one_shot = false, replace_current = true }),
 				pane
 			)
 			herdr_mode.set_active_mode(window, herdr_mode.modes.main)
 			refresh_right_status(window, pane)
+		else
+			activate_wezterm_leader(window, pane)
 		end
 	end),
 })
