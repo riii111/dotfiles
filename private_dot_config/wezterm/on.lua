@@ -182,6 +182,7 @@ local SEP = "\u{e0b3}"
 local STATUS_BG = "#1f1f28"
 local git_info_cache = {}
 local git_info_cache_last_gc = 0
+local herdr_cwd_cache = { at = 0, cwd = nil }
 
 local FLAG_BADGES = {
 	R = { text = " REBASE", color = "#ff9e64" },
@@ -219,6 +220,70 @@ local function cwd_to_path(cwd_uri)
 		end)
 	end
 	return cwd
+end
+
+local function command_path(name)
+	local home = os.getenv("HOME") or ""
+	local candidates = {
+		home .. "/.nix-profile/bin/" .. name,
+		"/opt/homebrew/bin/" .. name,
+		"/usr/local/bin/" .. name,
+		name,
+	}
+
+	for _, path in ipairs(candidates) do
+		if path == name or file_exists(path) then
+			return path
+		end
+	end
+	return nil
+end
+
+local function unescape_json_string(value)
+	return value:gsub("\\/", "/"):gsub('\\"', '"'):gsub("\\\\", "\\")
+end
+
+local function get_foreground_process_name(pane)
+	local ok, process = pcall(function()
+		return pane:get_foreground_process_name()
+	end)
+	if not ok or not process then
+		return ""
+	end
+	return (process:match("([^/]+)$") or process)
+end
+
+local function is_herdr_pane(pane)
+	return get_foreground_process_name(pane) == "herdr"
+end
+
+local function get_focused_herdr_cwd()
+	local now = os.time()
+	if now - herdr_cwd_cache.at < 2 then
+		return herdr_cwd_cache.cwd
+	end
+
+	herdr_cwd_cache.at = now
+	herdr_cwd_cache.cwd = nil
+
+	local herdr = command_path("herdr")
+	if not herdr then
+		return nil
+	end
+
+	local success, stdout = wezterm.run_child_process({ herdr, "pane", "list" })
+	if not success then
+		return nil
+	end
+
+	local cwd = stdout:match('"focused"%s*:%s*true.-"foreground_cwd"%s*:%s*"([^"]+)"')
+		or stdout:match('"focused"%s*:%s*true.-"cwd"%s*:%s*"([^"]+)"')
+	if not cwd then
+		return nil
+	end
+
+	herdr_cwd_cache.cwd = unescape_json_string(cwd)
+	return herdr_cwd_cache.cwd
 end
 
 local function get_git_info(cwd)
@@ -301,6 +366,9 @@ local function render_right_status(window, pane)
 	local git_info = nil
 	local ok, err = pcall(function()
 		local cwd = cwd_to_path(pane:get_current_working_dir())
+		if is_herdr_pane(pane) then
+			cwd = get_focused_herdr_cwd() or cwd
+		end
 		git_info = get_git_info(cwd)
 	end)
 
