@@ -338,6 +338,15 @@ local function herdr_cache_path()
 	return cache_home .. "/wezterm/herdr-git-info"
 end
 
+local function herdr_pane_cache_path(herdr_pane_id)
+	local cache_home = os.getenv("XDG_CACHE_HOME")
+	if not cache_home or cache_home == "" then
+		local home = os.getenv("HOME") or ""
+		cache_home = home .. "/.cache"
+	end
+	return cache_home .. "/wezterm/herdr-git-info-by-pane/" .. herdr_pane_id:gsub("/", "_")
+end
+
 local function read_herdr_focused_git_info()
 	local path = herdr_cache_path()
 	local f = io.open(path, "r")
@@ -359,6 +368,25 @@ local function read_herdr_focused_git_info()
 	return herdr_focused_git_info
 end
 
+local function read_herdr_pane_git_info(herdr_pane_id)
+	if not herdr_pane_id or herdr_pane_id == "" then
+		return nil
+	end
+
+	local f = io.open(herdr_pane_cache_path(herdr_pane_id), "r")
+	if not f then
+		return nil
+	end
+
+	local value = f:read("*l")
+	f:close()
+	local info = parse_herdr_payload(value)
+	if not info or info.herdr_pane_id ~= herdr_pane_id then
+		return nil
+	end
+	return info
+end
+
 local function get_git_info_from_user_vars(pane)
 	local user_vars = pane:get_user_vars() or {}
 	accept_git_info_for_pane(pane, parse_git_payload(user_vars.WEZ_GIT_INFO))
@@ -370,6 +398,10 @@ local function get_git_info(pane)
 		local focused = read_herdr_focused_git_info()
 		if focused and focused.herdr_pane_id and focused.herdr_pane_id ~= "" then
 			local from_shell = herdr_git_info_by_pane_id[focused.herdr_pane_id]
+			local from_file = read_herdr_pane_git_info(focused.herdr_pane_id)
+			if from_file and (not from_shell or from_file.at >= from_shell.at) then
+				from_shell = from_file
+			end
 			if from_shell and from_shell.at >= focused.at then
 				return from_shell.present and from_shell or nil
 			end

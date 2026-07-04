@@ -99,6 +99,24 @@ _wezterm_set_user_var() {
   fi
 }
 
+_wezterm_write_herdr_git_cache() {
+  [[ -n "${HERDR_PANE_ID:-}" ]] || return 0
+
+  local payload="$1"
+  local cache_home="${XDG_CACHE_HOME:-$HOME/.cache}"
+  local cache_dir="$cache_home/wezterm/herdr-git-info-by-pane"
+  local pane_file="${HERDR_PANE_ID//\//_}"
+  local tmp="$cache_dir/$pane_file.$$"
+  local line
+
+  line=$(printf '%s\n' "$payload" | awk -F '\t' -v OFS='\t' '$1 == "wezgit1" { print "herdrgit1", $2, $8, $3, $4, $5, $6, $7 }') || return 0
+  [[ -n "$line" ]] || return 0
+
+  mkdir -p "$cache_dir" || return 0
+  printf '%s\n' "$line" > "$tmp" || return 0
+  mv "$tmp" "$cache_dir/$pane_file" 2>/dev/null || rm -f "$tmp"
+}
+
 _wezterm_git_info_payload() {
   local cwd="$1"
   local at="$2"
@@ -136,7 +154,7 @@ _wezterm_git_info_payload() {
 }
 
 _wezterm_refresh_git_info() {
-  [[ "${TERM_PROGRAM:-}" == "WezTerm" ]] || return 0
+  [[ "${TERM_PROGRAM:-}" == "WezTerm" || -n "${HERDR_PANE_ID:-}" ]] || return 0
 
   if [[ -n "${_WEZTERM_GIT_INFO_JOB_PID:-}" ]] && kill -0 "$_WEZTERM_GIT_INFO_JOB_PID" 2>/dev/null; then
     kill "$_WEZTERM_GIT_INFO_JOB_PID" 2>/dev/null
@@ -148,6 +166,7 @@ _wezterm_refresh_git_info() {
     local payload
     payload=$(_wezterm_git_info_payload "$cwd" "$at") || exit 0
     _wezterm_set_user_var WEZ_GIT_INFO "$payload"
+    _wezterm_write_herdr_git_cache "$payload"
   ) &!
   _WEZTERM_GIT_INFO_JOB_PID=$!
 }

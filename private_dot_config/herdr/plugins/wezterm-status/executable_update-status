@@ -28,10 +28,10 @@ cwd=$(
 
 if [ -z "$pane_id" ] || [ -z "$cwd" ]; then
 	herdr_bin=${HERDR_BIN_PATH:-herdr}
-	current=$("$herdr_bin" pane current 2>/dev/null || true)
+	current=$("$herdr_bin" pane list 2>/dev/null || true)
 	if [ -n "$current" ]; then
-		pane_id=${pane_id:-$(printf '%s' "$current" | jq -r '.result.pane.pane_id // empty' 2>/dev/null || true)}
-		cwd=${cwd:-$(printf '%s' "$current" | jq -r '.result.pane.foreground_cwd // .result.pane.cwd // empty' 2>/dev/null || true)}
+		pane_id=${pane_id:-$(printf '%s' "$current" | jq -r '.result.panes[]? | select(.focused == true) | .pane_id' 2>/dev/null || true)}
+		cwd=${cwd:-$(printf '%s' "$current" | jq -r '.result.panes[]? | select(.focused == true) | .foreground_cwd // .cwd' 2>/dev/null || true)}
 	fi
 fi
 
