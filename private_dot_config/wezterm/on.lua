@@ -162,6 +162,10 @@ local HERDR_TAB_STYLES = {
 		bg = "#2f4a38",
 		fg = "#c8facc",
 	},
+	herdr_passthrough_mode = {
+		bg = "#2f4a38",
+		fg = "#c8facc",
+	},
 	herdr_resize_mode = {
 		bg = "#4a3f24",
 		fg = "#e6c384",
@@ -318,7 +322,11 @@ local function render_right_status(window, pane)
 		wezterm.log_error("right-status: " .. tostring(err))
 	end
 
-	if active_key_table == "herdr_mode" or active_key_table == "herdr_resize_mode" then
+	if
+		active_key_table == "herdr_mode"
+		or active_key_table == "herdr_passthrough_mode"
+		or active_key_table == "herdr_resize_mode"
+	then
 		local is_resize = active_key_table == "herdr_resize_mode"
 		table.insert(segments, { Background = { Color = is_resize and "#4a3f24" or "#2f4a38" } })
 		table.insert(segments, { Foreground = { Color = is_resize and "#e6c384" or "#c8facc" } })

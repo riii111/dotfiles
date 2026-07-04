@@ -62,6 +62,7 @@ zoom = ["prefix+z"]  # pane拡大
 resize_mode = "prefix+r"
 
 workspace_picker = "prefix+w"  # 誤爆防止のためprefixのみ
+rename_workspace = ""          # close_tab の prefix+shift+w と既定値が衝突するため無効化
 
 remote_image_paste = ""  # remote attach時のraw Ctrl-v画像paste無効（neovim/shell優先）
 

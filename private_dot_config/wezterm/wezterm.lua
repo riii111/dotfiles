@@ -118,6 +118,7 @@ end
 local HERDR_PREFIX = "\x1b[59;5u"
 local HERDR_MODES = {
 	herdr_mode = true,
+	herdr_passthrough_mode = true,
 	herdr_resize_mode = true,
 }
 
@@ -177,14 +178,26 @@ local function herdr_shift_key(key)
 	})
 end
 
-local function herdr_key_table(key, table_name)
+local function herdr_key_table(key, table_name, mods)
 	return wezterm.action_callback(function(window, pane)
-		window:perform_action(herdr_key(key), pane)
+		window:perform_action(herdr_key(key, mods), pane)
 		window:perform_action(
 			act.ActivateKeyTable({ name = table_name, one_shot = false, replace_current = true }),
 			pane
 		)
 		show_herdr_visuals(window, table_name)
+		refresh_right_status(window, pane)
+	end)
+end
+
+local function exit_herdr_passthrough_mode(key, mods)
+	return wezterm.action_callback(function(window, pane)
+		window:perform_action(act.SendKey({ key = key, mods = mods or "NONE" }), pane)
+		window:perform_action(
+			act.ActivateKeyTable({ name = "herdr_mode", one_shot = false, replace_current = true }),
+			pane
+		)
+		show_herdr_visuals(window, "herdr_mode")
 		refresh_right_status(window, pane)
 	end)
 end
@@ -311,18 +324,19 @@ config.key_tables = {
 		{ key = ".", action = herdr_key(".") },
 
 		{ key = "c", action = herdr_key("c") },
-		{ key = "v", action = herdr_key("v") },
+		{ key = "v", action = herdr_key_table("v", "herdr_passthrough_mode") },
 		{ key = "V", mods = "SHIFT", action = herdr_shift_key("v") },
 		{ key = "d", action = herdr_key("d") },
 		{ key = "D", mods = "SHIFT", action = herdr_shift_key("d") },
 		{ key = "X", mods = "SHIFT", action = herdr_shift_key("x") },
 		{ key = "z", action = herdr_key("z") },
 
-		{ key = "w", action = herdr_key("w") },
+		{ key = "w", action = herdr_key_table("w", "herdr_passthrough_mode") },
 		{ key = "W", mods = "SHIFT", action = herdr_shift_key("w") },
-		{ key = "g", mods = "ALT", action = herdr_key("g", "ALT") },
-		{ key = "?", action = herdr_key("?") },
-		{ key = "s", action = herdr_key("s") },
+		{ key = "g", action = herdr_key_table("g", "herdr_passthrough_mode") },
+		{ key = "g", mods = "ALT", action = herdr_key_table("g", "herdr_passthrough_mode", "ALT") },
+		{ key = "?", action = herdr_key_table("?", "herdr_passthrough_mode") },
+		{ key = "s", action = herdr_key_table("s", "herdr_passthrough_mode") },
 		{ key = "r", action = herdr_key_table("r", "herdr_resize_mode") },
 		{ key = "R", mods = "SHIFT", action = herdr_shift_key("r") },
 		{ key = "O", mods = "SHIFT", action = herdr_shift_key("o") },
@@ -337,6 +351,11 @@ config.key_tables = {
 		{ key = "7", action = herdr_shift_number("7") },
 		{ key = "8", action = herdr_shift_number("8") },
 		{ key = "9", action = herdr_shift_number("9") },
+	},
+	herdr_passthrough_mode = {
+		{ key = "Escape", action = exit_herdr_passthrough_mode("Escape") },
+		{ key = "Enter", action = exit_herdr_passthrough_mode("Enter") },
+		{ key = "q", action = exit_herdr_passthrough_mode("q") },
 	},
 	herdr_resize_mode = {
 		{ key = "Escape", action = exit_herdr_resize_mode() },
