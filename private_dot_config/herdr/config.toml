@@ -80,7 +80,7 @@ sidebar_max_width = 36
 
 mobile_width_threshold = 64  # この幅未満でmobile layout
 
-mouse_capture = true  # 初回はtrue推奨。WezTerm Cmd-click URL優先ならfalse
+mouse_capture = false  # 初回はtrue推奨。WezTerm Cmd-click URL優先ならfalse
 
 right_click_passthrough_modifier = "ctrl"  # Ctrl+右クリック→pane内app、右クリック単体→Herdr menu
 
@@ -136,3 +136,9 @@ key = "prefix+alt+g"
 type = "pane"
 command = "lazygit"
 description = "run lazygit"
+
+[[keys.command]]
+key = "prefix+alt+s"
+type = "pane"
+command = "sabiql"
+description = "run sabiql"

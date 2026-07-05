@@ -352,6 +352,7 @@ config.key_tables = {
 		{ key = "g", mods = "ALT", action = herdr_key_table("g", herdr_mode.modes.passthrough, "ALT") },
 		{ key = "?", action = herdr_key_table("?", herdr_mode.modes.passthrough) },
 		{ key = "s", action = herdr_key_table("s", herdr_mode.modes.passthrough) },
+		{ key = "s", mods = "ALT", action = herdr_key_table("s", herdr_mode.modes.passthrough, "ALT") },
 		{ key = "r", action = herdr_key_table("r", herdr_mode.modes.resize) },
 		{ key = "R", mods = "SHIFT", action = herdr_shift_key("r") },
 		{ key = "O", mods = "SHIFT", action = herdr_shift_key("o") },
