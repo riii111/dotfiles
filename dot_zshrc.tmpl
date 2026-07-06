@@ -100,7 +100,7 @@ _wezterm_git_status_bridge_bin() {
 }
 
 _wezterm_refresh_git_info() {
-  [[ -n "${HERDR_PANE_ID:-}" ]] || return 0
+  [[ "${TERM_PROGRAM:-}" == "WezTerm" ]] || return 0
 
   local bin
   bin=$(_wezterm_git_status_bridge_bin) || return 0
@@ -110,7 +110,7 @@ _wezterm_refresh_git_info() {
   fi
 
   local cwd="$PWD"
-  local pane_id="$HERDR_PANE_ID"
+  local pane_id="${HERDR_PANE_ID:-}"
   (
     "$bin" update --pane-id "$pane_id" --cwd "$cwd" >/dev/null 2>&1
   ) &!

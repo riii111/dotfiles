@@ -1,12 +1,31 @@
 import io
+import os
+import shutil
 import subprocess
 import tempfile
+import time
 import unittest
 from types import SimpleNamespace
 from pathlib import Path
 from unittest import mock
 
 from bin.lib.dot import cli
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def extract_zsh_function(source: str, name: str) -> str:
+    lines = source.splitlines()
+    start = next(
+        index for index, line in enumerate(lines) if line == f"{name}() {{"
+    )
+    selected = []
+    for line in lines[start:]:
+        selected.append(line)
+        if line == "}":
+            break
+    return "\n".join(selected)
 
 
 class DotCliTest(unittest.TestCase):
@@ -565,6 +584,119 @@ class DotCliTest(unittest.TestCase):
         path = Path("/tmp/unreadable")
         with mock.patch.object(Path, "open", side_effect=PermissionError):
             self.assertEqual(cli.read_first_line(path), "")
+
+
+class WezTermGitStatusHookTest(unittest.TestCase):
+    def run_refresh_hook(
+        self,
+        tmpdir: Path,
+        *,
+        term_program: str,
+        herdr_pane_id: str | None,
+    ) -> dict[str, str]:
+        zsh = shutil.which("zsh")
+        if zsh is None:
+            self.skipTest("zsh not found")
+
+        capture = tmpdir / "bridge-call"
+        cwd = tmpdir / "repo"
+        cwd.mkdir()
+        fake_bridge = tmpdir / "wezterm-git-status-bridge"
+        fake_bridge.write_text(
+            """#!/bin/sh
+{
+  printf 'cwd=%s\\n' "$PWD"
+  index=0
+  for arg in "$@"; do
+    printf 'arg_%s=%s\\n' "$index" "$arg"
+    index=$((index + 1))
+  done
+} > "$CAPTURE_FILE"
+""",
+            encoding="utf-8",
+        )
+        fake_bridge.chmod(0o755)
+
+        zshrc = (REPO_ROOT / "dot_zshrc.tmpl").read_text(encoding="utf-8")
+        script = "\n".join(
+            [
+                "set -eu",
+                extract_zsh_function(zshrc, "_wezterm_git_status_bridge_bin"),
+                extract_zsh_function(zshrc, "_wezterm_refresh_git_info"),
+                f"cd -- {shlex_quote(cwd)}",
+                "_wezterm_refresh_git_info",
+            ]
+        )
+
+        env = os.environ.copy()
+        env["TERM_PROGRAM"] = term_program
+        env["WEZTERM_GIT_STATUS_BRIDGE_BIN"] = str(fake_bridge)
+        env["CAPTURE_FILE"] = str(capture)
+        if herdr_pane_id is None:
+            env.pop("HERDR_PANE_ID", None)
+        else:
+            env["HERDR_PANE_ID"] = herdr_pane_id
+
+        result = subprocess.run(
+            [zsh, "-c", script],
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+        for _ in range(50):
+            if capture.exists():
+                break
+            time.sleep(0.02)
+
+        if not capture.exists():
+            return {}
+
+        return dict(
+            line.split("=", 1)
+            for line in capture.read_text(encoding="utf-8").splitlines()
+        )
+
+    def test_refreshes_global_status_without_herdr_pane_id(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            data = self.run_refresh_hook(
+                Path(tmpdir),
+                term_program="WezTerm",
+                herdr_pane_id=None,
+            )
+
+        self.assertEqual(data["arg_0"], "update")
+        self.assertEqual(data["arg_1"], "--pane-id")
+        self.assertEqual(data["arg_2"], "")
+        self.assertEqual(data["arg_3"], "--cwd")
+        self.assertEqual(data["arg_4"], data["cwd"])
+
+    def test_refreshes_per_pane_status_with_herdr_pane_id(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            data = self.run_refresh_hook(
+                Path(tmpdir),
+                term_program="WezTerm",
+                herdr_pane_id="w1:p2",
+            )
+
+        self.assertEqual(data["arg_2"], "w1:p2")
+
+    def test_skips_refresh_outside_wezterm(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            data = self.run_refresh_hook(
+                Path(tmpdir),
+                term_program="Apple_Terminal",
+                herdr_pane_id=None,
+            )
+
+        self.assertEqual(data, {})
+
+
+def shlex_quote(value: Path) -> str:
+    return "'" + str(value).replace("'", "'\\''") + "'"
 
 
 if __name__ == "__main__":
