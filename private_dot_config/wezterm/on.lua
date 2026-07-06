@@ -183,6 +183,7 @@ end)
 
 -- Right status
 git_status.setup({
+	max_age_seconds = false,
 	mode_styles = herdr_mode.styles,
 	on_reload = function()
 		herdr_mode.clear_all_modes()
