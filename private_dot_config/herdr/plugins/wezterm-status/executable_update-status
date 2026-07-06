@@ -1,9 +1,0 @@
-#!/bin/sh
-set -eu
-
-# Temporary local binary while wezterm-git-status-bridge is not released yet.
-default_bin="/Users/a81803/ghq/github.com/riii111/wezterm-git-status-bridge/target/release/wezterm-git-status-bridge"
-bin=${WEZTERM_GIT_STATUS_BRIDGE_BIN:-"$default_bin"}
-herdr_bin=${HERDR_BIN_PATH:-herdr}
-
-exec "$bin" update --herdr-bin "$herdr_bin"
