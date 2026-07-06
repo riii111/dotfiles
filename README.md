@@ -26,6 +26,14 @@ Private work tool layers are managed separately.
 ~/bin/dotctl work-tools update
 ```
 
+### Herdr WezTerm status (optional)
+
+chezmoi only copies the plugin files; herdr needs a one-time link per machine to fire the events that feed the WezTerm right-status git info inside herdr panes.
+
+```bash
+herdr plugin link ~/.config/herdr/plugins/wezterm-status
+```
+
 ### Finder integration (optional)
 
 Route Finder double-clicks to WezTerm + Neovim / VisiData.
