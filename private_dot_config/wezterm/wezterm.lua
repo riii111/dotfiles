@@ -188,6 +188,15 @@ local function herdr_key_table(key, table_name, mods)
 	end)
 end
 
+local function herdr_shift_key_pop(key)
+	return wezterm.action_callback(function(window, pane)
+		window:perform_action(herdr_shift_key(key), pane)
+		window:perform_action(act.PopKeyTable, pane)
+		herdr_mode.clear_active_mode(window)
+		refresh_right_status(window, pane)
+	end)
+end
+
 local function exit_herdr_passthrough_mode(key, mods)
 	return wezterm.action_callback(function(window, pane)
 		window:perform_action(act.SendKey({ key = key, mods = mods or "NONE" }), pane)
@@ -345,7 +354,7 @@ config.key_tables = {
 		{ key = "T", mods = "SHIFT", action = herdr_shift_key("t") },
 		{ key = "z", action = herdr_key("z") },
 
-		{ key = "w", action = herdr_key_table("w", herdr_mode.modes.passthrough) },
+		{ key = "w", action = herdr_key("w") },
 		{ key = "W", mods = "SHIFT", action = herdr_shift_key("w") },
 		{ key = "Space", action = herdr_key_table("Space", herdr_mode.modes.passthrough) },
 		{ key = "g", action = herdr_key_table("g", herdr_mode.modes.passthrough) },
@@ -355,7 +364,7 @@ config.key_tables = {
 		{ key = "s", mods = "ALT", action = herdr_key_table("s", herdr_mode.modes.passthrough, "ALT") },
 		{ key = "r", action = herdr_key_table("r", herdr_mode.modes.resize) },
 		{ key = "R", mods = "SHIFT", action = herdr_shift_key("r") },
-		{ key = "O", mods = "SHIFT", action = herdr_shift_key("o") },
+		{ key = "O", mods = "SHIFT", action = herdr_shift_key_pop("o") },
 
 		{ key = "1", action = herdr_shift_number("1") },
 		{ key = "2", action = herdr_shift_number("2") },
