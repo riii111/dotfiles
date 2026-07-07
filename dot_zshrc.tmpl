@@ -628,23 +628,8 @@ _dotfiles_place_nix_path
 if command -v direnv >/dev/null 2>&1; then
   eval "$(direnv hook zsh)"
 fi
-
 # wezterm-git-status-bridge setup begin
 _wezterm_git_status_bridge_update() {
-  local event_json
-  local herdr_bin='/Users/ichinose/.nix-profile/bin/herdr'
-  if [[ "$herdr_bin" = */* || "$herdr_bin" = .*/* ]]; then
-    [[ -x "$herdr_bin" ]] || herdr_bin=
-  elif ! command -v "$herdr_bin" >/dev/null 2>&1; then
-    herdr_bin=
-  fi
-  if [[ -n "$herdr_bin" ]]; then
-    event_json=$("$herdr_bin" pane list 2>/dev/null) || event_json=
-    if [[ -n "$event_json" ]]; then
-      '/Users/ichinose/bin/wezterm-git-status-bridge' update --event-json "$event_json" >/dev/null 2>&1 &!
-      return
-    fi
-  fi
   '/Users/ichinose/bin/wezterm-git-status-bridge' update --pane-id "${WEZTERM_PANE:-shell}" --cwd "$PWD" >/dev/null 2>&1 &!
 }
 autoload -Uz add-zsh-hook
