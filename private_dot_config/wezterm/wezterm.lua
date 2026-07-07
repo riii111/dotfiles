@@ -456,4 +456,15 @@ config.audible_bell = "Disabled"
 config.adjust_window_size_when_changing_font_size = false
 config.hide_mouse_cursor_when_typing = true
 
+-- wezterm-git-status-bridge setup begin
+local git_status = require("right-status")
+git_status.setup({
+  auto_update = false,
+  binary_path = "/Users/ichinose/bin/wezterm-git-status-bridge",
+  mode_styles = herdr_mode.styles,
+  on_reload = function()
+    herdr_mode.clear_all_modes()
+  end,
+})
+-- wezterm-git-status-bridge setup end
 return config
