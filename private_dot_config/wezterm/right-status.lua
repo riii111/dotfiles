@@ -8,7 +8,7 @@ local DEFAULTS = {
 	separator = "  \u{e0b3}  ",
 	show_time = true,
 	always_show_time_separator = true,
-	max_age_seconds = 300,
+	max_age_seconds = false,
 	auto_update = true,
 	update_interval_seconds = 2,
 	update_delay_seconds = 0.2,
@@ -37,6 +37,10 @@ local DEFAULTS = {
 local function merge_options(options)
 	options = options or {}
 	local colors = {}
+	local max_age_seconds = options.max_age_seconds
+	if max_age_seconds == nil then
+		max_age_seconds = DEFAULTS.max_age_seconds
+	end
 	for key, value in pairs(DEFAULTS.colors) do
 		colors[key] = value
 	end
@@ -50,7 +54,7 @@ local function merge_options(options)
 				and DEFAULTS.always_show_time_separator
 			or options.always_show_time_separator,
 		cache_dir = options.cache_dir,
-		max_age_seconds = options.max_age_seconds == nil and DEFAULTS.max_age_seconds or options.max_age_seconds,
+		max_age_seconds = max_age_seconds,
 		auto_update = options.auto_update == nil and DEFAULTS.auto_update or options.auto_update,
 		update_interval_seconds = options.update_interval_seconds == nil
 				and DEFAULTS.update_interval_seconds
