@@ -1,6 +1,27 @@
 local wezterm = require("wezterm")
 local act = wezterm.action
 
+local function rerender_right_status(window)
+	if not wezterm.time or not wezterm.time.call_after then
+		return
+	end
+	wezterm.time.call_after(0.05, function()
+		local ok, active_pane = pcall(function()
+			return window:active_pane()
+		end)
+		if ok and active_pane then
+			window:perform_action(act.EmitEvent("render-right-status"), active_pane)
+		end
+	end)
+end
+
+local function activate_pane_direction(direction)
+	return wezterm.action_callback(function(window, pane)
+		window:perform_action(act.ActivatePaneDirection(direction), pane)
+		rerender_right_status(window)
+	end)
+end
+
 local keys = {
 	---------------------------------------------------------------
 	-- macOS Spaces shortcuts are handled outside terminal apps.
@@ -17,8 +38,8 @@ local keys = {
 	---------------------------------------------------------------
 	-- Pane: Navigation (Cmd+[ / Cmd+] for prev/next)
 	---------------------------------------------------------------
-	{ key = "[", mods = "CMD", action = act.ActivatePaneDirection("Prev") },
-	{ key = "]", mods = "CMD", action = act.ActivatePaneDirection("Next") },
+	{ key = "[", mods = "CMD", action = activate_pane_direction("Prev") },
+	{ key = "]", mods = "CMD", action = activate_pane_direction("Next") },
 
 	---------------------------------------------------------------
 	-- Forward to Neovim (Cmd+Arrow / Cmd+Opt+Arrow)
