@@ -460,6 +460,10 @@ local git_status = require("right-status")
 git_status.setup({
   auto_update = false,
   binary_path = "/Users/ichinose/bin/wezterm-git-status-bridge",
+  mode_styles = herdr_mode.styles,
+  on_reload = function()
+    herdr_mode.clear_all_modes()
+  end,
 })
 -- wezterm-git-status-bridge setup end
 return config
