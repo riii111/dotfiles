@@ -4,7 +4,8 @@
 # - よく使う移動や表示切替、かつ、誤操作の影響が小さいものは1キーにする。
 # - 作成と終了は対象リソース名の頭文字に揃え、終了はShift付きにする。
 #   例) pane: p / Shift+p, tab: t / Shift+t, workspace: w / Shift+w。
-# - lazygit など外部TUIの起動は、pane内アプリの通常操作と区別するためOption付きにする。
+# - 名前変更は対象リソース名の頭文字にOptionを組み合わせる。
+# - lazygit など外部TUIの起動は、pane内アプリの通常操作や名前変更と区別するためCtrl付きにする。
 # - q のように外部TUIで頻出するキーは、Herdr側の終了・切断操作に使わない。
 # - WezTerm / tmux と近い割当を保ち、どの操作レイヤーでも手癖がずれないようにする。
 
@@ -63,9 +64,9 @@ zoom = ["prefix+z"]
 resize_mode = "prefix+r"
 
 workspace_picker = "prefix+space"  # 誤爆防止のためprefixのみ
-rename_pane = ""      # close_pane の prefix+shift+p と既定値が衝突するため無効化
-rename_tab = ""       # close_tab の prefix+shift+t と既定値が衝突するため無効化
-rename_workspace = "" # close_workspace の prefix+shift+w と既定値が衝突するため無効化
+rename_pane = "prefix+alt+p"
+rename_tab = "prefix+alt+t"
+rename_workspace = "prefix+alt+w"
 
 remote_image_paste = ""  # remote attach時のraw Ctrl-v画像paste無効（neovim/shell優先）
 
@@ -132,13 +133,13 @@ cjk_ime_cursor_shape = "steady_block"
 switch_ascii_input_source_in_prefix = true  # macOS+CJK: prefix mode中だけASCII入力sourceへ
 
 [[keys.command]]
-key = "prefix+alt+g"
+key = "prefix+ctrl+g"
 type = "pane"
 command = "lazygit"
 description = "run lazygit"
 
 [[keys.command]]
-key = "prefix+alt+s"
+key = "prefix+ctrl+s"
 type = "pane"
 command = "sabiql"
 description = "run sabiql"
