@@ -296,7 +296,43 @@ local function is_fresh(info, options)
 	return options.now() - info.at <= options.max_age_seconds
 end
 
-local function read_git_info(options)
+local function read_cached_pane_info(options, id)
+	if not id or id == "" then
+		return nil
+	end
+	local info = parse_payload(read_line(pane_cache_path(options, id)))
+	if not info or not is_fresh(info, options) or info.herdr_pane_id ~= id then
+		return nil
+	end
+	return info
+end
+
+local function read_current_pane_info(pane, options)
+	local id = pane_id(pane)
+	if not id or id == "" then
+		return nil, false
+	end
+	local info = read_cached_pane_info(options, id)
+	if not info then
+		return nil, false
+	end
+
+	local cwd = pane_cwd(pane)
+	if cwd and cwd ~= "" and info.cwd ~= cwd then
+		return nil, false
+	end
+	if info.present then
+		return info, true
+	end
+	return nil, true
+end
+
+local function read_git_info(pane, options)
+	local current, has_current = read_current_pane_info(pane, options)
+	if has_current then
+		return current
+	end
+
 	local focused = parse_payload(read_line(focused_cache_path(options)))
 	if not is_fresh(focused, options) then
 		return nil
@@ -308,10 +344,10 @@ local function read_git_info(options)
 		return nil
 	end
 
-	local pane = parse_payload(read_line(pane_cache_path(options, focused.herdr_pane_id)))
-	if pane and is_fresh(pane, options) and pane.herdr_pane_id == focused.herdr_pane_id and pane.at >= focused.at then
-		if pane.present then
-			return pane
+	local focused_pane = read_cached_pane_info(options, focused.herdr_pane_id)
+	if focused_pane and focused_pane.at >= focused.at then
+		if focused_pane.present then
+			return focused_pane
 		end
 		return nil
 	end
@@ -356,7 +392,7 @@ end
 
 local function git_segments(options)
 	local segments = {}
-	local info = read_git_info(options)
+	local info = read_git_info(nil, options)
 
 	if info then
 		push_git_status(segments, info, options)
@@ -423,7 +459,11 @@ local function status_segments(window, pane, options)
 	local show_git = not options.show_git_for_pane or options.show_git_for_pane(pane)
 
 	if show_git then
-		local git_status_segments = git_segments(options)
+		local git_status_segments = {}
+		local info = read_git_info(pane, options)
+		if info then
+			push_git_status(git_status_segments, info, options)
+		end
 		if #git_status_segments > 0 then
 			if #segments > 0 then
 				push_separator(segments, options)
