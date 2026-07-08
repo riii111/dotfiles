@@ -3,10 +3,6 @@ local act = wezterm.action
 local io = require("io")
 local os = require("os")
 local herdr_mode = require("herdr_mode")
-local bridge_dir = os.getenv("WEZTERM_GIT_STATUS_BRIDGE_DIR")
-	or ((os.getenv("HOME") or "") .. "/ghq/github.com/riii111/wezterm-git-status-bridge")
-package.path = bridge_dir .. "/contrib/wezterm/?.lua;" .. package.path
-local git_status = require("right-status")
 
 local function file_exists(path)
 	local f = io.open(path, "r")
@@ -180,12 +176,3 @@ wezterm.on("format-tab-title", function(tab)
 
 	return " " .. name .. " "
 end)
-
--- Right status
-git_status.setup({
-	max_age_seconds = false,
-	mode_styles = herdr_mode.styles,
-	on_reload = function()
-		herdr_mode.clear_all_modes()
-	end,
-})
