@@ -1,6 +1,0 @@
-# Ripgrep configuration
-# Symlinked to ~/.config/ripgrep/config
-
---smart-case
-
-# Note: Exclusion patterns are in ~/.config/ripgrep/ignore
