@@ -8,7 +8,6 @@ local DEFAULTS = {
 	separator = "  \u{e0b3}  ",
 	show_time = true,
 	always_show_time_separator = true,
-	max_age_seconds = false,
 	auto_update = true,
 	update_interval_seconds = 2,
 	update_delay_seconds = 0.2,
@@ -37,10 +36,6 @@ local DEFAULTS = {
 local function merge_options(options)
 	options = options or {}
 	local colors = {}
-	local max_age_seconds = options.max_age_seconds
-	if max_age_seconds == nil then
-		max_age_seconds = DEFAULTS.max_age_seconds
-	end
 	for key, value in pairs(DEFAULTS.colors) do
 		colors[key] = value
 	end
@@ -54,7 +49,6 @@ local function merge_options(options)
 				and DEFAULTS.always_show_time_separator
 			or options.always_show_time_separator,
 		cache_dir = options.cache_dir,
-		max_age_seconds = max_age_seconds,
 		auto_update = options.auto_update == nil and DEFAULTS.auto_update or options.auto_update,
 		update_interval_seconds = options.update_interval_seconds == nil
 				and DEFAULTS.update_interval_seconds
@@ -182,6 +176,31 @@ local function pane_id(pane)
 	return tostring(id)
 end
 
+local function pane_foreground_process_name(pane)
+	if not pane or not pane.get_foreground_process_name then
+		return nil
+	end
+	local ok, name = pcall(function()
+		return pane:get_foreground_process_name()
+	end)
+	if not ok or not name or name == "" then
+		return nil
+	end
+	return tostring(name)
+end
+
+local function basename(path)
+	return path:gsub("\\", "/"):match("([^/]+)$") or path
+end
+
+local function pane_is_herdr_host(pane)
+	local process = pane_foreground_process_name(pane)
+	if not process then
+		return false
+	end
+	return basename(process) == "herdr"
+end
+
 local function refresh(pane, options)
 	if not options.auto_update then
 		return false
@@ -200,6 +219,7 @@ local function refresh(pane, options)
 	if last and last.cwd == cwd and now - last.at < options.update_interval_seconds then
 		return false
 	end
+
 	last_update_by_pane[id] = { at = now, cwd = cwd }
 
 	local args = {
@@ -278,10 +298,6 @@ local function read_line(path)
 	return value
 end
 
-local function focused_cache_path(options)
-	return cache_dir(options) .. "/herdr-git-info"
-end
-
 local function pane_cache_path(options, pane_id)
 	local sanitized = pane_id:gsub("/", "_")
 	if sanitized == "" or sanitized:match("^%.+$") then
@@ -290,14 +306,25 @@ local function pane_cache_path(options, pane_id)
 	return cache_dir(options) .. "/herdr-git-info-by-pane/" .. sanitized
 end
 
-local function is_fresh(info, options)
-	if not info then
-		return false
+local function cwd_cache_key(cwd)
+	local hash = 2166136261
+	for index = 1, #cwd do
+		hash = (hash ~ string.byte(cwd, index)) & 0xffffffff
+		hash = (hash * 16777619) & 0xffffffff
 	end
-	if options.max_age_seconds == false then
-		return true
-	end
-	return options.now() - info.at <= options.max_age_seconds
+	return string.format("%08x", hash)
+end
+
+local function cwd_cache_path(options, cwd)
+	return cache_dir(options) .. "/herdr-git-info-by-cwd/" .. cwd_cache_key(cwd)
+end
+
+local function focused_cache_path(options)
+	return cache_dir(options) .. "/herdr-git-info-focused"
+end
+
+local function read_focused_info(options)
+	return parse_payload(read_line(focused_cache_path(options)))
 end
 
 local function read_cached_pane_info(options, id)
@@ -305,58 +332,78 @@ local function read_cached_pane_info(options, id)
 		return nil
 	end
 	local info = parse_payload(read_line(pane_cache_path(options, id)))
-	if not info or not is_fresh(info, options) or info.herdr_pane_id ~= id then
+	if not info or info.herdr_pane_id ~= id then
 		return nil
 	end
 	return info
 end
 
-local function read_current_pane_info(pane, options)
+local function read_cached_cwd_info(options, cwd)
+	if not cwd or cwd == "" then
+		return nil
+	end
+	local info = parse_payload(read_line(cwd_cache_path(options, cwd)))
+	if not info or info.cwd ~= cwd then
+		return nil
+	end
+	return info
+end
+
+local function read_current_pane_info(options, pane)
 	local id = pane_id(pane)
 	if not id or id == "" then
-		return nil, false
+		return nil
 	end
 	local info = read_cached_pane_info(options, id)
 	if not info then
-		return nil, false
+		return nil
 	end
 
 	local cwd = pane_cwd(pane)
-	if cwd and cwd ~= "" and info.cwd ~= cwd then
-		return nil, false
+	if cwd and cwd ~= "" and info.cwd ~= "" and info.cwd ~= cwd then
+		return nil
 	end
-	if info.present then
-		return info, true
-	end
-	return nil, true
+	return info
 end
 
-local function read_git_info(pane, options)
-	local current, has_current = read_current_pane_info(pane, options)
-	if has_current then
-		return current
-	end
-
-	local focused = parse_payload(read_line(focused_cache_path(options)))
-	if not is_fresh(focused, options) then
+local function read_current_cwd_info(options, pane)
+	local cwd = pane_cwd(pane)
+	if not cwd or cwd == "" then
 		return nil
 	end
-	if focused.herdr_pane_id == "" then
-		if focused.present then
-			return focused
+	return read_cached_cwd_info(options, cwd)
+end
+
+local function read_git_info(options, pane)
+	if pane_is_herdr_host(pane) then
+		local focused_info = read_focused_info(options)
+		if not focused_info then
+			return nil
+		end
+		local cwd_info = read_cached_cwd_info(options, focused_info.cwd)
+		local chosen = focused_info
+		if cwd_info and cwd_info.at >= focused_info.at then
+			chosen = cwd_info
+		end
+		if chosen.present then
+			return chosen
 		end
 		return nil
 	end
 
-	local focused_pane = read_cached_pane_info(options, focused.herdr_pane_id)
-	if focused_pane and focused_pane.at >= focused.at then
-		if focused_pane.present then
-			return focused_pane
-		end
-		return nil
+	-- Prefer the freshest matching cache; cwd join covers pane-id namespace divergence.
+	local pane_info = read_current_pane_info(options, pane)
+	local cwd_info = read_current_cwd_info(options, pane)
+
+	local chosen
+	if pane_info and cwd_info then
+		chosen = pane_info.at >= cwd_info.at and pane_info or cwd_info
+	else
+		chosen = pane_info or cwd_info
 	end
-	if focused.present then
-		return focused
+
+	if chosen and chosen.present then
+		return chosen
 	end
 	return nil
 end
@@ -394,9 +441,9 @@ local function push_git_status(segments, info, options)
 	end
 end
 
-local function git_segments(options)
+local function git_segments(options, pane)
 	local segments = {}
-	local info = read_git_info(nil, options)
+	local info = read_git_info(options, pane)
 
 	if info then
 		push_git_status(segments, info, options)
@@ -405,8 +452,12 @@ local function git_segments(options)
 	return segments, info
 end
 
-function M.git_segments(options)
-	return git_segments(merge_options(options))
+function M.git_segments(options, pane)
+	return git_segments(merge_options(options), pane)
+end
+
+function M.cwd_cache_key(cwd)
+	return cwd_cache_key(cwd)
 end
 
 local function time_segments(options)
@@ -463,11 +514,7 @@ local function status_segments(window, pane, options)
 	local show_git = not options.show_git_for_pane or options.show_git_for_pane(pane)
 
 	if show_git then
-		local git_status_segments = {}
-		local info = read_git_info(pane, options)
-		if info then
-			push_git_status(git_status_segments, info, options)
-		end
+		local git_status_segments = git_segments(options, pane)
 		if #git_status_segments > 0 then
 			if #segments > 0 then
 				push_separator(segments, options)
@@ -535,12 +582,25 @@ local function refresh_and_render(window, pane, options)
 	end
 end
 
+local function active_pane(window, pane)
+	if pane or not window or not window.active_pane then
+		return pane
+	end
+	local ok, value = pcall(function()
+		return window:active_pane()
+	end)
+	if ok then
+		return value
+	end
+	return nil
+end
+
 function M.render(window, pane, options)
 	if options == nil and (pane == nil or type(pane) == "table") then
 		options = pane
 		pane = nil
 	end
-	render(window, pane, merge_options(options))
+	render(window, active_pane(window, pane), merge_options(options))
 end
 
 function M.setup(options)
@@ -550,25 +610,21 @@ function M.setup(options)
 	M._setup_done = true
 
 	local merged = merge_options(options)
-	wezterm.on("update-status", function(window, pane)
-		refresh_and_render(window, pane, merged)
-	end)
 	wezterm.on("update-right-status", function(window, pane)
-		refresh_and_render(window, pane, merged)
+		refresh_and_render(window, active_pane(window, pane), merged)
 	end)
 	wezterm.on("render-right-status", function(window, pane)
-		local active_pane = pane or window:active_pane()
-		refresh_and_render(window, active_pane, merged)
+		refresh_and_render(window, active_pane(window, pane), merged)
 	end)
 	wezterm.on("window-focus-changed", function(window, pane)
-		refresh_and_render(window, pane, merged)
+		refresh_and_render(window, active_pane(window, pane), merged)
 	end)
 	wezterm.on("window-config-reloaded", function(window, pane)
-		local active_pane = pane or window:active_pane()
+		local pane_to_render = active_pane(window, pane)
 		if merged.on_reload then
-			merged.on_reload(window, active_pane)
+			merged.on_reload(window, pane_to_render)
 		end
-		refresh_and_render(window, active_pane, merged)
+		refresh_and_render(window, pane_to_render, merged)
 	end)
 end
 
