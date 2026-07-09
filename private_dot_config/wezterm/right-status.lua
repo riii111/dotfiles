@@ -550,6 +550,9 @@ function M.setup(options)
 	M._setup_done = true
 
 	local merged = merge_options(options)
+	wezterm.on("update-status", function(window, pane)
+		refresh_and_render(window, pane, merged)
+	end)
 	wezterm.on("update-right-status", function(window, pane)
 		refresh_and_render(window, pane, merged)
 	end)
