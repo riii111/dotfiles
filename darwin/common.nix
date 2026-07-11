@@ -76,6 +76,7 @@
       "arc"
       "codex"
       "font-droid-sans-mono-nerd-font"
+      "font-udev-gothic"
       "ghostty"
       "karabiner-elements"
       "meetingbar"
