@@ -1,0 +1,4 @@
+interface:
+  display_name: "Merge Conflict Safety"
+  short_description: "競合解消を安全に実施し、main変更の欠落を監査する。"
+  default_prompt: "$resolve-merge-conflicts を使って、この競合を解消し、main側変更の欠落がないか監査してください。"
