@@ -1,7 +1,0 @@
-interface:
-  display_name: "Rust Worktree 容量調査"
-  short_description: "Rust並列開発時の容量不足を安全に調査・解消する。"
-  default_prompt: "$rust-worktree-storage-triage を使って、Rust worktree 開発環境の容量不足を調査して安全に解消してください。"
-
-policy:
-  allow_implicit_invocation: false

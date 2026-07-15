@@ -1,9 +1,9 @@
 ---
-name: rust-worktree-storage-triage
-description: Rust の複数 worktree を並列開発する macOS で、容量不足を調査・解消する。Nix store、Rust の target とエディタ用ビルド成果物、sccache、Docker/Colima、アプリのデータを分類し、再生成可能なものから安全に削除する必要があるときに使う。
+name: macos-storage-triage
+description: macOS の不要データと容量不足を調査・解消する。Nix、Rust のビルド成果物、Docker/Colima、アプリのデータを含む候補を分類し、再生成可能なものから安全に削除する必要があるときに使う。
 ---
 
-# Rust Worktree 容量調査
+# macOS ストレージ整理
 
 容量を大きい順に測定し、対象を「再生成可能な成果物」「稼働中の開発状態」「永続データ」に分ける。削除前に必ず利用状況を確認し、解放量と再発原因を報告する。
 
