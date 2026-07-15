@@ -1,5 +1,5 @@
 interface:
-  display_name: "macOS ストレージ整理"
+  display_name: "macOS Storage Triage"
   short_description: "macOS の不要データを安全に調査し、容量を整理する。"
   default_prompt: "$macos-storage-triage を使って、この Mac のストレージ容量を調査して安全に削減してください。"
 
