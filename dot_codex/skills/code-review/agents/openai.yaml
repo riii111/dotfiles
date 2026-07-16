@@ -1,4 +1,4 @@
 interface:
   display_name: "Code Review"
-  short_description: "変更をレビューし、指摘と調査メモを分ける。"
-  default_prompt: "code-reviewを使ってこの変更をレビューし、blocking/non-blockingの指摘とverification noteを分けてください。"
+  short_description: "変更を徹底レビューし、投稿可能な指摘を省略せずに出す。"
+  default_prompt: "$code-reviewをsingleで使い、この変更を徹底レビューしてください。actionableな指摘は件数を絞らず、調査過程や取り下げた候補は出力しないでください。"
