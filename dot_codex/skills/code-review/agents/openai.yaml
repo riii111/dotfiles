@@ -1,4 +1,4 @@
 interface:
   display_name: "Code Review"
   short_description: "変更を徹底レビューし、投稿可能な指摘を省略せずに出す。"
-  default_prompt: "$code-reviewをsingleで使い、この変更を徹底レビューしてください。具体的で修正可能な指摘は件数を絞らず、調査過程や取り下げた候補は出力しないでください。"
+  default_prompt: "$code-reviewをsingleで使い、この変更をレビューしてください。"
