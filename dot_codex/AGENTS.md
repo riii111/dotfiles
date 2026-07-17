@@ -39,6 +39,11 @@
 - JSON: jq / YAML・XML: yq
 - コマンド出力は最小限に。必要なら `--json | jq` を使う
 
+## Codex操作
+
+セッションIDへの情報共有を依頼されたら、multi_agent_v1__send_inputのtargetへセッションIDを指定する。
+submission_idの取得を成功条件とする。
+
 ## コメント規律
 
 - **禁止**: 挙動の説明、自明な言い換え
