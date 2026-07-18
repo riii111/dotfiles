@@ -33,6 +33,13 @@ scripts
 # settings and selected desktop preferences. See its header comment.
 .codex/config.toml
 
+# App-managed: written by `wezterm-git-status-bridge setup --herdr` from the
+# installed binary. Managing copies here rolled the Lua module back to old
+# versions and stripped the plugin script's exec bit on apply; the setup
+# command is the single source of truth for these files.
+.config/wezterm/right-status.lua
+.config/wezterm/herdr-plugin
+
 # Auto-generated files
 .config/karabiner/automatic_backups
 .config/karabiner/assets
