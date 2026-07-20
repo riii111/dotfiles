@@ -12,7 +12,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 
-SESSION_VERSION = 3
+SESSION_VERSION = 1
 MERGES_VERSION = 1
 ORCHESTRATION_ID = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 REPOSITORY = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
@@ -91,7 +91,7 @@ def load_sessions(path: Path, parent_thread_id: str, repository: str) -> dict:
         raise StateError(f"could not read sessions at {path}: {error}") from error
 
     version = data.get("version") if isinstance(data, dict) else None
-    if type(version) is not int or version not in (1, 2, SESSION_VERSION):
+    if type(version) is not int or version != SESSION_VERSION:
         raise StateError("unsupported sessions version")
     if data.get("parent_thread_id") != parent_thread_id or not isinstance(
         data.get("tasks"), dict
@@ -122,25 +122,17 @@ def load_sessions(path: Path, parent_thread_id: str, repository: str) -> dict:
                     )
                 pull_request_tasks[key] = task_id
                 normalized_task["pull_request"] = pull_request
-        elif version == SESSION_VERSION:
+        else:
             normalized_task = {"creation": validate_creation(task_id, creation)}
             if "pull_request" in task:
                 raise StateError(f"task {task_id} has a pull request without a thread")
-        else:
-            raise StateError(f"task {task_id} has no child thread ID")
         normalized["tasks"][task_id] = normalized_task
     return normalized
 
 
 def validate_creation(task_id: str, creation: object) -> dict:
-    if not isinstance(creation, dict):
-        raise StateError(f"task {task_id} has invalid creation state")
-    status = creation.get("status")
-    client_thread_id = creation.get("client_thread_id")
-    if status == "reserved" and client_thread_id is None:
-        return {"status": status}
-    if status == "pending" and isinstance(client_thread_id, str) and client_thread_id:
-        return {"status": status, "client_thread_id": client_thread_id}
+    if creation == {"status": "reserved"}:
+        return creation
     raise StateError(f"task {task_id} has invalid creation state")
 
 
@@ -179,23 +171,12 @@ def load_merges(path: Path, sessions: dict, repository: str) -> dict:
             raise StateError(f"merge record for PR {number} must be an object")
         task_id = record.get("task_id")
         merge_commit = record.get("merge_commit")
-        parent_notification = record.get("parent_notification")
-        local_notification = record.get("local_notification")
         if not isinstance(task_id, str) or not task_id:
             raise StateError(f"merge record for PR {number} has no task ID")
         if task_id in task_ids:
             raise StateError(f"multiple merge records refer to task {task_id}")
         if not isinstance(merge_commit, str) or not merge_commit:
             raise StateError(f"merge record for PR {number} has no merge commit")
-        if parent_notification not in ("pending", "delivered"):
-            raise StateError(
-                f"merge record for PR {number} has invalid parent notification"
-            )
-        if local_notification not in ("not_sent", "sent"):
-            raise StateError(
-                f"merge record for PR {number} has invalid local notification"
-            )
-
         task = sessions["tasks"].get(task_id)
         pull_request = task.get("pull_request") if task else None
         expected = {"repository": repository, "number": int(number)}
@@ -207,8 +188,6 @@ def load_merges(path: Path, sessions: dict, repository: str) -> dict:
         normalized["pull_requests"][number] = {
             "task_id": task_id,
             "merge_commit": merge_commit,
-            "parent_notification": parent_notification,
-            "local_notification": local_notification,
         }
     return normalized
 
@@ -256,26 +235,6 @@ def reserve_session(orchestration_id: str, task_id: str) -> dict:
         if task_id in sessions["tasks"]:
             raise StateError(f"task {task_id} already has session creation state")
         sessions["tasks"][task_id] = {"creation": {"status": "reserved"}}
-        write_sessions(path, sessions)
-        return sessions
-
-
-def record_pending(orchestration_id: str, task_id: str, client_thread_id: str) -> dict:
-    context = load_orchestration(orchestration_id)
-    path = Path(context["sessions_path"])
-    with lock_sessions(path):
-        sessions = load_sessions(
-            path, context["parent_thread_id"], context["repository"]
-        )
-        task = sessions["tasks"].get(task_id)
-        if not client_thread_id:
-            raise StateError("client thread ID must not be empty")
-        pending = {"status": "pending", "client_thread_id": client_thread_id}
-        if task == {"creation": pending}:
-            return sessions
-        if task != {"creation": {"status": "reserved"}}:
-            raise StateError(f"task {task_id} has no matching session reservation")
-        task["creation"] = pending
         write_sessions(path, sessions)
         return sessions
 
@@ -497,11 +456,6 @@ def parser() -> argparse.ArgumentParser:
     reservation.add_argument("orchestration_id")
     reservation.add_argument("--task-id", required=True)
 
-    pending = commands.add_parser("record-pending")
-    pending.add_argument("orchestration_id")
-    pending.add_argument("--task-id", required=True)
-    pending.add_argument("--client-thread-id", required=True)
-
     release = commands.add_parser("release-reservation")
     release.add_argument("orchestration_id")
     release.add_argument("--task-id", required=True)
@@ -540,12 +494,6 @@ def main(argv: list[str] | None = None) -> int:
             )
         elif arguments.command == "reserve-session":
             output = reserve_session(arguments.orchestration_id, arguments.task_id)
-        elif arguments.command == "record-pending":
-            output = record_pending(
-                arguments.orchestration_id,
-                arguments.task_id,
-                arguments.client_thread_id,
-            )
         elif arguments.command == "release-reservation":
             output = release_reservation(arguments.orchestration_id, arguments.task_id)
         elif arguments.command == "record-session":

@@ -150,25 +150,6 @@ task_source = "linear://project"
         self.assertEqual(result["completed_from_merges"], ["A"])
         self.assertEqual(result["selected"], ["B"])
 
-    def test_context_rejects_invalid_merge_notification_state(self):
-        self.create_session_with_pull_request()
-        path = self.write_merges(
-            {
-                "42": {
-                    "task_id": "A",
-                    "merge_commit": "abc123",
-                    "parent_notification": "unknown",
-                    "local_notification": "sent",
-                }
-            }
-        )
-        sessions = state.load_sessions(
-            state.state_path("example"), "parent-thread", "owner/repository"
-        )
-
-        with self.assertRaisesRegex(state.StateError, "invalid parent notification"):
-            state.load_merges(path, sessions, "owner/repository")
-
     def test_cli_reports_non_table_orchestrations_as_json_error(self):
         self.config_path.write_text('orchestrations = "invalid"\n')
 
@@ -185,7 +166,7 @@ task_source = "linear://project"
             {"error": "configuration orchestrations must be a table"},
         )
 
-    def test_records_session_and_pull_request_and_upgrades_version_one(self):
+    def test_records_a_pull_request_for_an_existing_session(self):
         sessions_path = state.state_path("example")
         sessions_path.parent.mkdir(parents=True)
         sessions_path.write_text(
@@ -200,7 +181,7 @@ task_source = "linear://project"
 
         result = state.record_pull_request("example", "A", "owner/repository", 42)
 
-        self.assertEqual(result["version"], 3)
+        self.assertEqual(result["version"], 1)
         self.assertEqual(
             result["tasks"]["A"]["pull_request"],
             {"repository": "owner/repository", "number": 42},
@@ -216,17 +197,14 @@ task_source = "linear://project"
         with self.assertRaisesRegex(state.StateError, "another thread"):
             state.record_session("example", "A", "thread-b")
 
-    def test_reservation_and_pending_creation_prevent_duplicate_selection(self):
+    def test_reservation_prevents_duplicate_selection(self):
         tasks = self.tasks_file([{"id": "A", "dependencies": []}])
 
         state.reserve_session("example", "A")
-        reserved = state.plan("example", tasks, [], 1)
-        state.record_pending("example", "A", "client-a")
-        pending = state.plan("example", tasks, [], 1)
+        result = state.plan("example", tasks, [], 1)
 
-        self.assertEqual(reserved["selected"], [])
-        self.assertEqual(pending["selected"], [])
-        self.assertEqual(pending["launched_uncompleted"], ["A"])
+        self.assertEqual(result["selected"], [])
+        self.assertEqual(result["launched_uncompleted"], ["A"])
         with self.assertRaisesRegex(
             state.StateError, "already has session creation state"
         ):
@@ -240,11 +218,6 @@ task_source = "linear://project"
 
         self.assertNotIn("A", released["tasks"])
         self.assertEqual(state.plan("example", tasks, [], 1)["selected"], ["A"])
-
-        state.reserve_session("example", "A")
-        state.record_pending("example", "A", "client-a")
-        with self.assertRaisesRegex(state.StateError, "no releasable"):
-            state.release_reservation("example", "A")
 
     def test_record_pull_request_rejects_repository_and_number_changes(self):
         state.reserve_session("example", "A")
@@ -274,7 +247,7 @@ task_source = "linear://project"
         path.write_text(
             json.dumps(
                 {
-                    "version": 3,
+                    "version": 1,
                     "parent_thread_id": "parent-thread",
                     "tasks": {
                         "A": {
@@ -300,7 +273,7 @@ task_source = "linear://project"
         path.write_text(
             json.dumps(
                 {
-                    "version": 3,
+                    "version": 1,
                     "parent_thread_id": "parent-thread",
                     "tasks": {
                         "A": {
