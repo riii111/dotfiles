@@ -162,7 +162,9 @@ task_source = "linear://project"
                 }
             }
         )
-        sessions = state.load_sessions(state.state_path("example"), "parent-thread")
+        sessions = state.load_sessions(
+            state.state_path("example"), "parent-thread", "owner/repository"
+        )
 
         with self.assertRaisesRegex(state.StateError, "invalid parent notification"):
             state.load_merges(path, sessions, "owner/repository")
@@ -254,6 +256,103 @@ task_source = "linear://project"
         state.record_pull_request("example", "A", "owner/repository", 42)
         with self.assertRaisesRegex(state.StateError, "another pull request"):
             state.record_pull_request("example", "A", "owner/repository", 43)
+
+    def test_record_pull_request_rejects_a_pull_request_used_by_another_task(self):
+        state.reserve_session("example", "A")
+        state.record_session("example", "A", "thread-a")
+        state.reserve_session("example", "B")
+        state.record_session("example", "B", "thread-b")
+        state.record_pull_request("example", "A", "owner/repository", 42)
+
+        with self.assertRaisesRegex(state.StateError, "already associated with task A"):
+            state.record_pull_request("example", "B", "owner/repository", 42)
+
+    def test_sessions_reject_duplicate_pull_request_associations(self):
+        path = state.state_path("example")
+        path.parent.mkdir(parents=True)
+        pull_request = {"repository": "owner/repository", "number": 42}
+        path.write_text(
+            json.dumps(
+                {
+                    "version": 3,
+                    "parent_thread_id": "parent-thread",
+                    "tasks": {
+                        "A": {
+                            "child_thread_id": "thread-a",
+                            "pull_request": pull_request,
+                        },
+                        "B": {
+                            "child_thread_id": "thread-b",
+                            "pull_request": pull_request,
+                        },
+                    },
+                }
+            )
+        )
+
+        with self.assertRaisesRegex(state.StateError, "share a pull request"):
+            state.load_sessions(path, "parent-thread", "owner/repository")
+
+    def test_context_rejects_a_pull_request_from_another_repository(self):
+        path = state.state_path("example")
+        tasks = self.tasks_file([{"id": "A", "dependencies": []}])
+        path.parent.mkdir(parents=True)
+        path.write_text(
+            json.dumps(
+                {
+                    "version": 3,
+                    "parent_thread_id": "parent-thread",
+                    "tasks": {
+                        "A": {
+                            "child_thread_id": "thread-a",
+                            "pull_request": {
+                                "repository": "old/repository",
+                                "number": 42,
+                            },
+                        }
+                    },
+                }
+            )
+        )
+
+        result = subprocess.run(
+            [sys.executable, str(SPEC.origin), "context", "example"],
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("does not match the orchestration", result.stderr)
+        with self.assertRaisesRegex(
+            state.StateError, "does not match the orchestration"
+        ):
+            state.plan("example", tasks, [], 1)
+
+    def test_sessions_and_merges_reject_boolean_versions(self):
+        sessions_path = state.state_path("example")
+        sessions_path.parent.mkdir(parents=True)
+        sessions_path.write_text(
+            json.dumps(
+                {
+                    "version": True,
+                    "parent_thread_id": "parent-thread",
+                    "tasks": {},
+                }
+            )
+        )
+
+        with self.assertRaisesRegex(state.StateError, "unsupported sessions version"):
+            state.load_sessions(sessions_path, "parent-thread", "owner/repository")
+
+        merges_path = state.merges_path("example")
+        merges_path.write_text(json.dumps({"version": True, "pull_requests": {}}))
+        with self.assertRaisesRegex(state.StateError, "unsupported merges version"):
+            state.load_merges(
+                merges_path,
+                state.empty_sessions("parent-thread"),
+                "owner/repository",
+            )
 
 
 if __name__ == "__main__":

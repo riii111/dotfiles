@@ -82,7 +82,7 @@ def empty_sessions(parent_thread_id: str) -> dict:
     }
 
 
-def load_sessions(path: Path, parent_thread_id: str) -> dict:
+def load_sessions(path: Path, parent_thread_id: str, repository: str) -> dict:
     if not path.exists():
         return empty_sessions(parent_thread_id)
     try:
@@ -90,7 +90,8 @@ def load_sessions(path: Path, parent_thread_id: str) -> dict:
     except (OSError, json.JSONDecodeError) as error:
         raise StateError(f"could not read sessions at {path}: {error}") from error
 
-    if not isinstance(data, dict) or data.get("version") not in (1, 2, SESSION_VERSION):
+    version = data.get("version") if isinstance(data, dict) else None
+    if type(version) is not int or version not in (1, 2, SESSION_VERSION):
         raise StateError("unsupported sessions version")
     if data.get("parent_thread_id") != parent_thread_id or not isinstance(
         data.get("tasks"), dict
@@ -98,6 +99,7 @@ def load_sessions(path: Path, parent_thread_id: str) -> dict:
         raise StateError("sessions parent or tasks do not match the orchestration")
 
     normalized = empty_sessions(parent_thread_id)
+    pull_request_tasks = {}
     for task_id, task in data["tasks"].items():
         if not isinstance(task_id, str) or not task_id or not isinstance(task, dict):
             raise StateError("sessions contain an invalid task entry")
@@ -108,10 +110,19 @@ def load_sessions(path: Path, parent_thread_id: str) -> dict:
                 raise StateError(f"task {task_id} has conflicting creation state")
             normalized_task = {"child_thread_id": child_thread_id}
             if "pull_request" in task:
-                normalized_task["pull_request"] = validate_pull_request(
-                    task["pull_request"]
-                )
-        elif data["version"] == SESSION_VERSION:
+                pull_request = validate_pull_request(task["pull_request"])
+                if pull_request["repository"] != repository:
+                    raise StateError(
+                        f"task {task_id} pull request repository does not match the orchestration"
+                    )
+                key = (pull_request["repository"], pull_request["number"])
+                if key in pull_request_tasks:
+                    raise StateError(
+                        f"tasks {pull_request_tasks[key]} and {task_id} share a pull request"
+                    )
+                pull_request_tasks[key] = task_id
+                normalized_task["pull_request"] = pull_request
+        elif version == SESSION_VERSION:
             normalized_task = {"creation": validate_creation(task_id, creation)}
             if "pull_request" in task:
                 raise StateError(f"task {task_id} has a pull request without a thread")
@@ -152,7 +163,8 @@ def load_merges(path: Path, sessions: dict, repository: str) -> dict:
         data = json.loads(path.read_text())
     except (OSError, json.JSONDecodeError) as error:
         raise StateError(f"could not read merges at {path}: {error}") from error
-    if not isinstance(data, dict) or data.get("version") != MERGES_VERSION:
+    version = data.get("version") if isinstance(data, dict) else None
+    if type(version) is not int or version != MERGES_VERSION:
         raise StateError("unsupported merges version")
     pull_requests = data.get("pull_requests")
     if not isinstance(pull_requests, dict):
@@ -236,7 +248,9 @@ def reserve_session(orchestration_id: str, task_id: str) -> dict:
     context = load_orchestration(orchestration_id)
     path = Path(context["sessions_path"])
     with lock_sessions(path):
-        sessions = load_sessions(path, context["parent_thread_id"])
+        sessions = load_sessions(
+            path, context["parent_thread_id"], context["repository"]
+        )
         if not task_id:
             raise StateError("task ID must not be empty")
         if task_id in sessions["tasks"]:
@@ -250,7 +264,9 @@ def record_pending(orchestration_id: str, task_id: str, client_thread_id: str) -
     context = load_orchestration(orchestration_id)
     path = Path(context["sessions_path"])
     with lock_sessions(path):
-        sessions = load_sessions(path, context["parent_thread_id"])
+        sessions = load_sessions(
+            path, context["parent_thread_id"], context["repository"]
+        )
         task = sessions["tasks"].get(task_id)
         if not client_thread_id:
             raise StateError("client thread ID must not be empty")
@@ -268,7 +284,9 @@ def release_reservation(orchestration_id: str, task_id: str) -> dict:
     context = load_orchestration(orchestration_id)
     path = Path(context["sessions_path"])
     with lock_sessions(path):
-        sessions = load_sessions(path, context["parent_thread_id"])
+        sessions = load_sessions(
+            path, context["parent_thread_id"], context["repository"]
+        )
         if sessions["tasks"].get(task_id) != {"creation": {"status": "reserved"}}:
             raise StateError(f"task {task_id} has no releasable session reservation")
         del sessions["tasks"][task_id]
@@ -280,7 +298,9 @@ def record_session(orchestration_id: str, task_id: str, child_thread_id: str) ->
     context = load_orchestration(orchestration_id)
     path = Path(context["sessions_path"])
     with lock_sessions(path):
-        sessions = load_sessions(path, context["parent_thread_id"])
+        sessions = load_sessions(
+            path, context["parent_thread_id"], context["repository"]
+        )
         existing = sessions["tasks"].get(task_id)
         if existing and "child_thread_id" in existing:
             if existing["child_thread_id"] != child_thread_id:
@@ -305,7 +325,9 @@ def record_pull_request(
         raise StateError("pull request repository does not match the orchestration")
     path = Path(context["sessions_path"])
     with lock_sessions(path):
-        sessions = load_sessions(path, context["parent_thread_id"])
+        sessions = load_sessions(
+            path, context["parent_thread_id"], context["repository"]
+        )
         task = sessions["tasks"].get(task_id)
         if task is None or "child_thread_id" not in task:
             raise StateError(f"task {task_id} has no child session")
@@ -319,6 +341,14 @@ def record_pull_request(
             )
         if existing == pull_request:
             return sessions
+        for other_task_id, other_task in sessions["tasks"].items():
+            if (
+                other_task_id != task_id
+                and other_task.get("pull_request") == pull_request
+            ):
+                raise StateError(
+                    f"pull request is already associated with task {other_task_id}"
+                )
         task["pull_request"] = pull_request
         write_sessions(path, sessions)
         return sessions
@@ -397,7 +427,9 @@ def plan(
         raise StateError("maximum parallelism must be positive")
     context = load_orchestration(orchestration_id)
     sessions = load_sessions(
-        Path(context["sessions_path"]), context["parent_thread_id"]
+        Path(context["sessions_path"]),
+        context["parent_thread_id"],
+        context["repository"],
     )
     merges = load_merges(Path(context["merges_path"]), sessions, context["repository"])
     tasks = load_tasks(tasks_path)
@@ -488,7 +520,9 @@ def main(argv: list[str] | None = None) -> int:
         if arguments.command == "context":
             output = load_orchestration(arguments.orchestration_id)
             output["sessions"] = load_sessions(
-                Path(output["sessions_path"]), output["parent_thread_id"]
+                Path(output["sessions_path"]),
+                output["parent_thread_id"],
+                output["repository"],
             )
             output["merges"] = load_merges(
                 Path(output["merges_path"]), output["sessions"], output["repository"]
