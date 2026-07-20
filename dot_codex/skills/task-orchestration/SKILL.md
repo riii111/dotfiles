@@ -97,7 +97,7 @@ available_slots = max(0, maximum_parallelism - launched_uncompletedの数)
 1. `list_projects`でrepositoryに対応する保存済みprojectを一意に特定する。候補なし・複数候補なら停止する。
 2. 対応表を再読し、task IDが未登録で親IDも不変であることを確認する。
 3. `create_thread`を一回だけ呼ぶ。project targetの`environment`は`local`とし、modelとthinkingは明示指定がある場合だけ渡す。promptには下記Goalを使う。
-4. 戻り値の`threadId`をchild thread IDとする。`clientThreadId`しかなければ推測せず停止する。
+4. 戻り値の`threadId`をchild thread IDとする。`clientThreadId`しかなければ、同じタスクを再作成せず、Codexが提供する文書化済みの作成待機手段で対応する`threadId`を待つ。待機手段がない、待機が失敗またはタイムアウトする、対応を一意に特定できない場合だけ「判断が必要」とする。
 5. 作成成功後すぐ、既存taskを保持して対応表へIDを追加する。同じディレクトリの一時ファイルへ有効なJSONを書いて置換し、保存完了後に次のタスクへ進む。
 6. `set_thread_title`で`[<task-id>] <task title>`へ変更する。失敗時は登録を残して以降の作成を止める。
 
@@ -126,10 +126,36 @@ base: <base>
 
 タスク本文を転記しても再読を省略させない。自動mergeは対象repositoryへの明示的な許可と条件がある場合だけ記載する。
 
+## 入力例
+
+通常の開始では、次のように依頼する。
+
+```text
+$task-orchestrationを使って、次に開始できるタスクを選んでください。
+オーケストレーションID: example-project
+base: origin/main
+最大並列数: 3
+子セッション用SKILL: 利用なし
+merge方針: 手動merge
+```
+
+必須入力が不足している依頼では、子セッションを作らず、不足項目を「判断が必要」として返す。
+
+```text
+$task-orchestrationを使って、example-projectのタスクを開始してください。
+```
+
 ## 結果とfixture
 
 作成したtask・タイトル・thread ID、完了taskと根拠、見送ったtaskと理由、依存待ちtaskと未完了依存、対応表の保存先を返す。部分失敗時は保存済み・未保存を分け、作成済みthread IDをすべて示す。
 
 作成対象がない確定状態は`開始可能なタスクなし`とする。入力不足、取得失敗、schema不正、依存・完了証拠の矛盾、project・threadの特定不能は`判断が必要`とする。
 
-実threadを作らない検証では、最大並列数2、`A: []`、`B: []`、`C: [A,B]`を使い、初回はA・Bを同時に選び、Aだけmerge後もCはB待ち、A・B merge後はCを次に選ぶことを確認する。A・B登録済みの再実行では子を増やさず、未mergeなら`開始可能なタスクなし`とする。別fixture`D: [MISSING]`は`判断が必要`とする。各作成成功直後のID保存と、Goalのworktree、二次・三次影響、branch、commit、全検証、draft PR、`Task-ID`も確認する。
+実threadを作らない検証では、最大並列数2、`A: []`、`B: []`、`C: [A,B]`を使って次を確認する。
+
+- 正常系: 初回はA・Bを同時に選び、A・B merge後はCを次に選ぶ。
+- 依存待ち: Aだけmerge後もCを選ばず、B待ちとする。
+- 重複防止: A・B登録済みの再実行では子を増やさず、未mergeなら`開始可能なタスクなし`とする。
+- 不正依存: 別fixture`D: [MISSING]`では子を作らず`判断が必要`とする。
+- ID保存: 作成成功または作成待機の完了で得たthread IDを保存してから次のタスクを作る。
+- Goal: worktree、二次・三次影響、branch、commit、全検証、draft PR、`Task-ID`を含める。
