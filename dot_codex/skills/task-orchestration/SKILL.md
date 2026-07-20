@@ -11,8 +11,6 @@ description: |
 
 ## 入力値
 
-入力値は以下。
-
 - オーケストレーションID: 必須。`codex-task-orchestrator init`で登録したID
 - base: 必須
 - 最大並列数: 必須。正の整数
@@ -24,62 +22,15 @@ description: |
 
 ## 状態管理ツール
 
-`scripts/orchestration_state.py`を、設定とセッション対応表の読込、schema検証、開始対象の計算、ID保存に使う。これらをAIの手作業で再実装しない。
-
-設定確認:
+`scripts/orchestration_state.py`を、設定と状態の読込、schema検証、開始対象の計算、ID保存に使う。これらをAIの手作業で再実装しない。
 
 ```text
 python3 <skill-directory>/scripts/orchestration_state.py context <orchestration-id>
 ```
 
-ツールは、絶対パスの`XDG_CONFIG_HOME`または`$HOME/.config`からRust実装と同じ設定schemaを読む。
+設定は、絶対パスの`XDG_CONFIG_HOME`または`$HOME/.config`にある`codex-task-orchestrator/config.toml`から読む。セッション対応表とmerge処理記録は、絶対パスの`XDG_STATE_HOME`または`$HOME/.local/state`にある`codex-task-orchestrator/<orchestration-id>/sessions.json`と`merges.json`から読む。
 
-```toml
-[orchestrations.<orchestration-id>]
-parent_thread_id = "parent-thread-id"
-repository = "owner/repository"
-task_source = "task-source"
-```
-
-セッション対応表とmerge処理記録は、絶対パスの`XDG_STATE_HOME`または`$HOME/.local/state`配下から読む。
-
-```text
-codex-task-orchestrator/<orchestration-id>/sessions.json
-```
-
-```json
-{
-  "version": 3,
-  "parent_thread_id": "parent-thread-id",
-  "tasks": {
-    "TASK-1": {
-      "child_thread_id": "child-thread-id",
-      "pull_request": {
-        "repository": "owner/repository",
-        "number": 123
-      }
-    }
-  }
-}
-```
-
-`pull_request`はdraft PR作成後に追加する。子セッションの作成前または作成待ちでは、task entryをそれぞれ次の形にする。
-
-```json
-{"creation": {"status": "reserved"}}
-{"creation": {"status": "pending", "client_thread_id": "client-thread-id"}}
-```
-
-タスク本文、タスク管理元の状態、依存関係は保存しない。version 1と2は読込時に受け入れ、次の書込でversion 3へ更新する。
-
-merge処理記録は参照だけにする。通知状態の条件は以下。
-
-- `parent_notification`: `pending`または`delivered`
-- `local_notification`: `not_sent`または`sent`
-- ファイルなし: 未処理記録なしとして扱う
-- JSON、version、必須値が不正: 修復せず「判断が必要」とする
-
-`context`はmerge処理記録をschema検証し、セッション対応表のtask ID・repository・PR番号と一致する記録だけを`completed_from_merges`として返す。不一致、重複task ID、不正な通知状態では失敗する。
+`context`は設定と両状態ファイルを検証し、設定値、保存先、taskごとのセッション・PR対応、`completed_from_merges`を返す。`reserved`は作成前、`pending`は`clientThreadId`だけ取得済み、`child_thread_id`は作成完了を表す。状態ファイルがなければ空として扱い、それ以外の読込・schema・対応関係の不正では失敗する。
 
 ## 開始するタスクを選ぶ
 
@@ -145,7 +96,14 @@ python3 <skill-directory>/scripts/orchestration_state.py record-pending <orchest
 
 7. 保存後に`set_thread_title`で`[<task-id>] <task title>`へ変更する。
 
-予約後の作成失敗、pending、ID保存、タイトル変更の失敗では予約を消さず、同じタスクを再作成しない。保存済みの状態と失敗内容を返す。
+予約後の作成失敗、pending、ID保存、タイトル変更の失敗では同じタスクを再作成せず、保存済みの状態と失敗内容を返す。
+
+`create_thread`がセッションを作成していないと確定でき、ユーザーが再試行を明示的に許可した場合だけ、`reserved`を解除する。タイムアウトなど結果が不明な場合や`pending`には使わない。
+
+```text
+python3 <skill-directory>/scripts/orchestration_state.py release-reservation <orchestration-id> \
+  --task-id <task-id>
+```
 
 ## 子セッションへ渡すGoal
 

@@ -50,7 +50,10 @@ def load_orchestration(orchestration_id: str) -> dict:
     except (OSError, tomllib.TOMLDecodeError) as error:
         raise StateError(f"could not read configuration at {path}: {error}") from error
 
-    orchestration = config.get("orchestrations", {}).get(orchestration_id)
+    orchestrations = config.get("orchestrations", {})
+    if not isinstance(orchestrations, dict):
+        raise StateError("configuration orchestrations must be a table")
+    orchestration = orchestrations.get(orchestration_id)
     if not isinstance(orchestration, dict):
         raise StateError(f"orchestration {orchestration_id!r} is not registered")
 
@@ -261,6 +264,18 @@ def record_pending(orchestration_id: str, task_id: str, client_thread_id: str) -
         return sessions
 
 
+def release_reservation(orchestration_id: str, task_id: str) -> dict:
+    context = load_orchestration(orchestration_id)
+    path = Path(context["sessions_path"])
+    with lock_sessions(path):
+        sessions = load_sessions(path, context["parent_thread_id"])
+        if sessions["tasks"].get(task_id) != {"creation": {"status": "reserved"}}:
+            raise StateError(f"task {task_id} has no releasable session reservation")
+        del sessions["tasks"][task_id]
+        write_sessions(path, sessions)
+        return sessions
+
+
 def record_session(orchestration_id: str, task_id: str, child_thread_id: str) -> dict:
     context = load_orchestration(orchestration_id)
     path = Path(context["sessions_path"])
@@ -455,6 +470,10 @@ def parser() -> argparse.ArgumentParser:
     pending.add_argument("--task-id", required=True)
     pending.add_argument("--client-thread-id", required=True)
 
+    release = commands.add_parser("release-reservation")
+    release.add_argument("orchestration_id")
+    release.add_argument("--task-id", required=True)
+
     pull_request = commands.add_parser("record-pr")
     pull_request.add_argument("orchestration_id")
     pull_request.add_argument("--task-id", required=True)
@@ -493,6 +512,8 @@ def main(argv: list[str] | None = None) -> int:
                 arguments.task_id,
                 arguments.client_thread_id,
             )
+        elif arguments.command == "release-reservation":
+            output = release_reservation(arguments.orchestration_id, arguments.task_id)
         elif arguments.command == "record-session":
             output = record_session(
                 arguments.orchestration_id,

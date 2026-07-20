@@ -1,6 +1,8 @@
 import importlib.util
 import json
 import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -23,7 +25,8 @@ class OrchestrationStateTest(unittest.TestCase):
         self.state_home = self.root / "state"
         config_directory = self.config_home / "codex-task-orchestrator"
         config_directory.mkdir(parents=True)
-        (config_directory / "config.toml").write_text(
+        self.config_path = config_directory / "config.toml"
+        self.config_path.write_text(
             """
 [orchestrations.example]
 parent_thread_id = "parent-thread"
@@ -164,6 +167,22 @@ task_source = "linear://project"
         with self.assertRaisesRegex(state.StateError, "invalid parent notification"):
             state.load_merges(path, sessions, "owner/repository")
 
+    def test_cli_reports_non_table_orchestrations_as_json_error(self):
+        self.config_path.write_text('orchestrations = "invalid"\n')
+
+        result = subprocess.run(
+            [sys.executable, str(SPEC.origin), "context", "example"],
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(
+            json.loads(result.stderr),
+            {"error": "configuration orchestrations must be a table"},
+        )
+
     def test_records_session_and_pull_request_and_upgrades_version_one(self):
         sessions_path = state.state_path("example")
         sessions_path.parent.mkdir(parents=True)
@@ -210,6 +229,20 @@ task_source = "linear://project"
             state.StateError, "already has session creation state"
         ):
             state.reserve_session("example", "A")
+
+    def test_only_a_reserved_creation_can_be_released(self):
+        tasks = self.tasks_file([{"id": "A", "dependencies": []}])
+        state.reserve_session("example", "A")
+
+        released = state.release_reservation("example", "A")
+
+        self.assertNotIn("A", released["tasks"])
+        self.assertEqual(state.plan("example", tasks, [], 1)["selected"], ["A"])
+
+        state.reserve_session("example", "A")
+        state.record_pending("example", "A", "client-a")
+        with self.assertRaisesRegex(state.StateError, "no releasable"):
+            state.release_reservation("example", "A")
 
     def test_record_pull_request_rejects_repository_and_number_changes(self):
         state.reserve_session("example", "A")
