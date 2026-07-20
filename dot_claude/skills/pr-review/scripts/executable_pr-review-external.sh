@@ -18,8 +18,8 @@ BASE_BRANCH="${2:?Usage: pr-review-external.sh <WORKTREE_DIR> <BASE_BRANCH>}"
 
 # worktree の存在確認
 if [ ! -d "$WORKTREE_DIR" ]; then
-  echo "ERROR: Worktree not found: $WORKTREE_DIR" >&2
-  exit 1
+	echo "ERROR: Worktree not found: $WORKTREE_DIR" >&2
+	exit 1
 fi
 
 CODEX_TMP=$(mktemp)
@@ -29,7 +29,8 @@ trap 'rm -f "$CODEX_TMP" "$CR_TMP"' EXIT
 # Codex（利用可能な場合）— バックグラウンドで起動
 CODEX_PID=""
 if command -v codex &>/dev/null; then
-  (cd "$WORKTREE_DIR" && RUST_LOG=off codex exec --sandbox read-only 2>/dev/null - <<CODEX_PROMPT > "$CODEX_TMP"
+	(
+		cd "$WORKTREE_DIR" && RUST_LOG=off codex exec --sandbox read-only - 2>/dev/null <<CODEX_PROMPT >"$CODEX_TMP"
 You are a PR reviewer. Review the changes on this branch compared to the base branch.
 
 Instructions:
@@ -45,19 +46,19 @@ Description of the issue and why it matters.
 
 Severity levels: Critical / Suggestion / Nit
 CODEX_PROMPT
-  ) &
-  CODEX_PID=$!
+	) &
+	CODEX_PID=$!
 else
-  echo "codex CLI not found, skipping" >&2
+	echo "codex CLI not found, skipping" >&2
 fi
 
 # CodeRabbit（利用可能な場合）— バックグラウンドで起動
 CR_PID=""
 if command -v cr &>/dev/null; then
-  (cd "$WORKTREE_DIR" && cr --prompt-only -t committed --base "$BASE_BRANCH" 2>/dev/null > "$CR_TMP") &
-  CR_PID=$!
+	(cd "$WORKTREE_DIR" && cr --agent -t committed --base "$BASE_BRANCH" 2>/dev/null >"$CR_TMP") &
+	CR_PID=$!
 else
-  echo "cr CLI not found, skipping" >&2
+	echo "cr CLI not found, skipping" >&2
 fi
 
 # 完了を待つ
