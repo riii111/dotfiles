@@ -229,7 +229,10 @@ def command_test(_: argparse.Namespace) -> int:
     lua = shutil.which("lua")
     if lua is None:
         failures += 1
-        print("lua tests: lua not found", file=sys.stderr)
+        print(
+            "lua tests: lua not found (run inside nix develop or install Lua 5.4)",
+            file=sys.stderr,
+        )
     else:
         lua_test_result = run_command(
             [lua, "private_dot_config/wezterm/tests/herdr_mode_test.lua"],

@@ -15,5 +15,8 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install Lua
+        run: brew install lua
+
       - name: Run repo verification
         run: ./bin/executable_dotctl test
