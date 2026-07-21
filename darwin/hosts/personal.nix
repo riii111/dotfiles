@@ -8,6 +8,6 @@
   services.codex-task-orchestrator = {
     enable = true;
     orchestrationIds = [ "codex-task-orchestration" ];
-    intervalSeconds = 60;
+    intervalSeconds = 180;
   };
 }

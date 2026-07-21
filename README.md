@@ -60,7 +60,7 @@ Homebrew stays for GUI / cask packages and is managed by nix-darwin.
 
 ### Codex task orchestration
 
-Set the orchestration IDs and polling interval in `darwin/hosts/personal.nix`. The current personal-host setting polls `codex-task-orchestration` every 60 seconds.
+Set the orchestration IDs and polling interval in `darwin/hosts/personal.nix`. The current personal-host setting polls `codex-task-orchestration` every 3 minutes.
 
 Initial setup:
 
