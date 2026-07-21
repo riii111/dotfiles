@@ -12,6 +12,10 @@
       url = "github:ogulcancelik/herdr/v0.7.4";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    codex-task-orchestrator = {
+      url = "github:riii111/codex-task-orchestrator";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -20,6 +24,7 @@
       zigpkgs,
       nix-darwin,
       herdr,
+      codex-task-orchestrator,
       ...
     }:
     let
@@ -73,6 +78,7 @@
           '';
           mkVersionEntry = name: value: { inherit name value; };
           herdrPkg = herdr.packages.${system}.default;
+          codexTaskOrchestratorPkg = codex-task-orchestrator.packages.${system}.default;
           dailyCliPackages = with pkgs; [
             # Editor-integrated tooling that should exist in the normal shell too.
             _1password-cli
@@ -149,24 +155,27 @@
             tbls
             uv
             herdrPkg
+            codexTaskOrchestratorPkg
           ];
           devShellOnlyPackages = with pkgs; [
             alejandra
           ];
-          directToolVersions = nixpkgs.lib.concatMap
-            (package:
-              let
-                name = nixpkgs.lib.getName package;
-              in
-              if builtins.elem name [
+          directToolVersions = nixpkgs.lib.concatMap (
+            package:
+            let
+              name = nixpkgs.lib.getName package;
+            in
+            if
+              builtins.elem name [
                 "selected-go-tools"
                 "selected-rustup-tools"
                 "wezterm-terminfo"
-              ] then
-                [ ]
-              else
-                [ (mkVersionEntry name (package.version or "unknown")) ])
-            (dailyCliPackages ++ devShellOnlyPackages);
+              ]
+            then
+              [ ]
+            else
+              [ (mkVersionEntry name (package.version or "unknown")) ]
+          ) (dailyCliPackages ++ devShellOnlyPackages);
           toolVersions = builtins.listToAttrs (
             directToolVersions
             ++ [
@@ -240,12 +249,14 @@
 
       darwinConfigurations = {
         personal = nix-darwin.lib.darwinSystem {
+          specialArgs = { inherit codex-task-orchestrator; };
           modules = [
             ./darwin/hosts/personal.nix
           ];
         };
 
         work = nix-darwin.lib.darwinSystem {
+          specialArgs = { inherit codex-task-orchestrator; };
           modules = [
             ./darwin/hosts/work.nix
           ];
