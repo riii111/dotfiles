@@ -8,7 +8,6 @@ local PREFIX = "\x1b[59;5u"
 local MODES = {
 	main = "herdr_mode",
 	copy = "herdr_copy_mode",
-	internal = "herdr_internal_mode",
 	selection = "herdr_selection_mode",
 	resize = "herdr_resize_mode",
 }
@@ -20,11 +19,6 @@ M.styles = {
 		label = " HERDR ",
 	},
 	[MODES.copy] = {
-		bg = "#2f4a38",
-		fg = "#c8facc",
-		label = " HERDR ",
-	},
-	[MODES.internal] = {
 		bg = "#2f4a38",
 		fg = "#c8facc",
 		label = " HERDR ",
@@ -199,10 +193,10 @@ end
 -- モード遷移は、操作後のキー入力の受け手に合わせる。
 -- - 維持: 次の入力もHerdrの操作として扱う。
 --   （例: pane移動、tab/workspace切替、resizeなど）
--- - 一時モード: Herdr内のUIへ入力を渡し、終了後の入力先に応じてmain復帰またはOFFにする。
---   （例: copy、picker、Helpなど）
--- - 即OFF: 次の入力を名前入力や別アプリへ渡す、または操作対象を閉じる。
---   （例: rename、edit scrollback、外部TUIなど）
+-- - 一時モード: Herdr内のUIへ入力を渡し、終了操作に応じてmain復帰またはOFFにする。
+--   （例: copy、pickerなど）
+-- - 即OFF: 操作後の入力をそのまま別の入力先へ引き渡す、または操作対象を閉じる。
+--   （例: rename、Help/settings、外部TUIなど）
 local function main_key_table()
 	return {
 		{ key = "Escape", action = leave_main_mode() },
@@ -243,8 +237,8 @@ local function main_key_table()
 		{ key = "Space", action = enter_submode(herdr_key("Space"), MODES.selection) },
 		{ key = "g", action = enter_submode(herdr_key("g"), MODES.selection) },
 		{ key = "g", mods = "CTRL", action = handoff(herdr_key("g", "CTRL")) },
-		{ key = "?", action = enter_submode(herdr_key("?"), MODES.internal) },
-		{ key = "s", action = enter_submode(herdr_key("s"), MODES.internal) },
+		{ key = "?", action = handoff(herdr_key("?")) },
+		{ key = "s", action = handoff(herdr_key("s")) },
 		{ key = "s", mods = "CTRL", action = handoff(herdr_key("s", "CTRL")) },
 		{ key = "r", action = enter_submode(herdr_key("r"), MODES.resize) },
 		{ key = "R", mods = "SHIFT", action = herdr_shift_key("r") },
@@ -277,14 +271,6 @@ local function selection_key_table()
 		{ key = "Escape", action = send_raw_and_return_to_main("Escape") },
 		{ key = "q", action = send_raw_and_return_to_main("q") },
 		{ key = "Enter", action = send_raw_and_leave("Enter") },
-		{ key = ";", mods = "CTRL", action = cancel_submode_and_leave() },
-	}
-end
-
-local function internal_key_table()
-	return {
-		{ key = "Escape", action = send_raw_and_leave("Escape") },
-		{ key = "q", action = send_raw_and_leave("q") },
 		{ key = ";", mods = "CTRL", action = cancel_submode_and_leave() },
 	}
 end
@@ -332,7 +318,6 @@ function M.install(keys, key_tables)
 
 	key_tables[MODES.main] = main_key_table()
 	key_tables[MODES.copy] = copy_key_table()
-	key_tables[MODES.internal] = internal_key_table()
 	key_tables[MODES.selection] = selection_key_table()
 	key_tables[MODES.resize] = resize_key_table()
 end
