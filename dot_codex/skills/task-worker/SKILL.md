@@ -82,7 +82,7 @@ review AIは確認したhead SHAと、`Blocking`、`Non-blocking`、必要な場
 指摘を受けたら次を行う。
 
 1. 指摘を現在のPR差分とrepository realityに照らして確認する。ユーザーが方針を変えた場合はその指示を優先する。
-2. 妥当な指摘に必要なコード、test、文書、設定を変更する。対象がなければ無理にtestを追加しない。
+2. 指摘が妥当であれば対応する。
 3. repository所定の全検証を再実行し、小さなcommitにしてpushする。
 4. 新しいhead SHA、対応内容、検証結果を添え、`send_message_to_thread`で既存のreview thread IDへ再レビューを依頼する。新しいside chatを作らない。
 5. review AIは更新後のbase差分全体を同じ`code-review` SKILLで再確認し、同じ子セッションIDへ結果を送る。
