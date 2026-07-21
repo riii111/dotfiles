@@ -16,7 +16,9 @@ description: |
 - 最大並列数: 必須。正の整数
 - ブリッジから受け取ったmerge情報: 任意
 - 子セッション用SKILL: 任意。既定は「利用なし」
-- merge方針: 任意。既定は「手動merge」
+- 子セッションの完了方針: 任意。`manual`または`auto`。既定は`manual`
+
+`manual`はreview通過後もdraft PRのままユーザーへ報告して止める。`auto`はreview通過後にReady for reviewへ変更し、最新headの全検証と必須checksを確認してmergeまで進める。`auto`は対象repositoryとtaskへ明示された場合だけ使う。
 
 必須値を過去の会話からも確定できなければ、既定branchや並列数を推測せず「判断が必要」として返す。
 
@@ -111,7 +113,7 @@ python3 <skill-directory>/scripts/orchestration_state.py release-reservation <or
 - 検証後にdraft PRを作る
 - draft PR作成後、次を実行してローカルにPRを対応付ける
 - 子セッション用SKILLの利用有無
-- 手動merge、または明示的に許可された条件付き自動merge
+- 子セッションの完了方針。既定の`manual`、または明示的に許可された`auto`
 
 ```text
 python3 <skill-directory>/scripts/orchestration_state.py record-pr <orchestration-id> \
