@@ -172,6 +172,16 @@ local selection_complete = run_binding(MODE.selection, "Enter", nil)
 assert(selection_complete[1].value.key == "Enter")
 assert(selection_complete[2].name == "PopKeyTable")
 
+for _, case in ipairs({ { "?", "Escape" }, { "s", "q" } }) do
+	enable_mode()
+	run_binding(MODE.main, case[1], nil)
+	assert(herdr_mode.active_mode_for_tab({ window_id = 42 }) == MODE.internal)
+	local modal_exit = run_binding(MODE.internal, case[2], nil)
+	assert(modal_exit[1].value.key == case[2])
+	assert(modal_exit[2].name == "PopKeyTable")
+	assert(herdr_mode.active_mode_for_tab({ window_id = 42 }) == nil)
+end
+
 assert(find_binding(MODE.internal, "Enter", nil) == nil)
 
 enable_mode()

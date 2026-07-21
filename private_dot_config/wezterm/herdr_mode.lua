@@ -197,9 +197,12 @@ local function exit_resize_mode(leave_outer_mode)
 end
 
 -- モード遷移は、操作後のキー入力の受け手に合わせる。
--- - 続けてHerdrを操作する場合は維持する（pane移動、tab/workspace切替、resize、zoom、新規workspace）。
--- - copyやpickerなどHerdr内の一時UIへ移る場合は、取り消し時にmainへ戻し、完了後に通常入力へ戻るなら解除する。
--- - renameやnew tabの名前入力、edit scrollback、外部TUIなどへ入力を引き渡す場合と、対象を閉じる場合は送信直後に解除する。
+-- - 維持: 次の入力もHerdrの操作として扱う。
+--   （例: pane移動、tab/workspace切替、resizeなど）
+-- - 一時モード: Herdr内のUIへ入力を渡し、終了後の入力先に応じてmain復帰またはOFFにする。
+--   （例: copy、picker、Helpなど）
+-- - 即OFF: 次の入力を名前入力や別アプリへ渡す、または操作対象を閉じる。
+--   （例: rename、edit scrollback、外部TUIなど）
 local function main_key_table()
 	return {
 		{ key = "Escape", action = leave_main_mode() },
@@ -280,8 +283,8 @@ end
 
 local function internal_key_table()
 	return {
-		{ key = "Escape", action = send_raw_and_return_to_main("Escape") },
-		{ key = "q", action = send_raw_and_return_to_main("q") },
+		{ key = "Escape", action = send_raw_and_leave("Escape") },
+		{ key = "q", action = send_raw_and_leave("q") },
 		{ key = ";", mods = "CTRL", action = cancel_submode_and_leave() },
 	}
 end
