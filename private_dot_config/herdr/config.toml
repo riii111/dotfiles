@@ -71,7 +71,7 @@ rename_workspace = "prefix+alt+w"
 remote_image_paste = ""  # remote attach時のraw Ctrl-v画像paste無効（neovim/shell優先）
 
 [theme]
-name = "rose-pine"
+name = "vesper"
 auto_switch = false
 
 [ui]
@@ -134,9 +134,11 @@ switch_ascii_input_source_in_prefix = true  # macOS+CJK: prefix mode中だけASC
 
 [[keys.command]]
 key = "prefix+ctrl+g"
-type = "pane"
+type = "popup"
 command = "lazygit"
 description = "run lazygit"
+width = "90%"
+height = "90%"
 
 [[keys.command]]
 key = "prefix+ctrl+s"
