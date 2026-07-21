@@ -1,4 +1,4 @@
 interface:
   display_name: "Task Worker"
-  short_description: "実装・検証・レビュー反復を経てPRをReadyにする。"
-  default_prompt: "$task-workerを使い、担当タスクを実装してレビュー通過まで進めてください。"
+  short_description: "実装・レビュー反復を進め、指定方針でPRを完了する。"
+  default_prompt: "$task-workerを使い、担当タスクを実装して指定した完了方針まで進めてください。"
