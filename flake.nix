@@ -152,21 +152,24 @@
           ];
           devShellOnlyPackages = with pkgs; [
             alejandra
+            lua5_4
           ];
-          directToolVersions = nixpkgs.lib.concatMap
-            (package:
-              let
-                name = nixpkgs.lib.getName package;
-              in
-              if builtins.elem name [
+          directToolVersions = nixpkgs.lib.concatMap (
+            package:
+            let
+              name = nixpkgs.lib.getName package;
+            in
+            if
+              builtins.elem name [
                 "selected-go-tools"
                 "selected-rustup-tools"
                 "wezterm-terminfo"
-              ] then
-                [ ]
-              else
-                [ (mkVersionEntry name (package.version or "unknown")) ])
-            (dailyCliPackages ++ devShellOnlyPackages);
+              ]
+            then
+              [ ]
+            else
+              [ (mkVersionEntry name (package.version or "unknown")) ]
+          ) (dailyCliPackages ++ devShellOnlyPackages);
           toolVersions = builtins.listToAttrs (
             directToolVersions
             ++ [

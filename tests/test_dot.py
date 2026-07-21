@@ -209,20 +209,29 @@ class DotCliTest(unittest.TestCase):
         self.assertEqual(
             calls[0][0], ("python3", "-m", "unittest", "discover", "tests")
         )
-        self.assertEqual(calls[1][0], ("/bin/bash", "-n", "/repo/scripts/check.sh"))
-        self.assertEqual(calls[2][0], ("/bin/sh", "-n", "/repo/bin/run"))
+        self.assertEqual(
+            calls[1][0],
+            (
+                "/bin/lua",
+                "private_dot_config/wezterm/tests/herdr_mode_test.lua",
+            ),
+        )
+        self.assertEqual(calls[2][0], ("/bin/bash", "-n", "/repo/scripts/check.sh"))
+        self.assertEqual(calls[3][0], ("/bin/sh", "-n", "/repo/bin/run"))
 
     def test_command_test_collects_failures_without_traceback(self):
         repo_root = Path("/repo")
         targets = [(repo_root / "scripts/check.sh", "bash")]
         runs = [
             subprocess.CompletedProcess(["python3"], 1, "", "unit failed"),
+            subprocess.CompletedProcess(["lua"], 0, "", ""),
             subprocess.CompletedProcess(["bash"], 1, "", "syntax failed"),
         ]
 
         with (
             mock.patch.object(cli, "resolve_repo_root", return_value=repo_root),
             mock.patch.object(cli, "collect_shell_targets", return_value=targets),
+            mock.patch("shutil.which", side_effect=lambda name: f"/bin/{name}"),
             mock.patch("subprocess.run", side_effect=runs),
             mock.patch("sys.stdout", new=io.StringIO()),
             mock.patch("sys.stderr", new=io.StringIO()) as stderr,

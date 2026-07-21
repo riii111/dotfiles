@@ -226,6 +226,19 @@ def command_test(_: argparse.Namespace) -> int:
         failures += 1
         print_process_failure("python tests", test_result)
 
+    lua = shutil.which("lua")
+    if lua is None:
+        failures += 1
+        print("lua tests: lua not found", file=sys.stderr)
+    else:
+        lua_test_result = run_command(
+            [lua, "private_dot_config/wezterm/tests/herdr_mode_test.lua"],
+            repo_root,
+        )
+        if lua_test_result.returncode != 0:
+            failures += 1
+            print_process_failure("lua tests", lua_test_result)
+
     targets = collect_shell_targets(repo_root)
     if not targets:
         print("No shell targets found")
