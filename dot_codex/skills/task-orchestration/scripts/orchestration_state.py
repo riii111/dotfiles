@@ -76,7 +76,8 @@ def load_orchestration(orchestration_id: str) -> dict:
             or not REPOSITORY.fullmatch(repository)
             for repository in pull_request_repositories
         )
-        or len(pull_request_repositories) != len(set(pull_request_repositories))
+        or len(pull_request_repositories)
+        != len({repository.lower() for repository in pull_request_repositories})
     ):
         raise StateError(
             "pull_request_repositories must be a non-empty unique owner/repository list"
@@ -84,8 +85,12 @@ def load_orchestration(orchestration_id: str) -> dict:
 
     return {
         "orchestration_id": orchestration_id,
-        **{key: orchestration[key] for key in required},
-        "pull_request_repositories": pull_request_repositories,
+        "parent_thread_id": orchestration["parent_thread_id"],
+        "repository": orchestration["repository"].lower(),
+        "task_source": orchestration["task_source"],
+        "pull_request_repositories": [
+            repository.lower() for repository in pull_request_repositories
+        ],
         "sessions_path": str(state_path(orchestration_id)),
         "merges_path": str(merges_path(orchestration_id)),
     }
@@ -164,7 +169,7 @@ def validate_pull_request(pull_request: object) -> dict:
         raise StateError("pull request repository must use owner/repository form")
     if not isinstance(number, int) or isinstance(number, bool) or number < 1:
         raise StateError("pull request number must be a positive integer")
-    return {"repository": repository, "number": number}
+    return {"repository": repository.lower(), "number": number}
 
 
 def pull_request_key(pull_request: dict) -> str:
@@ -316,7 +321,8 @@ def record_pull_request(
     orchestration_id: str, task_id: str, repository: str, number: int
 ) -> dict:
     context = load_orchestration(orchestration_id)
-    if repository not in context["pull_request_repositories"]:
+    pull_request = validate_pull_request({"repository": repository, "number": number})
+    if pull_request["repository"] not in context["pull_request_repositories"]:
         raise StateError("pull request repository is not allowed by the orchestration")
     path = Path(context["sessions_path"])
     with lock_sessions(path):
@@ -328,9 +334,6 @@ def record_pull_request(
         task = sessions["tasks"].get(task_id)
         if task is None or "child_thread_id" not in task:
             raise StateError(f"task {task_id} has no child session")
-        pull_request = validate_pull_request(
-            {"repository": repository, "number": number}
-        )
         existing = task.get("pull_request")
         if existing and existing != pull_request:
             raise StateError(

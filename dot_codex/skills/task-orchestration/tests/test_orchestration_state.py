@@ -261,6 +261,17 @@ task_source = "linear://project"
         with self.assertRaisesRegex(state.StateError, "another pull request"):
             state.record_pull_request("example", "A", "other/repository", 43)
 
+    def test_record_pull_request_normalizes_repository_case(self):
+        state.reserve_session("example", "A")
+        state.record_session("example", "A", "thread-a")
+
+        result = state.record_pull_request("example", "A", "Other/Repository", 42)
+
+        self.assertEqual(
+            result["tasks"]["A"]["pull_request"],
+            {"repository": "other/repository", "number": 42},
+        )
+
     def test_record_pull_request_rejects_a_pull_request_used_by_another_task(self):
         state.reserve_session("example", "A")
         state.record_session("example", "A", "thread-a")
@@ -365,6 +376,48 @@ task_source = "linear://project"
         self.create_session_with_pull_request()
         path = self.write_merges(
             {"42": {"task_id": "A", "merge_commit": "abc123"}}
+        )
+
+        merges = state.load_merges(
+            path,
+            state.load_sessions(
+                state.state_path("example"),
+                "parent-thread",
+                ["owner/repository", "other/repository"],
+            ),
+        )
+
+        self.assertEqual(
+            list(merges["pull_requests"]), ["owner/repository#42"]
+        )
+
+    def test_load_merges_matches_a_case_normalized_repository_key(self):
+        sessions_path = state.state_path("example")
+        sessions_path.parent.mkdir(parents=True)
+        sessions_path.write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "parent_thread_id": "parent-thread",
+                    "tasks": {
+                        "A": {
+                            "child_thread_id": "thread-a",
+                            "pull_request": {
+                                "repository": "Owner/Repository",
+                                "number": 42,
+                            },
+                        }
+                    },
+                }
+            )
+        )
+        path = self.write_merges(
+            {
+                "owner/repository#42": {
+                    "task_id": "A",
+                    "merge_commit": "abc123",
+                }
+            }
         )
 
         merges = state.load_merges(
