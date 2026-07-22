@@ -129,6 +129,7 @@
             ninja
             nix-direnv
             nodejs
+            opencode
             openjdk
             pgcli
             pinentry_mac
