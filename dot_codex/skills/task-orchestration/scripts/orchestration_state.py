@@ -14,9 +14,14 @@ from pathlib import Path
 
 SESSION_VERSION = 1
 MERGES_VERSION = 1
+COMPLETION_NOTES_VERSION = 1
 ORCHESTRATION_ID = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 REPOSITORY = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 PULL_REQUEST_NUMBER = re.compile(r"^[1-9][0-9]*$")
+COMPLETION_NOTE_FIELDS = frozenset(
+    {"risks", "handoff", "review_learnings", "technical_debt"}
+)
+HANDOFF_NOTE_FIELDS = ("risks", "handoff")
 
 
 class StateError(ValueError):
@@ -37,6 +42,10 @@ def state_path(orchestration_id: str) -> Path:
 
 def merges_path(orchestration_id: str) -> Path:
     return state_path(orchestration_id).with_name("merges.json")
+
+
+def completion_notes_path(orchestration_id: str) -> Path:
+    return state_path(orchestration_id).parent.parent / "completion-notes.json"
 
 
 def load_orchestration(orchestration_id: str) -> dict:
@@ -93,6 +102,7 @@ def load_orchestration(orchestration_id: str) -> dict:
         ],
         "sessions_path": str(state_path(orchestration_id)),
         "merges_path": str(merges_path(orchestration_id)),
+        "completion_notes_path": str(completion_notes_path(orchestration_id)),
     }
 
 
@@ -227,6 +237,70 @@ def load_merges(path: Path, sessions: dict) -> dict:
     return normalized
 
 
+def empty_completion_notes() -> dict:
+    return {"version": COMPLETION_NOTES_VERSION, "orchestrations": {}}
+
+
+def validate_completion_note(note: object) -> dict:
+    if not isinstance(note, dict):
+        raise StateError("completion note must be an object")
+    unknown_fields = set(note) - COMPLETION_NOTE_FIELDS
+    if unknown_fields:
+        raise StateError("completion note contains an unknown field")
+
+    normalized = {}
+    for field, value in note.items():
+        if not isinstance(value, str) or not value.strip():
+            raise StateError(f"completion note {field} must be a non-empty string")
+        normalized[field] = value
+    return normalized
+
+
+def load_completion_notes(path: Path) -> dict:
+    if not path.exists():
+        return empty_completion_notes()
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as error:
+        raise StateError(
+            f"could not read completion notes at {path}: {error}"
+        ) from error
+
+    version = data.get("version") if isinstance(data, dict) else None
+    if type(version) is not int or version != COMPLETION_NOTES_VERSION:
+        raise StateError("unsupported completion notes version")
+    orchestrations = data.get("orchestrations")
+    if not isinstance(orchestrations, dict):
+        raise StateError("completion notes must contain an orchestrations object")
+
+    normalized = empty_completion_notes()
+    for orchestration_id, orchestration in orchestrations.items():
+        if not isinstance(orchestration_id, str) or not ORCHESTRATION_ID.fullmatch(
+            orchestration_id
+        ):
+            raise StateError("completion notes contain an invalid orchestration ID")
+        if not isinstance(orchestration, dict) or set(orchestration) != {"tasks"}:
+            raise StateError("completion notes orchestration must contain a tasks object")
+        tasks = orchestration["tasks"]
+        if not isinstance(tasks, dict):
+            raise StateError("completion notes tasks must be an object")
+        normalized_tasks = {}
+        for task_id, note in tasks.items():
+            if not isinstance(task_id, str) or not task_id:
+                raise StateError("completion notes contain an invalid task ID")
+            normalized_tasks[task_id] = validate_completion_note(note)
+        normalized["orchestrations"][orchestration_id] = {"tasks": normalized_tasks}
+    return normalized
+
+
+def load_completion_note_file(path: Path) -> dict:
+    try:
+        note = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as error:
+        raise StateError(f"could not read completion note at {path}: {error}") from error
+    return validate_completion_note(note)
+
+
 def write_sessions(path: Path, sessions: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary_path = None
@@ -244,6 +318,10 @@ def write_sessions(path: Path, sessions: dict) -> None:
     finally:
         if temporary_path and temporary_path.exists():
             temporary_path.unlink()
+
+
+def write_completion_notes(path: Path, completion_notes: dict) -> None:
+    write_sessions(path, completion_notes)
 
 
 @contextmanager
@@ -354,6 +432,37 @@ def record_pull_request(
         return sessions
 
 
+def record_completion_note(
+    orchestration_id: str, task_id: str, note_file: Path
+) -> dict:
+    context = load_orchestration(orchestration_id)
+    sessions = load_sessions(
+        Path(context["sessions_path"]),
+        context["parent_thread_id"],
+        context["pull_request_repositories"],
+    )
+    task = sessions["tasks"].get(task_id)
+    if task is None or "child_thread_id" not in task:
+        raise StateError(f"task {task_id} has no child session")
+    if "pull_request" not in task:
+        raise StateError(f"task {task_id} has no tracked pull request")
+    note = load_completion_note_file(note_file)
+    path = Path(context["completion_notes_path"])
+    with lock_sessions(path):
+        completion_notes = load_completion_notes(path)
+        tasks = completion_notes["orchestrations"].setdefault(
+            orchestration_id, {"tasks": {}}
+        )["tasks"]
+        existing = tasks.get(task_id)
+        if existing is not None:
+            if existing != note:
+                raise StateError(f"task {task_id} already has a different completion note")
+            return completion_notes
+        tasks[task_id] = note
+        write_completion_notes(path, completion_notes)
+        return completion_notes
+
+
 def load_tasks(path: Path) -> dict[str, dict]:
     try:
         payload = json.loads(path.read_text())
@@ -432,6 +541,7 @@ def plan(
         context["pull_request_repositories"],
     )
     merges = load_merges(Path(context["merges_path"]), sessions)
+    completion_notes = load_completion_notes(Path(context["completion_notes_path"]))
     tasks = load_tasks(tasks_path)
     completed_from_merges = {
         record["task_id"] for record in merges["pull_requests"].values()
@@ -440,10 +550,19 @@ def plan(
     completed = completed_from_merges | completed_additional
     unknown_completed = completed - tasks.keys()
     unknown_launched = sessions["tasks"].keys() - tasks.keys()
-    if unknown_completed or unknown_launched:
+    noted_tasks = set(
+        completion_notes["orchestrations"].get(orchestration_id, {"tasks": {}})[
+            "tasks"
+        ]
+    )
+    unknown_noted = noted_tasks - tasks.keys()
+    if unknown_completed or unknown_launched or unknown_noted:
         raise StateError(
-            "completed or launched tasks are absent from the current task source"
+            "completed, launched, or noted tasks are absent from the current task source"
         )
+
+    missing_completion_notes = completed_from_merges - noted_tasks
+    completion_ready = completed - missing_completion_notes
 
     launched = set(sessions["tasks"])
     active = launched - completed
@@ -452,7 +571,7 @@ def plan(
         task_id
         for task_id, task in tasks.items()
         if task_id not in completed | launched
-        and set(task["dependencies"]) <= completed
+        and set(task["dependencies"]) <= completion_ready
     ]
     ready.sort(key=lambda task_id: (tasks[task_id]["order"], task_id))
     selected = ready[:available]
@@ -462,6 +581,31 @@ def plan(
         for task_id, task in tasks.items()
         if task_id not in completed | launched and set(task["dependencies"]) - completed
     }
+    waiting_completion_notes = {
+        task_id: sorted(set(task["dependencies"]) & missing_completion_notes)
+        for task_id, task in tasks.items()
+        if task_id not in completed | launched
+        and set(task["dependencies"]) & missing_completion_notes
+    }
+    dependency_completion_notes = {}
+    current_notes = completion_notes["orchestrations"].get(
+        orchestration_id, {"tasks": {}}
+    )["tasks"]
+    for task_id in selected:
+        notes = {
+            dependency: {
+                field: current_notes.get(dependency, {})[field]
+                for field in HANDOFF_NOTE_FIELDS
+                if field in current_notes.get(dependency, {})
+            }
+            for dependency in tasks[task_id]["dependencies"]
+            if any(
+                field in current_notes.get(dependency, {})
+                for field in HANDOFF_NOTE_FIELDS
+            )
+        }
+        if notes:
+            dependency_completion_notes[task_id] = notes
     return {
         "selected": selected,
         "completed": sorted(completed),
@@ -469,6 +613,8 @@ def plan(
         "completed_additional": sorted(completed_additional),
         "launched_uncompleted": sorted(active),
         "waiting_dependencies": waiting,
+        "waiting_completion_notes": waiting_completion_notes,
+        "dependency_completion_notes": dependency_completion_notes,
         "capacity_deferred": ready[available:],
         "available_slots": available,
         "sessions_path": context["sessions_path"],
@@ -506,6 +652,11 @@ def parser() -> argparse.ArgumentParser:
     pull_request.add_argument("--task-id", required=True)
     pull_request.add_argument("--repository", required=True)
     pull_request.add_argument("--number", type=int, required=True)
+
+    completion_note = commands.add_parser("record-completion-note")
+    completion_note.add_argument("orchestration_id")
+    completion_note.add_argument("--task-id", required=True)
+    completion_note.add_argument("--note-file", type=Path, required=True)
     return root
 
 
@@ -522,6 +673,12 @@ def main(argv: list[str] | None = None) -> int:
             output["merges"] = load_merges(
                 Path(output["merges_path"]), output["sessions"]
             )
+            completion_notes = load_completion_notes(
+                Path(output["completion_notes_path"])
+            )
+            output["completion_notes"] = completion_notes["orchestrations"].get(
+                arguments.orchestration_id, {"tasks": {}}
+            )["tasks"]
             output["completed_from_merges"] = sorted(
                 record["task_id"]
                 for record in output["merges"]["pull_requests"].values()
@@ -542,6 +699,12 @@ def main(argv: list[str] | None = None) -> int:
                 arguments.orchestration_id,
                 arguments.task_id,
                 arguments.child_thread_id,
+            )
+        elif arguments.command == "record-completion-note":
+            output = record_completion_note(
+                arguments.orchestration_id,
+                arguments.task_id,
+                arguments.note_file,
             )
         else:
             output = record_pull_request(
