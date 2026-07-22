@@ -11,16 +11,15 @@ description: |
 
 ## 入力値
 
-- オーケストレーションID: 必須。`codex-task-orchestrator init`で登録したID
 - base: 必須
-- 最大並列数: 必須。正の整数
+- 最大並列数: 任意。既定値は4
 - ブリッジから受け取ったmerge情報: 任意
 - 子セッション用SKILL: 任意。既定は「利用なし」
 - 子セッションの完了方針: 任意。`manual`または`auto`。既定は`manual`
 
 `manual`はreview通過後もdraft PRのままユーザーへ報告して止める。`auto`はreview通過後にReady for reviewへ変更し、最新headの全検証と必須checksを確認してmergeまで進める。`auto`は対象repositoryとtaskへ明示された場合だけ使う。
 
-必須値を過去の会話からも確定できなければ、既定branchや並列数を推測せず「判断が必要」として返す。
+オーケストレーションIDは`codex-task-orchestrator init`で登録済みの設定から自動解決する。ユーザーへ入力を求めない。baseを過去の会話からも確定できなければ「判断が必要」として返す。
 
 ## 状態管理ツール
 
@@ -36,7 +35,7 @@ python3 <skill-directory>/scripts/orchestration_state.py context <orchestration-
 
 ## 開始するタスクを選ぶ
 
-1. `context`で設定、セッション対応表、merge処理記録を読む。失敗したら「判断が必要」とする。
+1. 登録済み設定からオーケストレーションIDを自動解決し、`context`で設定、セッション対応表、merge処理記録を読む。失敗したら「判断が必要」とする。
 2. `task_source`から、全タスクの最新本文、直接依存、現在状態、状態履歴、優先順位を毎回読み直す。ページングと依存先を省略しない。
 3. 読み直した結果を一時JSONへ正規化する。`order`にはタスク管理元の優先順位と並び順を反映する。
 
@@ -61,7 +60,7 @@ python3 <skill-directory>/scripts/orchestration_state.py context <orchestration-
 python3 <skill-directory>/scripts/orchestration_state.py plan <orchestration-id> \
   --tasks <normalized-tasks.json> \
   --completed <task-id> \
-  --max-parallelism <count>
+  --max-parallelism <user override or 4>
 ```
 
 ツールが依存先の欠落、自己依存、循環、重複ID、現在のタスク管理元にない完了済み・起動済みtask IDを検出した場合は「判断が必要」とする。成功時は`selected`、`waiting_dependencies`、`capacity_deferred`、`launched_uncompleted`をそのまま判断へ使う。
