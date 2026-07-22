@@ -16,7 +16,7 @@ description: |
 - repositoryとbase
 - 完了方針。`manual`または`auto`。既定は`manual`
 
-`manual`はLGTM後もDraftのまま結果を報告して止まる。`auto`はLGTM後にReady for reviewへ変更し、最新headの検証と必須checksを確認してmergeまで進める。`auto`はユーザーまたは親Goalがこのrepositoryとタスクへ明示した場合だけ使い、過去の慣例から推測しない。
+`manual`はLGTM、またはBlockingなしかつNon-blockingが2件以内のreview結果を得た後もDraftのまま結果を報告して止まる。`auto`はそのreview結果の後にReady for reviewへ変更し、最新headの検証と必須checksを確認してmergeまで進める。`auto`はユーザーまたは親Goalがこのrepositoryとタスクへ明示した場合だけ使い、過去の慣例から推測しない。
 
 不足値は親セッションのGoalと会話履歴から補う。repository、base、オーケストレーションID、task IDを確定できなければ推測せずユーザーへ返す。
 
@@ -33,7 +33,7 @@ python3 <task-orchestration-skill-directory>/scripts/orchestration_state.py cont
 
 3. `sessions.tasks[<task-id>].child_thread_id`を自分の通知先セッションIDとして取得する。taskが未登録、予約中、またはIDが空なら停止する。会話から推測したIDで代用しない。
 4. 担当repositoryが`pull_request_repositories`に含まれることを確認する。含まれなければ実装やPR作成へ進まず、親セッションへ設定不足を返す。`pull_request`があれば`gh pr view`でrepository、番号、base、draft状態、head SHA、checks、merge状態を確認する。ローカルworktreeは`git worktree list`とbranchから探す。
-5. PRなしなら実装工程、draft PRならreview工程から再開する。Readyなら完了方針を確認し、`manual`なら現在状態を報告して止まり、`auto`ならLGTMの証拠、最新headの全検証、必須checksを再確認してmerge工程へ進む。mergedなら完了を報告する。closedか状態が矛盾する場合は自動復旧しない。
+5. PRなしなら実装工程、draft PRならreview工程から再開する。Readyなら完了方針を確認し、`manual`なら現在状態を報告して止まり、`auto`ならLGTMまたはBlockingなしかつNon-blockingが2件以内のreview結果、最新headの全検証、必須checksを再確認してmerge工程へ進む。mergedなら完了を報告する。closedか状態が矛盾する場合は自動復旧しない。
 
 これにより、通知漏れで停止してもPRの現在状態から再開する。
 
@@ -84,17 +84,18 @@ review AIは確認したhead SHAと、`Blocking`、`Non-blocking`、必要な場
 1. 指摘を現在のPR差分とrepository realityに照らして確認する。ユーザーが方針を変えた場合はその指示を優先する。
 2. 指摘が妥当であれば対応する。
 3. repository所定の全検証を再実行し、小さなcommitにしてpushする。
-4. 新しいhead SHA、対応内容、検証結果を添え、`model: gpt-5.6-sol`と`thinking: high`を指定した`send_message_to_thread`で既存のreview thread IDへ再レビューを依頼する。新しいside chatを作らない。
-5. review AIは更新後のbase差分全体を同じ`code-review` SKILLで再確認し、同じ子セッションIDへ結果を送る。
+4. `Blocking`がなく、`Non-blocking`が2件以内なら再レビューを依頼しない。対応後のhead、対応内容、検証結果を記録し、review完了として次の工程へ進む。
+5. それ以外では、新しいhead SHA、対応内容、検証結果を添え、`model: gpt-5.6-sol`と`thinking: high`を指定した`send_message_to_thread`で既存のreview thread IDへ再レビューを依頼する。新しいside chatを作らない。
+6. review AIは更新後のbase差分全体を同じ`code-review` SKILLで再確認し、同じ子セッションIDへ結果を送る。
 
 review結果を待つ間も、ユーザーから届いた指示へ応答できる状態を保つ。
 
-## LGTM後
+## review完了後
 
-LGTMを受け取ったら、review対象のhead SHAから追加commitがないこと、PRの現在状態、最新headの全検証、必須checksが成功していることを確認する。
+LGTM、またはBlockingなしかつNon-blockingが2件以内のreview結果を得たら、review対象のhead SHAから追加commitがないこと、PRの現在状態、最新headの全検証、必須checksが成功していることを確認する。
 
 - `manual`: `gh pr ready`を呼ばず、DraftのままPR、review結果、検証結果をユーザーへ報告して止まる。
-- `auto`: PRがDraftなら`gh pr ready`でReady for reviewへ変更する。LGTM、最新headの全検証、必須checks成功を再確認してmergeする。
+- `auto`: PRがDraftなら`gh pr ready`でReady for reviewへ変更する。LGTMまたは上記のreview結果、最新headの全検証、必須checks成功を再確認してmergeする。
 
 `auto`の許可が不明または対象範囲が曖昧なら`manual`として扱う。ユーザーがPR状態を変更した場合は勝手にDraftへ戻さず、現在状態を報告する。
 
