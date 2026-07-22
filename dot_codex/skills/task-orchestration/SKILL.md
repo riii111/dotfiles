@@ -36,7 +36,7 @@ description: |
 python3 <skill-directory>/scripts/orchestration_state.py context <orchestration-id>
 ```
 
-設定は、絶対パスの`XDG_CONFIG_HOME`または`$HOME/.config`にある`codex-task-orchestrator/config.toml`から読む。セッション対応表とmerge処理記録は、絶対パスの`XDG_STATE_HOME`または`$HOME/.local/state`にある`codex-task-orchestrator/<orchestration-id>/sessions.json`と`merges.json`から読む。
+設定は、絶対パスの`XDG_CONFIG_HOME`または`$HOME/.config`にある`codex-task-orchestrator/config.toml`から読む。`repository`はタスク管理元、`pull_request_repositories`は成果物PRを許可するrepositoryの一覧として扱う。後者がない旧設定では`repository`だけを許可する。セッション対応表とmerge処理記録は、絶対パスの`XDG_STATE_HOME`または`$HOME/.local/state`にある`codex-task-orchestrator/<orchestration-id>/sessions.json`と`merges.json`から読む。
 
 `context`は設定、セッション対応、完了判定に使うmerge情報を検証し、設定値、保存先、taskごとのセッション・PR対応、`completed_from_merges`を返す。`reserved`は作成前、`child_thread_id`は作成完了を表す。状態ファイルがなければ空として扱い、それ以外の読込・対応関係の不正では失敗する。
 
@@ -77,7 +77,7 @@ python3 <skill-directory>/scripts/orchestration_state.py plan <orchestration-id>
 `selected`の各タスクについて、必ず一つずつ次を行う。
 
 1. `list_projects`でrepositoryに対応する保存済みprojectを一意に特定する。
-2. `context`を再実行し、task IDが未登録であることを確認する。
+2. `context`を再実行し、task IDが未登録で、対象repositoryが`pull_request_repositories`に含まれることを確認する。含まれなければ作成せず「判断が必要」とする。
 3. `create_thread`より先に作成予約を保存する。
 
 ```text

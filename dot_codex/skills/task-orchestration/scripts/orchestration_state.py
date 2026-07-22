@@ -65,10 +65,27 @@ def load_orchestration(orchestration_id: str) -> dict:
         raise StateError("orchestration configuration has an empty required value")
     if not REPOSITORY.fullmatch(orchestration["repository"]):
         raise StateError("repository must use owner/repository form")
+    pull_request_repositories = orchestration.get(
+        "pull_request_repositories", [orchestration["repository"]]
+    )
+    if (
+        not isinstance(pull_request_repositories, list)
+        or not pull_request_repositories
+        or any(
+            not isinstance(repository, str)
+            or not REPOSITORY.fullmatch(repository)
+            for repository in pull_request_repositories
+        )
+        or len(pull_request_repositories) != len(set(pull_request_repositories))
+    ):
+        raise StateError(
+            "pull_request_repositories must be a non-empty unique owner/repository list"
+        )
 
     return {
         "orchestration_id": orchestration_id,
         **{key: orchestration[key] for key in required},
+        "pull_request_repositories": pull_request_repositories,
         "sessions_path": str(state_path(orchestration_id)),
         "merges_path": str(merges_path(orchestration_id)),
     }
@@ -82,7 +99,9 @@ def empty_sessions(parent_thread_id: str) -> dict:
     }
 
 
-def load_sessions(path: Path, parent_thread_id: str, repository: str) -> dict:
+def load_sessions(
+    path: Path, parent_thread_id: str, pull_request_repositories: list[str]
+) -> dict:
     if not path.exists():
         return empty_sessions(parent_thread_id)
     try:
@@ -111,9 +130,9 @@ def load_sessions(path: Path, parent_thread_id: str, repository: str) -> dict:
             normalized_task = {"child_thread_id": child_thread_id}
             if "pull_request" in task:
                 pull_request = validate_pull_request(task["pull_request"])
-                if pull_request["repository"] != repository:
+                if pull_request["repository"] not in pull_request_repositories:
                     raise StateError(
-                        f"task {task_id} pull request repository does not match the orchestration"
+                        f"task {task_id} pull request repository is not allowed"
                     )
                 key = (pull_request["repository"], pull_request["number"])
                 if key in pull_request_tasks:
@@ -148,7 +167,11 @@ def validate_pull_request(pull_request: object) -> dict:
     return {"repository": repository, "number": number}
 
 
-def load_merges(path: Path, sessions: dict, repository: str) -> dict:
+def pull_request_key(pull_request: dict) -> str:
+    return f"{pull_request['repository']}#{pull_request['number']}"
+
+
+def load_merges(path: Path, sessions: dict) -> dict:
     if not path.exists():
         return {"version": MERGES_VERSION, "pull_requests": {}}
     try:
@@ -164,28 +187,35 @@ def load_merges(path: Path, sessions: dict, repository: str) -> dict:
 
     normalized = {"version": MERGES_VERSION, "pull_requests": {}}
     task_ids = set()
-    for number, record in pull_requests.items():
-        if not isinstance(number, str) or not PULL_REQUEST_NUMBER.fullmatch(number):
-            raise StateError("merges contain an invalid pull request number")
+    for key, record in pull_requests.items():
+        if not isinstance(key, str):
+            raise StateError("merges contain an invalid pull request key")
         if not isinstance(record, dict):
-            raise StateError(f"merge record for PR {number} must be an object")
+            raise StateError(f"merge record for PR {key} must be an object")
         task_id = record.get("task_id")
         merge_commit = record.get("merge_commit")
         if not isinstance(task_id, str) or not task_id:
-            raise StateError(f"merge record for PR {number} has no task ID")
+            raise StateError(f"merge record for PR {key} has no task ID")
         if task_id in task_ids:
             raise StateError(f"multiple merge records refer to task {task_id}")
         if not isinstance(merge_commit, str) or not merge_commit:
-            raise StateError(f"merge record for PR {number} has no merge commit")
+            raise StateError(f"merge record for PR {key} has no merge commit")
         task = sessions["tasks"].get(task_id)
         pull_request = task.get("pull_request") if task else None
-        expected = {"repository": repository, "number": int(number)}
-        if pull_request != expected:
+        if pull_request is None:
             raise StateError(
-                f"merge record for PR {number} does not match the session mapping"
+                f"merge record for PR {key} does not match the session mapping"
             )
+        canonical_key = pull_request_key(pull_request)
+        is_legacy_key = PULL_REQUEST_NUMBER.fullmatch(key) and int(key) == pull_request["number"]
+        if key != canonical_key and not is_legacy_key:
+            raise StateError(
+                f"merge record for PR {key} does not match the session mapping"
+            )
+        if canonical_key in normalized["pull_requests"]:
+            raise StateError(f"multiple merge records refer to PR {canonical_key}")
         task_ids.add(task_id)
-        normalized["pull_requests"][number] = {
+        normalized["pull_requests"][canonical_key] = {
             "task_id": task_id,
             "merge_commit": merge_commit,
         }
@@ -228,7 +258,9 @@ def reserve_session(orchestration_id: str, task_id: str) -> dict:
     path = Path(context["sessions_path"])
     with lock_sessions(path):
         sessions = load_sessions(
-            path, context["parent_thread_id"], context["repository"]
+            path,
+            context["parent_thread_id"],
+            context["pull_request_repositories"],
         )
         if not task_id:
             raise StateError("task ID must not be empty")
@@ -244,7 +276,9 @@ def release_reservation(orchestration_id: str, task_id: str) -> dict:
     path = Path(context["sessions_path"])
     with lock_sessions(path):
         sessions = load_sessions(
-            path, context["parent_thread_id"], context["repository"]
+            path,
+            context["parent_thread_id"],
+            context["pull_request_repositories"],
         )
         if sessions["tasks"].get(task_id) != {"creation": {"status": "reserved"}}:
             raise StateError(f"task {task_id} has no releasable session reservation")
@@ -258,7 +292,9 @@ def record_session(orchestration_id: str, task_id: str, child_thread_id: str) ->
     path = Path(context["sessions_path"])
     with lock_sessions(path):
         sessions = load_sessions(
-            path, context["parent_thread_id"], context["repository"]
+            path,
+            context["parent_thread_id"],
+            context["pull_request_repositories"],
         )
         existing = sessions["tasks"].get(task_id)
         if existing and "child_thread_id" in existing:
@@ -280,12 +316,14 @@ def record_pull_request(
     orchestration_id: str, task_id: str, repository: str, number: int
 ) -> dict:
     context = load_orchestration(orchestration_id)
-    if repository != context["repository"]:
-        raise StateError("pull request repository does not match the orchestration")
+    if repository not in context["pull_request_repositories"]:
+        raise StateError("pull request repository is not allowed by the orchestration")
     path = Path(context["sessions_path"])
     with lock_sessions(path):
         sessions = load_sessions(
-            path, context["parent_thread_id"], context["repository"]
+            path,
+            context["parent_thread_id"],
+            context["pull_request_repositories"],
         )
         task = sessions["tasks"].get(task_id)
         if task is None or "child_thread_id" not in task:
@@ -388,9 +426,9 @@ def plan(
     sessions = load_sessions(
         Path(context["sessions_path"]),
         context["parent_thread_id"],
-        context["repository"],
+        context["pull_request_repositories"],
     )
-    merges = load_merges(Path(context["merges_path"]), sessions, context["repository"])
+    merges = load_merges(Path(context["merges_path"]), sessions)
     tasks = load_tasks(tasks_path)
     completed_from_merges = {
         record["task_id"] for record in merges["pull_requests"].values()
@@ -476,10 +514,10 @@ def main(argv: list[str] | None = None) -> int:
             output["sessions"] = load_sessions(
                 Path(output["sessions_path"]),
                 output["parent_thread_id"],
-                output["repository"],
+                output["pull_request_repositories"],
             )
             output["merges"] = load_merges(
-                Path(output["merges_path"]), output["sessions"], output["repository"]
+                Path(output["merges_path"]), output["sessions"]
             )
             output["completed_from_merges"] = sorted(
                 record["task_id"]

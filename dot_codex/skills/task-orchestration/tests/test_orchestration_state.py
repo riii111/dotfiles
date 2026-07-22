@@ -31,6 +31,7 @@ class OrchestrationStateTest(unittest.TestCase):
 [orchestrations.example]
 parent_thread_id = "parent-thread"
 repository = "owner/repository"
+pull_request_repositories = ["owner/repository", "other/repository"]
 task_source = "linear://project"
 """.lstrip()
         )
@@ -52,10 +53,12 @@ task_source = "linear://project"
         path.write_text(json.dumps({"tasks": tasks}))
         return path
 
-    def create_session_with_pull_request(self, task_id="A", number=42):
+    def create_session_with_pull_request(
+        self, task_id="A", repository="owner/repository", number=42
+    ):
         state.reserve_session("example", task_id)
         state.record_session("example", task_id, f"thread-{task_id.lower()}")
-        state.record_pull_request("example", task_id, "owner/repository", number)
+        state.record_pull_request("example", task_id, repository, number)
 
     def write_merges(self, pull_requests):
         path = state.merges_path("example")
@@ -150,6 +153,34 @@ task_source = "linear://project"
         self.assertEqual(result["completed_from_merges"], ["A"])
         self.assertEqual(result["selected"], ["B"])
 
+    def test_plan_uses_cross_repository_merge_records_with_the_same_number(self):
+        tasks = self.tasks_file(
+            [
+                {"id": "A", "dependencies": []},
+                {"id": "B", "dependencies": []},
+                {"id": "C", "dependencies": ["A", "B"]},
+            ]
+        )
+        self.create_session_with_pull_request("A", "owner/repository", 42)
+        self.create_session_with_pull_request("B", "other/repository", 42)
+        self.write_merges(
+            {
+                "owner/repository#42": {
+                    "task_id": "A",
+                    "merge_commit": "abc123",
+                },
+                "other/repository#42": {
+                    "task_id": "B",
+                    "merge_commit": "def456",
+                },
+            }
+        )
+
+        result = state.plan("example", tasks, [], 1)
+
+        self.assertEqual(result["completed_from_merges"], ["A", "B"])
+        self.assertEqual(result["selected"], ["C"])
+
     def test_cli_reports_non_table_orchestrations_as_json_error(self):
         self.config_path.write_text('orchestrations = "invalid"\n')
 
@@ -219,16 +250,16 @@ task_source = "linear://project"
         self.assertNotIn("A", released["tasks"])
         self.assertEqual(state.plan("example", tasks, [], 1)["selected"], ["A"])
 
-    def test_record_pull_request_rejects_repository_and_number_changes(self):
+    def test_record_pull_request_allows_configured_repository_and_rejects_changes(self):
         state.reserve_session("example", "A")
         state.record_session("example", "A", "thread-a")
 
-        with self.assertRaisesRegex(state.StateError, "does not match"):
-            state.record_pull_request("example", "A", "other/repository", 42)
+        with self.assertRaisesRegex(state.StateError, "not allowed"):
+            state.record_pull_request("example", "A", "unlisted/repository", 42)
 
-        state.record_pull_request("example", "A", "owner/repository", 42)
+        state.record_pull_request("example", "A", "other/repository", 42)
         with self.assertRaisesRegex(state.StateError, "another pull request"):
-            state.record_pull_request("example", "A", "owner/repository", 43)
+            state.record_pull_request("example", "A", "other/repository", 43)
 
     def test_record_pull_request_rejects_a_pull_request_used_by_another_task(self):
         state.reserve_session("example", "A")
@@ -264,9 +295,11 @@ task_source = "linear://project"
         )
 
         with self.assertRaisesRegex(state.StateError, "share a pull request"):
-            state.load_sessions(path, "parent-thread", "owner/repository")
+            state.load_sessions(
+                path, "parent-thread", ["owner/repository", "other/repository"]
+            )
 
-    def test_context_rejects_a_pull_request_from_another_repository(self):
+    def test_context_accepts_a_pull_request_from_an_allowed_repository(self):
         path = state.state_path("example")
         tasks = self.tasks_file([{"id": "A", "dependencies": []}])
         path.parent.mkdir(parents=True)
@@ -279,7 +312,7 @@ task_source = "linear://project"
                         "A": {
                             "child_thread_id": "thread-a",
                             "pull_request": {
-                                "repository": "old/repository",
+                                "repository": "other/repository",
                                 "number": 42,
                             },
                         }
@@ -295,12 +328,57 @@ task_source = "linear://project"
             text=True,
         )
 
-        self.assertEqual(result.returncode, 2)
-        self.assertIn("does not match the orchestration", result.stderr)
-        with self.assertRaisesRegex(
-            state.StateError, "does not match the orchestration"
-        ):
-            state.plan("example", tasks, [], 1)
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(
+            json.loads(result.stdout)["sessions"]["tasks"]["A"]["pull_request"],
+            {"repository": "other/repository", "number": 42},
+        )
+        self.assertEqual(state.plan("example", tasks, [], 1)["selected"], [])
+
+    def test_context_rejects_a_pull_request_from_an_unlisted_repository(self):
+        path = state.state_path("example")
+        path.parent.mkdir(parents=True)
+        path.write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "parent_thread_id": "parent-thread",
+                    "tasks": {
+                        "A": {
+                            "child_thread_id": "thread-a",
+                            "pull_request": {
+                                "repository": "unlisted/repository",
+                                "number": 42,
+                            },
+                        }
+                    },
+                }
+            )
+        )
+
+        with self.assertRaisesRegex(state.StateError, "not allowed"):
+            state.load_sessions(
+                path, "parent-thread", ["owner/repository", "other/repository"]
+            )
+
+    def test_load_merges_normalizes_legacy_number_key(self):
+        self.create_session_with_pull_request()
+        path = self.write_merges(
+            {"42": {"task_id": "A", "merge_commit": "abc123"}}
+        )
+
+        merges = state.load_merges(
+            path,
+            state.load_sessions(
+                state.state_path("example"),
+                "parent-thread",
+                ["owner/repository", "other/repository"],
+            ),
+        )
+
+        self.assertEqual(
+            list(merges["pull_requests"]), ["owner/repository#42"]
+        )
 
     def test_sessions_and_merges_reject_boolean_versions(self):
         sessions_path = state.state_path("example")
@@ -316,7 +394,9 @@ task_source = "linear://project"
         )
 
         with self.assertRaisesRegex(state.StateError, "unsupported sessions version"):
-            state.load_sessions(sessions_path, "parent-thread", "owner/repository")
+            state.load_sessions(
+                sessions_path, "parent-thread", ["owner/repository"]
+            )
 
         merges_path = state.merges_path("example")
         merges_path.write_text(json.dumps({"version": True, "pull_requests": {}}))
@@ -324,7 +404,6 @@ task_source = "linear://project"
             state.load_merges(
                 merges_path,
                 state.empty_sessions("parent-thread"),
-                "owner/repository",
             )
 
 
