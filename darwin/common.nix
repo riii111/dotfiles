@@ -76,7 +76,6 @@
     casks = [
       "arc"
       "codex"
-      "cursor"
       "font-droid-sans-mono-nerd-font"
       "font-udev-gothic"
       "ghostty"
@@ -84,7 +83,6 @@
       "meetingbar"
       "wezterm"
       "wireshark-app"
-      "zed"
     ];
   };
 
