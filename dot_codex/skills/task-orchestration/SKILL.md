@@ -16,10 +16,17 @@ description: |
 - ブリッジから受け取ったmerge情報: 任意
 - 子セッション用SKILL: 任意。既定は「利用なし」
 - 子セッションの完了方針: 任意。`manual`または`auto`。既定は`manual`
+- 子セッションのmodelとthinking: 任意。指定時は下記の組み合わせから選ぶ
 
 `manual`はreview通過後もdraft PRのままユーザーへ報告して止める。`auto`はreview通過後にReady for reviewへ変更し、最新headの全検証と必須checksを確認してmergeまで進める。`auto`は対象repositoryとtaskへ明示された場合だけ使う。
 
 オーケストレーションIDは`codex-task-orchestrator init`で登録済みの設定から自動解決する。ユーザーへ入力を求めない。baseを過去の会話からも確定できなければ「判断が必要」として返す。
+
+子セッションのmodelとthinkingは、明示指定があればそれを使う。指定がなければ、Issueを読み直して次から選ぶ。
+
+- 実装に必要な情報が揃い、変更範囲が限定的: `gpt-5.6-luna` + `xhigh`
+- 実装に必要な情報が揃い、複数の呼び出し元・設定・失敗経路を調べる: `gpt-5.6-terra` + `high`
+- 実装に必要な情報が不足し、責務・仕様・構成などの設計判断が必要: `gpt-5.6-sol` + `medium`
 
 ## 状態管理ツール
 
@@ -78,7 +85,7 @@ python3 <skill-directory>/scripts/orchestration_state.py reserve-session <orches
   --task-id <task-id>
 ```
 
-4. `create_thread`を一回だけ呼ぶ。project targetの`environment`は必ず`local`とし、promptには下記Goalを使う。通常のlocal作成は`threadId`と`hostId`を直接返す。`clientThreadId`を返すCodex管理worktreeは指定しない。
+4. 選んだmodelとthinkingを指定して`create_thread`を一回だけ呼ぶ。project targetの`environment`は必ず`local`とし、promptには下記Goalを使う。通常のlocal作成は`threadId`と`hostId`を直接返す。`clientThreadId`を返すCodex管理worktreeは指定しない。
 5. `threadId`を取得した直後に保存する。
 
 ```text
