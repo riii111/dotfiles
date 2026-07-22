@@ -79,6 +79,7 @@
           mkVersionEntry = name: value: { inherit name value; };
           herdrPkg = herdr.packages.${system}.default;
           codexTaskOrchestratorPkg = codex-task-orchestrator.packages.${system}.default;
+          python3WithPyYAML = pkgs.python3.withPackages (pythonPackages: [ pythonPackages.pyyaml ]);
           dailyCliPackages = with pkgs; [
             # Editor-integrated tooling that should exist in the normal shell too.
             _1password-cli
@@ -86,7 +87,7 @@
             nil
             nixd
             nixfmt
-            python3
+            python3WithPyYAML
             shellcheck
             shfmt
             taplo
