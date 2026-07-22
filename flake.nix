@@ -12,6 +12,10 @@
       url = "github:ogulcancelik/herdr/v0.7.4";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    codex-task-orchestrator = {
+      url = "github:riii111/codex-task-orchestrator";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -20,6 +24,7 @@
       zigpkgs,
       nix-darwin,
       herdr,
+      codex-task-orchestrator,
       ...
     }:
     let
@@ -73,6 +78,7 @@
           '';
           mkVersionEntry = name: value: { inherit name value; };
           herdrPkg = herdr.packages.${system}.default;
+          codexTaskOrchestratorPkg = codex-task-orchestrator.packages.${system}.default;
           dailyCliPackages = with pkgs; [
             # Editor-integrated tooling that should exist in the normal shell too.
             _1password-cli
@@ -123,6 +129,7 @@
             ninja
             nix-direnv
             nodejs
+            opencode
             openjdk
             pgcli
             pinentry_mac
@@ -149,6 +156,7 @@
             tbls
             uv
             herdrPkg
+            codexTaskOrchestratorPkg
           ];
           devShellOnlyPackages = with pkgs; [
             alejandra
@@ -243,12 +251,14 @@
 
       darwinConfigurations = {
         personal = nix-darwin.lib.darwinSystem {
+          specialArgs = { inherit codex-task-orchestrator; };
           modules = [
             ./darwin/hosts/personal.nix
           ];
         };
 
         work = nix-darwin.lib.darwinSystem {
+          specialArgs = { inherit codex-task-orchestrator; };
           modules = [
             ./darwin/hosts/work.nix
           ];
