@@ -4,6 +4,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -152,9 +153,7 @@ task_source = "linear://project"
                 }
             }
         )
-        state.record_completion_note(
-            "example", "A", self.completion_note_file({})
-        )
+        state.record_completion_note("example", "A", self.completion_note_file({}))
 
         result = state.plan("example", tasks, [], 1)
 
@@ -184,12 +183,8 @@ task_source = "linear://project"
                 },
             }
         )
-        state.record_completion_note(
-            "example", "A", self.completion_note_file({})
-        )
-        state.record_completion_note(
-            "example", "B", self.completion_note_file({})
-        )
+        state.record_completion_note("example", "A", self.completion_note_file({}))
+        state.record_completion_note("example", "B", self.completion_note_file({}))
 
         result = state.plan("example", tasks, [], 1)
 
@@ -270,9 +265,7 @@ task_source = "linear://project"
             ],
         )
 
-        state.record_completion_note(
-            "example", "A", self.completion_note_file({})
-        )
+        state.record_completion_note("example", "A", self.completion_note_file({}))
 
         self.assertEqual(state.plan("example", tasks, ["A"], 1)["selected"], ["B"])
 
@@ -302,9 +295,7 @@ task_source = "linear://project"
         waiting = state.plan("example", tasks, [], 2)
 
         self.assertEqual(waiting["selected"], [])
-        self.assertEqual(
-            waiting["waiting_completion_notes"], {"C": ["A", "B"]}
-        )
+        self.assertEqual(waiting["waiting_completion_notes"], {"C": ["A", "B"]})
         self.assertEqual(
             waiting["resume_completion_notes"],
             [
@@ -414,9 +405,7 @@ task_source = "linear://project"
             {"task_id": "A", "saved": False, "note": None},
         )
 
-        state.record_completion_note(
-            "example", "A", self.completion_note_file({})
-        )
+        state.record_completion_note("example", "A", self.completion_note_file({}))
 
         self.assertEqual(
             state.completion_note("example", "A"),
@@ -495,9 +484,45 @@ task_source = "linear://project"
         state.record_session("example", "A", "thread-a")
 
         with self.assertRaisesRegex(state.StateError, "no tracked pull request"):
-            state.record_completion_note(
-                "example", "A", self.completion_note_file({})
-            )
+            state.record_completion_note("example", "A", self.completion_note_file({}))
+
+    def test_completion_note_writer_cannot_restore_state_removed_by_reset(self):
+        self.create_session_with_pull_request()
+        sessions_path = state.state_path("example")
+        notes_path = state.completion_notes_path("example")
+        note = self.completion_note_file({"handoff": "Do not restore this."})
+        writer_started = threading.Event()
+        reset_finished = threading.Event()
+        writer_errors = []
+        original_load = state.load_completion_note_file
+
+        def pause_old_writer(path):
+            loaded = original_load(path)
+            writer_started.set()
+            self.assertTrue(reset_finished.wait(timeout=5))
+            return loaded
+
+        def write_note():
+            try:
+                state.record_completion_note("example", "A", note)
+            except state.StateError as error:
+                writer_errors.append(str(error))
+
+        with patch.object(state, "load_completion_note_file", pause_old_writer):
+            writer = threading.Thread(target=write_note)
+            writer.start()
+            self.assertTrue(writer_started.wait(timeout=5))
+            with state.lock_sessions(sessions_path):
+                with state.lock_sessions(notes_path):
+                    sessions_path.unlink()
+                    if notes_path.exists():
+                        notes_path.unlink()
+            reset_finished.set()
+            writer.join(timeout=5)
+
+        self.assertFalse(writer.is_alive())
+        self.assertEqual(writer_errors, ["task A has no child session"])
+        self.assertFalse(notes_path.exists())
 
     def test_cli_reports_non_table_orchestrations_as_json_error(self):
         self.config_path.write_text('orchestrations = "invalid"\n')
@@ -730,9 +755,7 @@ task_source = "linear://project"
 
     def test_load_merges_normalizes_legacy_number_key(self):
         self.create_session_with_pull_request()
-        path = self.write_merges(
-            {"42": {"task_id": "A", "merge_commit": "abc123"}}
-        )
+        path = self.write_merges({"42": {"task_id": "A", "merge_commit": "abc123"}})
 
         merges = state.load_merges(
             path,
@@ -743,9 +766,7 @@ task_source = "linear://project"
             ),
         )
 
-        self.assertEqual(
-            list(merges["pull_requests"]), ["owner/repository#42"]
-        )
+        self.assertEqual(list(merges["pull_requests"]), ["owner/repository#42"])
 
     def test_load_merges_matches_a_case_normalized_repository_key(self):
         sessions_path = state.state_path("example")
@@ -785,9 +806,7 @@ task_source = "linear://project"
             ),
         )
 
-        self.assertEqual(
-            list(merges["pull_requests"]), ["owner/repository#42"]
-        )
+        self.assertEqual(list(merges["pull_requests"]), ["owner/repository#42"])
 
     def test_sessions_and_merges_reject_boolean_versions(self):
         sessions_path = state.state_path("example")
@@ -803,9 +822,7 @@ task_source = "linear://project"
         )
 
         with self.assertRaisesRegex(state.StateError, "unsupported sessions version"):
-            state.load_sessions(
-                sessions_path, "parent-thread", ["owner/repository"]
-            )
+            state.load_sessions(sessions_path, "parent-thread", ["owner/repository"])
 
         merges_path = state.merges_path("example")
         merges_path.write_text(json.dumps({"version": True, "pull_requests": {}}))

@@ -81,8 +81,7 @@ def load_orchestration(orchestration_id: str) -> dict:
         not isinstance(pull_request_repositories, list)
         or not pull_request_repositories
         or any(
-            not isinstance(repository, str)
-            or not REPOSITORY.fullmatch(repository)
+            not isinstance(repository, str) or not REPOSITORY.fullmatch(repository)
             for repository in pull_request_repositories
         )
         or len(pull_request_repositories)
@@ -222,7 +221,9 @@ def load_merges(path: Path, sessions: dict) -> dict:
                 f"merge record for PR {key} does not match the session mapping"
             )
         canonical_key = pull_request_key(pull_request)
-        is_legacy_key = PULL_REQUEST_NUMBER.fullmatch(key) and int(key) == pull_request["number"]
+        is_legacy_key = (
+            PULL_REQUEST_NUMBER.fullmatch(key) and int(key) == pull_request["number"]
+        )
         if key != canonical_key and not is_legacy_key:
             raise StateError(
                 f"merge record for PR {key} does not match the session mapping"
@@ -280,7 +281,9 @@ def load_completion_notes(path: Path) -> dict:
         ):
             raise StateError("completion notes contain an invalid orchestration ID")
         if not isinstance(orchestration, dict) or set(orchestration) != {"tasks"}:
-            raise StateError("completion notes orchestration must contain a tasks object")
+            raise StateError(
+                "completion notes orchestration must contain a tasks object"
+            )
         tasks = orchestration["tasks"]
         if not isinstance(tasks, dict):
             raise StateError("completion notes tasks must be an object")
@@ -297,7 +300,9 @@ def load_completion_note_file(path: Path) -> dict:
     try:
         note = json.loads(path.read_text())
     except (OSError, json.JSONDecodeError) as error:
-        raise StateError(f"could not read completion note at {path}: {error}") from error
+        raise StateError(
+            f"could not read completion note at {path}: {error}"
+        ) from error
     return validate_completion_note(note)
 
 
@@ -436,31 +441,35 @@ def record_completion_note(
     orchestration_id: str, task_id: str, note_file: Path
 ) -> dict:
     context = load_orchestration(orchestration_id)
-    sessions = load_sessions(
-        Path(context["sessions_path"]),
-        context["parent_thread_id"],
-        context["pull_request_repositories"],
-    )
-    task = sessions["tasks"].get(task_id)
-    if task is None or "child_thread_id" not in task:
-        raise StateError(f"task {task_id} has no child session")
-    if "pull_request" not in task:
-        raise StateError(f"task {task_id} has no tracked pull request")
     note = load_completion_note_file(note_file)
-    path = Path(context["completion_notes_path"])
-    with lock_sessions(path):
-        completion_notes = load_completion_notes(path)
-        tasks = completion_notes["orchestrations"].setdefault(
-            orchestration_id, {"tasks": {}}
-        )["tasks"]
-        existing = tasks.get(task_id)
-        if existing is not None:
-            if existing != note:
-                raise StateError(f"task {task_id} already has a different completion note")
+    sessions_path = Path(context["sessions_path"])
+    notes_path = Path(context["completion_notes_path"])
+    with lock_sessions(sessions_path):
+        sessions = load_sessions(
+            sessions_path,
+            context["parent_thread_id"],
+            context["pull_request_repositories"],
+        )
+        task = sessions["tasks"].get(task_id)
+        if task is None or "child_thread_id" not in task:
+            raise StateError(f"task {task_id} has no child session")
+        if "pull_request" not in task:
+            raise StateError(f"task {task_id} has no tracked pull request")
+        with lock_sessions(notes_path):
+            completion_notes = load_completion_notes(notes_path)
+            tasks = completion_notes["orchestrations"].setdefault(
+                orchestration_id, {"tasks": {}}
+            )["tasks"]
+            existing = tasks.get(task_id)
+            if existing is not None:
+                if existing != note:
+                    raise StateError(
+                        f"task {task_id} already has a different completion note"
+                    )
+                return completion_notes
+            tasks[task_id] = note
+            write_completion_notes(notes_path, completion_notes)
             return completion_notes
-        tasks[task_id] = note
-        write_completion_notes(path, completion_notes)
-        return completion_notes
 
 
 def completion_note(orchestration_id: str, task_id: str) -> dict:
@@ -477,9 +486,11 @@ def completion_note(orchestration_id: str, task_id: str) -> dict:
         raise StateError(f"task {task_id} has no tracked pull request")
 
     notes = load_completion_notes(Path(context["completion_notes_path"]))
-    note = notes["orchestrations"].get(orchestration_id, {"tasks": {}})[
-        "tasks"
-    ].get(task_id)
+    note = (
+        notes["orchestrations"]
+        .get(orchestration_id, {"tasks": {}})["tasks"]
+        .get(task_id)
+    )
     return {"task_id": task_id, "saved": note is not None, "note": note}
 
 
@@ -571,9 +582,7 @@ def plan(
     unknown_completed = completed - tasks.keys()
     unknown_launched = sessions["tasks"].keys() - tasks.keys()
     noted_tasks = set(
-        completion_notes["orchestrations"].get(orchestration_id, {"tasks": {}})[
-            "tasks"
-        ]
+        completion_notes["orchestrations"].get(orchestration_id, {"tasks": {}})["tasks"]
     )
     unknown_noted = noted_tasks - tasks.keys()
     if unknown_completed or unknown_launched or unknown_noted:
@@ -582,9 +591,7 @@ def plan(
         )
 
     tracked_tasks = {
-        task_id
-        for task_id, task in sessions["tasks"].items()
-        if "pull_request" in task
+        task_id for task_id, task in sessions["tasks"].items() if "pull_request" in task
     }
     missing_completion_notes = completed & tracked_tasks - noted_tasks
     completion_ready = completed - missing_completion_notes

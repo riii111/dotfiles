@@ -64,7 +64,7 @@ python3 <skill-directory>/scripts/orchestration_state.py plan <orchestration-id>
 
 `plan`の出力を次の順で実行する。
 
-1. `resume_completion_notes`の各子セッションだけを再開する。新しい子セッションを作らず、対応するPRの`state`、`mergedAt`、`mergeCommit`の確認と、未保存Completion Noteの保存を依頼する。Noteの本文は親へ表示しない。
+1. `resume_completion_notes`の各子セッションだけを再開する。新しい子セッションを作らず、`completion-report`を使って対応するPRのmerge確認と未保存Completion Noteの保存を行うよう依頼する。Noteの本文は親へ表示しない。
 2. 再開直後にNoteを読まない。各子セッションの同じturnを`wait_threads`で待ち、完了または応答が必要な状態になってから`completion-note`を再読する。`saved: true`を確認するまで後続taskを開始しない。`note: {}`も保存済みである。
 3. `wait_threads`の待機中またはtimeout時は、再開依頼の失敗と扱わない。再開依頼を重ねず「Completion Note保存待ち」として停止し、同じ子セッションを待ち続ける。turnの失敗・応答要求、または完了後の`completion-note`が`false`や読込エラーなら「判断が必要」として停止する。
 4. `resume_completion_notes`が空になるまで`plan`を改めて実行する。`waiting_completion_notes`にあるtaskは、その直接依存のNoteを確認するまで開始しない。
