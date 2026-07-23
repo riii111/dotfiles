@@ -129,6 +129,18 @@ class WorkerTransitionTest(unittest.TestCase):
                     review=self.review("pending", head_sha=None, turn_id="review-turn"),
                 )
             )
+        with self.assertRaisesRegex(transition.TransitionError, "absent review"):
+            transition.next_action(
+                self.state(
+                    pr="absent",
+                    head_sha=None,
+                    review=self.review(
+                        "absent",
+                        head_sha="old-head",
+                        thread_id=None,
+                    ),
+                )
+            )
         with self.assertRaisesRegex(transition.TransitionError, "checks state"):
             transition.next_action(
                 self.state(
@@ -150,14 +162,27 @@ class WorkerTransitionTest(unittest.TestCase):
                     review=self.review(),
                 )
             )
-        with self.assertRaisesRegex(transition.TransitionError, "pending checks"):
+        with self.assertRaisesRegex(transition.TransitionError, "checks state"):
             transition.next_action(
                 self.state(
                     review=self.review(),
                     checks=self.checks("pending", "old-head"),
                 )
             )
-        with self.assertRaisesRegex(transition.TransitionError, "passed checks"):
+        with self.assertRaisesRegex(transition.TransitionError, "checks state"):
+            transition.reduce_state(
+                self.state(
+                    review=self.review(),
+                    checks=self.checks("pending"),
+                    head_sha="head-2",
+                ),
+                {
+                    "type": "checks_completed",
+                    "head_sha": "head-1",
+                    "status": "failed",
+                },
+            )
+        with self.assertRaisesRegex(transition.TransitionError, "checks state"):
             transition.next_action(
                 self.state(
                     review=self.review(),

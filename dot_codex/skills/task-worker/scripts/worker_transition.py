@@ -271,14 +271,60 @@ def next_action(state: dict) -> str:
 
 def validate_state_invariants(state: dict) -> None:
     pr = state["pr"]
+    review = state["review"]
+    checks = state["checks"]
     if pr != "merged" and state["completion_note_saved"]:
         raise TransitionError("an unmerged pull request cannot have a completion note")
+    match review["status"]:
+        case "absent":
+            if review != {
+                "status": "absent",
+                "head_sha": None,
+                "applied_head_sha": None,
+                "blocking": 0,
+                "non_blocking": 0,
+                "thread_id": None,
+                "turn_id": None,
+            }:
+                raise TransitionError("absent review contains processing state")
+        case "pending":
+            if (
+                not review["thread_id"]
+                or not review["turn_id"]
+                or review["head_sha"] is not None
+                or review["applied_head_sha"] is not None
+                or review["blocking"]
+                or review["non_blocking"]
+            ):
+                raise TransitionError(
+                    "pending review has contradictory processing state"
+                )
+        case "completed":
+            if (
+                not review["thread_id"]
+                or not review["head_sha"]
+                or review["turn_id"] is not None
+                or (
+                    review["applied_head_sha"] is not None
+                    and not (review["blocking"] or review["non_blocking"])
+                )
+            ):
+                raise TransitionError(
+                    "completed review has contradictory processing state"
+                )
+    match checks["status"]:
+        case "not_run":
+            if checks["head_sha"] is not None:
+                raise TransitionError("checks not_run contains a head SHA")
+        case "pending" | "passed" | "failed":
+            if checks["head_sha"] != state["head_sha"]:
+                raise TransitionError("checks state does not match the current head")
     if pr == "absent":
         if state["head_sha"] is not None:
             raise TransitionError("work without a pull request cannot have a head SHA")
         if state["review"]["status"] != "absent":
             raise TransitionError("work without a pull request has active review state")
-        if state["checks"] != {"status": "not_run", "head_sha": None}:
+        if checks != {"status": "not_run", "head_sha": None}:
             raise TransitionError("work without a pull request has checks state")
     elif not state["head_sha"]:
         raise TransitionError("tracked pull request has no head SHA")
