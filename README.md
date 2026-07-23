@@ -60,43 +60,21 @@ Homebrew stays for GUI / cask packages and is managed by nix-darwin.
 
 ### Codex task orchestration
 
-Set the orchestration IDs and polling interval in `darwin/hosts/personal.nix`. The current personal-host setting polls `codex-task-orchestration` every 3 minutes.
-
 Initial setup:
 
 ```bash
 chezmoi apply
 ~/bin/dotctl sync-nix-profile
 codex-task-orchestrator init # Use codex-task-orchestration as the ID
-sudo nix run nix-darwin/master#darwin-rebuild -- switch --flake ~/ghq/github.com/riii111/dotfiles#personal
-launchctl print gui/$(id -u)/org.nixos.codex-task-orchestrator
 ```
 
-Inspect the latest run and persisted task state:
+Reset one orchestration when its tracked state should be discarded:
 
 ```bash
-tail -n 50 ~/Library/Logs/codex-task-orchestrator.log
-jq . ~/.local/state/codex-task-orchestrator/codex-task-orchestration/{sessions,merges}.json
-```
-
-Stop and resume polling without rebuilding nix-darwin:
-
-```bash
-launchctl unload -w ~/Library/LaunchAgents/org.nixos.codex-task-orchestrator.plist
-launchctl load -w ~/Library/LaunchAgents/org.nixos.codex-task-orchestrator.plist
-```
-
-Reset one orchestration only after stopping its poller:
-
-```bash
-launchctl unload -w ~/Library/LaunchAgents/org.nixos.codex-task-orchestrator.plist
 codex-task-orchestrator reset codex-task-orchestration
-launchctl load -w ~/Library/LaunchAgents/org.nixos.codex-task-orchestrator.plist
 ```
 
-`reset` destructively discards that orchestration's tracked sessions, merge records, and Completion Notes; Completion Notes for other orchestrations remain. Until the T5 Completion Note writer/reset race fix is merged, do not run it where another process can write Completion Notes concurrently.
-
-If Codex cannot resume the parent task, macOS shows one notification for each merge and a later poll retries automatically. Check the log above when no parent task starts.
+`reset` destructively discards that orchestration's tracked sessions and Completion Notes; Completion Notes for other orchestrations remain.
 
 ### Store maintenance
 

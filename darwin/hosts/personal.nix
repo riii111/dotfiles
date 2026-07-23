@@ -9,10 +9,4 @@
     "cursor"
     "zed"
   ];
-
-  services.codex-task-orchestrator = {
-    enable = true;
-    orchestrationIds = [ "codex-task-orchestration" ];
-    intervalSeconds = 180;
-  };
 }
