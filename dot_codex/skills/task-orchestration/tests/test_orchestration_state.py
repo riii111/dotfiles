@@ -318,6 +318,45 @@ task_source = "linear://project"
             {"handoff": "Use this."},
         )
 
+    def test_completion_note_status_is_content_free_and_stable_after_save(self):
+        self.create_session_with_pull_request()
+
+        before_save = subprocess.run(
+            [
+                sys.executable,
+                str(SPEC.origin),
+                "completion-note-status",
+                "example",
+                "--task-id",
+                "A",
+            ],
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+        self.assertEqual(before_save.returncode, 0)
+        self.assertEqual(json.loads(before_save.stdout), {"saved": False})
+
+        state.record_completion_note(
+            "example", "A", self.completion_note_file({"handoff": "Use this."})
+        )
+
+        after_save = subprocess.run(
+            [
+                sys.executable,
+                str(SPEC.origin),
+                "completion-note-status",
+                "example",
+                "--task-id",
+                "A",
+            ],
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+        self.assertEqual(after_save.returncode, 0)
+        self.assertEqual(json.loads(after_save.stdout), {"saved": True})
+
     def test_completion_notes_are_idempotent_and_preserve_other_orchestrations(self):
         self.create_session_with_pull_request()
         path = state.completion_notes_path("example")
