@@ -463,6 +463,26 @@ def record_completion_note(
         return completion_notes
 
 
+def completion_note(orchestration_id: str, task_id: str) -> dict:
+    context = load_orchestration(orchestration_id)
+    sessions = load_sessions(
+        Path(context["sessions_path"]),
+        context["parent_thread_id"],
+        context["pull_request_repositories"],
+    )
+    task = sessions["tasks"].get(task_id)
+    if task is None or "child_thread_id" not in task:
+        raise StateError(f"task {task_id} has no child session")
+    if "pull_request" not in task:
+        raise StateError(f"task {task_id} has no tracked pull request")
+
+    notes = load_completion_notes(Path(context["completion_notes_path"]))
+    note = notes["orchestrations"].get(orchestration_id, {"tasks": {}})[
+        "tasks"
+    ].get(task_id)
+    return {"task_id": task_id, "saved": note is not None, "note": note}
+
+
 def load_tasks(path: Path) -> dict[str, dict]:
     try:
         payload = json.loads(path.read_text())
@@ -665,6 +685,10 @@ def parser() -> argparse.ArgumentParser:
     completion_note.add_argument("--task-id", required=True)
     completion_note.add_argument("--note-file", type=Path, required=True)
 
+    completion_note = commands.add_parser("completion-note")
+    completion_note.add_argument("orchestration_id")
+    completion_note.add_argument("--task-id", required=True)
+
     return root
 
 
@@ -709,6 +733,8 @@ def main(argv: list[str] | None = None) -> int:
                 arguments.task_id,
                 arguments.note_file,
             )
+        elif arguments.command == "completion-note":
+            output = completion_note(arguments.orchestration_id, arguments.task_id)
         else:
             output = record_pull_request(
                 arguments.orchestration_id,

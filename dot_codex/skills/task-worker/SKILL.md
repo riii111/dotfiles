@@ -57,7 +57,18 @@ python3 <task-orchestration-skill-directory>/scripts/orchestration_state.py reco
 
 ## merge後のCompletion Note
 
-担当PRのmergeを`gh pr view`などで確認した後だけ、作業で初めて得た情報をJSON objectにして保存する。通常のPR要約や形式を埋める文章は入れない。使える項目は次だけで、共有事項がなければ空のobjectを保存する。
+担当PRの`state`、`mergedAt`、`mergeCommit`を`gh pr view`などで確認し、merge済みであることを確定してからだけ保存する。未mergeならNoteを生成・保存せず、通常の実装、review、merge工程へ戻る。
+
+merge済みなら、先に状態管理ツールで自分のNoteを照会する。
+
+```text
+python3 <task-orchestration-skill-directory>/scripts/orchestration_state.py completion-note <orchestration-id> \
+  --task-id <task-id>
+```
+
+`saved`が`true`なら、Noteを生成も再保存もせず、保存済みであることだけを報告して終了する。`note: {}`は保存済みの空Noteであり、未保存として扱わない。
+
+`saved`が`false`なら、実装、review指摘、修正、最終検証、mergeまでを振り返り、後続作業や案件後の見直しに必要な情報だけをJSON objectへ記録する。PRタイトル、変更ファイル、通常のPR要約は入れない。使える項目は次だけで、共有事項がなければ空のobjectを保存する。
 
 - `risks`
 - `handoff`
@@ -70,7 +81,15 @@ python3 <task-orchestration-skill-directory>/scripts/orchestration_state.py reco
   --note-file <completion-note-json-path>
 ```
 
-子セッション自身がmergeした場合は、merge後にこの保存を済ませてから終了する。ユーザーによるmergeの通知で再開された場合も同じ工程を行う。保存失敗または既存Noteとの不一致は、後続taskを開始できる状態として報告しない。
+保存後に同じ`completion-note`コマンドを再実行し、`saved`が`true`で、保存したobjectと一致することを確認する。保存、再読、既存Noteとの一致確認のいずれかに失敗した場合は完了扱いにせず、判明した状態だけを報告する。Noteの本文は親セッションへ送らない。
+
+子セッション自身がmergeした場合は、merge後にこの工程を済ませてから終了する。ユーザーによるmergeの通知で再開された場合も同じ工程を行う。
+
+### 検証シナリオ
+
+- `auto`: merge直後に未保存Noteを記録し、再読が成功してから終了する。
+- `manual`: Draftのまま停止し、ユーザーのmerge後に同じワーカーを再開して未保存Noteを記録する。
+- どちらも未mergeなら保存せず、空Noteは保存済みとして再生成しない。
 
 ## review side chatを一度だけ作る
 
