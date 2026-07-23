@@ -318,6 +318,49 @@ task_source = "linear://project"
             {"handoff": "Use this."},
         )
 
+    def test_completion_note_reports_missing_and_saved_empty_notes(self):
+        self.create_session_with_pull_request()
+
+        self.assertEqual(
+            state.completion_note("example", "A"),
+            {"task_id": "A", "saved": False, "note": None},
+        )
+
+        state.record_completion_note(
+            "example", "A", self.completion_note_file({})
+        )
+
+        self.assertEqual(
+            state.completion_note("example", "A"),
+            {"task_id": "A", "saved": True, "note": {}},
+        )
+
+    def test_cli_reads_a_completion_note(self):
+        self.create_session_with_pull_request()
+        state.record_completion_note(
+            "example", "A", self.completion_note_file({"handoff": "Use this."})
+        )
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(SPEC.origin),
+                "completion-note",
+                "example",
+                "--task-id",
+                "A",
+            ],
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(
+            json.loads(result.stdout),
+            {"task_id": "A", "saved": True, "note": {"handoff": "Use this."}},
+        )
+
     def test_completion_notes_are_idempotent_and_preserve_other_orchestrations(self):
         self.create_session_with_pull_request()
         path = state.completion_notes_path("example")
