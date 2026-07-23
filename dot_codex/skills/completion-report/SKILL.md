@@ -6,7 +6,7 @@ description: |
 
 # Completion Report
 
-merge後のCompletion Noteだけを担当する。
+merge後のCompletion Note保存と親オーケストレーションへの完了通知を担当する。
 
 ## 入力
 
@@ -22,7 +22,7 @@ python3 <task-orchestration-skill-directory>/scripts/orchestration_state.py cont
 ```
 
 1. `gh pr view`で担当PRの`state`、`mergedAt`、merge commitとtask対応を確認する。未mergeまたは矛盾時は保存しない。PRがmerge済みでworker状態がまだ未mergeなら、先に`merged` eventを適用する。
-2. 次を実行し、`complete`ならeventを適用せず、保存済みと報告して終了する。
+2. 次を実行する。`complete`ならNote処理を繰り返さず手順7の通知へ進む。`record_completion_note`なら手順3へ進む。それ以外のactionでは停止する。
 
 ```text
 python3 <task-worker-skill-directory>/scripts/worker_transition.py next <orchestration-id> \
@@ -44,11 +44,36 @@ python3 <task-orchestration-skill-directory>/scripts/orchestration_state.py reco
   --task-id <task-id> --note-file <completion-note-json-path>
 ```
 
-6. `completion_note_saved` event JSONを作り、次で適用する。`complete`を確認して保存完了だけを報告する。Note本文は親へ送らない。
+6. `completion_note_saved` event JSONを作り、次で適用する。返されたactionが`complete`であることを確認する。
 
 ```text
 python3 <task-worker-skill-directory>/scripts/worker_transition.py apply-event <orchestration-id> \
   --task-id <task-id> --worker-id <child-thread-id> --event-file <event-json-path>
 ```
 
-保存、再読、既存Noteとの一致確認の失敗は完了扱いにしない。
+7. `context`の`parent_thread_id`を送信先にする。次で通知outboxを作成する。既存outboxと同じ通知ならその状態を返し、異なる内容では上書きしない。
+
+```text
+python3 <completion-report-skill-directory>/scripts/completion_notification.py \
+  prepare <orchestration-id> --task-id <task-id> --worker-id <child-thread-id> \
+  --repository <owner/repository> --number <pr-number> \
+  --merge-commit <merge-commit>
+```
+
+`status`が`submitted`なら保存済み`submission_id`を確認して完了を報告し、再送しない。`pending`なら次のstdoutを変更せず`multi_agent_v1__send_input`のmessageへ渡し、targetへ親thread IDを指定する。
+
+```text
+python3 <completion-report-skill-directory>/scripts/completion_notification.py \
+  payload <orchestration-id> --task-id <task-id> --worker-id <child-thread-id>
+```
+
+通知JSONはオーケストレーションID、task ID、PR、merge commit、`saved: true`だけを含む。Note本文や再planの指示を追加しない。空でない`submission_id`を取得したら次でoutboxへ保存し、`submitted`と同じIDを再読できた場合だけ通知済みとして完了を報告する。
+
+```text
+python3 <completion-report-skill-directory>/scripts/completion_notification.py \
+  mark-submitted <orchestration-id> \
+  --task-id <task-id> --worker-id <child-thread-id> \
+  --submission-id <submission-id>
+```
+
+親が処理中でもsubmissionが受理されれば成功であり、同じturnへ割り込ませようとしない。保存、再読、既存Noteとの一致、`complete`確認、outbox、送信のいずれかに失敗した場合は完了扱いにしない。送信が失敗するか`submission_id`を確認できない場合はoutboxを`pending`のまま残し、通知未完了として判明した状態を報告する。再開時は最初から状態と証跡を再確認し、pendingの同じJSONを再送する。送信結果が不明な場合も同様に再送し、親側の冪等なplanへ重複排除を任せる。
