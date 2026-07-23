@@ -96,16 +96,13 @@ EVENT_FIELDS = {
 }
 ACTION_EVENTS = {
     "implement": ("pr_created",),
-    "request_review": ("review_requested", "merged", "closed"),
-    "wait_review": ("review_completed", "merged", "closed"),
-    "address_review": ("changes_applied", "merged", "closed"),
-    "verify": ("checks_started", "checks_completed", "merged", "closed"),
-    "wait_checks": ("checks_completed", "merged", "closed"),
-    "mark_ready": ("marked_ready", "merged", "closed"),
-    "report_manual": ("merged", "closed"),
-    "merge": ("merged", "closed"),
+    "request_review": ("review_requested",),
+    "wait_review": ("review_completed",),
+    "address_review": ("changes_applied",),
+    "verify": ("checks_started", "checks_completed"),
+    "wait_checks": ("checks_completed",),
+    "mark_ready": ("marked_ready",),
     "record_completion_note": ("completion_note_saved",),
-    "stop_conflict": ("mergeability_changed", "merged", "closed"),
 }
 
 
@@ -322,25 +319,8 @@ def reduce_state(state: dict, event: dict) -> dict:
         raise TransitionError("unknown worker event")
     if set(event) != EVENT_FIELDS[event_type]:
         raise TransitionError(f"event {event_type} has missing or unknown fields")
-    expected_actions = {
-        "pr_created": {"implement"},
-        "review_requested": {"request_review"},
-        "review_completed": {"wait_review"},
-        "changes_applied": {"address_review"},
-        "checks_started": {"verify"},
-        "checks_completed": {"verify", "wait_checks"},
-        "marked_ready": {"mark_ready"},
-        "completion_note_saved": {"record_completion_note"},
-    }
-    if event_type in {"merged", "closed"}:
-        if state["pr"] in {"absent", "closed"}:
-            raise TransitionError(f"event {event_type} requires a tracked pull request")
-    elif event_type in expected_actions:
-        action = next_action(state)
-        if action not in expected_actions[event_type]:
-            raise TransitionError(
-                f"event {event_type} is invalid after action {action}"
-            )
+    if event_type not in allowed_events(state):
+        raise TransitionError(f"event {event_type} is invalid in the current state")
 
     match event_type:
         case "pr_created":
@@ -408,10 +388,21 @@ def require_event_string(event: dict, field: str) -> str:
     return value
 
 
-def allowed_event_schemas(action: str) -> dict:
-    return {
-        event: sorted(EVENT_FIELDS[event]) for event in ACTION_EVENTS.get(action, ())
-    }
+def allowed_events(state: dict) -> tuple[str, ...]:
+    external = (
+        ("mergeability_changed", "merged", "closed")
+        if state["pr"] in {"draft", "ready"}
+        else ()
+    )
+    try:
+        action = next_action(state)
+    except TransitionError:
+        return external
+    return tuple(dict.fromkeys((*ACTION_EVENTS.get(action, ()), *external)))
+
+
+def allowed_event_schemas(state: dict) -> dict:
+    return {event: sorted(EVENT_FIELDS[event]) for event in allowed_events(state)}
 
 
 def load_state_object(raw: object) -> dict:
@@ -469,10 +460,11 @@ def main(argv: list[str] | None = None) -> int:
             write_state(path, state)
             output = {"path": str(path), "state": state}
         elif arguments.command == "next":
-            action = next_action(load_state(path))
+            state = load_state(path)
+            action = next_action(state)
             output = {
                 "action": action,
-                "allowed_events": allowed_event_schemas(action),
+                "allowed_events": allowed_event_schemas(state),
                 "path": str(path),
             }
         else:
@@ -487,7 +479,7 @@ def main(argv: list[str] | None = None) -> int:
             write_state(path, state)
             output = {
                 "action": action,
-                "allowed_events": allowed_event_schemas(action),
+                "allowed_events": allowed_event_schemas(state),
                 "path": str(path),
                 "state": state,
             }

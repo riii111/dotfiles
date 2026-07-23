@@ -205,7 +205,7 @@ class WorkerTransitionTest(unittest.TestCase):
         self.assertEqual(state["review"]["turn_id"], "review-turn")
 
     def test_events_reject_skipped_and_incomplete_transitions(self):
-        with self.assertRaisesRegex(transition.TransitionError, "tracked pull request"):
+        with self.assertRaisesRegex(transition.TransitionError, "invalid"):
             transition.reduce_state(
                 transition.initial_state("manual"), {"type": "merged"}
             )
@@ -242,6 +242,8 @@ class WorkerTransitionTest(unittest.TestCase):
 
         self.assertEqual(transition.next_action(merged), "record_completion_note")
         self.assertEqual(transition.next_action(closed), "stop_closed")
+        with self.assertRaisesRegex(transition.TransitionError, "invalid"):
+            transition.reduce_state(merged, {"type": "closed"})
 
     def test_verify_accepts_already_completed_checks(self):
         state = self.state(review=self.review())
@@ -266,6 +268,63 @@ class WorkerTransitionTest(unittest.TestCase):
         second = transition.worker_state_path("example", "T5", "thread-two")
 
         self.assertNotEqual(first, second)
+
+    def test_displayed_event_schemas_match_accepted_events(self):
+        samples = {
+            "pr_created": {"type": "pr_created", "head_sha": "head-1"},
+            "review_requested": {
+                "type": "review_requested",
+                "thread_id": "review-thread",
+                "turn_id": "review-turn",
+            },
+            "review_completed": {
+                "type": "review_completed",
+                "head_sha": "head-1",
+                "blocking": 0,
+                "non_blocking": 0,
+            },
+            "changes_applied": {"type": "changes_applied", "head_sha": "head-1"},
+            "checks_started": {"type": "checks_started", "head_sha": "head-1"},
+            "checks_completed": {
+                "type": "checks_completed",
+                "head_sha": "head-1",
+                "status": "passed",
+            },
+            "marked_ready": {"type": "marked_ready"},
+            "mergeability_changed": {
+                "type": "mergeability_changed",
+                "mergeable": True,
+            },
+            "merged": {"type": "merged"},
+            "closed": {"type": "closed"},
+            "completion_note_saved": {"type": "completion_note_saved"},
+        }
+        states = [
+            transition.initial_state("manual"),
+            self.state(),
+            self.state(
+                review=self.review("pending", head_sha=None, turn_id="review-turn")
+            ),
+            self.state(review=self.review()),
+            self.state(review=self.review(), checks=self.checks()),
+            self.state(
+                pr="ready",
+                review=self.review(),
+                checks=self.checks(),
+                policy="auto",
+            ),
+            self.state(pr="merged"),
+        ]
+
+        for state in states:
+            displayed = transition.allowed_event_schemas(state)
+            self.assertEqual(set(displayed), set(transition.allowed_events(state)))
+            for event_type, fields in displayed.items():
+                self.assertEqual(set(fields), transition.EVENT_FIELDS[event_type])
+                transition.reduce_state(state, samples[event_type])
+            for event_type in set(samples) - set(displayed):
+                with self.assertRaises(transition.TransitionError):
+                    transition.reduce_state(state, samples[event_type])
 
     def test_unmergeable_pull_request_cannot_merge(self):
         for pr in ("draft", "ready"):
