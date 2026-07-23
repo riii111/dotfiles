@@ -44,7 +44,7 @@ python3 <skill-directory>/scripts/orchestration_state.py context <orchestration-
 
 1. `context`を実行する。
 2. `task_source`から、全タスクの最新本文、直接依存、現在状態、状態履歴、優先順位を毎回読み直す。ページングと依存先を省略しない。
-3. 読み直した結果と確認済みの完了task IDを`plan`へ渡す。
+3. 読み直した結果と確認済みの完了task IDを`plan`へ渡す。`--completed`には、ブリッジまたは`context`のmerge記録、追跡PRの`mergedAt`とmerge commit、開始前から完了していたことを初回読込と履歴で確認できるtaskだけを入れる。タスク管理元だけが後から完了になったtaskは入れない。
 
 ```json
 {

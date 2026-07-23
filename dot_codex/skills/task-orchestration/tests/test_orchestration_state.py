@@ -553,6 +553,24 @@ task_source = "linear://project"
             output["completion_notes_path"], str(state.completion_notes_path("example"))
         )
 
+    def test_context_rejects_invalid_completion_notes(self):
+        path = state.completion_notes_path("example")
+        path.parent.mkdir(parents=True)
+        path.write_text(json.dumps({"version": 1, "orchestrations": []}))
+
+        result = subprocess.run(
+            [sys.executable, str(SPEC.origin), "context", "example"],
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(
+            json.loads(result.stderr),
+            {"error": "completion notes must contain an orchestrations object"},
+        )
+
     def test_context_rejects_a_pull_request_from_an_unlisted_repository(self):
         path = state.state_path("example")
         path.parent.mkdir(parents=True)

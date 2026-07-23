@@ -681,6 +681,7 @@ def main(argv: list[str] | None = None) -> int:
             output["merges"] = load_merges(
                 Path(output["merges_path"]), output["sessions"]
             )
+            load_completion_notes(Path(output["completion_notes_path"]))
             output["completed_from_merges"] = sorted(
                 record["task_id"]
                 for record in output["merges"]["pull_requests"].values()
