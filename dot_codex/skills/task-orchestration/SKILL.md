@@ -64,7 +64,7 @@ python3 <skill-directory>/scripts/orchestration_state.py plan <orchestration-id>
 
 `plan`の出力を次の順で実行する。
 
-1. `resume_completion_notes`の各子セッションへ、対応するPRのmerge確認とCompletion Note保存を依頼する。Noteの内容は親へ表示しない。この配列が空でなければ、保存後に改めて`plan`を実行する。
+1. `resume_completion_notes`の各子セッションへ、`completion-report` SKILLを使うよう依頼する。Noteの内容は親へ表示しない。この配列が空でなければ、保存後に改めて`plan`を実行する。
 2. `selected`のtaskを作成する。Goalには同じtaskの`dependency_completion_notes`をそのまま入れる。
 
 依存の充足、Noteの保存有無、並列枠、引継ぎ項目の選別は`plan`が決める。親は出力を再計算しない。

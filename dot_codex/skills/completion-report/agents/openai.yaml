@@ -1,0 +1,4 @@
+interface:
+  display_name: "完了レポート"
+  short_description: "merge後の引継ぎメモを保存する"
+  default_prompt: "このmerge済みtaskのCompletion Noteを保存して。"
