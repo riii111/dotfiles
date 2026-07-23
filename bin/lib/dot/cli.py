@@ -225,6 +225,10 @@ def command_test(_: argparse.Namespace) -> int:
             "dot_codex/skills/task-orchestration/tests",
             "task orchestration tests",
         ),
+        (
+            "dot_codex/skills/task-worker/tests",
+            "task worker tests",
+        ),
     ):
         test_result = run_command(
             ["python3", "-m", "unittest", "discover", directory], repo_root

@@ -222,18 +222,29 @@ class DotCliTest(unittest.TestCase):
         self.assertEqual(
             calls[2][0],
             (
+                "python3",
+                "-m",
+                "unittest",
+                "discover",
+                "dot_codex/skills/task-worker/tests",
+            ),
+        )
+        self.assertEqual(
+            calls[3][0],
+            (
                 "/bin/lua",
                 "private_dot_config/wezterm/tests/herdr_mode_test.lua",
             ),
         )
-        self.assertEqual(calls[3][0], ("/bin/bash", "-n", "/repo/scripts/check.sh"))
-        self.assertEqual(calls[4][0], ("/bin/sh", "-n", "/repo/bin/run"))
+        self.assertEqual(calls[4][0], ("/bin/bash", "-n", "/repo/scripts/check.sh"))
+        self.assertEqual(calls[5][0], ("/bin/sh", "-n", "/repo/bin/run"))
 
     def test_command_test_collects_failures_without_traceback(self):
         repo_root = Path("/repo")
         targets = [(repo_root / "scripts/check.sh", "bash")]
         runs = [
             subprocess.CompletedProcess(["python3"], 1, "", "unit failed"),
+            subprocess.CompletedProcess(["python3"], 0, "", ""),
             subprocess.CompletedProcess(["python3"], 0, "", ""),
             subprocess.CompletedProcess(["lua"], 0, "", ""),
             subprocess.CompletedProcess(["bash"], 1, "", "syntax failed"),
