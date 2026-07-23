@@ -436,31 +436,35 @@ def record_completion_note(
     orchestration_id: str, task_id: str, note_file: Path
 ) -> dict:
     context = load_orchestration(orchestration_id)
-    sessions = load_sessions(
-        Path(context["sessions_path"]),
-        context["parent_thread_id"],
-        context["pull_request_repositories"],
-    )
-    task = sessions["tasks"].get(task_id)
-    if task is None or "child_thread_id" not in task:
-        raise StateError(f"task {task_id} has no child session")
-    if "pull_request" not in task:
-        raise StateError(f"task {task_id} has no tracked pull request")
     note = load_completion_note_file(note_file)
-    path = Path(context["completion_notes_path"])
-    with lock_sessions(path):
-        completion_notes = load_completion_notes(path)
-        tasks = completion_notes["orchestrations"].setdefault(
-            orchestration_id, {"tasks": {}}
-        )["tasks"]
-        existing = tasks.get(task_id)
-        if existing is not None:
-            if existing != note:
-                raise StateError(f"task {task_id} already has a different completion note")
+    sessions_path = Path(context["sessions_path"])
+    notes_path = Path(context["completion_notes_path"])
+    with lock_sessions(sessions_path):
+        sessions = load_sessions(
+            sessions_path,
+            context["parent_thread_id"],
+            context["pull_request_repositories"],
+        )
+        task = sessions["tasks"].get(task_id)
+        if task is None or "child_thread_id" not in task:
+            raise StateError(f"task {task_id} has no child session")
+        if "pull_request" not in task:
+            raise StateError(f"task {task_id} has no tracked pull request")
+        with lock_sessions(notes_path):
+            completion_notes = load_completion_notes(notes_path)
+            tasks = completion_notes["orchestrations"].setdefault(
+                orchestration_id, {"tasks": {}}
+            )["tasks"]
+            existing = tasks.get(task_id)
+            if existing is not None:
+                if existing != note:
+                    raise StateError(
+                        f"task {task_id} already has a different completion note"
+                    )
+                return completion_notes
+            tasks[task_id] = note
+            write_completion_notes(notes_path, completion_notes)
             return completion_notes
-        tasks[task_id] = note
-        write_completion_notes(path, completion_notes)
-        return completion_notes
 
 
 def completion_note(orchestration_id: str, task_id: str) -> dict:

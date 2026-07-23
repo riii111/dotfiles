@@ -1,4 +1,5 @@
 import importlib.util
+import fcntl
 import json
 import os
 import subprocess
@@ -498,6 +499,41 @@ task_source = "linear://project"
             state.record_completion_note(
                 "example", "A", self.completion_note_file({})
             )
+
+    def test_completion_note_writer_cannot_restore_state_removed_by_reset(self):
+        self.create_session_with_pull_request()
+        sessions_path = state.state_path("example")
+        notes_path = state.completion_notes_path("example")
+        note = self.completion_note_file({"handoff": "Do not restore this."})
+        lock_path = sessions_path.with_suffix(".lock")
+
+        with lock_path.open("a+") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            writer = subprocess.Popen(
+                [
+                    sys.executable,
+                    str(SPEC.origin),
+                    "record-completion-note",
+                    "example",
+                    "--task-id",
+                    "A",
+                    "--note-file",
+                    str(note),
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            sessions_path.unlink()
+            if notes_path.exists():
+                notes_path.unlink()
+            fcntl.flock(lock, fcntl.LOCK_UN)
+
+        _, stderr = writer.communicate(timeout=5)
+
+        self.assertEqual(writer.returncode, 2)
+        self.assertIn("no child session", stderr)
+        self.assertFalse(notes_path.exists())
 
     def test_cli_reports_non_table_orchestrations_as_json_error(self):
         self.config_path.write_text('orchestrations = "invalid"\n')
