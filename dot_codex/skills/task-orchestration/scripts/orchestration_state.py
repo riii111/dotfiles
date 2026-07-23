@@ -586,12 +586,14 @@ def plan(
         for task_id, task in tasks.items()
         if task_id not in completed | launched and set(task["dependencies"]) - completed
     }
-    waiting_completion_notes = {
-        task_id: sorted(set(task["dependencies"]) & missing_completion_notes)
-        for task_id, task in tasks.items()
-        if task_id not in completed | launched
-        and set(task["dependencies"]) & missing_completion_notes
-    }
+    resume_completion_notes = [
+        {
+            "task_id": task_id,
+            "child_thread_id": sessions["tasks"][task_id]["child_thread_id"],
+            "pull_request": sessions["tasks"][task_id]["pull_request"],
+        }
+        for task_id in sorted(missing_completion_notes)
+    ]
     dependency_completion_notes = {}
     current_notes = completion_notes["orchestrations"].get(
         orchestration_id, {"tasks": {}}
@@ -618,7 +620,7 @@ def plan(
         "completed_additional": sorted(completed_additional),
         "launched_uncompleted": sorted(active),
         "waiting_dependencies": waiting,
-        "waiting_completion_notes": waiting_completion_notes,
+        "resume_completion_notes": resume_completion_notes,
         "dependency_completion_notes": dependency_completion_notes,
         "capacity_deferred": ready[available:],
         "available_slots": available,
@@ -679,12 +681,6 @@ def main(argv: list[str] | None = None) -> int:
             output["merges"] = load_merges(
                 Path(output["merges_path"]), output["sessions"]
             )
-            completion_notes = load_completion_notes(
-                Path(output["completion_notes_path"])
-            )
-            output["completion_notes"] = completion_notes["orchestrations"].get(
-                arguments.orchestration_id, {"tasks": {}}
-            )["tasks"]
             output["completed_from_merges"] = sorted(
                 record["task_id"]
                 for record in output["merges"]["pull_requests"].values()

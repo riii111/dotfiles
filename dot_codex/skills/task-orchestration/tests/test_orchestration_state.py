@@ -208,7 +208,16 @@ task_source = "linear://project"
         waiting = state.plan("example", tasks, [], 1)
 
         self.assertEqual(waiting["selected"], [])
-        self.assertEqual(waiting["waiting_completion_notes"], {"B": ["A"]})
+        self.assertEqual(
+            waiting["resume_completion_notes"],
+            [
+                {
+                    "task_id": "A",
+                    "child_thread_id": "thread-a",
+                    "pull_request": {"repository": "owner/repository", "number": 42},
+                }
+            ],
+        )
 
         state.record_completion_note(
             "example",
@@ -249,7 +258,16 @@ task_source = "linear://project"
         waiting = state.plan("example", tasks, ["A"], 1)
 
         self.assertEqual(waiting["selected"], [])
-        self.assertEqual(waiting["waiting_completion_notes"], {"B": ["A"]})
+        self.assertEqual(
+            waiting["resume_completion_notes"],
+            [
+                {
+                    "task_id": "A",
+                    "child_thread_id": "thread-a",
+                    "pull_request": {"repository": "owner/repository", "number": 42},
+                }
+            ],
+        )
 
         state.record_completion_note(
             "example", "A", self.completion_note_file({})
@@ -515,7 +533,7 @@ task_source = "linear://project"
         )
         self.assertEqual(state.plan("example", tasks, [], 1)["selected"], [])
 
-    def test_context_reports_current_orchestration_completion_notes(self):
+    def test_context_does_not_expose_completion_notes(self):
         self.create_session_with_pull_request()
         state.record_completion_note(
             "example", "A", self.completion_note_file({"handoff": "Use this."})
@@ -530,7 +548,7 @@ task_source = "linear://project"
 
         self.assertEqual(result.returncode, 0)
         output = json.loads(result.stdout)
-        self.assertEqual(output["completion_notes"], {"A": {"handoff": "Use this."}})
+        self.assertNotIn("completion_notes", output)
         self.assertEqual(
             output["completion_notes_path"], str(state.completion_notes_path("example"))
         )

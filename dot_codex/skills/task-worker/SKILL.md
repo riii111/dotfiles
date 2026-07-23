@@ -33,7 +33,7 @@ python3 <task-orchestration-skill-directory>/scripts/orchestration_state.py cont
 
 3. `sessions.tasks[<task-id>].child_thread_id`を自分の通知先セッションIDとして取得する。taskが未登録、予約中、またはIDが空なら停止する。会話から推測したIDで代用しない。
 4. 担当repositoryが`pull_request_repositories`に含まれることを確認する。含まれなければ実装やPR作成へ進まず、親セッションへ設定不足を返す。`pull_request`があれば`gh pr view`でrepository、番号、base、draft状態、head SHA、checks、merge状態を確認する。ローカルworktreeは`git worktree list`とbranchから探す。
-5. PRなしなら実装工程、draft PRならreview工程から再開する。Readyなら完了方針を確認し、`manual`なら現在状態を報告して止まり、`auto`ならLGTMまたはBlockingなしかつNon-blockingが2件以内のreview結果、最新headの全検証、必須checksを再確認してmerge工程へ進む。mergedならCompletion Noteの保存状態を確認し、未保存なら保存工程へ進む。closedか状態が矛盾する場合は自動復旧しない。
+5. PRなしなら実装工程、draft PRならreview工程から再開する。Readyなら完了方針を確認し、`manual`なら現在状態を報告して止まり、`auto`ならLGTMまたはBlockingなしかつNon-blockingが2件以内のreview結果、最新headの全検証、必須checksを再確認してmerge工程へ進む。mergedならCompletion Noteを保存する。closedか状態が矛盾する場合は自動復旧しない。
 
 これにより、通知漏れで停止してもPRの現在状態から再開する。
 
@@ -70,7 +70,7 @@ python3 <task-orchestration-skill-directory>/scripts/orchestration_state.py reco
   --note-file <completion-note-json-path>
 ```
 
-子セッション自身がmergeした場合は、merge後にこの保存を済ませてから終了する。ユーザーによるmergeの通知で再開された場合も同じ工程を行う。保存済みなら内容を作り直さず終了する。保存失敗または既存Noteとの不一致は、後続taskを開始できる状態として報告しない。
+子セッション自身がmergeした場合は、merge後にこの保存を済ませてから終了する。ユーザーによるmergeの通知で再開された場合も同じ工程を行う。保存失敗または既存Noteとの不一致は、後続taskを開始できる状態として報告しない。
 
 ## review side chatを一度だけ作る
 

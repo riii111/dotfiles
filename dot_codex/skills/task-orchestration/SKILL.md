@@ -38,13 +38,13 @@ python3 <skill-directory>/scripts/orchestration_state.py context <orchestration-
 
 設定は、絶対パスの`XDG_CONFIG_HOME`または`$HOME/.config`にある`codex-task-orchestrator/config.toml`から読む。`repository`はタスク管理元、`pull_request_repositories`は成果物PRを許可するrepositoryの一覧として扱う。後者がない旧設定では`repository`だけを許可する。セッション対応表とmerge処理記録は、絶対パスの`XDG_STATE_HOME`または`$HOME/.local/state`にある`codex-task-orchestrator/<orchestration-id>/sessions.json`と`merges.json`から読む。
 
-`context`は設定、セッション対応、完了判定に使うmerge情報、現在のオーケストレーションのCompletion Noteを検証し、設定値、保存先、taskごとのセッション・PR対応、`completed_from_merges`、`completion_notes`を返す。Completion Noteは全オーケストレーションで共通の`completion-notes.json`に保存する。`reserved`は作成前、`child_thread_id`は作成完了を表す。状態ファイルがなければ空として扱い、それ以外の読込・対応関係の不正では失敗する。
+`context`は設定とローカル状態を検証する。失敗したら推測せず停止する。Completion Noteを含む状態の対応付けや形式はスクリプトだけが扱う。
 
 ## 開始するタスクを選ぶ
 
-1. 登録済み設定からオーケストレーションIDを自動解決し、`context`で設定、セッション対応表、merge処理記録を読む。失敗したら「判断が必要」とする。
+1. `context`を実行する。
 2. `task_source`から、全タスクの最新本文、直接依存、現在状態、状態履歴、優先順位を毎回読み直す。ページングと依存先を省略しない。
-3. 読み直した結果を一時JSONへ正規化する。`order`にはタスク管理元の優先順位と並び順を反映する。
+3. 読み直した結果と確認済みの完了task IDを`plan`へ渡す。
 
 ```json
 {
@@ -55,15 +55,6 @@ python3 <skill-directory>/scripts/orchestration_state.py context <orchestration-
 }
 ```
 
-4. 完了タスクを次の証拠から確定する。
-   - ブリッジのmerge情報
-   - `context`の`completed_from_merges`
-   - ブリッジ情報なしの場合、セッション対応表の`pull_request`を使った`gh pr view`の`mergedAt`とmerge commit
-   - オーケストレーション開始前から完了していたことを、初回読込、状態履歴、親セッションの記録で確認できるタスク管理元の状態
-5. タスク管理元だけが後から完了になったタスクは、mergeなしで完了扱いにしない。証拠が不足または矛盾する場合は「判断が必要」とする。
-6. merge済みtaskにCompletion Noteがなければ、親は後続taskを開始せず、元の子セッションを再開する。`context`のsession対応から対象を特定し、同じ子セッションへmerge済みのPRを確認してCompletion Noteを保存するよう送る。すでにCompletion Noteがあれば再開しない。親はCompletion Noteを受信しても内容を表示しない。
-7. `completed_from_merges`以外から確定した完了task IDだけを`--completed`で渡し、開始対象を計算する。`plan`は検証済みのmerge処理記録を自動で完了へ加えるが、merge済みの直接依存にCompletion Noteがないtaskは選ばない。`waiting_completion_notes`はその待機理由を、`dependency_completion_notes`は選ばれたtaskへ渡すべき先行taskの`handoff`と`risks`だけを返す。
-
 ```text
 python3 <skill-directory>/scripts/orchestration_state.py plan <orchestration-id> \
   --tasks <normalized-tasks.json> \
@@ -71,14 +62,19 @@ python3 <skill-directory>/scripts/orchestration_state.py plan <orchestration-id>
   --max-parallelism <user override or 4>
 ```
 
-ツールが依存先の欠落、自己依存、循環、重複ID、現在のタスク管理元にない完了済み・起動済み・Note保存済みtask IDを検出した場合は「判断が必要」とする。成功時は`selected`、`waiting_dependencies`、`waiting_completion_notes`、`dependency_completion_notes`、`capacity_deferred`、`launched_uncompleted`をそのまま判断へ使う。
+`plan`の出力を次の順で実行する。
+
+1. `resume_completion_notes`の各子セッションへ、対応するPRのmerge確認とCompletion Note保存を依頼する。Noteの内容は親へ表示しない。この配列が空でなければ、保存後に改めて`plan`を実行する。
+2. `selected`のtaskを作成する。Goalには同じtaskの`dependency_completion_notes`をそのまま入れる。
+
+依存の充足、Noteの保存有無、並列枠、引継ぎ項目の選別は`plan`が決める。親は出力を再計算しない。
 
 ## 子セッションを作る
 
 `selected`の各タスクについて、必ず一つずつ次を行う。
 
 1. `list_projects`でrepositoryに対応する保存済みprojectを一意に特定する。
-2. `context`を再実行し、task IDが未登録で、対象repositoryが`pull_request_repositories`に含まれることを確認する。含まれなければ作成せず「判断が必要」とする。`plan`の`dependency_completion_notes[task ID]`があれば、task IDごとに`handoff`と`risks`だけをGoalの参考情報として渡す。値が空の先行taskや`review_learnings`、`technical_debt`は渡さない。
+2. `context`を再実行し、task IDが未登録で、対象repositoryが`pull_request_repositories`に含まれることを確認する。含まれなければ作成せず「判断が必要」とする。Goalには`plan`の`dependency_completion_notes[task ID]`をそのまま入れる。
 3. `create_thread`より先に作成予約を保存する。
 
 ```text
@@ -121,7 +117,7 @@ python3 <skill-directory>/scripts/orchestration_state.py release-reservation <or
 - draft PR作成後、次を実行してローカルにPRを対応付ける
 - 子セッション用SKILLの利用有無
 - 子セッションの完了方針。既定の`manual`、または明示的に許可された`auto`
-- 先行taskのCompletion Noteから引き継ぐ`handoff`と`risks`。ない場合は参考情報を付けない
+- `plan`が返した`dependency_completion_notes`
 
 ```text
 python3 <skill-directory>/scripts/orchestration_state.py record-pr <orchestration-id> \
@@ -131,22 +127,6 @@ python3 <skill-directory>/scripts/orchestration_state.py record-pr <orchestratio
 ```
 
 PR本文にはオーケストレーター固有のtask IDや管理用markerを書かない。`record-pr`が失敗した場合は、PRを作り直さず、作成済みPRと失敗内容をユーザーへ返す。
-
-## Completion Noteを保存する
-
-merge通知を受けた親は、`context`の`completed_from_merges`と`completion_notes`を照合する。未保存のtaskだけ、session対応にある元の子セッションを再開し、次を依頼する。PR番号だけから新しい子セッションを作らない。
-
-- merge済みのPRを確認する
-- 作業で初めて分かった`risks`、`handoff`、`review_learnings`、`technical_debt`だけをJSON objectにする。該当がなければ`{}`にする
-- `record-completion-note`で保存する
-
-```text
-python3 <skill-directory>/scripts/orchestration_state.py record-completion-note <orchestration-id> \
-  --task-id <task-id> \
-  --note-file <completion-note-json-path>
-```
-
-同じ内容の再実行は安全に扱う。保存済みのNoteと異なる内容は上書きせず停止する。保存失敗が残る間は依存taskを開始しない。
 
 ## 停止条件
 
