@@ -606,6 +606,12 @@ def plan(
         for task_id, task in tasks.items()
         if task_id not in completed | launched and set(task["dependencies"]) - completed
     }
+    waiting_completion_notes = {
+        task_id: sorted(set(task["dependencies"]) & missing_completion_notes)
+        for task_id, task in tasks.items()
+        if task_id not in completed | launched
+        and set(task["dependencies"]) & missing_completion_notes
+    }
     resume_completion_notes = [
         {
             "task_id": task_id,
@@ -640,6 +646,7 @@ def plan(
         "completed_additional": sorted(completed_additional),
         "launched_uncompleted": sorted(active),
         "waiting_dependencies": waiting,
+        "waiting_completion_notes": waiting_completion_notes,
         "resume_completion_notes": resume_completion_notes,
         "dependency_completion_notes": dependency_completion_notes,
         "capacity_deferred": ready[available:],

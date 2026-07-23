@@ -159,6 +159,7 @@ task_source = "linear://project"
         result = state.plan("example", tasks, [], 1)
 
         self.assertEqual(result["completed_from_merges"], ["A"])
+        self.assertEqual(result["resume_completion_notes"], [])
         self.assertEqual(result["selected"], ["B"])
 
     def test_plan_uses_cross_repository_merge_records_with_the_same_number(self):
@@ -274,6 +275,93 @@ task_source = "linear://project"
         )
 
         self.assertEqual(state.plan("example", tasks, ["A"], 1)["selected"], ["B"])
+
+    def test_plan_waits_for_multiple_notes_and_handoffs_each_direct_dependency(self):
+        tasks = self.tasks_file(
+            [
+                {"id": "A", "dependencies": []},
+                {"id": "B", "dependencies": []},
+                {"id": "C", "dependencies": ["A", "B"]},
+            ]
+        )
+        self.create_session_with_pull_request("A", "owner/repository", 42)
+        self.create_session_with_pull_request("B", "other/repository", 42)
+        self.write_merges(
+            {
+                "owner/repository#42": {
+                    "task_id": "A",
+                    "merge_commit": "abc123",
+                },
+                "other/repository#42": {
+                    "task_id": "B",
+                    "merge_commit": "def456",
+                },
+            }
+        )
+
+        waiting = state.plan("example", tasks, [], 2)
+
+        self.assertEqual(waiting["selected"], [])
+        self.assertEqual(
+            waiting["waiting_completion_notes"], {"C": ["A", "B"]}
+        )
+        self.assertEqual(
+            waiting["resume_completion_notes"],
+            [
+                {
+                    "task_id": "A",
+                    "child_thread_id": "thread-a",
+                    "pull_request": {"repository": "owner/repository", "number": 42},
+                },
+                {
+                    "task_id": "B",
+                    "child_thread_id": "thread-b",
+                    "pull_request": {"repository": "other/repository", "number": 42},
+                },
+            ],
+        )
+
+        state.record_completion_note(
+            "example",
+            "A",
+            self.completion_note_file(
+                {
+                    "risks": "Watch conversion errors after release.",
+                    "technical_debt": "Unify duplicate conversions.",
+                }
+            ),
+        )
+        state.record_completion_note(
+            "example",
+            "B",
+            self.completion_note_file(
+                {
+                    "handoff": "Use ErrorKind::ExpiredToken.",
+                    "review_learnings": "Check retry paths with normal paths.",
+                }
+            ),
+        )
+
+        ready = state.plan("example", tasks, [], 2)
+
+        self.assertEqual(ready["resume_completion_notes"], [])
+        self.assertEqual(ready["selected"], ["C"])
+        self.assertEqual(
+            ready["dependency_completion_notes"],
+            {
+                "C": {
+                    "A": {"risks": "Watch conversion errors after release."},
+                    "B": {"handoff": "Use ErrorKind::ExpiredToken."},
+                }
+            },
+        )
+
+        state.reserve_session("example", "C")
+
+        rerun = state.plan("example", tasks, [], 2)
+
+        self.assertEqual(rerun["selected"], [])
+        self.assertEqual(rerun["launched_uncompleted"], ["C"])
 
     def test_records_an_empty_completion_note_in_the_shared_file(self):
         self.create_session_with_pull_request()
