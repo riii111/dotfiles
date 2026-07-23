@@ -463,6 +463,18 @@ def record_completion_note(
         return completion_notes
 
 
+def clear_completion_notes(orchestration_id: str) -> dict:
+    context = load_orchestration(orchestration_id)
+    path = Path(context["completion_notes_path"])
+    with lock_sessions(path):
+        completion_notes = load_completion_notes(path)
+        if orchestration_id not in completion_notes["orchestrations"]:
+            return completion_notes
+        del completion_notes["orchestrations"][orchestration_id]
+        write_completion_notes(path, completion_notes)
+        return completion_notes
+
+
 def load_tasks(path: Path) -> dict[str, dict]:
     try:
         payload = json.loads(path.read_text())
@@ -561,7 +573,12 @@ def plan(
             "completed, launched, or noted tasks are absent from the current task source"
         )
 
-    missing_completion_notes = completed_from_merges - noted_tasks
+    tracked_tasks = {
+        task_id
+        for task_id, task in sessions["tasks"].items()
+        if "pull_request" in task
+    }
+    missing_completion_notes = completed & tracked_tasks - noted_tasks
     completion_ready = completed - missing_completion_notes
 
     launched = set(sessions["tasks"])
@@ -657,6 +674,9 @@ def parser() -> argparse.ArgumentParser:
     completion_note.add_argument("orchestration_id")
     completion_note.add_argument("--task-id", required=True)
     completion_note.add_argument("--note-file", type=Path, required=True)
+
+    clear_notes = commands.add_parser("clear-completion-notes")
+    clear_notes.add_argument("orchestration_id")
     return root
 
 
@@ -706,6 +726,8 @@ def main(argv: list[str] | None = None) -> int:
                 arguments.task_id,
                 arguments.note_file,
             )
+        elif arguments.command == "clear-completion-notes":
+            output = clear_completion_notes(arguments.orchestration_id)
         else:
             output = record_pull_request(
                 arguments.orchestration_id,

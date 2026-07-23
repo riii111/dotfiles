@@ -92,6 +92,8 @@ To reset all local task and merge records, stop polling, move the state director
 launchctl unload -w ~/Library/LaunchAgents/org.nixos.codex-task-orchestrator.plist
 mv ~/.local/state/codex-task-orchestrator/codex-task-orchestration \
   ~/.Trash/codex-task-orchestration-state-$(date +%Y%m%d%H%M%S)
+python3 ~/.codex/skills/task-orchestration/scripts/orchestration_state.py \
+  clear-completion-notes codex-task-orchestration
 launchctl load -w ~/Library/LaunchAgents/org.nixos.codex-task-orchestrator.plist
 ```
 

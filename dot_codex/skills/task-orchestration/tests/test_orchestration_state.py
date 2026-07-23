@@ -237,6 +237,26 @@ task_source = "linear://project"
             },
         )
 
+    def test_plan_waits_for_a_completion_note_from_completed_tracked_pr(self):
+        tasks = self.tasks_file(
+            [
+                {"id": "A", "dependencies": []},
+                {"id": "B", "dependencies": ["A"]},
+            ]
+        )
+        self.create_session_with_pull_request()
+
+        waiting = state.plan("example", tasks, ["A"], 1)
+
+        self.assertEqual(waiting["selected"], [])
+        self.assertEqual(waiting["waiting_completion_notes"], {"B": ["A"]})
+
+        state.record_completion_note(
+            "example", "A", self.completion_note_file({})
+        )
+
+        self.assertEqual(state.plan("example", tasks, ["A"], 1)["selected"], ["B"])
+
     def test_records_an_empty_completion_note_in_the_shared_file(self):
         self.create_session_with_pull_request()
 
@@ -308,6 +328,43 @@ task_source = "linear://project"
             state.record_completion_note(
                 "example", "A", self.completion_note_file({"risks": "Changed."})
             )
+
+    def test_clear_completion_notes_resets_only_the_current_orchestration(self):
+        self.create_session_with_pull_request()
+        state.record_completion_note(
+            "example", "A", self.completion_note_file({"handoff": "Old path."})
+        )
+        path = state.completion_notes_path("example")
+        path.write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "orchestrations": {
+                        "example": {"tasks": {"A": {"handoff": "Old path."}}},
+                        "other": {"tasks": {"X": {"handoff": "Keep this."}}},
+                    },
+                }
+            )
+        )
+
+        cleared = state.clear_completion_notes("example")
+
+        self.assertNotIn("example", cleared["orchestrations"])
+        self.assertEqual(
+            cleared["orchestrations"]["other"]["tasks"]["X"],
+            {"handoff": "Keep this."},
+        )
+
+        tasks = self.tasks_file(
+            [
+                {"id": "A", "dependencies": []},
+                {"id": "B", "dependencies": ["A"]},
+            ]
+        )
+        self.assertEqual(
+            state.plan("example", tasks, ["A"], 1)["waiting_completion_notes"],
+            {"B": ["A"]},
+        )
 
     def test_completion_note_rejects_unknown_or_empty_fields(self):
         self.create_session_with_pull_request()
