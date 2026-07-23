@@ -1,4 +1,4 @@
 interface:
   display_name: "Completion Report"
-  short_description: "merge後のCompletion Noteを保存する。"
-  default_prompt: "$completion-reportを使い、merge済みtaskのCompletion Noteを保存してください。"
+  short_description: "merge後のCompletion Noteを保存して親へ通知する。"
+  default_prompt: "$completion-reportを使い、merge済みtaskのCompletion Noteを保存して親へ完了通知してください。"

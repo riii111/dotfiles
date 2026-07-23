@@ -226,6 +226,10 @@ def command_test(_: argparse.Namespace) -> int:
             "task orchestration tests",
         ),
         (
+            "dot_codex/skills/completion-report/tests",
+            "completion report tests",
+        ),
+        (
             "dot_codex/skills/task-worker/tests",
             "task worker tests",
         ),
