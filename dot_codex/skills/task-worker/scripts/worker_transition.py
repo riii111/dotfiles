@@ -44,6 +44,7 @@
     Any tracked PR -- conflict --> [stop_conflict]
     Any tracked PR -- closed ----> [stop_closed]
     Any tracked PR -- merged ----> [record_completion_note]
+    Any active state -- policy_changed/head_changed --> recompute from new state
 
 Every bracketed step is one returned action. External work reports an event back
 to this script; the reducer validates the candidate state, writes it atomically,
@@ -259,12 +260,12 @@ def next_action(state: dict) -> str:
         return "stop_closed"
     if pr == "merged":
         return "complete" if note_saved else "record_completion_note"
-    if pr == "ready" and policy == "manual":
-        return "stop_policy_mismatch"
     if pr == "absent":
         return "implement"
     if not state["mergeable"]:
         return "stop_conflict"
+    if pr == "ready" and policy == "manual":
+        return "stop_policy_mismatch"
 
     match review_action(state):
         case "request_review":
@@ -298,15 +299,13 @@ def validate_state_invariants(state: dict) -> None:
         raise TransitionError("an unmerged pull request cannot have a completion note")
     match review["status"]:
         case "absent":
-            if review != {
-                "status": "absent",
-                "head_sha": None,
-                "applied_head_sha": None,
-                "blocking": 0,
-                "non_blocking": 0,
-                "thread_id": None,
-                "turn_id": None,
-            }:
+            if (
+                review["head_sha"] is not None
+                or review["applied_head_sha"] is not None
+                or review["blocking"]
+                or review["non_blocking"]
+                or review["turn_id"] is not None
+            ):
                 raise TransitionError("absent review contains processing state")
         case "pending":
             if (
@@ -462,7 +461,9 @@ def reduce_state(state: dict, event: dict) -> dict:
             )
         case "head_changed":
             updated["head_sha"] = require_event_string(event, "head_sha")
+            thread_id = updated["review"]["thread_id"]
             updated["review"] = initial_state(updated["policy"])["review"]
+            updated["review"]["thread_id"] = thread_id
             updated["checks"] = {"status": "not_run", "head_sha": None}
         case "checks_retry_requested":
             updated["checks"] = {"status": "not_run", "head_sha": None}
@@ -489,6 +490,8 @@ def allowed_events(state: dict) -> tuple[str, ...]:
                 "policy_changed",
             )
         )
+    if state["pr"] == "absent":
+        external.append("policy_changed")
     try:
         action = next_action(state)
     except TransitionError:
@@ -513,6 +516,11 @@ def write_state(path: Path, state: dict) -> None:
             temporary.flush()
             os.fsync(temporary.fileno())
         os.replace(temporary_path, path)
+        directory = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
     finally:
         if temporary_path and temporary_path.exists():
             temporary_path.unlink()
@@ -553,14 +561,16 @@ def main(argv: list[str] | None = None) -> int:
         if arguments.command == "state-path":
             output = {"path": str(path)}
         elif arguments.command == "init":
+            policy = require_choice(arguments.policy, "completion policy", POLICIES)
             with lock_state(path):
                 if path.exists():
                     state = load_state(path)
                 else:
-                    state = initial_state(arguments.policy)
+                    state = initial_state(policy)
                     write_state(path, state)
             output = {
                 "action": next_action(state),
+                "allowed_events": allowed_event_schemas(state),
                 "path": str(path),
                 "state": state,
             }

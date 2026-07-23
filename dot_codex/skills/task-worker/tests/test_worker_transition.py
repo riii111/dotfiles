@@ -157,6 +157,17 @@ class WorkerTransitionTest(unittest.TestCase):
         state = self.state(review=self.review(blocking=1, applied_head_sha="head-1"))
         self.assertEqual(transition.next_action(state), "request_review")
 
+    def test_non_blocking_review_threshold_accepts_two_and_rechecks_three(self):
+        accepted = self.state(
+            review=self.review(non_blocking=2, applied_head_sha="head-1")
+        )
+        recheck = self.state(
+            review=self.review(non_blocking=3, applied_head_sha="head-1")
+        )
+
+        self.assertEqual(transition.next_action(accepted), "verify")
+        self.assertEqual(transition.next_action(recheck), "request_review")
+
     def test_rejects_stale_review_and_checks(self):
         with self.assertRaisesRegex(transition.TransitionError, "reviewed head"):
             transition.next_action(
@@ -302,16 +313,23 @@ class WorkerTransitionTest(unittest.TestCase):
         self.assertEqual(transition.next_action(retried), "verify")
 
     def test_policy_and_head_changes_are_explicit_events(self):
+        initial = transition.reduce_state(
+            transition.initial_state("manual"),
+            {"type": "policy_changed", "policy": "auto"},
+        )
         state = transition.reduce_state(
             self.state(), {"type": "policy_changed", "policy": "auto"}
         )
+        state["review"]["thread_id"] = "review-thread"
         state = transition.reduce_state(
             state, {"type": "head_changed", "head_sha": "head-2"}
         )
 
+        self.assertEqual(initial["policy"], "auto")
         self.assertEqual(state["policy"], "auto")
         self.assertEqual(state["head_sha"], "head-2")
         self.assertEqual(state["review"]["status"], "absent")
+        self.assertEqual(state["review"]["thread_id"], "review-thread")
         self.assertEqual(state["checks"]["status"], "not_run")
 
     def test_review_findings_cannot_come_from_a_stale_head(self):
@@ -406,10 +424,20 @@ class WorkerTransitionTest(unittest.TestCase):
             ]
 
             first = subprocess.run(
-                command, capture_output=True, text=True, env=environment, check=False
+                command,
+                capture_output=True,
+                text=True,
+                env=environment,
+                check=False,
+                timeout=5,
             )
             second = subprocess.run(
-                command, capture_output=True, text=True, env=environment, check=False
+                command,
+                capture_output=True,
+                text=True,
+                env=environment,
+                check=False,
+                timeout=5,
             )
             changed_policy = subprocess.run(
                 [*command[:-1], "auto"],
@@ -417,6 +445,7 @@ class WorkerTransitionTest(unittest.TestCase):
                 text=True,
                 env=environment,
                 check=False,
+                timeout=5,
             )
             invalid = subprocess.run(
                 [
@@ -433,14 +462,25 @@ class WorkerTransitionTest(unittest.TestCase):
                 text=True,
                 env=environment,
                 check=False,
+                timeout=5,
+            )
+            invalid_policy = subprocess.run(
+                [*command[:-1], "bogus"],
+                capture_output=True,
+                text=True,
+                env=environment,
+                check=False,
+                timeout=5,
             )
 
         self.assertEqual(first.returncode, 0)
         self.assertEqual(second.returncode, 0)
         self.assertEqual(json.loads(first.stdout), json.loads(second.stdout))
+        self.assertIn("allowed_events", json.loads(first.stdout))
         self.assertEqual(changed_policy.returncode, 0)
         self.assertEqual(json.loads(changed_policy.stdout)["state"]["policy"], "manual")
         self.assertEqual(invalid.returncode, 2)
+        self.assertEqual(invalid_policy.returncode, 2)
         self.assertEqual(
             json.loads(invalid.stderr),
             {"error": ("orchestration, task, and worker IDs must be filesystem-safe")},
@@ -460,6 +500,18 @@ class WorkerTransitionTest(unittest.TestCase):
                 ),
                 "stop_conflict",
             )
+        self.assertEqual(
+            transition.next_action(
+                self.state(
+                    pr="ready",
+                    review=self.review(),
+                    checks=self.checks(),
+                    policy="manual",
+                    mergeable=False,
+                )
+            ),
+            "stop_conflict",
+        )
 
 
 if __name__ == "__main__":
