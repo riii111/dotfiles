@@ -12,7 +12,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 
-SESSION_VERSION = 1
+SESSION_VERSION = 2
 MERGES_VERSION = 1
 COMPLETION_NOTES_VERSION = 1
 ORCHESTRATION_ID = re.compile(r"^[a-z0-9][a-z0-9-]*$")
@@ -125,7 +125,7 @@ def load_sessions(
         raise StateError(f"could not read sessions at {path}: {error}") from error
 
     version = data.get("version") if isinstance(data, dict) else None
-    if type(version) is not int or version != SESSION_VERSION:
+    if type(version) is not int or version not in (1, SESSION_VERSION):
         raise StateError("unsupported sessions version")
     if data.get("parent_thread_id") != parent_thread_id or not isinstance(
         data.get("tasks"), dict
@@ -137,12 +137,15 @@ def load_sessions(
     for task_id, task in data["tasks"].items():
         if not isinstance(task_id, str) or not task_id or not isinstance(task, dict):
             raise StateError("sessions contain an invalid task entry")
+        worker = task.get("worker")
         child_thread_id = task.get("child_thread_id")
         creation = task.get("creation")
-        if isinstance(child_thread_id, str) and child_thread_id:
+        if version == 1 and isinstance(child_thread_id, str) and child_thread_id:
+            worker = {"provider": "codex-app", "worker_id": child_thread_id}
+        if worker is not None:
             if creation is not None:
                 raise StateError(f"task {task_id} has conflicting creation state")
-            normalized_task = {"child_thread_id": child_thread_id}
+            normalized_task = {"worker": validate_worker_reference(task_id, worker)}
             if "pull_request" in task:
                 pull_request = validate_pull_request(task["pull_request"])
                 if pull_request["repository"] not in pull_request_repositories:
@@ -159,7 +162,7 @@ def load_sessions(
         else:
             normalized_task = {"creation": validate_creation(task_id, creation)}
             if "pull_request" in task:
-                raise StateError(f"task {task_id} has a pull request without a thread")
+                raise StateError(f"task {task_id} has a pull request without a worker")
         normalized["tasks"][task_id] = normalized_task
     return normalized
 
@@ -168,6 +171,21 @@ def validate_creation(task_id: str, creation: object) -> dict:
     if creation == {"status": "reserved"}:
         return creation
     raise StateError(f"task {task_id} has invalid creation state")
+
+
+def validate_worker_reference(task_id: str, worker: object) -> dict:
+    if not isinstance(worker, dict):
+        raise StateError(f"task {task_id} has an invalid worker reference")
+    provider = worker.get("provider")
+    worker_id = worker.get("worker_id")
+    if (
+        provider not in {"codex-app", "herdr"}
+        or not isinstance(worker_id, str)
+        or not worker_id
+        or worker_id == "null"
+    ):
+        raise StateError(f"task {task_id} has an invalid worker reference")
+    return {"provider": provider, "worker_id": worker_id}
 
 
 def validate_pull_request(pull_request: object) -> dict:
@@ -370,7 +388,9 @@ def release_reservation(orchestration_id: str, task_id: str) -> dict:
         return sessions
 
 
-def record_session(orchestration_id: str, task_id: str, child_thread_id: str) -> dict:
+def record_worker(
+    orchestration_id: str, task_id: str, provider: str, worker_id: str
+) -> dict:
     context = load_orchestration(orchestration_id)
     path = Path(context["sessions_path"])
     with lock_sessions(path):
@@ -380,19 +400,25 @@ def record_session(orchestration_id: str, task_id: str, child_thread_id: str) ->
             context["pull_request_repositories"],
         )
         existing = sessions["tasks"].get(task_id)
-        if existing and "child_thread_id" in existing:
-            if existing["child_thread_id"] != child_thread_id:
+        worker = {"provider": provider, "worker_id": worker_id}
+        worker = validate_worker_reference(task_id, worker)
+        if existing and "worker" in existing:
+            if existing["worker"] != worker:
                 raise StateError(
-                    f"task {task_id} is already associated with another thread"
+                    f"task {task_id} is already associated with another worker"
                 )
             return sessions
-        if not task_id or not child_thread_id:
-            raise StateError("task ID and child thread ID must not be empty")
+        if not task_id:
+            raise StateError("task ID must not be empty")
         if not existing or "creation" not in existing:
             raise StateError(f"task {task_id} has no session reservation")
-        sessions["tasks"][task_id] = {"child_thread_id": child_thread_id}
+        sessions["tasks"][task_id] = {"worker": worker}
         write_sessions(path, sessions)
         return sessions
+
+
+def record_session(orchestration_id: str, task_id: str, child_thread_id: str) -> dict:
+    return record_worker(orchestration_id, task_id, "codex-app", child_thread_id)
 
 
 def record_pull_request(
@@ -410,8 +436,8 @@ def record_pull_request(
             context["pull_request_repositories"],
         )
         task = sessions["tasks"].get(task_id)
-        if task is None or "child_thread_id" not in task:
-            raise StateError(f"task {task_id} has no child session")
+        if task is None or "worker" not in task:
+            raise StateError(f"task {task_id} has no worker")
         existing = task.get("pull_request")
         if existing and existing != pull_request:
             raise StateError(
@@ -442,8 +468,8 @@ def record_completion_note(
         context["pull_request_repositories"],
     )
     task = sessions["tasks"].get(task_id)
-    if task is None or "child_thread_id" not in task:
-        raise StateError(f"task {task_id} has no child session")
+    if task is None or "worker" not in task:
+        raise StateError(f"task {task_id} has no worker")
     if "pull_request" not in task:
         raise StateError(f"task {task_id} has no tracked pull request")
     note = load_completion_note_file(note_file)
@@ -471,8 +497,8 @@ def completion_note(orchestration_id: str, task_id: str) -> dict:
         context["pull_request_repositories"],
     )
     task = sessions["tasks"].get(task_id)
-    if task is None or "child_thread_id" not in task:
-        raise StateError(f"task {task_id} has no child session")
+    if task is None or "worker" not in task:
+        raise StateError(f"task {task_id} has no worker")
     if "pull_request" not in task:
         raise StateError(f"task {task_id} has no tracked pull request")
 
@@ -615,7 +641,7 @@ def plan(
     resume_completion_notes = [
         {
             "task_id": task_id,
-            "child_thread_id": sessions["tasks"][task_id]["child_thread_id"],
+            "worker": sessions["tasks"][task_id]["worker"],
             "pull_request": sessions["tasks"][task_id]["pull_request"],
         }
         for task_id in sorted(missing_completion_notes)
@@ -668,10 +694,11 @@ def parser() -> argparse.ArgumentParser:
     planning.add_argument("--completed", action="append", default=[])
     planning.add_argument("--max-parallelism", type=int, required=True)
 
-    session = commands.add_parser("record-session")
-    session.add_argument("orchestration_id")
-    session.add_argument("--task-id", required=True)
-    session.add_argument("--child-thread-id", required=True)
+    worker = commands.add_parser("record-worker")
+    worker.add_argument("orchestration_id")
+    worker.add_argument("--task-id", required=True)
+    worker.add_argument("--provider", required=True, choices=("codex-app", "herdr"))
+    worker.add_argument("--worker-id", required=True)
 
     reservation = commands.add_parser("reserve-session")
     reservation.add_argument("orchestration_id")
@@ -728,11 +755,12 @@ def main(argv: list[str] | None = None) -> int:
             output = reserve_session(arguments.orchestration_id, arguments.task_id)
         elif arguments.command == "release-reservation":
             output = release_reservation(arguments.orchestration_id, arguments.task_id)
-        elif arguments.command == "record-session":
-            output = record_session(
+        elif arguments.command == "record-worker":
+            output = record_worker(
                 arguments.orchestration_id,
                 arguments.task_id,
-                arguments.child_thread_id,
+                arguments.provider,
+                arguments.worker_id,
             )
         elif arguments.command == "record-completion-note":
             output = record_completion_note(

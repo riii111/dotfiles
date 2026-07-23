@@ -214,7 +214,7 @@ task_source = "linear://project"
             [
                 {
                     "task_id": "A",
-                    "child_thread_id": "thread-a",
+                    "worker": {"provider": "codex-app", "worker_id": "thread-a"},
                     "pull_request": {"repository": "owner/repository", "number": 42},
                 }
             ],
@@ -264,7 +264,7 @@ task_source = "linear://project"
             [
                 {
                     "task_id": "A",
-                    "child_thread_id": "thread-a",
+                    "worker": {"provider": "codex-app", "worker_id": "thread-a"},
                     "pull_request": {"repository": "owner/repository", "number": 42},
                 }
             ],
@@ -310,12 +310,12 @@ task_source = "linear://project"
             [
                 {
                     "task_id": "A",
-                    "child_thread_id": "thread-a",
+                    "worker": {"provider": "codex-app", "worker_id": "thread-a"},
                     "pull_request": {"repository": "owner/repository", "number": 42},
                 },
                 {
                     "task_id": "B",
-                    "child_thread_id": "thread-b",
+                    "worker": {"provider": "codex-app", "worker_id": "thread-b"},
                     "pull_request": {"repository": "other/repository", "number": 42},
                 },
             ],
@@ -530,7 +530,7 @@ task_source = "linear://project"
 
         result = state.record_pull_request("example", "A", "owner/repository", 42)
 
-        self.assertEqual(result["version"], 1)
+        self.assertEqual(result["version"], 2)
         self.assertEqual(
             result["tasks"]["A"]["pull_request"],
             {"repository": "owner/repository", "number": 42},
@@ -543,8 +543,73 @@ task_source = "linear://project"
         second = state.record_session("example", "A", "thread-a")
 
         self.assertEqual(first, second)
-        with self.assertRaisesRegex(state.StateError, "another thread"):
+        with self.assertRaisesRegex(state.StateError, "another worker"):
             state.record_session("example", "A", "thread-b")
+
+    def test_legacy_session_is_migrated_to_a_codex_worker_reference(self):
+        path = state.state_path("example")
+        path.parent.mkdir(parents=True)
+        path.write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "parent_thread_id": "parent-thread",
+                    "tasks": {"A": {"child_thread_id": "thread-a"}},
+                }
+            )
+        )
+
+        sessions = state.load_sessions(
+            path, "parent-thread", ["owner/repository", "other/repository"]
+        )
+
+        self.assertEqual(
+            sessions["tasks"]["A"]["worker"],
+            {"provider": "codex-app", "worker_id": "thread-a"},
+        )
+
+    def test_worker_reference_flows_from_reservation_to_pull_request(self):
+        state.reserve_session("example", "A")
+        state.record_worker("example", "A", "codex-app", "thread-a")
+
+        result = state.record_pull_request("example", "A", "owner/repository", 42)
+
+        self.assertEqual(
+            result["tasks"]["A"]["worker"],
+            {"provider": "codex-app", "worker_id": "thread-a"},
+        )
+
+    def test_cli_refuses_an_unresolved_worker_id_after_reservation(self):
+        state.reserve_session("example", "A")
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(SPEC.origin),
+                "record-worker",
+                "example",
+                "--task-id",
+                "A",
+                "--provider",
+                "codex-app",
+                "--worker-id",
+                "null",
+            ],
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("invalid worker reference", result.stderr)
+        self.assertEqual(
+            state.load_sessions(
+                state.state_path("example"),
+                "parent-thread",
+                ["owner/repository", "other/repository"],
+            )["tasks"]["A"],
+            {"creation": {"status": "reserved"}},
+        )
 
     def test_reservation_prevents_duplicate_selection(self):
         tasks = self.tasks_file([{"id": "A", "dependencies": []}])

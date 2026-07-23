@@ -1,7 +1,7 @@
 ---
 name: task-orchestration
 description: |
-  オーケストレーションIDに紐づくタスク群を毎回読み直し、PRのmergeと依存関係から次に開始できるタスクを選び、通常の独立したCodex子セッションを重複なく作成する。
+  オーケストレーションIDに紐づくタスク群を毎回読み直し、PRのmergeと依存関係から次に開始できるタスクを選び、Providerとmodelを指定したworkerを共通adapter経由で重複なく起動する。
   最初のタスク開始、merge通知後の再開、開始済み・依存待ちタスクの整理に使う。
 ---
 
@@ -64,7 +64,7 @@ python3 <skill-directory>/scripts/orchestration_state.py plan <orchestration-id>
 
 `plan`の出力を次の順で実行する。
 
-1. `resume_completion_notes`の各子セッションだけを再開する。新しい子セッションを作らず、対応するPRの`state`、`mergedAt`、`mergeCommit`の確認と、未保存Completion Noteの保存を依頼する。Noteの本文は親へ表示しない。
+1. `resume_completion_notes`の各workerだけを再開する。新しいworkerを作らず、対応するPRの`state`、`mergedAt`、`mergeCommit`の確認と、未保存Completion Noteの保存を依頼する。Noteの本文は親へ表示しない。
 2. 再開直後にNoteを読まない。各子セッションの同じturnを`wait_threads`で待ち、完了または応答が必要な状態になってから`completion-note`を再読する。`saved: true`を確認するまで後続taskを開始しない。`note: {}`も保存済みである。
 3. `wait_threads`の待機中またはtimeout時は、再開依頼の失敗と扱わない。再開依頼を重ねず「Completion Note保存待ち」として停止し、同じ子セッションを待ち続ける。turnの失敗・応答要求、または完了後の`completion-note`が`false`や読込エラーなら「判断が必要」として停止する。
 4. `resume_completion_notes`が空になるまで`plan`を改めて実行する。`waiting_completion_notes`にあるtaskは、その直接依存のNoteを確認するまで開始しない。
@@ -72,34 +72,41 @@ python3 <skill-directory>/scripts/orchestration_state.py plan <orchestration-id>
 
 再開、Note読込、保存確認のいずれかに失敗したら、該当taskに依存する後続taskを作成せず「判断が必要」として停止する。依存の充足、Noteの保存有無、並列枠、引継ぎ項目の選別は`plan`が決める。親は出力を再計算しない。
 
-## 子セッションを作る
+## workerを起動する
 
 `selected`の各タスクについて、必ず一つずつ次を行う。
 
-1. `list_projects`でrepositoryに対応する保存済みprojectを一意に特定する。
-2. `context`を再実行し、task IDが未登録で、対象repositoryが`pull_request_repositories`に含まれることを確認する。含まれなければ作成せず「判断が必要」とする。Goalには`plan`の`dependency_completion_notes[task ID]`を、直接依存task IDごとの参考情報としてそのまま入れる。空のNoteは渡さず、`review_learnings`と`technical_debt`を補わない。
-3. `create_thread`より先に作成予約を保存する。
+1. `context`を再実行し、task IDが未登録で、対象repositoryが`pull_request_repositories`に含まれることを確認する。含まれなければ起動せず「判断が必要」とする。Goalには`plan`の`dependency_completion_notes[task ID]`を、直接依存task IDごとの参考情報としてそのまま入れる。空のNoteは渡さず、`review_learnings`と`technical_debt`を補わない。
+2. `worker start`より先に起動予約を保存する。
 
 ```text
 python3 <skill-directory>/scripts/orchestration_state.py reserve-session <orchestration-id> \
   --task-id <task-id>
 ```
 
-4. 選んだmodelとthinkingを指定して`create_thread`を一回だけ呼ぶ。project targetの`environment`は必ず`local`とし、promptには下記Goalを使う。通常のlocal作成は`threadId`と`hostId`を直接返す。`clientThreadId`を返すCodex管理worktreeは指定しない。
-5. `threadId`を取得した直後に保存する。
+3. 共通task形式のJSONへProvider、model、thinking、Goal、assigned workspaceを入れ、`worker start`を一回だけ呼ぶ。Codexでは`agent_tool: codex`と`runner: codex-app`、Herdrでは対応するProviderとrunnerを指定する。Codex Appの`create_thread`、`child_thread_id`、Codex管理worktreeを直接使わない。
 
 ```text
-python3 <skill-directory>/scripts/orchestration_state.py record-session <orchestration-id> \
-  --task-id <task-id> \
-  --child-thread-id <thread-id>
+codex-task-orchestrator worker start <orchestration-id> <common-worker-task.json>
+worker_status=$(codex-task-orchestrator worker status <orchestration-id> <task-id> --json)
+provider=$(jq -er 'if .record.handle.provider == "codex" then "codex-app" elif .record.handle.provider == "herdr" then "herdr" else empty end' <<<"$worker_status")
+worker_id=$(jq -er 'if .record.handle.provider == "codex" then .record.handle.thread_id elif .record.handle.provider == "herdr" then .record.handle.workspace_id else empty end | select(type == "string" and length > 0)' <<<"$worker_status")
 ```
 
-6. `threadId`が返らなければ予約を残し、それ以上作成せず「判断が必要」とする。
-7. 保存後に`set_thread_title`で`[<task-id>] <task title>`へ変更する。
+4. statusの`record.handle`からProvider非依存worker参照を取得した直後に保存する。Codexは`provider: codex-app`とThread ID、Herdrは`provider: herdr`とworkspace IDを使う。
 
-予約後の作成失敗、ID保存、タイトル変更の失敗では同じタスクを再作成せず、保存済みの状態と失敗内容を返す。
+```text
+python3 <skill-directory>/scripts/orchestration_state.py record-worker <orchestration-id> \
+  --task-id <task-id> \
+  --provider "$provider" \
+  --worker-id "$worker_id"
+```
 
-`create_thread`がセッションを作成していないと確定でき、ユーザーが再試行を明示的に許可した場合だけ、`reserved`を解除する。タイムアウトなど結果が不明な場合には使わない。
+5. worker参照を取得できなければ予約を残し、それ以上起動せず「判断が必要」とする。
+
+予約後の起動失敗、worker参照保存の失敗では同じタスクを再起動せず、保存済みの状態と失敗内容を返す。
+
+`worker start`がworkerを作成していないと確定でき、ユーザーが再試行を明示的に許可した場合だけ、`reserved`を解除する。タイムアウトなど結果が不明な場合には使わない。
 
 ```text
 python3 <skill-directory>/scripts/orchestration_state.py release-reservation <orchestration-id> \
