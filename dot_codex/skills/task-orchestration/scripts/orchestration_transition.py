@@ -281,8 +281,13 @@ def normalize_notification(value: object, orchestration_id: str | None = None) -
         raise TransitionError("notification merge commit is not a Git object ID")
     if notification["saved"] is not True:
         raise TransitionError("completion notification is not saved")
+    pull_request_value = require_object(
+        notification["pull_request"],
+        "notification.pull_request",
+        {"repository", "number"},
+    )
     try:
-        pull_request = storage.validate_pull_request(notification["pull_request"])
+        pull_request = storage.validate_pull_request(pull_request_value)
     except storage.StateError as error:
         raise TransitionError(str(error)) from error
     return {
@@ -476,6 +481,8 @@ def normalize_state(raw: object) -> dict:
         raise TransitionError(
             "completion notification task is absent from the current task source"
         )
+    if not set(normalized_notifications) <= set(normalized["completed"]):
+        raise TransitionError("completion notification task is not completed")
     recovery = normalized["recovery"]
     launch = normalized["launch"]
     if recovery and recovery["task_id"] not in task_ids:
@@ -1026,10 +1033,6 @@ def main(argv: list[str] | None = None) -> int:
             with lock_state(path):
                 if path.exists():
                     state = load_state(path)
-                    state, old_plan = materialize_next(
-                        arguments.orchestration_id, state
-                    )
-                    old_action = action_name(state)
                     if not same_inputs(
                         state,
                         arguments.source_revision,
@@ -1038,7 +1041,7 @@ def main(argv: list[str] | None = None) -> int:
                         arguments.max_parallelism,
                         arguments.policy,
                     ):
-                        if old_action != "complete":
+                        if action_name(state) != "complete":
                             raise TransitionError(
                                 "cycle inputs changed during an active operation"
                             )
@@ -1050,6 +1053,8 @@ def main(argv: list[str] | None = None) -> int:
                             arguments.policy,
                             state["cycle"] + 1,
                         )
+                    else:
+                        state, _ = materialize_next(arguments.orchestration_id, state)
                 else:
                     state = initial_state(
                         arguments.source_revision,

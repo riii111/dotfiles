@@ -524,6 +524,32 @@ task_source = "file:///tasks.md"
                 ),
             )
 
+        invalid_pull_request = self.notification()
+        invalid_pull_request["pull_request"]["extra"] = "must not pass"
+        with self.assertRaisesRegex(
+            transition.TransitionError, "missing or unknown fields"
+        ):
+            transition.reduce_event(
+                "example",
+                state,
+                self.event(
+                    state,
+                    "completion_notified",
+                    notification=invalid_pull_request,
+                    observed_merge_commit="a" * 40,
+                ),
+            )
+
+    def test_rejects_notification_missing_from_completed_tasks(self):
+        state, _ = self.new_state([{"id": "A", "dependencies": []}])
+        malformed = json.loads(json.dumps(state))
+        malformed["notifications"]["A"] = self.notification()
+
+        with self.assertRaisesRegex(
+            transition.TransitionError, "notification task is not completed"
+        ):
+            transition.normalize_state(malformed)
+
     def test_rejects_stale_source_observation_and_contradictory_thread(self):
         state, _ = self.advance_to_created_thread()
         stale_source = self.event(
@@ -717,6 +743,76 @@ task_source = "file:///tasks.md"
             json.loads(stale.stderr),
             {"error": "cycle inputs changed during an active operation"},
         )
+
+    def test_cli_init_changes_cycle_before_old_plan_is_materialized(self):
+        self.create_tracked_session()
+        tasks = self.root / "tasks.json"
+        tasks.write_text(json.dumps({"tasks": [{"id": "A", "dependencies": []}]}))
+        command = [
+            sys.executable,
+            str(TRANSITION_SPEC.origin),
+            "init",
+            "example",
+            "--tasks",
+            str(tasks),
+            "--max-parallelism",
+            "1",
+            "--policy",
+            "manual",
+            "--source-revision",
+            "source-1",
+        ]
+        environment = {
+            **os.environ,
+            "XDG_CONFIG_HOME": str(self.config_home),
+            "XDG_STATE_HOME": str(self.state_home),
+        }
+        first = subprocess.run(
+            command,
+            capture_output=True,
+            check=False,
+            text=True,
+            env=environment,
+        )
+        self.assertEqual(first.returncode, 0)
+        self.assertEqual(json.loads(first.stdout)["action"], "complete")
+
+        merges_path = storage.merges_path("example")
+        merges_path.write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "pull_requests": {
+                        "owner/repository#42": {
+                            "task_id": "A",
+                            "merge_commit": "a" * 40,
+                        }
+                    },
+                }
+            )
+        )
+        tasks.write_text(
+            json.dumps(
+                {
+                    "tasks": [
+                        {"id": "A", "dependencies": []},
+                        {"id": "B", "dependencies": ["A"]},
+                    ]
+                }
+            )
+        )
+        changed = subprocess.run(
+            [*command[:-1], "source-2"],
+            capture_output=True,
+            check=False,
+            text=True,
+            env=environment,
+        )
+
+        self.assertEqual(changed.returncode, 0)
+        output = json.loads(changed.stdout)
+        self.assertEqual(output["source_revision"], "source-2")
+        self.assertEqual(output["action"], "recover_completion_note")
 
 
 if __name__ == "__main__":
