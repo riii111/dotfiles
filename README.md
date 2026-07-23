@@ -86,15 +86,6 @@ launchctl unload -w ~/Library/LaunchAgents/org.nixos.codex-task-orchestrator.pli
 launchctl load -w ~/Library/LaunchAgents/org.nixos.codex-task-orchestrator.plist
 ```
 
-To reset all local task and merge records, stop polling, move the state directory to the Trash, then resume polling. Existing task and PR registrations are removed, so start the orchestration again afterward.
-
-```bash
-launchctl unload -w ~/Library/LaunchAgents/org.nixos.codex-task-orchestrator.plist
-mv ~/.local/state/codex-task-orchestrator/codex-task-orchestration \
-  ~/.Trash/codex-task-orchestration-state-$(date +%Y%m%d%H%M%S)
-launchctl load -w ~/Library/LaunchAgents/org.nixos.codex-task-orchestrator.plist
-```
-
 If Codex cannot resume the parent task, macOS shows one notification for each merge and a later poll retries automatically. Check the log above when no parent task starts.
 
 ### Store maintenance

@@ -66,6 +66,11 @@ task_source = "linear://project"
         path.write_text(json.dumps({"version": 1, "pull_requests": pull_requests}))
         return path
 
+    def completion_note_file(self, note):
+        path = self.root / "completion-note.json"
+        path.write_text(json.dumps(note))
+        return path
+
     def test_plan_selects_independent_tasks_then_their_dependent(self):
         tasks = self.tasks_file(
             [
@@ -147,6 +152,9 @@ task_source = "linear://project"
                 }
             }
         )
+        state.record_completion_note(
+            "example", "A", self.completion_note_file({})
+        )
 
         result = state.plan("example", tasks, [], 1)
 
@@ -175,11 +183,190 @@ task_source = "linear://project"
                 },
             }
         )
+        state.record_completion_note(
+            "example", "A", self.completion_note_file({})
+        )
+        state.record_completion_note(
+            "example", "B", self.completion_note_file({})
+        )
 
         result = state.plan("example", tasks, [], 1)
 
         self.assertEqual(result["completed_from_merges"], ["A", "B"])
         self.assertEqual(result["selected"], ["C"])
+
+    def test_plan_waits_for_a_merged_dependency_completion_note(self):
+        tasks = self.tasks_file(
+            [
+                {"id": "A", "dependencies": []},
+                {"id": "B", "dependencies": ["A"]},
+            ]
+        )
+        self.create_session_with_pull_request()
+        self.write_merges({"42": {"task_id": "A", "merge_commit": "abc123"}})
+
+        waiting = state.plan("example", tasks, [], 1)
+
+        self.assertEqual(waiting["selected"], [])
+        self.assertEqual(
+            waiting["resume_completion_notes"],
+            [
+                {
+                    "task_id": "A",
+                    "child_thread_id": "thread-a",
+                    "pull_request": {"repository": "owner/repository", "number": 42},
+                }
+            ],
+        )
+
+        state.record_completion_note(
+            "example",
+            "A",
+            self.completion_note_file(
+                {
+                    "risks": "Watch conversion errors after release.",
+                    "handoff": "Use ErrorKind::ExpiredToken.",
+                    "review_learnings": "Check retry paths with normal paths.",
+                    "technical_debt": "Unify duplicate conversions.",
+                }
+            ),
+        )
+        ready = state.plan("example", tasks, [], 1)
+
+        self.assertEqual(ready["selected"], ["B"])
+        self.assertEqual(
+            ready["dependency_completion_notes"],
+            {
+                "B": {
+                    "A": {
+                        "risks": "Watch conversion errors after release.",
+                        "handoff": "Use ErrorKind::ExpiredToken.",
+                    }
+                }
+            },
+        )
+
+    def test_plan_waits_for_a_completion_note_from_completed_tracked_pr(self):
+        tasks = self.tasks_file(
+            [
+                {"id": "A", "dependencies": []},
+                {"id": "B", "dependencies": ["A"]},
+            ]
+        )
+        self.create_session_with_pull_request()
+
+        waiting = state.plan("example", tasks, ["A"], 1)
+
+        self.assertEqual(waiting["selected"], [])
+        self.assertEqual(
+            waiting["resume_completion_notes"],
+            [
+                {
+                    "task_id": "A",
+                    "child_thread_id": "thread-a",
+                    "pull_request": {"repository": "owner/repository", "number": 42},
+                }
+            ],
+        )
+
+        state.record_completion_note(
+            "example", "A", self.completion_note_file({})
+        )
+
+        self.assertEqual(state.plan("example", tasks, ["A"], 1)["selected"], ["B"])
+
+    def test_records_an_empty_completion_note_in_the_shared_file(self):
+        self.create_session_with_pull_request()
+
+        result = state.record_completion_note(
+            "example", "A", self.completion_note_file({})
+        )
+
+        path = state.completion_notes_path("example")
+        self.assertEqual(
+            result,
+            {
+                "version": 1,
+                "orchestrations": {"example": {"tasks": {"A": {}}}},
+            },
+        )
+        self.assertEqual(json.loads(path.read_text()), result)
+
+    def test_cli_records_a_completion_note(self):
+        self.create_session_with_pull_request()
+        note = self.completion_note_file({"handoff": "Use this."})
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(SPEC.origin),
+                "record-completion-note",
+                "example",
+                "--task-id",
+                "A",
+                "--note-file",
+                str(note),
+            ],
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(
+            json.loads(result.stdout)["orchestrations"]["example"]["tasks"]["A"],
+            {"handoff": "Use this."},
+        )
+
+    def test_completion_notes_are_idempotent_and_preserve_other_orchestrations(self):
+        self.create_session_with_pull_request()
+        path = state.completion_notes_path("example")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "orchestrations": {
+                        "other": {"tasks": {"X": {"handoff": "Keep this."}}}
+                    },
+                }
+            )
+        )
+        note = self.completion_note_file({"handoff": "Use the new path."})
+
+        first = state.record_completion_note("example", "A", note)
+        second = state.record_completion_note("example", "A", note)
+
+        self.assertEqual(first, second)
+        self.assertEqual(
+            first["orchestrations"]["other"]["tasks"]["X"],
+            {"handoff": "Keep this."},
+        )
+        with self.assertRaisesRegex(state.StateError, "different completion note"):
+            state.record_completion_note(
+                "example", "A", self.completion_note_file({"risks": "Changed."})
+            )
+
+    def test_completion_note_rejects_unknown_or_empty_fields(self):
+        self.create_session_with_pull_request()
+
+        with self.assertRaisesRegex(state.StateError, "unknown field"):
+            state.record_completion_note(
+                "example", "A", self.completion_note_file({"summary": "No."})
+            )
+        with self.assertRaisesRegex(state.StateError, "non-empty string"):
+            state.record_completion_note(
+                "example", "A", self.completion_note_file({"handoff": " "})
+            )
+
+    def test_completion_note_requires_a_tracked_pull_request(self):
+        state.reserve_session("example", "A")
+        state.record_session("example", "A", "thread-a")
+
+        with self.assertRaisesRegex(state.StateError, "no tracked pull request"):
+            state.record_completion_note(
+                "example", "A", self.completion_note_file({})
+            )
 
     def test_cli_reports_non_table_orchestrations_as_json_error(self):
         self.config_path.write_text('orchestrations = "invalid"\n')
@@ -345,6 +532,44 @@ task_source = "linear://project"
             {"repository": "other/repository", "number": 42},
         )
         self.assertEqual(state.plan("example", tasks, [], 1)["selected"], [])
+
+    def test_context_does_not_expose_completion_notes(self):
+        self.create_session_with_pull_request()
+        state.record_completion_note(
+            "example", "A", self.completion_note_file({"handoff": "Use this."})
+        )
+
+        result = subprocess.run(
+            [sys.executable, str(SPEC.origin), "context", "example"],
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+
+        self.assertEqual(result.returncode, 0)
+        output = json.loads(result.stdout)
+        self.assertNotIn("completion_notes", output)
+        self.assertEqual(
+            output["completion_notes_path"], str(state.completion_notes_path("example"))
+        )
+
+    def test_context_rejects_invalid_completion_notes(self):
+        path = state.completion_notes_path("example")
+        path.parent.mkdir(parents=True)
+        path.write_text(json.dumps({"version": 1, "orchestrations": []}))
+
+        result = subprocess.run(
+            [sys.executable, str(SPEC.origin), "context", "example"],
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(
+            json.loads(result.stderr),
+            {"error": "completion notes must contain an orchestrations object"},
+        )
 
     def test_context_rejects_a_pull_request_from_an_unlisted_repository(self):
         path = state.state_path("example")
