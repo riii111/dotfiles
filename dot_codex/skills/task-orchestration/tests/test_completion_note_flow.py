@@ -140,7 +140,9 @@ task_source = "linear://project"
         driver.poll()
         driver.poll()
 
-        self.assertEqual([request["task_id"] for request in driver.resume_requests], ["A"])
+        self.assertEqual(
+            [request["task_id"] for request in driver.resume_requests], ["A"]
+        )
         self.assertEqual(driver.launches, [])
 
         worker.complete(
@@ -196,9 +198,7 @@ task_source = "linear://project"
             [
                 {
                     "task_id": "B",
-                    "dependency_completion_notes": {
-                        "A": {"handoff": "Use this."}
-                    },
+                    "dependency_completion_notes": {"A": {"handoff": "Use this."}},
                 }
             ],
         )
@@ -291,7 +291,9 @@ task_source = "linear://project"
 
         self.assertEqual(worker.reads, 1)
         self.assertEqual(worker.writes, 0)
-        self.assertEqual([request["task_id"] for request in driver.resume_requests], ["A"])
+        self.assertEqual(
+            [request["task_id"] for request in driver.resume_requests], ["A"]
+        )
         self.assertEqual(driver.launches, [])
 
 

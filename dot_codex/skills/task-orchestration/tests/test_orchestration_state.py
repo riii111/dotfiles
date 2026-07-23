@@ -153,9 +153,7 @@ task_source = "linear://project"
                 }
             }
         )
-        state.record_completion_note(
-            "example", "A", self.completion_note_file({})
-        )
+        state.record_completion_note("example", "A", self.completion_note_file({}))
 
         result = state.plan("example", tasks, [], 1)
 
@@ -185,12 +183,8 @@ task_source = "linear://project"
                 },
             }
         )
-        state.record_completion_note(
-            "example", "A", self.completion_note_file({})
-        )
-        state.record_completion_note(
-            "example", "B", self.completion_note_file({})
-        )
+        state.record_completion_note("example", "A", self.completion_note_file({}))
+        state.record_completion_note("example", "B", self.completion_note_file({}))
 
         result = state.plan("example", tasks, [], 1)
 
@@ -271,9 +265,7 @@ task_source = "linear://project"
             ],
         )
 
-        state.record_completion_note(
-            "example", "A", self.completion_note_file({})
-        )
+        state.record_completion_note("example", "A", self.completion_note_file({}))
 
         self.assertEqual(state.plan("example", tasks, ["A"], 1)["selected"], ["B"])
 
@@ -303,9 +295,7 @@ task_source = "linear://project"
         waiting = state.plan("example", tasks, [], 2)
 
         self.assertEqual(waiting["selected"], [])
-        self.assertEqual(
-            waiting["waiting_completion_notes"], {"C": ["A", "B"]}
-        )
+        self.assertEqual(waiting["waiting_completion_notes"], {"C": ["A", "B"]})
         self.assertEqual(
             waiting["resume_completion_notes"],
             [
@@ -415,9 +405,7 @@ task_source = "linear://project"
             {"task_id": "A", "saved": False, "note": None},
         )
 
-        state.record_completion_note(
-            "example", "A", self.completion_note_file({})
-        )
+        state.record_completion_note("example", "A", self.completion_note_file({}))
 
         self.assertEqual(
             state.completion_note("example", "A"),
@@ -496,9 +484,7 @@ task_source = "linear://project"
         state.record_session("example", "A", "thread-a")
 
         with self.assertRaisesRegex(state.StateError, "no tracked pull request"):
-            state.record_completion_note(
-                "example", "A", self.completion_note_file({})
-            )
+            state.record_completion_note("example", "A", self.completion_note_file({}))
 
     def test_completion_note_writer_cannot_restore_state_removed_by_reset(self):
         self.create_session_with_pull_request()
@@ -769,9 +755,7 @@ task_source = "linear://project"
 
     def test_load_merges_normalizes_legacy_number_key(self):
         self.create_session_with_pull_request()
-        path = self.write_merges(
-            {"42": {"task_id": "A", "merge_commit": "abc123"}}
-        )
+        path = self.write_merges({"42": {"task_id": "A", "merge_commit": "abc123"}})
 
         merges = state.load_merges(
             path,
@@ -782,9 +766,7 @@ task_source = "linear://project"
             ),
         )
 
-        self.assertEqual(
-            list(merges["pull_requests"]), ["owner/repository#42"]
-        )
+        self.assertEqual(list(merges["pull_requests"]), ["owner/repository#42"])
 
     def test_load_merges_matches_a_case_normalized_repository_key(self):
         sessions_path = state.state_path("example")
@@ -824,9 +806,7 @@ task_source = "linear://project"
             ),
         )
 
-        self.assertEqual(
-            list(merges["pull_requests"]), ["owner/repository#42"]
-        )
+        self.assertEqual(list(merges["pull_requests"]), ["owner/repository#42"])
 
     def test_sessions_and_merges_reject_boolean_versions(self):
         sessions_path = state.state_path("example")
@@ -842,9 +822,7 @@ task_source = "linear://project"
         )
 
         with self.assertRaisesRegex(state.StateError, "unsupported sessions version"):
-            state.load_sessions(
-                sessions_path, "parent-thread", ["owner/repository"]
-            )
+            state.load_sessions(sessions_path, "parent-thread", ["owner/repository"])
 
         merges_path = state.merges_path("example")
         merges_path.write_text(json.dumps({"version": True, "pull_requests": {}}))
