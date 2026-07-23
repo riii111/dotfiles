@@ -494,13 +494,7 @@ def completion_note(orchestration_id: str, task_id: str) -> dict:
     return {"task_id": task_id, "saved": note is not None, "note": note}
 
 
-def load_tasks(path: Path) -> dict[str, dict]:
-    try:
-        payload = json.loads(path.read_text())
-    except (OSError, json.JSONDecodeError) as error:
-        raise StateError(
-            f"could not read normalized tasks at {path}: {error}"
-        ) from error
+def normalize_tasks(payload: object) -> dict[str, dict]:
     raw_tasks = payload.get("tasks") if isinstance(payload, dict) else None
     if not isinstance(raw_tasks, list):
         raise StateError("normalized tasks must contain a tasks array")
@@ -538,6 +532,16 @@ def load_tasks(path: Path) -> dict[str, dict]:
     return tasks
 
 
+def load_tasks(path: Path) -> dict[str, dict]:
+    try:
+        payload = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as error:
+        raise StateError(
+            f"could not read normalized tasks at {path}: {error}"
+        ) from error
+    return normalize_tasks(payload)
+
+
 def validate_acyclic(tasks: dict[str, dict]) -> None:
     visiting = set()
     visited = set()
@@ -563,6 +567,20 @@ def plan(
     completed_ids: list[str],
     maximum_parallelism: int,
 ) -> dict:
+    return plan_tasks(
+        orchestration_id,
+        load_tasks(tasks_path),
+        completed_ids,
+        maximum_parallelism,
+    )
+
+
+def plan_tasks(
+    orchestration_id: str,
+    tasks: dict[str, dict],
+    completed_ids: list[str],
+    maximum_parallelism: int,
+) -> dict:
     if maximum_parallelism < 1:
         raise StateError("maximum parallelism must be positive")
     context = load_orchestration(orchestration_id)
@@ -573,7 +591,6 @@ def plan(
     )
     merges = load_merges(Path(context["merges_path"]), sessions)
     completion_notes = load_completion_notes(Path(context["completion_notes_path"]))
-    tasks = load_tasks(tasks_path)
     completed_from_merges = {
         record["task_id"] for record in merges["pull_requests"].values()
     }
