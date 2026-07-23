@@ -44,7 +44,7 @@ python3 <task-worker-skill-directory>/scripts/worker_transition.py apply-event <
 - `stop_closed`: PRを変更せず、closed状態を報告して停止する。
 - `stop_policy_mismatch`: PRをDraftへ戻さず、現在状態と完了方針の不一致を報告して停止する。
 
-ユーザーが完了方針を変更したら`policy_changed` eventを適用する。review確定後にユーザー指示でcommitが追加されたら`head_changed` eventを適用し、reviewとchecksを新しいheadでやり直す。review結果を待つ間もユーザーの最新指示へ応答する。
+ユーザーが完了方針を変更したら`policy_changed` eventを適用する。`report_manual`後にユーザーがこの子セッションへmergeを直接依頼した場合は、そのtaskへの明示的な`auto`許可として`policy_changed` eventを適用し、`next`から再開する。merge後は`completion-report`まで続け、親への完了通知を確認する。review確定後にユーザー指示でcommitが追加されたら`head_changed` eventを適用し、reviewとchecksを新しいheadでやり直す。review結果を待つ間もユーザーの最新指示へ応答する。
 
 ## review side chat
 
