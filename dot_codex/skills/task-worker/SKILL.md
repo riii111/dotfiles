@@ -17,13 +17,13 @@ description: |
 
 開始時と再開時は、タスク管理元の最新本文、直接依存、添付資料、repository規約を読む。次に`task-orchestration`の`orchestration_state.py context`を実行し、taskの子セッションID、許可repository、PR対応を確認する。会話上の進捗で代用しない。
 
-状態遷移スクリプトの`init`を一度実行する。スクリプトはオーケストレーションIDとtask IDから一意な絶対パスを決める。main checkoutと専用worktreeのcwdへ依存しない。
+状態遷移スクリプトの`init`を一度実行する。スクリプトはオーケストレーションID、task ID、`context`で確認した子セッションIDから一意な絶対パスを決める。main checkoutと専用worktreeのcwdへ依存せず、reset後に同じtask IDが再作成されても古いworker状態を読まない。
 
 ```text
 python3 <task-worker-skill-directory>/scripts/worker_transition.py init <orchestration-id> \
-  --task-id <task-id> --policy <manual-or-auto>
+  --task-id <task-id> --worker-id <child-thread-id> --policy <manual-or-auto>
 python3 <task-worker-skill-directory>/scripts/worker_transition.py next <orchestration-id> \
-  --task-id <task-id>
+  --task-id <task-id> --worker-id <child-thread-id>
 ```
 
 状態JSONのschemaと更新はスクリプトが扱う。外部操作後は結果をevent JSONにし、`apply-event`へ渡す。返された`action`が`implement`なら次の工程を行い、それ以外は絶対状態パスとactionを`task-review-cycle`へ渡す。矛盾や未知の状態でエラーになった場合は自動復旧しない。

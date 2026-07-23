@@ -107,7 +107,9 @@ def load_state(path: Path) -> dict:
     try:
         raw = json.loads(path.read_text())
     except (OSError, json.JSONDecodeError) as error:
-        raise TransitionError(f"could not read worker state at {path}: {error}") from error
+        raise TransitionError(
+            f"could not read worker state at {path}: {error}"
+        ) from error
     state = require_object(raw, "worker state", ROOT_FIELDS)
     review = require_object(state["review"], "review state", REVIEW_FIELDS)
     checks = require_object(state["checks"], "checks state", CHECK_FIELDS)
@@ -119,12 +121,8 @@ def load_state(path: Path) -> dict:
         "head_sha": require_optional_string(state["head_sha"], "head_sha"),
         "mergeable": state["mergeable"],
         "review": {
-            "status": require_choice(
-                review["status"], "review state", REVIEW_STATES
-            ),
-            "head_sha": require_optional_string(
-                review["head_sha"], "review.head_sha"
-            ),
+            "status": require_choice(review["status"], "review state", REVIEW_STATES),
+            "head_sha": require_optional_string(review["head_sha"], "review.head_sha"),
             "applied_head_sha": require_optional_string(
                 review["applied_head_sha"], "review.applied_head_sha"
             ),
@@ -138,12 +136,8 @@ def load_state(path: Path) -> dict:
             "turn_id": require_optional_string(review["turn_id"], "review.turn_id"),
         },
         "checks": {
-            "status": require_choice(
-                checks["status"], "checks state", CHECK_STATES
-            ),
-            "head_sha": require_optional_string(
-                checks["head_sha"], "checks.head_sha"
-            ),
+            "status": require_choice(checks["status"], "checks state", CHECK_STATES),
+            "head_sha": require_optional_string(checks["head_sha"], "checks.head_sha"),
         },
     }
     if type(normalized["completion_note_saved"]) is not bool:
@@ -225,6 +219,8 @@ def next_action(state: dict) -> str:
         return "implement"
     if not state["head_sha"]:
         raise TransitionError("tracked pull request has no head SHA")
+    if not state["mergeable"]:
+        return "stop_conflict"
 
     match review_action(state):
         case "request_review":
@@ -244,15 +240,15 @@ def next_action(state: dict) -> str:
         case "checks_passed" if pr == "draft":
             return "report_manual" if policy == "manual" else "mark_ready"
         case "checks_passed":
-            if not state["mergeable"]:
-                raise TransitionError("pull request is not mergeable")
             return "merge"
     raise AssertionError("validated worker state was not handled")
 
 
-def worker_state_path(orchestration_id: str, task_id: str) -> Path:
-    if not ID.fullmatch(orchestration_id) or not ID.fullmatch(task_id):
-        raise TransitionError("orchestration ID and task ID must be filesystem-safe")
+def worker_state_path(orchestration_id: str, task_id: str, worker_id: str) -> Path:
+    if any(not ID.fullmatch(value) for value in (orchestration_id, task_id, worker_id)):
+        raise TransitionError(
+            "orchestration, task, and worker IDs must be filesystem-safe"
+        )
     xdg = Path(value) if (value := os.environ.get("XDG_STATE_HOME")) else None
     base = xdg if xdg and xdg.is_absolute() else Path.home() / ".local" / "state"
     return (
@@ -260,7 +256,8 @@ def worker_state_path(orchestration_id: str, task_id: str) -> Path:
         / "codex-task-orchestrator"
         / orchestration_id
         / "workers"
-        / f"{task_id}.json"
+        / task_id
+        / f"{worker_id}.json"
     )
 
 
@@ -289,21 +286,50 @@ def reduce_state(state: dict, event: dict) -> dict:
         raise TransitionError("event must be an object with a type")
     updated = json.loads(json.dumps(state))
     event_type = event["type"]
+    event_fields = {
+        "pr_created": {"type", "head_sha"},
+        "review_requested": {"type", "thread_id", "turn_id"},
+        "review_completed": {"type", "head_sha", "blocking", "non_blocking"},
+        "changes_applied": {"type", "head_sha"},
+        "checks_started": {"type", "head_sha"},
+        "checks_completed": {"type", "head_sha", "status"},
+        "marked_ready": {"type"},
+        "mergeability_changed": {"type", "mergeable"},
+        "merged": {"type"},
+        "completion_note_saved": {"type"},
+    }
+    if event_type not in event_fields:
+        raise TransitionError("unknown worker event")
+    if set(event) != event_fields[event_type]:
+        raise TransitionError(f"event {event_type} has missing or unknown fields")
+    expected_actions = {
+        "pr_created": {"implement"},
+        "review_requested": {"request_review"},
+        "review_completed": {"wait_review"},
+        "changes_applied": {"address_review"},
+        "checks_started": {"verify"},
+        "checks_completed": {"wait_checks"},
+        "marked_ready": {"mark_ready"},
+        "merged": {"merge", "report_manual"},
+        "completion_note_saved": {"record_completion_note"},
+    }
+    if event_type in expected_actions:
+        action = next_action(state)
+        if action not in expected_actions[event_type]:
+            raise TransitionError(
+                f"event {event_type} is invalid after action {action}"
+            )
 
     match event_type:
         case "pr_created":
             updated["pr"] = "draft"
-            updated["head_sha"] = require_optional_string(
-                event.get("head_sha"), "event.head_sha"
-            )
+            updated["head_sha"] = require_event_string(event, "head_sha")
             updated["mergeable"] = True
         case "review_requested":
             updated["review"].update(
                 status="pending",
-                thread_id=require_optional_string(
-                    event.get("thread_id"), "event.thread_id"
-                ),
-                turn_id=require_optional_string(event.get("turn_id"), "event.turn_id"),
+                thread_id=require_event_string(event, "thread_id"),
+                turn_id=require_event_string(event, "turn_id"),
                 head_sha=None,
                 applied_head_sha=None,
                 blocking=0,
@@ -312,9 +338,7 @@ def reduce_state(state: dict, event: dict) -> dict:
         case "review_completed":
             updated["review"].update(
                 status="completed",
-                head_sha=require_optional_string(
-                    event.get("head_sha"), "event.head_sha"
-                ),
+                head_sha=require_event_string(event, "head_sha"),
                 applied_head_sha=None,
                 blocking=require_count(event.get("blocking"), "event.blocking"),
                 non_blocking=require_count(
@@ -323,16 +347,14 @@ def reduce_state(state: dict, event: dict) -> dict:
                 turn_id=None,
             )
         case "changes_applied":
-            head_sha = require_optional_string(event.get("head_sha"), "event.head_sha")
+            head_sha = require_event_string(event, "head_sha")
             updated["head_sha"] = head_sha
             updated["review"]["applied_head_sha"] = head_sha
             updated["checks"] = {"status": "not_run", "head_sha": None}
         case "checks_started":
             updated["checks"] = {
                 "status": "pending",
-                "head_sha": require_optional_string(
-                    event.get("head_sha"), "event.head_sha"
-                ),
+                "head_sha": require_event_string(event, "head_sha"),
             }
         case "checks_completed":
             status = require_choice(
@@ -340,9 +362,7 @@ def reduce_state(state: dict, event: dict) -> dict:
             )
             updated["checks"] = {
                 "status": status,
-                "head_sha": require_optional_string(
-                    event.get("head_sha"), "event.head_sha"
-                ),
+                "head_sha": require_event_string(event, "head_sha"),
             }
         case "marked_ready":
             updated["pr"] = "ready"
@@ -354,9 +374,14 @@ def reduce_state(state: dict, event: dict) -> dict:
             updated["pr"] = "merged"
         case "completion_note_saved":
             updated["completion_note_saved"] = True
-        case _:
-            raise TransitionError("unknown worker event")
     return load_state_object(updated)
+
+
+def require_event_string(event: dict, field: str) -> str:
+    value = event.get(field)
+    if not isinstance(value, str) or not value:
+        raise TransitionError(f"event.{field} must be a non-empty string")
+    return value
 
 
 def load_state_object(raw: object) -> dict:
@@ -391,6 +416,7 @@ def parser() -> argparse.ArgumentParser:
         command = commands.add_parser(name)
         command.add_argument("orchestration_id")
         command.add_argument("--task-id", required=True)
+        command.add_argument("--worker-id", required=True)
         if name == "init":
             command.add_argument("--policy", required=True)
         if name == "apply-event":
@@ -401,7 +427,9 @@ def parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     arguments = parser().parse_args(argv)
     try:
-        path = worker_state_path(arguments.orchestration_id, arguments.task_id)
+        path = worker_state_path(
+            arguments.orchestration_id, arguments.task_id, arguments.worker_id
+        )
         if arguments.command == "state-path":
             output = {"path": str(path)}
         elif arguments.command == "init":
@@ -416,11 +444,14 @@ def main(argv: list[str] | None = None) -> int:
             try:
                 event = json.loads(arguments.event_file.read_text())
             except (OSError, json.JSONDecodeError) as error:
-                raise TransitionError(f"could not read worker event: {error}") from error
+                raise TransitionError(
+                    f"could not read worker event: {error}"
+                ) from error
             state = reduce_state(load_state(path), event)
+            action = next_action(state)
             write_state(path, state)
             output = {
-                "action": next_action(state),
+                "action": action,
                 "path": str(path),
                 "state": state,
             }

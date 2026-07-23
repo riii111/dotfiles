@@ -1,7 +1,5 @@
 import importlib.util
 import json
-import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -59,9 +57,7 @@ class WorkerTransitionTest(unittest.TestCase):
             (self.state(), "request_review"),
             (
                 self.state(
-                    review=self.review(
-                        "pending", head_sha=None, turn_id="review-turn"
-                    )
+                    review=self.review("pending", head_sha=None, turn_id="review-turn")
                 ),
                 "wait_review",
             ),
@@ -71,9 +67,7 @@ class WorkerTransitionTest(unittest.TestCase):
             ),
             (
                 self.state(
-                    review=self.review(
-                        non_blocking=1, applied_head_sha="head-1"
-                    )
+                    review=self.review(non_blocking=1, applied_head_sha="head-1")
                 ),
                 "verify",
             ),
@@ -131,9 +125,7 @@ class WorkerTransitionTest(unittest.TestCase):
                 self.state(
                     pr="absent",
                     head_sha=None,
-                    review=self.review(
-                        "pending", head_sha=None, turn_id="review-turn"
-                    ),
+                    review=self.review("pending", head_sha=None, turn_id="review-turn"),
                 )
             )
         with self.assertRaisesRegex(transition.TransitionError, "checks state"):
@@ -146,9 +138,7 @@ class WorkerTransitionTest(unittest.TestCase):
             )
 
     def test_large_review_requires_rereview_after_changes(self):
-        state = self.state(
-            review=self.review(blocking=1, applied_head_sha="head-1")
-        )
+        state = self.state(review=self.review(blocking=1, applied_head_sha="head-1"))
         self.assertEqual(transition.next_action(state), "request_review")
 
     def test_rejects_stale_review_and_checks(self):
@@ -214,16 +204,54 @@ class WorkerTransitionTest(unittest.TestCase):
         self.assertEqual(state["review"]["thread_id"], "review-thread")
         self.assertEqual(state["review"]["turn_id"], "review-turn")
 
+    def test_events_reject_skipped_and_incomplete_transitions(self):
+        with self.assertRaisesRegex(transition.TransitionError, "invalid after action"):
+            transition.reduce_state(
+                transition.initial_state("manual"), {"type": "merged"}
+            )
+        with self.assertRaisesRegex(
+            transition.TransitionError, "missing or unknown fields"
+        ):
+            transition.reduce_state(
+                self.state(),
+                {
+                    "type": "review_requested",
+                    "thread_id": "review-thread",
+                },
+            )
+
+    def test_manual_external_merge_syncs_existing_completion_note(self):
+        state = self.state(
+            review=self.review(),
+            checks=self.checks(),
+        )
+        self.assertEqual(transition.next_action(state), "report_manual")
+
+        state = transition.reduce_state(state, {"type": "merged"})
+        self.assertEqual(transition.next_action(state), "record_completion_note")
+
+        state = transition.reduce_state(state, {"type": "completion_note_saved"})
+        self.assertEqual(transition.next_action(state), "complete")
+
+    def test_worker_generation_gets_a_distinct_state_path(self):
+        first = transition.worker_state_path("example", "T5", "thread-one")
+        second = transition.worker_state_path("example", "T5", "thread-two")
+
+        self.assertNotEqual(first, second)
+
     def test_unmergeable_pull_request_cannot_merge(self):
-        with self.assertRaisesRegex(transition.TransitionError, "not mergeable"):
-            transition.next_action(
-                self.state(
-                    pr="ready",
-                    review=self.review(),
-                    checks=self.checks(),
-                    policy="auto",
-                    mergeable=False,
-                )
+        for pr in ("draft", "ready"):
+            self.assertEqual(
+                transition.next_action(
+                    self.state(
+                        pr=pr,
+                        review=self.review(),
+                        checks=self.checks(),
+                        policy="auto",
+                        mergeable=False,
+                    )
+                ),
+                "stop_conflict",
             )
 
 
