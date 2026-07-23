@@ -1,5 +1,8 @@
 import importlib.util
 import json
+import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -190,15 +193,17 @@ class WorkerTransitionTest(unittest.TestCase):
                 )
             )
 
-    def test_rejects_manual_ready_and_premature_completion_note(self):
-        with self.assertRaisesRegex(transition.TransitionError, "manual policy"):
+    def test_stops_manual_ready_and_rejects_premature_completion_note(self):
+        self.assertEqual(
             transition.next_action(
                 self.state(
                     pr="ready",
                     review=self.review(),
                     checks=self.checks(),
                 )
-            )
+            ),
+            "stop_policy_mismatch",
+        )
         with self.assertRaisesRegex(transition.TransitionError, "unmerged"):
             transition.next_action(self.state(completion_note_saved=True))
         with self.assertRaisesRegex(transition.TransitionError, "unmerged"):
@@ -286,6 +291,29 @@ class WorkerTransitionTest(unittest.TestCase):
 
         self.assertEqual(transition.next_action(completed), "report_manual")
 
+    def test_failed_checks_stop_until_user_direction(self):
+        state = self.state(
+            review=self.review(),
+            checks=self.checks("failed"),
+        )
+
+        self.assertEqual(transition.next_action(state), "stop_checks_failed")
+        retried = transition.reduce_state(state, {"type": "checks_retry_requested"})
+        self.assertEqual(transition.next_action(retried), "verify")
+
+    def test_policy_and_head_changes_are_explicit_events(self):
+        state = transition.reduce_state(
+            self.state(), {"type": "policy_changed", "policy": "auto"}
+        )
+        state = transition.reduce_state(
+            state, {"type": "head_changed", "head_sha": "head-2"}
+        )
+
+        self.assertEqual(state["policy"], "auto")
+        self.assertEqual(state["head_sha"], "head-2")
+        self.assertEqual(state["review"]["status"], "absent")
+        self.assertEqual(state["checks"]["status"], "not_run")
+
     def test_review_findings_cannot_come_from_a_stale_head(self):
         with self.assertRaisesRegex(transition.TransitionError, "reviewed head"):
             transition.next_action(
@@ -330,6 +358,9 @@ class WorkerTransitionTest(unittest.TestCase):
             "merged": {"type": "merged"},
             "closed": {"type": "closed"},
             "completion_note_saved": {"type": "completion_note_saved"},
+            "policy_changed": {"type": "policy_changed", "policy": "auto"},
+            "head_changed": {"type": "head_changed", "head_sha": "head-2"},
+            "checks_retry_requested": {"type": "checks_retry_requested"},
         }
         states = [
             transition.initial_state("manual"),
@@ -357,6 +388,63 @@ class WorkerTransitionTest(unittest.TestCase):
             for event_type in set(samples) - set(displayed):
                 with self.assertRaises(transition.TransitionError):
                     transition.reduce_state(state, samples[event_type])
+
+    def test_cli_init_is_idempotent_and_rejects_unsafe_ids(self):
+        with tempfile.TemporaryDirectory() as directory:
+            environment = {**os.environ, "XDG_STATE_HOME": directory}
+            command = [
+                sys.executable,
+                str(SPEC.origin),
+                "init",
+                "example",
+                "--task-id",
+                "T5",
+                "--worker-id",
+                "thread-1",
+                "--policy",
+                "manual",
+            ]
+
+            first = subprocess.run(
+                command, capture_output=True, text=True, env=environment, check=False
+            )
+            second = subprocess.run(
+                command, capture_output=True, text=True, env=environment, check=False
+            )
+            changed_policy = subprocess.run(
+                [*command[:-1], "auto"],
+                capture_output=True,
+                text=True,
+                env=environment,
+                check=False,
+            )
+            invalid = subprocess.run(
+                [
+                    sys.executable,
+                    str(SPEC.origin),
+                    "state-path",
+                    "../example",
+                    "--task-id",
+                    "T5",
+                    "--worker-id",
+                    "thread-1",
+                ],
+                capture_output=True,
+                text=True,
+                env=environment,
+                check=False,
+            )
+
+        self.assertEqual(first.returncode, 0)
+        self.assertEqual(second.returncode, 0)
+        self.assertEqual(json.loads(first.stdout), json.loads(second.stdout))
+        self.assertEqual(changed_policy.returncode, 0)
+        self.assertEqual(json.loads(changed_policy.stdout)["state"]["policy"], "manual")
+        self.assertEqual(invalid.returncode, 2)
+        self.assertEqual(
+            json.loads(invalid.stderr),
+            {"error": ("orchestration, task, and worker IDs must be filesystem-safe")},
+        )
 
     def test_unmergeable_pull_request_cannot_merge(self):
         for pr in ("draft", "ready"):

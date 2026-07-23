@@ -21,6 +21,12 @@
                                 |
                                 v
                          [verify/checks]
+                                | failed
+                                +------> [stop_checks_failed]
+                                |                 |
+                                |       user retry requested
+                                |                 |
+                                +<----------------+
                                 |
                     +-----------+-----------+
                     |                       |
@@ -45,11 +51,13 @@ then returns the next action.
 """
 
 import argparse
+import fcntl
 import json
 import os
 import re
 import sys
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 
 
@@ -61,6 +69,7 @@ PR_STATES = {"absent", "draft", "ready", "merged", "closed"}
 REVIEW_STATES = {"absent", "pending", "completed"}
 CHECK_STATES = {"not_run", "pending", "failed", "passed"}
 POLICIES = {"manual", "auto"}
+MAX_ACCEPTABLE_NON_BLOCKING = 2
 ROOT_FIELDS = {
     "pr",
     "review",
@@ -93,6 +102,9 @@ EVENT_FIELDS = {
     "merged": {"type"},
     "closed": {"type"},
     "completion_note_saved": {"type"},
+    "policy_changed": {"type", "policy"},
+    "head_changed": {"type", "head_sha"},
+    "checks_retry_requested": {"type"},
 }
 ACTION_EVENTS = {
     "implement": ("pr_created",),
@@ -103,6 +115,7 @@ ACTION_EVENTS = {
     "wait_checks": ("checks_completed",),
     "mark_ready": ("marked_ready",),
     "record_completion_note": ("completion_note_saved",),
+    "stop_checks_failed": ("checks_retry_requested",),
 }
 
 
@@ -130,13 +143,7 @@ def require_count(value: object, name: str) -> int:
     return value
 
 
-def load_state(path: Path) -> dict:
-    try:
-        raw = json.loads(path.read_text())
-    except (OSError, json.JSONDecodeError) as error:
-        raise TransitionError(
-            f"could not read worker state at {path}: {error}"
-        ) from error
+def normalize_state(raw: object) -> dict:
     state = require_object(raw, "worker state", ROOT_FIELDS)
     review = require_object(state["review"], "review state", REVIEW_FIELDS)
     checks = require_object(state["checks"], "checks state", CHECK_FIELDS)
@@ -174,6 +181,16 @@ def load_state(path: Path) -> dict:
     return normalized
 
 
+def load_state(path: Path) -> dict:
+    try:
+        raw = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as error:
+        raise TransitionError(
+            f"could not read worker state at {path}: {error}"
+        ) from error
+    return normalize_state(raw)
+
+
 def review_action(state: dict) -> str:
     review = state["review"]
     head_sha = state["head_sha"]
@@ -209,7 +226,7 @@ def review_action(state: dict) -> str:
         raise TransitionError("reviewed head does not match the current head")
     if findings and not applied_head:
         return "address_review"
-    if review["blocking"] or review["non_blocking"] > 2:
+    if review["blocking"] or review["non_blocking"] > MAX_ACCEPTABLE_NON_BLOCKING:
         return "request_review"
     return "review_passed"
 
@@ -217,8 +234,10 @@ def review_action(state: dict) -> str:
 def checks_action(state: dict) -> str:
     checks = state["checks"]
     match checks["status"]:
-        case "not_run" | "failed":
+        case "not_run":
             return "verify"
+        case "failed":
+            return "stop_checks_failed"
         case "pending":
             if checks["head_sha"] != state["head_sha"]:
                 raise TransitionError("pending checks do not match the current head")
@@ -241,7 +260,7 @@ def next_action(state: dict) -> str:
     if pr == "merged":
         return "complete" if note_saved else "record_completion_note"
     if pr == "ready" and policy == "manual":
-        raise TransitionError("manual policy cannot advance a ready pull request")
+        return "stop_policy_mismatch"
     if pr == "absent":
         return "implement"
     if not state["mergeable"]:
@@ -262,6 +281,8 @@ def next_action(state: dict) -> str:
             return "verify"
         case "wait_checks":
             return "wait_checks"
+        case "stop_checks_failed":
+            return "stop_checks_failed"
         case "checks_passed" if pr == "draft":
             return "report_manual" if policy == "manual" else "mark_ready"
         case "checks_passed":
@@ -435,7 +456,17 @@ def reduce_state(state: dict, event: dict) -> dict:
             updated["pr"] = "closed"
         case "completion_note_saved":
             updated["completion_note_saved"] = True
-    return load_state_object(updated)
+        case "policy_changed":
+            updated["policy"] = require_choice(
+                event.get("policy"), "event policy", POLICIES
+            )
+        case "head_changed":
+            updated["head_sha"] = require_event_string(event, "head_sha")
+            updated["review"] = initial_state(updated["policy"])["review"]
+            updated["checks"] = {"status": "not_run", "head_sha": None}
+        case "checks_retry_requested":
+            updated["checks"] = {"status": "not_run", "head_sha": None}
+    return normalize_state(updated)
 
 
 def require_event_string(event: dict, field: str) -> str:
@@ -447,27 +478,26 @@ def require_event_string(event: dict, field: str) -> str:
 
 def allowed_events(state: dict) -> tuple[str, ...]:
     validate_state_invariants(state)
-    external = (
-        ("mergeability_changed", "merged", "closed")
-        if state["pr"] in {"draft", "ready"}
-        else ()
-    )
+    external = []
+    if state["pr"] in {"draft", "ready"}:
+        external.extend(
+            (
+                "mergeability_changed",
+                "merged",
+                "closed",
+                "head_changed",
+                "policy_changed",
+            )
+        )
     try:
         action = next_action(state)
     except TransitionError:
-        return external
+        return tuple(external)
     return tuple(dict.fromkeys((*ACTION_EVENTS.get(action, ()), *external)))
 
 
 def allowed_event_schemas(state: dict) -> dict:
     return {event: sorted(EVENT_FIELDS[event]) for event in allowed_events(state)}
-
-
-def load_state_object(raw: object) -> dict:
-    with tempfile.NamedTemporaryFile(mode="w+", encoding="utf-8") as temporary:
-        json.dump(raw, temporary)
-        temporary.flush()
-        return load_state(Path(temporary.name))
 
 
 def write_state(path: Path, state: dict) -> None:
@@ -486,6 +516,17 @@ def write_state(path: Path, state: dict) -> None:
     finally:
         if temporary_path and temporary_path.exists():
             temporary_path.unlink()
+
+
+@contextmanager
+def lock_state(path: Path):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.with_suffix(".lock").open("a+") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock, fcntl.LOCK_UN)
 
 
 def parser() -> argparse.ArgumentParser:
@@ -512,13 +553,20 @@ def main(argv: list[str] | None = None) -> int:
         if arguments.command == "state-path":
             output = {"path": str(path)}
         elif arguments.command == "init":
-            if path.exists():
-                raise TransitionError("worker state already exists")
-            state = initial_state(arguments.policy)
-            write_state(path, state)
-            output = {"path": str(path), "state": state}
+            with lock_state(path):
+                if path.exists():
+                    state = load_state(path)
+                else:
+                    state = initial_state(arguments.policy)
+                    write_state(path, state)
+            output = {
+                "action": next_action(state),
+                "path": str(path),
+                "state": state,
+            }
         elif arguments.command == "next":
-            state = load_state(path)
+            with lock_state(path):
+                state = load_state(path)
             action = next_action(state)
             output = {
                 "action": action,
@@ -532,9 +580,10 @@ def main(argv: list[str] | None = None) -> int:
                 raise TransitionError(
                     f"could not read worker event: {error}"
                 ) from error
-            state = reduce_state(load_state(path), event)
-            action = next_action(state)
-            write_state(path, state)
+            with lock_state(path):
+                state = reduce_state(load_state(path), event)
+                action = next_action(state)
+                write_state(path, state)
             output = {
                 "action": action,
                 "allowed_events": allowed_event_schemas(state),
