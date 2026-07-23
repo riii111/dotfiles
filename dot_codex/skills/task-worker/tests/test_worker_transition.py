@@ -142,7 +142,7 @@ class WorkerTransitionTest(unittest.TestCase):
         self.assertEqual(transition.next_action(state), "request_review")
 
     def test_rejects_stale_review_and_checks(self):
-        with self.assertRaisesRegex(transition.TransitionError, "accepted review"):
+        with self.assertRaisesRegex(transition.TransitionError, "reviewed head"):
             transition.next_action(
                 self.state(
                     head_sha="head-2",
@@ -205,7 +205,7 @@ class WorkerTransitionTest(unittest.TestCase):
         self.assertEqual(state["review"]["turn_id"], "review-turn")
 
     def test_events_reject_skipped_and_incomplete_transitions(self):
-        with self.assertRaisesRegex(transition.TransitionError, "invalid after action"):
+        with self.assertRaisesRegex(transition.TransitionError, "tracked pull request"):
             transition.reduce_state(
                 transition.initial_state("manual"), {"type": "merged"}
             )
@@ -232,6 +232,34 @@ class WorkerTransitionTest(unittest.TestCase):
 
         state = transition.reduce_state(state, {"type": "completion_note_saved"})
         self.assertEqual(transition.next_action(state), "complete")
+
+    def test_external_merge_and_close_are_terminal_from_active_processing(self):
+        pending = self.state(
+            review=self.review("pending", head_sha=None, turn_id="review-turn")
+        )
+        merged = transition.reduce_state(pending, {"type": "merged"})
+        closed = transition.reduce_state(pending, {"type": "closed"})
+
+        self.assertEqual(transition.next_action(merged), "record_completion_note")
+        self.assertEqual(transition.next_action(closed), "stop_closed")
+
+    def test_verify_accepts_already_completed_checks(self):
+        state = self.state(review=self.review())
+        completed = transition.reduce_state(
+            state,
+            {"type": "checks_completed", "head_sha": "head-1", "status": "passed"},
+        )
+
+        self.assertEqual(transition.next_action(completed), "report_manual")
+
+    def test_review_findings_cannot_come_from_a_stale_head(self):
+        with self.assertRaisesRegex(transition.TransitionError, "reviewed head"):
+            transition.next_action(
+                self.state(
+                    head_sha="head-2",
+                    review=self.review(non_blocking=1),
+                )
+            )
 
     def test_worker_generation_gets_a_distinct_state_path(self):
         first = transition.worker_state_path("example", "T5", "thread-one")

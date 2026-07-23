@@ -35,9 +35,13 @@
                                             v
                                         complete
 
+    Any tracked PR -- conflict --> [stop_conflict]
+    Any tracked PR -- closed ----> [stop_closed]
+    Any tracked PR -- merged ----> [record_completion_note]
+
 Every bracketed step is one returned action. External work reports an event back
-to this script; the reducer writes the resulting state before the next action is
-selected.
+to this script; the reducer validates the candidate state, writes it atomically,
+then returns the next action.
 """
 
 import argparse
@@ -77,6 +81,32 @@ REVIEW_FIELDS = {
 }
 CHECK_FIELDS = {"status", "head_sha"}
 ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
+EVENT_FIELDS = {
+    "pr_created": {"type", "head_sha"},
+    "review_requested": {"type", "thread_id", "turn_id"},
+    "review_completed": {"type", "head_sha", "blocking", "non_blocking"},
+    "changes_applied": {"type", "head_sha"},
+    "checks_started": {"type", "head_sha"},
+    "checks_completed": {"type", "head_sha", "status"},
+    "marked_ready": {"type"},
+    "mergeability_changed": {"type", "mergeable"},
+    "merged": {"type"},
+    "closed": {"type"},
+    "completion_note_saved": {"type"},
+}
+ACTION_EVENTS = {
+    "implement": ("pr_created",),
+    "request_review": ("review_requested", "merged", "closed"),
+    "wait_review": ("review_completed", "merged", "closed"),
+    "address_review": ("changes_applied", "merged", "closed"),
+    "verify": ("checks_started", "checks_completed", "merged", "closed"),
+    "wait_checks": ("checks_completed", "merged", "closed"),
+    "mark_ready": ("marked_ready", "merged", "closed"),
+    "report_manual": ("merged", "closed"),
+    "merge": ("merged", "closed"),
+    "record_completion_note": ("completion_note_saved",),
+    "stop_conflict": ("mergeability_changed", "merged", "closed"),
+}
 
 
 def require_object(value: object, name: str, fields: set[str]) -> dict:
@@ -168,6 +198,8 @@ def review_action(state: dict) -> str:
         raise TransitionError("completed review still has a pending turn ID")
     if not review["head_sha"]:
         raise TransitionError("completed review has no reviewed head SHA")
+    if review["head_sha"] != head_sha:
+        raise TransitionError("reviewed head does not match the current head")
 
     findings = review["blocking"] + review["non_blocking"]
     if findings and not review["applied_head_sha"]:
@@ -202,7 +234,7 @@ def next_action(state: dict) -> str:
     note_saved = state["completion_note_saved"]
 
     if pr == "closed":
-        raise TransitionError("closed pull request cannot advance")
+        return "stop_closed"
     if pr != "merged" and note_saved:
         raise TransitionError("an unmerged pull request cannot have a completion note")
     if pr == "merged":
@@ -286,21 +318,9 @@ def reduce_state(state: dict, event: dict) -> dict:
         raise TransitionError("event must be an object with a type")
     updated = json.loads(json.dumps(state))
     event_type = event["type"]
-    event_fields = {
-        "pr_created": {"type", "head_sha"},
-        "review_requested": {"type", "thread_id", "turn_id"},
-        "review_completed": {"type", "head_sha", "blocking", "non_blocking"},
-        "changes_applied": {"type", "head_sha"},
-        "checks_started": {"type", "head_sha"},
-        "checks_completed": {"type", "head_sha", "status"},
-        "marked_ready": {"type"},
-        "mergeability_changed": {"type", "mergeable"},
-        "merged": {"type"},
-        "completion_note_saved": {"type"},
-    }
-    if event_type not in event_fields:
+    if event_type not in EVENT_FIELDS:
         raise TransitionError("unknown worker event")
-    if set(event) != event_fields[event_type]:
+    if set(event) != EVENT_FIELDS[event_type]:
         raise TransitionError(f"event {event_type} has missing or unknown fields")
     expected_actions = {
         "pr_created": {"implement"},
@@ -308,12 +328,14 @@ def reduce_state(state: dict, event: dict) -> dict:
         "review_completed": {"wait_review"},
         "changes_applied": {"address_review"},
         "checks_started": {"verify"},
-        "checks_completed": {"wait_checks"},
+        "checks_completed": {"verify", "wait_checks"},
         "marked_ready": {"mark_ready"},
-        "merged": {"merge", "report_manual"},
         "completion_note_saved": {"record_completion_note"},
     }
-    if event_type in expected_actions:
+    if event_type in {"merged", "closed"}:
+        if state["pr"] in {"absent", "closed"}:
+            raise TransitionError(f"event {event_type} requires a tracked pull request")
+    elif event_type in expected_actions:
         action = next_action(state)
         if action not in expected_actions[event_type]:
             raise TransitionError(
@@ -372,6 +394,8 @@ def reduce_state(state: dict, event: dict) -> dict:
             updated["mergeable"] = event["mergeable"]
         case "merged":
             updated["pr"] = "merged"
+        case "closed":
+            updated["pr"] = "closed"
         case "completion_note_saved":
             updated["completion_note_saved"] = True
     return load_state_object(updated)
@@ -382,6 +406,12 @@ def require_event_string(event: dict, field: str) -> str:
     if not isinstance(value, str) or not value:
         raise TransitionError(f"event.{field} must be a non-empty string")
     return value
+
+
+def allowed_event_schemas(action: str) -> dict:
+    return {
+        event: sorted(EVENT_FIELDS[event]) for event in ACTION_EVENTS.get(action, ())
+    }
 
 
 def load_state_object(raw: object) -> dict:
@@ -439,7 +469,12 @@ def main(argv: list[str] | None = None) -> int:
             write_state(path, state)
             output = {"path": str(path), "state": state}
         elif arguments.command == "next":
-            output = {"action": next_action(load_state(path)), "path": str(path)}
+            action = next_action(load_state(path))
+            output = {
+                "action": action,
+                "allowed_events": allowed_event_schemas(action),
+                "path": str(path),
+            }
         else:
             try:
                 event = json.loads(arguments.event_file.read_text())
@@ -452,6 +487,7 @@ def main(argv: list[str] | None = None) -> int:
             write_state(path, state)
             output = {
                 "action": action,
+                "allowed_events": allowed_event_schemas(action),
                 "path": str(path),
                 "state": state,
             }
