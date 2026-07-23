@@ -1,7 +1,7 @@
 ---
 name: task-worker
 description: |
-  オーケストレーションで割り当てられたタスクを再読し、専用worktreeで実装、全検証、Draft PR作成まで進める。task-orchestrationから起動された実装タスクの開始・再開と、PR作成後にtask-review-cycleへ引き継ぐときに使う。
+  オーケストレーションで割り当てられたタスクを再読し、専用worktreeで実装、全検証、Draft PR作成まで進める。task-orchestrationから起動された実装タスクを開始または再開するときに使う。
 ---
 
 # Task Worker
@@ -17,7 +17,7 @@ description: |
 
 不足値は親セッションのGoalと会話履歴から補う。repository、base、オーケストレーションID、task IDを確定できなければ推測せずユーザーへ返す。
 
-開始時と再開時は、タスク管理元の最新本文、直接依存、添付資料、repository規約を読む。次に`task-orchestration`の`orchestration_state.py context`を実行し、taskの子セッションID、許可repository、PR対応を確認する。会話上の進捗で代用しない。担当repositoryが`pull_request_repositories`に含まれなければ、実装やPR作成へ進まず親へ設定不足を返す。
+開始時と再開時は、タスク管理元の最新本文、直接依存、添付資料、コメント、依存タスクの成果物、repository規約を読む。次に`task-orchestration`の`orchestration_state.py context`を実行し、taskの子セッションID、許可repository、PR対応を確認する。taskが未登録、予約中、または子セッションIDが空なら停止し、会話から推測したIDで代用しない。担当repositoryが`pull_request_repositories`に含まれなければ、実装やPR作成へ進まず親へ設定不足を返す。
 
 ```text
 python3 <task-orchestration-skill-directory>/scripts/orchestration_state.py context <orchestration-id>
@@ -28,18 +28,18 @@ python3 <task-orchestration-skill-directory>/scripts/orchestration_state.py cont
 ```text
 python3 <task-worker-skill-directory>/scripts/worker_transition.py init <orchestration-id> \
   --task-id <task-id> --worker-id <child-thread-id> --policy <manual-or-auto>
-python3 <task-worker-skill-directory>/scripts/worker_transition.py next <orchestration-id> \
-  --task-id <task-id> --worker-id <child-thread-id>
 ```
 
-状態JSONのschemaと更新はスクリプトが扱う。外部操作後は結果をevent JSONにし、次を実行する。
+`init`は次のactionと`allowed_events`も返す。以後の再照会は`next`を使う。状態JSONのschemaと更新はスクリプトが扱う。外部操作後は結果をevent JSONにし、次を実行する。
 
 ```text
 python3 <task-worker-skill-directory>/scripts/worker_transition.py apply-event <orchestration-id> \
   --task-id <task-id> --worker-id <child-thread-id> --event-file <event-json-path>
 ```
 
-返された`action`が`implement`なら次の工程を行う。それ以外は同じセッションで直ちに`$task-review-cycle`を適用し、オーケストレーションID、task ID、child thread ID、repository、base、完了方針、状態の絶対パス、actionをすべて引き継ぐ。skillを自動適用できなければ、その`SKILL.md`を全文読んで続行する。矛盾や未知の状態でエラーになった場合は自動復旧しない。
+返された`action`が`implement`なら次の工程を行う。それ以外は同じセッションで直ちに`$task-review-cycle`を適用し、オーケストレーションID、task ID、task管理元、child thread ID、repository、base、完了方針、actionをすべて引き継ぐ。状態pathは3つのIDから再計算するため引き継がない。skillを自動適用できなければ、その`SKILL.md`を全文読んで続行する。矛盾や未知の状態でエラーになった場合は自動復旧しない。
+
+状態遷移スクリプトは3 skill共有のFSMだが、実装開始点と配布単位を一つにするためtask-workerへ同梱する。他2 skillは同じスクリプトを参照し、独自に状態判定しない。
 
 `context`に追跡PRがあるのにworker状態が`absent`なら、PRを作り直さず、GitHubで確認した既存PRのhead SHAを`pr_created` eventとして適用する。
 

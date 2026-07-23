@@ -8,6 +8,19 @@ description: |
 
 merge後のCompletion Noteだけを担当する。
 
+## 入力
+
+- オーケストレーションID
+- task ID
+- child thread ID
+- repositoryとPR番号
+
+不足値は`orchestration_state.py context`から取得する。taskが未登録、予約中、子セッションIDが空、またはPR対応がなければ推測せず停止する。
+
+```text
+python3 <task-orchestration-skill-directory>/scripts/orchestration_state.py context <orchestration-id>
+```
+
 1. `gh pr view`で担当PRの`state`、`mergedAt`、merge commitとtask対応を確認する。未mergeまたは矛盾時は保存しない。PRがmerge済みでworker状態がまだ未mergeなら、先に`merged` eventを適用する。
 2. 次を実行し、`complete`ならeventを適用せず、保存済みと報告して終了する。
 

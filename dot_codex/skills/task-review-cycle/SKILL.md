@@ -10,9 +10,13 @@ PR作成後からmergeまでを担当する。実装開始前の作業とComplet
 
 ## 状態から再開する
 
-PRのstate、draft、head SHA、checksと、`task-worker`から引き継いだ絶対状態パスのreview thread ID、待機中turn ID、review結果を読み直す。`manual`は明示されない限り既定値とし、過去の慣例から`auto`を推測しない。
+PRのstate、draft、head SHA、checksと、状態にあるreview thread ID、待機中turn ID、review結果を読み直す。ここで`checks`は最新headに対するrepository所定のローカル全検証とGitHub必須status checksをまとめた合否状態を指す。PRの実状態がmergedまたはclosedなら、`next`より先に対応するeventを適用する。`manual`は明示されない限り既定値とし、過去の慣例から`auto`を推測しない。
 
-オーケストレーションID、task ID、child thread ID、repository、base、完了方針、状態の絶対パスが揃っていることを確認する。不足値を推測しない。
+オーケストレーションID、task ID、task管理元、child thread ID、repository、base、完了方針が揃っていることを確認する。不足値は`orchestration_state.py context`から取得し、推測しない。
+
+```text
+python3 <task-orchestration-skill-directory>/scripts/orchestration_state.py context <orchestration-id>
+```
 
 ```text
 python3 <task-worker-skill-directory>/scripts/worker_transition.py next <orchestration-id> \
@@ -28,7 +32,7 @@ python3 <task-worker-skill-directory>/scripts/worker_transition.py apply-event <
 
 - `request_review`: review side chatを一度だけ作り、レビューを依頼する。
 - `wait_review`: 同じreview turnの完了を待つ。timeout中は依頼を重ねない。
-- `address_review`: 指摘を差分とrepository realityで確認し、妥当なものを修正、全検証、commit、pushする。修正後headと指摘件数を状態へ保存する。再レビューの要否は状態遷移スクリプトに再照会する。
+- `address_review`: 指摘を差分とrepository realityで確認し、妥当なものを修正、全検証、commit、pushする。修正後headを状態へ保存する。指摘件数は直前の`review_completed`を維持し、再レビューの要否は状態遷移スクリプトに再照会する。
 - `verify`: 最新headの全検証と必須checksを確認する。
 - `wait_checks`: checksの完了を待つ。
 - `stop_checks_failed`: 自動再試行せず、失敗内容を報告してユーザー判断を待つ。再試行の指示があれば`checks_retry_requested` eventを適用する。
