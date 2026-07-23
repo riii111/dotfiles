@@ -226,14 +226,13 @@ def checks_action(state: dict) -> str:
 
 
 def next_action(state: dict) -> str:
+    validate_state_invariants(state)
     pr = state["pr"]
     policy = state["policy"]
     note_saved = state["completion_note_saved"]
 
     if pr == "closed":
         return "stop_closed"
-    if pr != "merged" and note_saved:
-        raise TransitionError("an unmerged pull request cannot have a completion note")
     if pr == "merged":
         return "complete" if note_saved else "record_completion_note"
     if pr == "ready" and policy == "manual":
@@ -271,6 +270,11 @@ def next_action(state: dict) -> str:
         case "checks_passed":
             return "merge"
     raise AssertionError("validated worker state was not handled")
+
+
+def validate_state_invariants(state: dict) -> None:
+    if state["pr"] != "merged" and state["completion_note_saved"]:
+        raise TransitionError("an unmerged pull request cannot have a completion note")
 
 
 def worker_state_path(orchestration_id: str, task_id: str, worker_id: str) -> Path:
@@ -389,6 +393,7 @@ def require_event_string(event: dict, field: str) -> str:
 
 
 def allowed_events(state: dict) -> tuple[str, ...]:
+    validate_state_invariants(state)
     external = (
         ("mergeability_changed", "merged", "closed")
         if state["pr"] in {"draft", "ready"}

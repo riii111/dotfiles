@@ -175,6 +175,10 @@ class WorkerTransitionTest(unittest.TestCase):
             )
         with self.assertRaisesRegex(transition.TransitionError, "unmerged"):
             transition.next_action(self.state(completion_note_saved=True))
+        with self.assertRaisesRegex(transition.TransitionError, "unmerged"):
+            transition.reduce_state(
+                self.state(completion_note_saved=True), {"type": "merged"}
+            )
 
     def test_load_rejects_non_string_and_missing_state_without_traceback(self):
         malformed_states = [{"pr": []}, self.state(pr=[])]
