@@ -10,13 +10,13 @@ PR作成後からmergeまでを担当する。実装開始前の作業とComplet
 
 ## 状態から再開する
 
-PRのstate、draft、head SHA、checksと、現在headに対するreview結果を読み直す。`manual`は明示されない限り既定値とし、過去の慣例から`auto`を推測しない。
+PRのstate、draft、head SHA、checksと、`git rev-parse --git-path codex-worker-state.json`に保存したreview thread ID、待機中turn ID、review結果を読み直す。`manual`は明示されない限り既定値とし、過去の慣例から`auto`を推測しない。
 
 `task-worker/scripts/worker_transition.py`へ最新状態を渡し、返された操作を一つだけ実行する。操作後は外部状態を再読してスクリプトを再実行する。PR状態や合格条件を別の節で再判定しない。
 
 - `request_review`: review side chatを一度だけ作り、レビューを依頼する。
 - `wait_review`: 同じreview turnの完了を待つ。timeout中は依頼を重ねない。
-- `address_review`: 指摘を差分とrepository realityで確認し、妥当なものを修正、全検証、commit、pushする。BlockingがなくNon-blockingが2件以内なら`review: passed`、それ以外は同じside chatへ再レビューを依頼して`review: pending`にする。
+- `address_review`: 指摘を差分とrepository realityで確認し、妥当なものを修正、全検証、commit、pushする。修正後headと指摘件数を状態へ保存する。再レビューの要否は状態遷移スクリプトに再照会する。
 - `verify`: 最新headの全検証と必須checksを確認する。
 - `wait_checks`: checksの完了を待つ。
 - `report_manual`: Draftのままreview結果と検証結果を報告して止まる。

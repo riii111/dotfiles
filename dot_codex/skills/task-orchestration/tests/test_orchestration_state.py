@@ -1,10 +1,10 @@
 import importlib.util
-import fcntl
 import json
 import os
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -505,34 +505,37 @@ task_source = "linear://project"
         sessions_path = state.state_path("example")
         notes_path = state.completion_notes_path("example")
         note = self.completion_note_file({"handoff": "Do not restore this."})
-        lock_path = sessions_path.with_suffix(".lock")
+        writer_started = threading.Event()
+        reset_finished = threading.Event()
+        writer_errors = []
+        original_load = state.load_completion_note_file
 
-        with lock_path.open("a+") as lock:
-            fcntl.flock(lock, fcntl.LOCK_EX)
-            writer = subprocess.Popen(
-                [
-                    sys.executable,
-                    str(SPEC.origin),
-                    "record-completion-note",
-                    "example",
-                    "--task-id",
-                    "A",
-                    "--note-file",
-                    str(note),
-                ],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-            )
-            sessions_path.unlink()
-            if notes_path.exists():
-                notes_path.unlink()
-            fcntl.flock(lock, fcntl.LOCK_UN)
+        def pause_old_writer(path):
+            loaded = original_load(path)
+            writer_started.set()
+            self.assertTrue(reset_finished.wait(timeout=5))
+            return loaded
 
-        _, stderr = writer.communicate(timeout=5)
+        def write_note():
+            try:
+                state.record_completion_note("example", "A", note)
+            except state.StateError as error:
+                writer_errors.append(str(error))
 
-        self.assertEqual(writer.returncode, 2)
-        self.assertIn("no child session", stderr)
+        with patch.object(state, "load_completion_note_file", pause_old_writer):
+            writer = threading.Thread(target=write_note)
+            writer.start()
+            self.assertTrue(writer_started.wait(timeout=5))
+            with state.lock_sessions(sessions_path):
+                with state.lock_sessions(notes_path):
+                    sessions_path.unlink()
+                    if notes_path.exists():
+                        notes_path.unlink()
+            reset_finished.set()
+            writer.join(timeout=5)
+
+        self.assertFalse(writer.is_alive())
+        self.assertEqual(writer_errors, ["task A has no child session"])
         self.assertFalse(notes_path.exists())
 
     def test_cli_reports_non_table_orchestrations_as_json_error(self):
