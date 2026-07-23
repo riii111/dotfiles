@@ -184,7 +184,7 @@ def prepare(path: Path, notification: dict) -> dict:
 
 
 def mark_submitted(path: Path, submission_id: str) -> dict:
-    if not submission_id.strip():
+    if not isinstance(submission_id, str) or not submission_id.strip():
         raise NotificationError("submission ID must not be empty")
     with lock_outbox(path):
         outbox = load_outbox(path)

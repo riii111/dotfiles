@@ -72,22 +72,6 @@ task_source = "linear://project"
         path.write_text(json.dumps(note))
         return path
 
-    def completion_notification_file(self, **overrides):
-        notification = {
-            "orchestration_id": "example",
-            "task_id": "A",
-            "pull_request": {
-                "repository": "owner/repository",
-                "number": 42,
-            },
-            "merge_commit": "abcdef0123456789abcdef0123456789abcdef01",
-            "saved": True,
-        }
-        notification.update(overrides)
-        path = self.root / "completion-notification.json"
-        path.write_text(json.dumps(notification))
-        return path
-
     def test_plan_selects_independent_tasks_then_their_dependent(self):
         tasks = self.tasks_file(
             [
@@ -427,61 +411,6 @@ task_source = "linear://project"
             state.completion_note("example", "A"),
             {"task_id": "A", "saved": True, "note": {}},
         )
-
-    def test_validates_duplicate_completion_notifications_idempotently(self):
-        self.create_session_with_pull_request()
-        self.write_merges(
-            {
-                "owner/repository#42": {
-                    "task_id": "A",
-                    "merge_commit": "abcdef0123456789abcdef0123456789abcdef01",
-                }
-            }
-        )
-        state.record_completion_note("example", "A", self.completion_note_file({}))
-        notification = self.completion_notification_file()
-
-        first = state.validate_completion_notification("example", notification)
-        second = state.validate_completion_notification("example", notification)
-
-        self.assertEqual(first, second)
-        self.assertEqual(
-            set(first),
-            {
-                "orchestration_id",
-                "task_id",
-                "pull_request",
-                "merge_commit",
-                "saved",
-            },
-        )
-
-    def test_completion_notification_requires_saved_note_and_merge_evidence(self):
-        self.create_session_with_pull_request()
-        self.write_merges(
-            {
-                "owner/repository#42": {
-                    "task_id": "A",
-                    "merge_commit": "abcdef0123456789abcdef0123456789abcdef01",
-                }
-            }
-        )
-        notification = self.completion_notification_file()
-
-        with self.assertRaisesRegex(state.StateError, "no saved completion note"):
-            state.validate_completion_notification("example", notification)
-
-        state.record_completion_note("example", "A", self.completion_note_file({}))
-        mismatch = self.completion_notification_file(merge_commit="b" * 40)
-        with self.assertRaisesRegex(state.StateError, "merge evidence"):
-            state.validate_completion_notification("example", mismatch)
-
-    def test_completion_notification_rejects_note_content_and_unknown_fields(self):
-        self.create_session_with_pull_request()
-        notification = self.completion_notification_file(handoff="Do not send this.")
-
-        with self.assertRaisesRegex(state.StateError, "missing or unknown fields"):
-            state.validate_completion_notification("example", notification)
 
     def test_cli_reads_a_completion_note(self):
         self.create_session_with_pull_request()

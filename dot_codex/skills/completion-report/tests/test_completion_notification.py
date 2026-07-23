@@ -120,6 +120,10 @@ class CompletionNotificationTest(unittest.TestCase):
             notification.NotificationError, "another submission"
         ):
             notification.mark_submitted(path, "submission-2")
+        with self.assertRaisesRegex(
+            notification.NotificationError, "must not be empty"
+        ):
+            notification.mark_submitted(path, None)
 
     def test_outbox_rejects_a_different_notification(self):
         path = notification.outbox_path("completion-note", "TASK-1", "worker-1")
@@ -168,16 +172,6 @@ class CompletionNotificationTest(unittest.TestCase):
         self.assertIn("outboxを`pending`のまま残し", skill)
         self.assertIn("通知未完了", skill)
         self.assertIn("pendingの同じJSONを再送", skill)
-
-    def test_parent_skill_replans_duplicate_notifications_from_current_state(self):
-        parent_skill = (
-            SKILL_ROOT.parent / "task-orchestration" / "SKILL.md"
-        ).read_text()
-
-        self.assertIn("validate-completion-notification", parent_skill)
-        self.assertIn("最新task sourceを再読", parent_skill)
-        self.assertIn("同じ通知が複数届いても", parent_skill)
-        self.assertIn("過去の`plan`結果の再利用は行わない", parent_skill)
 
 
 if __name__ == "__main__":

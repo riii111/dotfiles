@@ -18,18 +18,10 @@ COMPLETION_NOTES_VERSION = 1
 ORCHESTRATION_ID = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 REPOSITORY = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 PULL_REQUEST_NUMBER = re.compile(r"^[1-9][0-9]*$")
-MERGE_COMMIT = re.compile(r"^[0-9a-fA-F]{7,64}$")
 COMPLETION_NOTE_FIELDS = frozenset(
     {"risks", "handoff", "review_learnings", "technical_debt"}
 )
 HANDOFF_NOTE_FIELDS = ("risks", "handoff")
-COMPLETION_NOTIFICATION_FIELDS = {
-    "orchestration_id",
-    "task_id",
-    "pull_request",
-    "merge_commit",
-    "saved",
-}
 
 
 class StateError(ValueError):
@@ -314,43 +306,6 @@ def load_completion_note_file(path: Path) -> dict:
     return validate_completion_note(note)
 
 
-def load_completion_notification_file(path: Path) -> dict:
-    try:
-        notification = json.loads(path.read_text())
-    except (OSError, json.JSONDecodeError) as error:
-        raise StateError(
-            f"could not read completion notification at {path}: {error}"
-        ) from error
-    if not isinstance(notification, dict) or set(notification) != (
-        COMPLETION_NOTIFICATION_FIELDS
-    ):
-        raise StateError("completion notification has missing or unknown fields")
-    if not isinstance(
-        notification["orchestration_id"], str
-    ) or not ORCHESTRATION_ID.fullmatch(notification["orchestration_id"]):
-        raise StateError("completion notification has an invalid orchestration ID")
-    if not isinstance(notification["task_id"], str) or not notification["task_id"]:
-        raise StateError("completion notification has an invalid task ID")
-    if not isinstance(notification["pull_request"], dict) or set(
-        notification["pull_request"]
-    ) != {"repository", "number"}:
-        raise StateError("completion notification has an invalid pull request")
-    pull_request = validate_pull_request(notification["pull_request"])
-    if not isinstance(notification["merge_commit"], str) or not MERGE_COMMIT.fullmatch(
-        notification["merge_commit"]
-    ):
-        raise StateError("completion notification has an invalid merge commit")
-    if notification["saved"] is not True:
-        raise StateError("completion notification must have saved true")
-    return {
-        "orchestration_id": notification["orchestration_id"],
-        "task_id": notification["task_id"],
-        "pull_request": pull_request,
-        "merge_commit": notification["merge_commit"].lower(),
-        "saved": True,
-    }
-
-
 def write_sessions(path: Path, sessions: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary_path = None
@@ -537,40 +492,6 @@ def completion_note(orchestration_id: str, task_id: str) -> dict:
         .get(task_id)
     )
     return {"task_id": task_id, "saved": note is not None, "note": note}
-
-
-def validate_completion_notification(
-    orchestration_id: str, notification_file: Path
-) -> dict:
-    notification = load_completion_notification_file(notification_file)
-    if notification["orchestration_id"] != orchestration_id:
-        raise StateError("completion notification orchestration does not match")
-
-    context = load_orchestration(orchestration_id)
-    sessions = load_sessions(
-        Path(context["sessions_path"]),
-        context["parent_thread_id"],
-        context["pull_request_repositories"],
-    )
-    task = sessions["tasks"].get(notification["task_id"])
-    if task is None or "child_thread_id" not in task:
-        raise StateError(f"task {notification['task_id']} has no child session")
-    if task.get("pull_request") != notification["pull_request"]:
-        raise StateError("completion notification pull request does not match")
-
-    merges = load_merges(Path(context["merges_path"]), sessions)
-    record = merges["pull_requests"].get(pull_request_key(notification["pull_request"]))
-    if (
-        record is None
-        or record["task_id"] != notification["task_id"]
-        or record["merge_commit"].lower() != notification["merge_commit"]
-    ):
-        raise StateError("completion notification merge evidence does not match")
-
-    saved = completion_note(orchestration_id, notification["task_id"])
-    if not saved["saved"]:
-        raise StateError("completion notification has no saved completion note")
-    return notification
 
 
 def load_tasks(path: Path) -> dict[str, dict]:
@@ -782,12 +703,6 @@ def parser() -> argparse.ArgumentParser:
     completion_note.add_argument("orchestration_id")
     completion_note.add_argument("--task-id", required=True)
 
-    completion_notification = commands.add_parser("validate-completion-notification")
-    completion_notification.add_argument("orchestration_id")
-    completion_notification.add_argument(
-        "--notification-file", type=Path, required=True
-    )
-
     return root
 
 
@@ -834,10 +749,6 @@ def main(argv: list[str] | None = None) -> int:
             )
         elif arguments.command == "completion-note":
             output = completion_note(arguments.orchestration_id, arguments.task_id)
-        elif arguments.command == "validate-completion-notification":
-            output = validate_completion_notification(
-                arguments.orchestration_id, arguments.notification_file
-            )
         else:
             output = record_pull_request(
                 arguments.orchestration_id,

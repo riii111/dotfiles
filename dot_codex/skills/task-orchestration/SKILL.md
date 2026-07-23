@@ -62,16 +62,6 @@ python3 <skill-directory>/scripts/orchestration_state.py plan <orchestration-id>
   --max-parallelism <user override or 4>
 ```
 
-子セッションから完了通知JSONを受け取った場合も同じ開始手順を最初から行う。受信したJSONだけをfileへ保存し、次の検証に成功してから最新task sourceを再読して`plan`を実行する。スクリプトは通知のfield、`saved: true`、taskとPRの対応、merge記録のtask IDとcommit、保存済みCompletion Noteを再確認する。通知だけを完了根拠にしない。
-
-```text
-python3 <skill-directory>/scripts/orchestration_state.py \
-  validate-completion-notification <orchestration-id> \
-  --notification-file <completion-notification-json-path>
-```
-
-同じ通知が複数届いても、保存済みsession対応、作成予約、`plan`の`selected`を使う既存手順を変えない。通知単位の子セッション作成や過去の`plan`結果の再利用は行わない。
-
 `plan`の出力を次の順で実行する。
 
 1. `resume_completion_notes`の各子セッションだけを再開する。新しい子セッションを作らず、`completion-report`を使って対応するPRのmerge確認と未保存Completion Noteの保存を行うよう依頼する。Noteの本文は親へ表示しない。
