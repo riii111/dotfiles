@@ -68,7 +68,7 @@ python3 <task-orchestration-skill-directory>/scripts/orchestration_state.py comp
 
 `saved`が`true`なら、Noteを生成も再保存もせず、保存済みであることだけを報告して終了する。`note: {}`は保存済みの空Noteであり、未保存として扱わない。
 
-`saved`が`false`なら、実装、review指摘、修正、最終検証、mergeまでを振り返り、後続作業や案件後の見直しに必要な情報だけをJSON objectへ記録する。PRタイトル、変更ファイル、通常のPR要約は入れない。使える項目は次だけで、共有事項がなければ空のobjectを保存する。
+`saved`が`false`なら、実装、review指摘、修正、最終検証、mergeまでを振り返り、後続作業や案件後の見直しに必要な情報だけをJSON objectへ日本語で記録する。PRタイトル、変更ファイル、通常のPR要約は入れない。使える項目は次だけで、共有事項がなければ空のobjectを保存する。
 
 - `risks`
 - `handoff`
