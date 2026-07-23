@@ -86,6 +86,16 @@ launchctl unload -w ~/Library/LaunchAgents/org.nixos.codex-task-orchestrator.pli
 launchctl load -w ~/Library/LaunchAgents/org.nixos.codex-task-orchestrator.plist
 ```
 
+Reset one orchestration only after stopping its poller:
+
+```bash
+launchctl unload -w ~/Library/LaunchAgents/org.nixos.codex-task-orchestrator.plist
+codex-task-orchestrator reset codex-task-orchestration
+launchctl load -w ~/Library/LaunchAgents/org.nixos.codex-task-orchestrator.plist
+```
+
+`reset` destructively discards that orchestration's tracked sessions, merge records, and Completion Notes; Completion Notes for other orchestrations remain. Until the T5 Completion Note writer/reset race fix is merged, do not run it where another process can write Completion Notes concurrently.
+
 If Codex cannot resume the parent task, macOS shows one notification for each merge and a later poll retries automatically. Check the log above when no parent task starts.
 
 ### Store maintenance
