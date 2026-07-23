@@ -22,6 +22,12 @@ TRANSITION_SPEC = importlib.util.spec_from_file_location(
 )
 transition = importlib.util.module_from_spec(TRANSITION_SPEC)
 TRANSITION_SPEC.loader.exec_module(transition)
+NOTIFICATION_SPEC = importlib.util.spec_from_file_location(
+    "completion_notification_for_transition_test",
+    SKILL_ROOT.parent / "completion-report" / "scripts" / "completion_notification.py",
+)
+notification_outbox = importlib.util.module_from_spec(NOTIFICATION_SPEC)
+NOTIFICATION_SPEC.loader.exec_module(notification_outbox)
 
 
 class OrchestrationTransitionTest(unittest.TestCase):
@@ -84,9 +90,7 @@ task_source = "file:///tasks.md"
         return transition.materialize_next("example", state)
 
     def create_tracked_merge(self, task_id="A", number=42):
-        storage.reserve_session("example", task_id)
-        storage.record_session("example", task_id, f"thread-{task_id.lower()}")
-        storage.record_pull_request("example", task_id, "owner/repository", number)
+        self.create_tracked_session(task_id, number)
         path = storage.merges_path("example")
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
@@ -96,11 +100,25 @@ task_source = "file:///tasks.md"
                     "pull_requests": {
                         f"owner/repository#{number}": {
                             "task_id": task_id,
-                            "merge_commit": f"merge-{task_id.lower()}",
+                            "merge_commit": "a" * 40,
                         }
                     },
                 }
             )
+        )
+
+    def create_tracked_session(self, task_id="A", number=42):
+        storage.reserve_session("example", task_id)
+        storage.record_session("example", task_id, f"thread-{task_id.lower()}")
+        storage.record_pull_request("example", task_id, "owner/repository", number)
+
+    def notification(self, task_id="A", number=42, merge_commit=None):
+        return notification_outbox.build_notification(
+            "example",
+            task_id,
+            "owner/repository",
+            number,
+            merge_commit or "a" * 40,
         )
 
     def save_note(self, task_id, note):
@@ -402,6 +420,109 @@ task_source = "file:///tasks.md"
 
         self.assertEqual(transition.action_name(state), "reserve_session")
         self.assertEqual(state["launch"]["task_id"], "B")
+
+    def test_completion_notification_replans_and_deduplicates_launch(self):
+        self.create_tracked_session()
+        self.save_note("A", {"handoff": "Use the notified interface."})
+        state, _ = self.new_state(
+            [
+                {"id": "A", "dependencies": []},
+                {"id": "B", "dependencies": ["A"]},
+            ]
+        )
+        self.assertEqual(transition.action_name(state), "complete")
+
+        state, _ = self.apply(
+            state,
+            "completion_notified",
+            notification=self.notification(),
+            observed_merge_commit="a" * 40,
+        )
+
+        self.assertEqual(transition.action_name(state), "reserve_session")
+        self.assertEqual(state["launch"]["task_id"], "B")
+        self.assertEqual(state["completed"], ["A"])
+        self.assertEqual(list(state["notifications"]), ["A"])
+
+        state, _ = self.apply(
+            state,
+            "completion_notified",
+            notification=self.notification(),
+            observed_merge_commit="a" * 40,
+        )
+        self.assertEqual(transition.action_name(state), "reserve_session")
+        self.assertEqual(state["launch"]["task_id"], "B")
+        self.assertEqual(list(state["notifications"]), ["A"])
+
+    def test_completion_notification_rejects_changed_or_unverified_payload(self):
+        self.create_tracked_session()
+        self.save_note("A", {})
+        state, _ = self.new_state([{"id": "A", "dependencies": []}])
+
+        with self.assertRaisesRegex(
+            transition.TransitionError, "does not match the observed merge"
+        ):
+            transition.reduce_event(
+                "example",
+                state,
+                self.event(
+                    state,
+                    "completion_notified",
+                    notification=self.notification(),
+                    observed_merge_commit="b" * 40,
+                ),
+            )
+
+        state, _ = self.apply(
+            state,
+            "completion_notified",
+            notification=self.notification(),
+            observed_merge_commit="a" * 40,
+        )
+        with self.assertRaisesRegex(transition.TransitionError, "already has another"):
+            transition.reduce_event(
+                "example",
+                state,
+                self.event(
+                    state,
+                    "completion_notified",
+                    notification=self.notification(merge_commit="b" * 40),
+                    observed_merge_commit="b" * 40,
+                ),
+            )
+
+    def test_completion_notification_requires_saved_note_and_exact_schema(self):
+        self.create_tracked_session()
+        state, _ = self.new_state([{"id": "A", "dependencies": []}])
+
+        with self.assertRaisesRegex(
+            transition.TransitionError, "no saved Completion Note"
+        ):
+            transition.reduce_event(
+                "example",
+                state,
+                self.event(
+                    state,
+                    "completion_notified",
+                    notification=self.notification(),
+                    observed_merge_commit="a" * 40,
+                ),
+            )
+
+        invalid = {**self.notification(), "note": {"handoff": "must not pass"}}
+        with self.assertRaisesRegex(
+            transition.TransitionError, "missing or unknown fields"
+        ):
+            transition.reduce_event(
+                "example",
+                state,
+                self.event(
+                    state,
+                    "completion_notified",
+                    notification=invalid,
+                    observed_merge_commit="a" * 40,
+                ),
+            )
 
     def test_rejects_stale_source_observation_and_contradictory_thread(self):
         state, _ = self.advance_to_created_thread()

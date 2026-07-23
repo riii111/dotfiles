@@ -85,6 +85,33 @@ python3 <skill-directory>/scripts/orchestration_transition.py apply-event <orche
   --event-file <event-json-path>
 ```
 
+## 完了通知を受け取る
+
+`completion-report`から通知を受けたら、本文が`orchestration_id`、`task_id`、`pull_request`、`merge_commit`、`saved: true`だけであることを確認する。Completion Note本文や再plan指示を受け入れない。`context`のtaskとPR対応、GitHubのmerge状態とmerge commit、`completion-note`の`saved: true`を再読し、task sourceも読み直す。
+
+現在のactionが返したtokenとsource revisionで、通知とGitHubから確認したmerge commitを`completion_notified` eventへ包む。
+
+```json
+{
+  "type": "completion_notified",
+  "action_token": "<current-action-token>",
+  "source_revision": "<task-source-revision>",
+  "notification": {
+    "orchestration_id": "<orchestration-id>",
+    "task_id": "<task-id>",
+    "pull_request": {
+      "repository": "<owner/repository>",
+      "number": 123
+    },
+    "merge_commit": "<merge-commit>",
+    "saved": true
+  },
+  "observed_merge_commit": "<merge-commit>"
+}
+```
+
+event適用後は状態遷移ツールが完了task、Completion Note、依存、並列枠を再計算する。同じ通知の再受信は同じ完了証跡として扱い、異なるpayload、PR、merge commitは拒否する。受信側は通知outboxやsubmission IDを変更しない。
+
 操作ごとの責務は次のとおり。
 
 - `recover_completion_note`: 先に`completion-note`を再読し、保存済みなら`completion_note_observed` eventを適用する。未保存なら、同じaction tokenを含む処理中turnを既存Threadで確認する。同じ依頼がなければ保存済みの子セッションだけを`send_message_to_thread`で再開し、action tokenを添えて`completion-report`による回収を依頼する。返されたturn IDとwait cursorをeventへ入れる。新しい子セッションを作らない。

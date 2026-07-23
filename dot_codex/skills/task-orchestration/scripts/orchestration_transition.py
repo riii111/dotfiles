@@ -27,6 +27,7 @@
 
   no recovery or launch work --> [complete]
   external operation failure --> [stop] -- retry_requested --> failed operation
+  completion notification -----> validate evidence -------> current plan
 
 The created Thread ID, host, project, and checkout are persisted before
 verification or session recording. Every external result carries the current
@@ -40,6 +41,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import sys
 import tempfile
 from contextlib import contextmanager
@@ -69,6 +71,13 @@ ACTIONS = {
 LAUNCH_STATUSES = {"selected", "reserved", "created", "verified", "recorded"}
 WAIT_OUTCOMES = {"timed_out", "completed", "needs_attention", "failed"}
 EVENT_FIELDS = {
+    "completion_notified": {
+        "type",
+        "action_token",
+        "source_revision",
+        "notification",
+        "observed_merge_commit",
+    },
     "completion_note_observed": {
         "type",
         "action_token",
@@ -176,6 +185,7 @@ ROOT_FIELDS = {
     "completed",
     "maximum_parallelism",
     "policy",
+    "notifications",
     "recovery",
     "launch",
     "launch_history",
@@ -183,6 +193,14 @@ ROOT_FIELDS = {
     "last_event",
 }
 THREAD_FIELDS = {"thread_id", "host_id", "project_id", "checkout"}
+MERGE_COMMIT = re.compile(r"^[0-9a-fA-F]{7,64}$")
+NOTIFICATION_FIELDS = {
+    "orchestration_id",
+    "task_id",
+    "pull_request",
+    "merge_commit",
+    "saved",
+}
 
 
 class TransitionError(ValueError):
@@ -244,6 +262,37 @@ def normalize_thread(value: object) -> dict:
     return {
         field: require_string(thread[field], f"thread.{field}")
         for field in THREAD_FIELDS
+    }
+
+
+def normalize_notification(value: object, orchestration_id: str | None = None) -> dict:
+    notification = require_object(value, "completion notification", NOTIFICATION_FIELDS)
+    if (
+        orchestration_id is not None
+        and notification["orchestration_id"] != orchestration_id
+    ):
+        raise TransitionError(
+            "completion notification belongs to another orchestration"
+        )
+    merge_commit = require_string(
+        notification["merge_commit"], "notification.merge_commit"
+    )
+    if not MERGE_COMMIT.fullmatch(merge_commit):
+        raise TransitionError("notification merge commit is not a Git object ID")
+    if notification["saved"] is not True:
+        raise TransitionError("completion notification is not saved")
+    try:
+        pull_request = storage.validate_pull_request(notification["pull_request"])
+    except storage.StateError as error:
+        raise TransitionError(str(error)) from error
+    return {
+        "orchestration_id": require_string(
+            notification["orchestration_id"], "notification.orchestration_id"
+        ),
+        "task_id": require_string(notification["task_id"], "notification.task_id"),
+        "pull_request": pull_request,
+        "merge_commit": merge_commit.lower(),
+        "saved": True,
     }
 
 
@@ -389,6 +438,18 @@ def normalize_state(raw: object) -> dict:
                 "thread": normalize_thread(history["thread"]),
             }
         )
+    notifications = state["notifications"]
+    if not isinstance(notifications, dict):
+        raise TransitionError("completion notifications must be an object")
+    normalized_notifications = {}
+    for task_id, notification in notifications.items():
+        normalized_notification = normalize_notification(notification)
+        if (
+            not isinstance(task_id, str)
+            or task_id != normalized_notification["task_id"]
+        ):
+            raise TransitionError("completion notification key does not match its task")
+        normalized_notifications[task_id] = normalized_notification
     normalized = {
         "version": VERSION,
         "cycle": require_integer(state["cycle"], "cycle", 1),
@@ -400,6 +461,7 @@ def normalize_state(raw: object) -> dict:
             state["maximum_parallelism"], "maximum parallelism", 1
         ),
         "policy": state["policy"],
+        "notifications": normalized_notifications,
         "recovery": normalize_recovery(state["recovery"]),
         "launch": normalize_launch(state["launch"]),
         "launch_history": normalized_history,
@@ -410,6 +472,10 @@ def normalize_state(raw: object) -> dict:
         raise TransitionError("recovery and launch states cannot both be active")
     if normalized["policy"] not in {"manual", "auto"}:
         raise TransitionError("unknown completion policy")
+    if not set(normalized_notifications) <= task_ids:
+        raise TransitionError(
+            "completion notification task is absent from the current task source"
+        )
     recovery = normalized["recovery"]
     launch = normalized["launch"]
     if recovery and recovery["task_id"] not in task_ids:
@@ -447,6 +513,7 @@ def initial_state(
             "completed": sorted(set(completed)),
             "maximum_parallelism": maximum_parallelism,
             "policy": policy,
+            "notifications": {},
             "recovery": None,
             "launch": None,
             "launch_history": [],
@@ -515,6 +582,15 @@ def current_plan(orchestration_id: str, state: dict) -> dict:
 
 def validate_external_state(orchestration_id: str, state: dict) -> None:
     sessions = load_sessions(orchestration_id)
+    for notification in state["notifications"].values():
+        validate_completion_notification(
+            orchestration_id,
+            state,
+            {
+                "notification": notification,
+                "observed_merge_commit": notification["merge_commit"],
+            },
+        )
     recovery = state["recovery"]
     if recovery:
         task = sessions["tasks"].get(recovery["task_id"])
@@ -602,9 +678,7 @@ def action_name(state: dict) -> str:
     return "complete"
 
 
-def action_token(state: dict, action: str) -> str | None:
-    if action == "complete":
-        return None
+def action_token(state: dict, action: str) -> str:
     task_id = ""
     if state["recovery"]:
         task_id = state["recovery"]["task_id"]
@@ -651,9 +725,9 @@ def action_details(state: dict, action: str, plan: dict) -> dict:
 
 
 def event_schemas(action: str, state: dict) -> dict:
-    events = ACTION_EVENTS.get(action, ())
+    events = (*ACTION_EVENTS.get(action, ()), "completion_notified")
     if action == "stop" and not state["stop"]["retryable"]:
-        events = ()
+        events = ("completion_notified",)
     return {event: sorted(EVENT_FIELDS[event]) for event in events}
 
 
@@ -690,7 +764,7 @@ def require_matching_event(state: dict, event: object, action: str) -> tuple[dic
     token = action_token(state, action)
     if event["action_token"] != token:
         raise TransitionError("event is based on a stale external observation")
-    if event_type not in ACTION_EVENTS.get(action, ()):
+    if event_type not in (*ACTION_EVENTS.get(action, ()), "completion_notified"):
         raise TransitionError(f"event {event_type} is invalid for action {action}")
     return event, token
 
@@ -709,11 +783,69 @@ def load_sessions(orchestration_id: str) -> dict:
     )
 
 
+def validate_completion_notification(
+    orchestration_id: str,
+    state: dict,
+    event: dict,
+) -> dict:
+    notification = normalize_notification(event["notification"], orchestration_id)
+    task_id = notification["task_id"]
+    if task_id not in tasks_from_state(state["tasks"]):
+        raise TransitionError(
+            "completion notification task is absent from the task source"
+        )
+    observed_merge_commit = require_string(
+        event["observed_merge_commit"], "event.observed_merge_commit"
+    ).lower()
+    if not MERGE_COMMIT.fullmatch(observed_merge_commit):
+        raise TransitionError("observed merge commit is not a Git object ID")
+    if observed_merge_commit != notification["merge_commit"]:
+        raise TransitionError(
+            "completion notification does not match the observed merge"
+        )
+
+    sessions = load_sessions(orchestration_id)
+    task = sessions["tasks"].get(task_id)
+    if (
+        not task
+        or "child_thread_id" not in task
+        or task.get("pull_request") != notification["pull_request"]
+    ):
+        raise TransitionError(
+            "completion notification does not match the session mapping"
+        )
+    try:
+        note = storage.completion_note(orchestration_id, task_id)
+    except storage.StateError as error:
+        raise TransitionError(str(error)) from error
+    if not note["saved"]:
+        raise TransitionError("completion notification has no saved Completion Note")
+    context = storage.load_orchestration(orchestration_id)
+    merges = storage.load_merges(Path(context["merges_path"]), sessions)
+    merge_record = merges["pull_requests"].get(
+        storage.pull_request_key(notification["pull_request"])
+    )
+    if merge_record and (
+        merge_record["task_id"] != task_id
+        or merge_record["merge_commit"].lower() != observed_merge_commit
+    ):
+        raise TransitionError("completion notification contradicts the merge record")
+    return notification
+
+
 def reduce_event(orchestration_id: str, state: dict, event: dict) -> dict:
     action = action_name(state)
     event, token = require_matching_event(state, event, action)
     event_type = event["type"]
-    if event_type == "operation_failed":
+    if event_type == "completion_notified":
+        notification = validate_completion_notification(orchestration_id, state, event)
+        task_id = notification["task_id"]
+        existing = state["notifications"].get(task_id)
+        if existing is not None and existing != notification:
+            raise TransitionError("task already has another completion notification")
+        state["notifications"][task_id] = notification
+        state["completed"] = sorted({*state["completed"], task_id})
+    elif event_type == "operation_failed":
         if event["operation"] != action:
             raise TransitionError("failed operation does not match the current action")
         if type(event["retryable"]) is not bool:
