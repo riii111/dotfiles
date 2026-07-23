@@ -10,9 +10,9 @@ PR作成後からmergeまでを担当する。実装開始前の作業とComplet
 
 ## 状態から再開する
 
-PRのstate、draft、head SHA、checksと、`git rev-parse --git-path codex-worker-state.json`に保存したreview thread ID、待機中turn ID、review結果を読み直す。`manual`は明示されない限り既定値とし、過去の慣例から`auto`を推測しない。
+PRのstate、draft、head SHA、checksと、`task-worker`から引き継いだ絶対状態パスのreview thread ID、待機中turn ID、review結果を読み直す。`manual`は明示されない限り既定値とし、過去の慣例から`auto`を推測しない。
 
-`task-worker/scripts/worker_transition.py`へ最新状態を渡し、返された操作を一つだけ実行する。操作後は外部状態を再読してスクリプトを再実行する。PR状態や合格条件を別の節で再判定しない。
+`task-worker/scripts/worker_transition.py next`が返した操作を一つだけ実行する。操作後は外部状態をevent JSONにし、`apply-event`で原子的に保存する。`review_requested`、`review_completed`、`changes_applied`、`checks_started`、`checks_completed`、`marked_ready`、`mergeability_changed`、`merged`を手編集で代用しない。PR状態や合格条件を別の節で再判定しない。
 
 - `request_review`: review side chatを一度だけ作り、レビューを依頼する。
 - `wait_review`: 同じreview turnの完了を待つ。timeout中は依頼を重ねない。
@@ -30,4 +30,4 @@ PRのstate、draft、head SHA、checksと、`git rev-parse --git-path codex-work
 
 初回と再レビューは`gpt-5.6-sol`、`high`で、`code-review`を使ってbaseとの差分全体を確認させる。結果の先頭に`Reviewed head: <head SHA>`を付け、現在の子セッションへ送らせる。PRへの投稿、修正、mergeはさせない。
 
-review対象headから追加commitがある結果、通知失敗、競合、意図しないbase、`manual`でReadyになっている状態は自動復旧せず停止する。
+review対象headから追加commitがある結果、通知失敗、意図しないbase、`manual`でReadyになっている状態は自動復旧せず停止する。競合は`mergeability_changed` eventで状態へ反映し、状態遷移スクリプトのエラーとして停止する。

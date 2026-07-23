@@ -17,13 +17,16 @@ description: |
 
 開始時と再開時は、タスク管理元の最新本文、直接依存、添付資料、repository規約を読む。次に`task-orchestration`の`orchestration_state.py context`を実行し、taskの子セッションID、許可repository、PR対応を確認する。会話上の進捗で代用しない。
 
-PRと処理状況を`git rev-parse --git-path codex-worker-state.json`のJSONへ保存し、状態遷移スクリプトへ渡す。review thread ID、待機中turn ID、現在・review・検証のhead SHA、指摘件数を省略しない。操作後は原子的に更新し、再開時も同じファイルを使う。
+状態遷移スクリプトの`init`を一度実行する。スクリプトはオーケストレーションIDとtask IDから一意な絶対パスを決める。main checkoutと専用worktreeのcwdへ依存しない。
 
 ```text
-python3 <task-worker-skill-directory>/scripts/worker_transition.py --state <worker-state-json>
+python3 <task-worker-skill-directory>/scripts/worker_transition.py init <orchestration-id> \
+  --task-id <task-id> --policy <manual-or-auto>
+python3 <task-worker-skill-directory>/scripts/worker_transition.py next <orchestration-id> \
+  --task-id <task-id>
 ```
 
-状態JSONのschemaはスクリプトが検証する。返された`action`が`implement`なら次の工程を行う。それ以外は同じ状態JSONとactionを`task-review-cycle`へ渡す。矛盾や未知の状態でエラーになった場合は自動復旧しない。
+状態JSONのschemaと更新はスクリプトが扱う。外部操作後は結果をevent JSONにし、`apply-event`へ渡す。返された`action`が`implement`なら次の工程を行い、それ以外は絶対状態パスとactionを`task-review-cycle`へ渡す。矛盾や未知の状態でエラーになった場合は自動復旧しない。
 
 ## 実装
 
@@ -33,6 +36,6 @@ python3 <task-worker-skill-directory>/scripts/worker_transition.py --state <work
 4. repository所定のformat、lint、静的検査、test、buildをすべて通す。
 5. PR templateと直近の慣例に従ってDraft PRを作る。PR本文にtask IDや管理用markerを書かない。
 6. 作成直後に`orchestration_state.py record-pr`を一回実行する。失敗したらPRを作り直さず、作成済みPRとエラーを報告して停止する。
-7. 最新のPR状態を状態JSONへ反映し、状態遷移スクリプトを再実行して`task-review-cycle`へ引き継ぐ。
+7. `pr_created` eventへhead SHAを入れて適用し、`task-review-cycle`へ引き継ぐ。
 
 worktreeやtaskとの対応が不明、baseが違う、PRがclosed、検証失敗が残る場合は停止する。
