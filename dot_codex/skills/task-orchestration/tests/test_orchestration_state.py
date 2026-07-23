@@ -329,43 +329,6 @@ task_source = "linear://project"
                 "example", "A", self.completion_note_file({"risks": "Changed."})
             )
 
-    def test_clear_completion_notes_resets_only_the_current_orchestration(self):
-        self.create_session_with_pull_request()
-        state.record_completion_note(
-            "example", "A", self.completion_note_file({"handoff": "Old path."})
-        )
-        path = state.completion_notes_path("example")
-        path.write_text(
-            json.dumps(
-                {
-                    "version": 1,
-                    "orchestrations": {
-                        "example": {"tasks": {"A": {"handoff": "Old path."}}},
-                        "other": {"tasks": {"X": {"handoff": "Keep this."}}},
-                    },
-                }
-            )
-        )
-
-        cleared = state.clear_completion_notes("example")
-
-        self.assertNotIn("example", cleared["orchestrations"])
-        self.assertEqual(
-            cleared["orchestrations"]["other"]["tasks"]["X"],
-            {"handoff": "Keep this."},
-        )
-
-        tasks = self.tasks_file(
-            [
-                {"id": "A", "dependencies": []},
-                {"id": "B", "dependencies": ["A"]},
-            ]
-        )
-        self.assertEqual(
-            state.plan("example", tasks, ["A"], 1)["waiting_completion_notes"],
-            {"B": ["A"]},
-        )
-
     def test_completion_note_rejects_unknown_or_empty_fields(self):
         self.create_session_with_pull_request()
 

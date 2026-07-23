@@ -40,12 +40,6 @@ python3 <skill-directory>/scripts/orchestration_state.py context <orchestration-
 
 `context`は設定、セッション対応、完了判定に使うmerge情報、現在のオーケストレーションのCompletion Noteを検証し、設定値、保存先、taskごとのセッション・PR対応、`completed_from_merges`、`completion_notes`を返す。Completion Noteは全オーケストレーションで共通の`completion-notes.json`に保存する。`reserved`は作成前、`child_thread_id`は作成完了を表す。状態ファイルがなければ空として扱い、それ以外の読込・対応関係の不正では失敗する。
 
-オーケストレーションを初期化し直すときは、sessions/mergesのディレクトリだけでなく、そのIDのCompletion Noteも次で削除する。他のオーケストレーションのNoteは残す。
-
-```text
-python3 <skill-directory>/scripts/orchestration_state.py clear-completion-notes <orchestration-id>
-```
-
 ## 開始するタスクを選ぶ
 
 1. 登録済み設定からオーケストレーションIDを自動解決し、`context`で設定、セッション対応表、merge処理記録を読む。失敗したら「判断が必要」とする。
