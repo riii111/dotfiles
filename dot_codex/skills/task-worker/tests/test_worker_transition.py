@@ -67,7 +67,8 @@ class WorkerTransitionTest(unittest.TestCase):
             ),
             (
                 self.state(
-                    review=self.review(non_blocking=1, applied_head_sha="head-1")
+                    head_sha="head-2",
+                    review=self.review(non_blocking=1, applied_head_sha="head-2"),
                 ),
                 "verify",
             ),
@@ -223,6 +224,8 @@ class WorkerTransitionTest(unittest.TestCase):
                     "thread_id": "review-thread",
                 },
             )
+        with self.assertRaisesRegex(transition.TransitionError, "no head SHA"):
+            transition.reduce_state(self.state(head_sha=None), {"type": "merged"})
 
     def test_manual_external_merge_syncs_existing_completion_note(self):
         state = self.state(

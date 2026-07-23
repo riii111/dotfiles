@@ -195,17 +195,22 @@ def review_action(state: dict) -> str:
         raise TransitionError("completed review still has a pending turn ID")
     if not review["head_sha"]:
         raise TransitionError("completed review has no reviewed head SHA")
-    if review["head_sha"] != head_sha:
-        raise TransitionError("reviewed head does not match the current head")
 
     findings = review["blocking"] + review["non_blocking"]
-    if findings and not review["applied_head_sha"]:
+    applied_head = review["applied_head_sha"]
+    if applied_head:
+        if applied_head != head_sha:
+            raise TransitionError(
+                "applied review changes do not match the current head"
+            )
+        if not findings:
+            raise TransitionError("review without findings has applied changes")
+    elif review["head_sha"] != head_sha:
+        raise TransitionError("reviewed head does not match the current head")
+    if findings and not applied_head:
         return "address_review"
     if review["blocking"] or review["non_blocking"] > 2:
         return "request_review"
-    accepted_head = review["applied_head_sha"] or review["head_sha"]
-    if accepted_head != head_sha:
-        raise TransitionError("accepted review does not match the current head")
     return "review_passed"
 
 
@@ -238,15 +243,7 @@ def next_action(state: dict) -> str:
     if pr == "ready" and policy == "manual":
         raise TransitionError("manual policy cannot advance a ready pull request")
     if pr == "absent":
-        if state["head_sha"] is not None:
-            raise TransitionError("work without a pull request cannot have a head SHA")
-        if review_action(state) != "request_review":
-            raise TransitionError("work without a pull request has active review state")
-        if state["checks"] != {"status": "not_run", "head_sha": None}:
-            raise TransitionError("work without a pull request has checks state")
         return "implement"
-    if not state["head_sha"]:
-        raise TransitionError("tracked pull request has no head SHA")
     if not state["mergeable"]:
         return "stop_conflict"
 
@@ -273,8 +270,18 @@ def next_action(state: dict) -> str:
 
 
 def validate_state_invariants(state: dict) -> None:
-    if state["pr"] != "merged" and state["completion_note_saved"]:
+    pr = state["pr"]
+    if pr != "merged" and state["completion_note_saved"]:
         raise TransitionError("an unmerged pull request cannot have a completion note")
+    if pr == "absent":
+        if state["head_sha"] is not None:
+            raise TransitionError("work without a pull request cannot have a head SHA")
+        if state["review"]["status"] != "absent":
+            raise TransitionError("work without a pull request has active review state")
+        if state["checks"] != {"status": "not_run", "head_sha": None}:
+            raise TransitionError("work without a pull request has checks state")
+    elif not state["head_sha"]:
+        raise TransitionError("tracked pull request has no head SHA")
 
 
 def worker_state_path(orchestration_id: str, task_id: str, worker_id: str) -> Path:
