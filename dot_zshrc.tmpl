@@ -619,7 +619,7 @@ if command -v direnv >/dev/null 2>&1; then
 fi
 # wezterm-git-status-bridge setup begin
 _wezterm_git_status_bridge_update() {
-  "$HOME/.local/bin/wezterm-git-status-bridge" update --pane-id "${HERDR_PANE_ID:-${WEZTERM_PANE:-shell}}" --cwd "$PWD" >/dev/null 2>&1 &!
+  "${WEZTERM_GIT_STATUS_BRIDGE_BIN:-$HOME/.local/bin/wezterm-git-status-bridge}" update --pane-id "${HERDR_PANE_ID:-${WEZTERM_PANE:-shell}}" --cwd "$PWD" >/dev/null 2>&1 &!
 }
 autoload -Uz add-zsh-hook
 add-zsh-hook chpwd _wezterm_git_status_bridge_update

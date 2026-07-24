@@ -28,6 +28,8 @@ Private work tool layers are managed separately.
 
 ### Herdr WezTerm status (optional)
 
+Install the release binary at `~/.local/bin/wezterm-git-status-bridge`, then run its `setup --herdr` command. The generated configuration and shell hook use this path; replace the binary in place when updating it.
+
 Herdr needs a one-time plugin link per machine to fire the events that feed the WezTerm right-status git info inside herdr panes.
 
 ```bash
