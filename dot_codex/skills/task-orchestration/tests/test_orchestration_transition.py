@@ -676,6 +676,39 @@ task_source = "file:///tasks.md"
         ):
             transition.materialize_next("example", state)
 
+    def test_rejects_selected_launch_with_an_existing_child_thread(self):
+        state, _ = self.new_state([{"id": "A", "dependencies": []}])
+        storage.reserve_session("example", "A")
+        storage.record_session("example", "A", "unexpected-thread")
+
+        with self.assertRaisesRegex(
+            transition.TransitionError,
+            "selected launch conflicts with the session mapping",
+        ):
+            transition.materialize_next("example", state)
+
+    def test_rejects_recovery_with_a_changed_child_thread(self):
+        self.create_tracked_session()
+        state, _ = self.new_state(
+            [
+                {"id": "A", "dependencies": []},
+                {"id": "B", "dependencies": ["A"]},
+            ],
+            completed=["A"],
+        )
+        sessions_path = storage.state_path("example")
+        sessions = storage.load_sessions(
+            sessions_path, "parent-thread", ["owner/repository"]
+        )
+        sessions["tasks"]["A"]["child_thread_id"] = "unexpected-thread"
+        storage.write_sessions(sessions_path, sessions)
+
+        with self.assertRaisesRegex(
+            transition.TransitionError,
+            "recovery state does not match the session mapping",
+        ):
+            transition.materialize_next("example", state)
+
     def test_parallelism_dependencies_and_order_still_come_from_plan(self):
         state, _ = self.new_state(
             [

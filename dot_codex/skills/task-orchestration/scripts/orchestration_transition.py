@@ -71,7 +71,6 @@ ACTIONS = {
 }
 LAUNCH_STATUSES = {"selected", "reserved", "created", "verified", "recorded"}
 WAIT_OUTCOMES = {"timed_out", "completed", "needs_attention", "failed"}
-RESERVED_SESSION = {"creation": {"status": "reserved"}}
 EVENT_FIELDS = {
     "completion_notified": {
         "type",
@@ -621,17 +620,17 @@ def validate_external_state(orchestration_id: str, state: dict) -> None:
     if launch:
         task = sessions["tasks"].get(launch["task_id"])
         if launch["status"] == "selected":
-            if task not in (None, RESERVED_SESSION):
+            if task not in (None, storage.RESERVED_SESSION):
                 raise TransitionError(
                     "selected launch conflicts with the session mapping"
                 )
         elif launch["status"] in {"reserved", "created"}:
-            if task != RESERVED_SESSION:
+            if task != storage.RESERVED_SESSION:
                 raise TransitionError("unrecorded launch lost its session reservation")
         elif launch["status"] == "verified":
             # record-session may persist before its result event reaches this state.
             thread_id = launch["thread"]["thread_id"]
-            if task != RESERVED_SESSION and (
+            if task != storage.RESERVED_SESSION and (
                 not task or task.get("child_thread_id") != thread_id
             ):
                 raise TransitionError(
@@ -950,7 +949,7 @@ def reduce_event(orchestration_id: str, state: dict, event: dict) -> dict:
         launch = state["launch"]
         require_task(event, launch["task_id"])
         sessions = load_sessions(orchestration_id)
-        if sessions["tasks"].get(launch["task_id"]) != RESERVED_SESSION:
+        if sessions["tasks"].get(launch["task_id"]) != storage.RESERVED_SESSION:
             raise TransitionError("session reservation was not persisted")
         launch["status"] = "reserved"
     elif event_type == "thread_created":

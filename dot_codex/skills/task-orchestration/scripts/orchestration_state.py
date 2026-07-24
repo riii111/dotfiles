@@ -20,6 +20,7 @@ COMPLETION_NOTE_FIELDS = frozenset(
     {"risks", "handoff", "review_learnings", "technical_debt"}
 )
 HANDOFF_NOTE_FIELDS = ("risks", "handoff")
+RESERVED_SESSION = {"creation": {"status": "reserved"}}
 
 
 class StateError(ValueError):
@@ -290,7 +291,7 @@ def reserve_session(orchestration_id: str, task_id: str) -> dict:
             raise StateError("task ID must not be empty")
         if task_id in sessions["tasks"]:
             raise StateError(f"task {task_id} already has session creation state")
-        sessions["tasks"][task_id] = {"creation": {"status": "reserved"}}
+        sessions["tasks"][task_id] = RESERVED_SESSION
         write_sessions(path, sessions)
         return sessions
 
@@ -304,7 +305,7 @@ def release_reservation(orchestration_id: str, task_id: str) -> dict:
             context["parent_thread_id"],
             context["pull_request_repositories"],
         )
-        if sessions["tasks"].get(task_id) != {"creation": {"status": "reserved"}}:
+        if sessions["tasks"].get(task_id) != RESERVED_SESSION:
             raise StateError(f"task {task_id} has no releasable session reservation")
         del sessions["tasks"][task_id]
         write_sessions(path, sessions)
