@@ -814,6 +814,77 @@ task_source = "file:///tasks.md"
         self.assertEqual(output["source_revision"], "source-2")
         self.assertEqual(output["action"], "recover_completion_note")
 
+    def test_cli_init_validates_old_external_state_before_cycle_change(self):
+        self.create_tracked_session()
+        state = transition.initial_state(
+            "source-1",
+            self.task_map([{"id": "A", "dependencies": []}]),
+            [],
+            1,
+            "manual",
+        )
+        state["launch_history"] = [
+            {
+                "task_id": "A",
+                "thread": {
+                    "thread_id": "thread-a",
+                    "host_id": "local",
+                    "project_id": "saved-project",
+                    "checkout": "/checkout/repository",
+                },
+            }
+        ]
+        transition.write_state(
+            transition.transition_path("example"), transition.normalize_state(state)
+        )
+        tasks = self.root / "tasks.json"
+        tasks.write_text(
+            json.dumps(
+                {
+                    "tasks": [
+                        {"id": "A", "dependencies": []},
+                        {"id": "B", "dependencies": ["A"]},
+                    ]
+                }
+            )
+        )
+        command = [
+            sys.executable,
+            str(TRANSITION_SPEC.origin),
+            "init",
+            "example",
+            "--tasks",
+            str(tasks),
+            "--max-parallelism",
+            "1",
+            "--policy",
+            "manual",
+            "--source-revision",
+            "source-2",
+        ]
+        environment = {
+            **os.environ,
+            "XDG_CONFIG_HOME": str(self.config_home),
+            "XDG_STATE_HOME": str(self.state_home),
+        }
+        sessions_path = storage.state_path("example")
+        sessions = json.loads(sessions_path.read_text())
+        sessions["tasks"]["A"]["child_thread_id"] = "contradictory-thread"
+        sessions_path.write_text(json.dumps(sessions))
+        changed = subprocess.run(
+            command,
+            capture_output=True,
+            check=False,
+            text=True,
+            env=environment,
+        )
+
+        self.assertEqual(changed.returncode, 2)
+        self.assertEqual(
+            json.loads(changed.stderr),
+            {"error": "launch history does not match the session mapping"},
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

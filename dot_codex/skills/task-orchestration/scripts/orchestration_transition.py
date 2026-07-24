@@ -1045,6 +1045,7 @@ def main(argv: list[str] | None = None) -> int:
                             raise TransitionError(
                                 "cycle inputs changed during an active operation"
                             )
+                        validate_external_state(arguments.orchestration_id, state)
                         state = initial_state(
                             arguments.source_revision,
                             tasks,
@@ -1053,8 +1054,6 @@ def main(argv: list[str] | None = None) -> int:
                             arguments.policy,
                             state["cycle"] + 1,
                         )
-                    else:
-                        state, _ = materialize_next(arguments.orchestration_id, state)
                 else:
                     state = initial_state(
                         arguments.source_revision,
