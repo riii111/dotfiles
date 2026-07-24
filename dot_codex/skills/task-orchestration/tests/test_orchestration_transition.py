@@ -169,8 +169,12 @@ task_source = "file:///tasks.md"
         )
 
     def test_returns_one_action_for_each_launch_stage(self):
-        state, _ = self.new_state([{"id": "A", "dependencies": []}])
+        state, plan = self.new_state([{"id": "A", "dependencies": []}])
         self.assertEqual(transition.action_name(state), "reserve_session")
+        self.assertEqual(
+            transition.output("example", state, plan)["executor_skill"],
+            "task-session-launch",
+        )
 
         storage.reserve_session("example", "A")
         state, _ = self.apply(state, "session_reserved", task_id="A")
@@ -236,10 +240,13 @@ task_source = "file:///tasks.md"
             transition.output("example", state, plan)["details"]["launched"],
             state["launch_history"],
         )
+        self.assertIsNone(
+            transition.output("example", state, plan)["executor_skill"]
+        )
 
     def test_wait_state_persists_turn_cursor_and_replans_after_note(self):
         self.create_tracked_session()
-        state, _ = self.new_state(
+        state, plan = self.new_state(
             [
                 {"id": "A", "dependencies": []},
                 {"id": "B", "dependencies": ["A"]},
@@ -247,6 +254,10 @@ task_source = "file:///tasks.md"
             completed=["A"],
         )
         self.assertEqual(transition.action_name(state), "recover_completion_note")
+        self.assertEqual(
+            transition.output("example", state, plan)["executor_skill"],
+            "task-completion-recovery",
+        )
 
         state, _ = self.apply(
             state,

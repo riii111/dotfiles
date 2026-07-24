@@ -70,6 +70,16 @@ LAUNCH_ACTION_BY_STATUS = {
     "recorded": ACTION_SET_THREAD_TITLE,
 }
 LAUNCH_ACTIONS = set(LAUNCH_ACTION_BY_STATUS.values())
+EXECUTOR_SKILL_BY_ACTION = {
+    **{
+        action: "task-completion-recovery"
+        for action in RECOVERY_ACTIONS
+    },
+    **{
+        action: "task-session-launch"
+        for action in LAUNCH_ACTIONS
+    },
+}
 ACTIONS = {
     *RECOVERY_ACTIONS,
     *LAUNCH_ACTIONS,
@@ -751,6 +761,7 @@ def output(orchestration_id: str, state: dict, plan: dict) -> dict:
         "allowed_events": event_schemas(action, state),
         "cycle": state["cycle"],
         "details": action_details(state, action, plan),
+        "executor_skill": EXECUTOR_SKILL_BY_ACTION.get(action),
         "path": str(transition_path(orchestration_id)),
         "policy": state["policy"],
         "source_revision": state["source_revision"],
