@@ -2,7 +2,6 @@
 
 {
   imports = [
-    ./codex-task-orchestrator.nix
     ./default-apps.nix
     ./keyboard-shortcuts.nix
   ];

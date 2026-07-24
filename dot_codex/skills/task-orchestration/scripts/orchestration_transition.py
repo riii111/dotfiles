@@ -827,16 +827,6 @@ def validate_completion_notification(
         raise TransitionError(str(error)) from error
     if not note["saved"]:
         raise TransitionError("completion notification has no saved Completion Note")
-    context = storage.load_orchestration(orchestration_id)
-    merges = storage.load_merges(Path(context["merges_path"]), sessions)
-    merge_record = merges["pull_requests"].get(
-        storage.pull_request_key(notification["pull_request"])
-    )
-    if merge_record and (
-        merge_record["task_id"] != task_id
-        or merge_record["merge_commit"].lower() != observed_merge_commit
-    ):
-        raise TransitionError("completion notification contradicts the merge record")
     return notification
 
 

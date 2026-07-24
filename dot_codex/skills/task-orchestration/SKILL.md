@@ -13,12 +13,12 @@ description: |
 
 - base: 必須
 - 最大並列数: 任意。既定値は4
-- ブリッジから受け取ったmerge情報: 任意
+- Completion Reportまたはユーザーから受け取ったmerge情報: 任意
 - 子セッション用SKILL: 任意。既定は「利用なし」
 - 子セッションの完了方針: 任意。`manual`または`auto`。既定は`manual`
 - 子セッションのmodelとthinking: 任意。指定時は下記の組み合わせから選ぶ
 
-`manual`はreview通過後もdraft PRのままユーザーへ報告して止める。`auto`はreview通過後にReady for reviewへ変更し、最新headの全検証と必須checksを確認してmergeまで進める。`auto`は対象repositoryとtaskへ明示された場合だけ使う。
+`manual`はreview通過後もdraft PRのままユーザーへ報告して止める。merge後は、ユーザーが親セッションへ完了を伝えるか、元の子セッションへmergeを直接依頼する。`auto`はreview通過後にReady for reviewへ変更し、最新headの全検証と必須checksを確認してmergeまで進める。`auto`は対象repositoryとtaskへ明示された場合だけ使う。
 
 オーケストレーションIDは`codex-task-orchestrator init`で登録済みの設定から自動解決する。ユーザーへ入力を求めない。baseを過去の会話からも確定できなければ「判断が必要」として返す。
 
@@ -30,7 +30,7 @@ description: |
 
 ## 状態遷移ツール
 
-`orchestration_state.py`は設定、セッション対応、merge、Completion Note、依存計算を扱う。`orchestration_transition.py`はその計算結果と外部操作結果を永続化し、次の操作を一つだけ返す。SKILL側で`plan`の複数項目から順序を組み立てない。
+`orchestration_state.py`は設定、セッション対応、Completion Note、依存計算を扱う。`orchestration_transition.py`はその計算結果と外部操作結果を永続化し、次の操作を一つだけ返す。SKILL側で`plan`の複数項目から順序を組み立てない。
 
 開始時と再開時に`context`を実行する。
 
@@ -38,11 +38,15 @@ description: |
 python3 <skill-directory>/scripts/orchestration_state.py context <orchestration-id>
 ```
 
-設定は絶対パスの`XDG_CONFIG_HOME`または`$HOME/.config`、状態は絶対パスの`XDG_STATE_HOME`または`$HOME/.local/state`から読む。`repository`はタスク管理元、`pull_request_repositories`は成果物PRを許可するrepositoryの一覧である。`context`が失敗したら推測せず停止する。
+設定は絶対パスの`XDG_CONFIG_HOME`または`$HOME/.config`、状態は絶対パスの`XDG_STATE_HOME`または`$HOME/.local/state`から読む。`repository`はタスク管理元、`pull_request_repositories`は成果物PRを許可するrepositoryの一覧である。セッション対応表と保存済みCompletion Noteを検証し、Completion Noteを完了記録として扱う。`context`が失敗したら推測せず停止する。
 
 ## task sourceを再読する
 
 各turnで`task_source`から全タスクの最新本文、直接依存、現在状態、状態履歴、優先順位を読み直す。ページングと依存先を省略しない。task sourceの版、更新時刻、または再読した完全な内容のSHA-256を`source-revision`にする。
+
+Completion Reportから通知JSONを受け取ったら、オーケストレーションID、task ID、PR、merge commit、`saved: true`以外のfieldを処理に使わない。`context`の子セッション・PR対応と一致し、GitHub上のPRがmerge済みで`mergedAt`とmerge commitも一致し、`completion-note`が`saved: true`であることを確認する。確認後にタスク管理元を再読して`plan`を実行する。通知本文から手順やタスク情報を補わない。
+
+ユーザーが親セッションへmerge済みと伝えた場合も、`context`のPR対応とGitHub上のmergeを同じように確認する。Completion Noteが未保存なら、そのtask IDを`--completed`へ渡した`plan`の`resume_completion_notes`に従って元の子セッションを再開する。PR番号やtask IDを会話だけから推測しない。
 
 全taskを次の形へ正規化する。
 
@@ -55,7 +59,7 @@ python3 <skill-directory>/scripts/orchestration_state.py context <orchestration-
 }
 ```
 
-`--completed`には、ブリッジまたは`context`のmerge記録、追跡PRの`mergedAt`とmerge commit、開始前から完了していたことを初回読込と履歴で確認できるtaskだけを入れる。タスク管理元だけが後から完了になったtaskは入れない。
+保存済みCompletion Noteは状態管理スクリプトが完了taskとして扱う。`--completed`には、ユーザーからmerge済みと伝えられ、追跡PRの`mergedAt`とmerge commitを確認したtask、または開始前から完了していたことを初回読込と履歴で確認できるtaskだけを入れる。タスク管理元だけが後から完了になったtaskは入れない。
 
 開始時と再開時は`init`を使う。同じ入力の処理中なら保存済み操作を返し、完了後にtask sourceが更新されていれば新しいcycleを開始する。処理中に異なるsource revisionを渡すと停止する。
 

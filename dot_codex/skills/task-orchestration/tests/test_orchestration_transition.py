@@ -89,24 +89,6 @@ task_source = "file:///tasks.md"
         )
         return transition.materialize_next("example", state)
 
-    def create_tracked_merge(self, task_id="A", number=42):
-        self.create_tracked_session(task_id, number)
-        path = storage.merges_path("example")
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
-            json.dumps(
-                {
-                    "version": 1,
-                    "pull_requests": {
-                        f"owner/repository#{number}": {
-                            "task_id": task_id,
-                            "merge_commit": "a" * 40,
-                        }
-                    },
-                }
-            )
-        )
-
     def create_tracked_session(self, task_id="A", number=42):
         storage.reserve_session("example", task_id)
         storage.record_session("example", task_id, f"thread-{task_id.lower()}")
@@ -232,12 +214,13 @@ task_source = "file:///tasks.md"
         )
 
     def test_wait_state_persists_turn_cursor_and_replans_after_note(self):
-        self.create_tracked_merge()
+        self.create_tracked_session()
         state, _ = self.new_state(
             [
                 {"id": "A", "dependencies": []},
                 {"id": "B", "dependencies": ["A"]},
-            ]
+            ],
+            completed=["A"],
         )
         self.assertEqual(transition.action_name(state), "recover_completion_note")
 
@@ -402,12 +385,13 @@ task_source = "file:///tasks.md"
         self.assertNotIn("child_thread_id", load_task)
 
     def test_saved_note_can_be_observed_before_recovery_request(self):
-        self.create_tracked_merge()
+        self.create_tracked_session()
         state, _ = self.new_state(
             [
                 {"id": "A", "dependencies": []},
                 {"id": "B", "dependencies": ["A"]},
-            ]
+            ],
+            completed=["A"],
         )
         self.assertEqual(transition.action_name(state), "recover_completion_note")
         self.save_note("A", {})
@@ -430,7 +414,8 @@ task_source = "file:///tasks.md"
                 {"id": "B", "dependencies": ["A"]},
             ]
         )
-        self.assertEqual(transition.action_name(state), "complete")
+        self.assertEqual(transition.action_name(state), "reserve_session")
+        self.assertEqual(state["launch"]["task_id"], "B")
 
         state, _ = self.apply(
             state,
@@ -777,20 +762,7 @@ task_source = "file:///tasks.md"
         self.assertEqual(first.returncode, 0)
         self.assertEqual(json.loads(first.stdout)["action"], "complete")
 
-        merges_path = storage.merges_path("example")
-        merges_path.write_text(
-            json.dumps(
-                {
-                    "version": 1,
-                    "pull_requests": {
-                        "owner/repository#42": {
-                            "task_id": "A",
-                            "merge_commit": "a" * 40,
-                        }
-                    },
-                }
-            )
-        )
+        self.save_note("A", {})
         tasks.write_text(
             json.dumps(
                 {
@@ -812,7 +784,7 @@ task_source = "file:///tasks.md"
         self.assertEqual(changed.returncode, 0)
         output = json.loads(changed.stdout)
         self.assertEqual(output["source_revision"], "source-2")
-        self.assertEqual(output["action"], "recover_completion_note")
+        self.assertEqual(output["action"], "reserve_session")
 
     def test_cli_init_validates_old_external_state_before_cycle_change(self):
         self.create_tracked_session()

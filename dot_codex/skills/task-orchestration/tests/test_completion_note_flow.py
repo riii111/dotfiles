@@ -42,19 +42,22 @@ class CompletionNoteWorker:
 
 
 class CompletionFlowDriver:
-    def __init__(self, orchestration_id, tasks_path, maximum_parallelism):
+    def __init__(
+        self, orchestration_id, tasks_path, maximum_parallelism, completed_ids=None
+    ):
         self.orchestration_id = orchestration_id
         self.tasks_path = tasks_path
         self.maximum_parallelism = maximum_parallelism
+        self.completed_ids = completed_ids or []
         self.resumed_tasks = set()
         self.resume_requests = []
         self.launches = []
 
-    def poll(self):
+    def run(self):
         result = state.plan(
             self.orchestration_id,
             self.tasks_path,
-            [],
+            self.completed_ids,
             self.maximum_parallelism,
         )
         for request in result["resume_completion_notes"]:
@@ -115,11 +118,6 @@ task_source = "linear://project"
         state.record_session("example", task_id, f"thread-{task_id.lower()}")
         state.record_pull_request("example", task_id, "owner/repository", number)
 
-    def write_merges(self, pull_requests):
-        path = state.merges_path("example")
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps({"version": 1, "pull_requests": pull_requests}))
-
     def worker(self, task_id):
         return CompletionNoteWorker(
             "example", task_id, self.root / f"completion-note-{task_id}.json"
@@ -133,12 +131,11 @@ task_source = "linear://project"
             ]
         )
         self.create_session_with_pull_request()
-        self.write_merges({"42": {"task_id": "A", "merge_commit": "abc123"}})
         worker = self.worker("A")
-        driver = CompletionFlowDriver("example", tasks, 1)
+        driver = CompletionFlowDriver("example", tasks, 1, ["A"])
 
-        driver.poll()
-        driver.poll()
+        driver.run()
+        driver.run()
 
         self.assertEqual(
             [request["task_id"] for request in driver.resume_requests], ["A"]
@@ -153,8 +150,8 @@ task_source = "linear://project"
                 "technical_debt": "Unify duplicate conversions.",
             }
         )
-        driver.poll()
-        driver.poll()
+        driver.run()
+        driver.run()
 
         self.assertEqual(worker.reads, 2)
         self.assertEqual(worker.writes, 1)
@@ -181,14 +178,13 @@ task_source = "linear://project"
             ]
         )
         self.create_session_with_pull_request()
-        self.write_merges({"42": {"task_id": "A", "merge_commit": "abc123"}})
         worker = self.worker("A")
         driver = CompletionFlowDriver("example", tasks, 1)
 
         worker.complete({"handoff": "Use this."})
         worker.complete({"handoff": "Ignored on retry."})
-        driver.poll()
-        driver.poll()
+        driver.run()
+        driver.run()
 
         self.assertEqual(worker.reads, 3)
         self.assertEqual(worker.writes, 1)
@@ -211,14 +207,13 @@ task_source = "linear://project"
             ]
         )
         self.create_session_with_pull_request()
-        self.write_merges({"42": {"task_id": "A", "merge_commit": "abc123"}})
         worker = self.worker("A")
-        driver = CompletionFlowDriver("example", tasks, 1)
+        driver = CompletionFlowDriver("example", tasks, 1, ["A"])
 
-        driver.poll()
+        driver.run()
         worker.complete({})
         worker.complete({"handoff": "Ignored on retry."})
-        driver.poll()
+        driver.run()
 
         self.assertEqual(worker.reads, 3)
         self.assertEqual(worker.writes, 1)
@@ -237,12 +232,6 @@ task_source = "linear://project"
         )
         self.create_session_with_pull_request("A", 42)
         self.create_session_with_pull_request("B", 43)
-        self.write_merges(
-            {
-                "42": {"task_id": "A", "merge_commit": "abc123"},
-                "43": {"task_id": "B", "merge_commit": "def456"},
-            }
-        )
         self.worker("A").complete(
             {
                 "handoff": "Use the A path.",
@@ -257,7 +246,7 @@ task_source = "linear://project"
         )
         driver = CompletionFlowDriver("example", tasks, 1)
 
-        driver.poll()
+        driver.run()
 
         self.assertEqual(
             driver.launches,
@@ -280,14 +269,13 @@ task_source = "linear://project"
             ]
         )
         self.create_session_with_pull_request()
-        self.write_merges({"42": {"task_id": "A", "merge_commit": "abc123"}})
         worker = self.worker("A")
-        driver = CompletionFlowDriver("example", tasks, 1)
+        driver = CompletionFlowDriver("example", tasks, 1, ["A"])
 
-        driver.poll()
+        driver.run()
         with self.assertRaisesRegex(state.StateError, "non-empty string"):
             worker.complete({"handoff": " "})
-        driver.poll()
+        driver.run()
 
         self.assertEqual(worker.reads, 1)
         self.assertEqual(worker.writes, 0)
@@ -295,6 +283,19 @@ task_source = "linear://project"
             [request["task_id"] for request in driver.resume_requests], ["A"]
         )
         self.assertEqual(driver.launches, [])
+
+    def test_skills_define_both_manual_merge_entry_points(self):
+        orchestration_skill = (SKILL_ROOT / "SKILL.md").read_text()
+        review_skill = (
+            SKILL_ROOT.parent / "task-review-cycle" / "SKILL.md"
+        ).read_text()
+
+        self.assertIn(
+            "ユーザーが親セッションへmerge済みと伝えた場合", orchestration_skill
+        )
+        self.assertIn("GitHub上のmergeを同じように確認", orchestration_skill)
+        self.assertIn("この子セッションへmergeを直接依頼", review_skill)
+        self.assertIn("`completion-report`まで続け", review_skill)
 
 
 if __name__ == "__main__":
