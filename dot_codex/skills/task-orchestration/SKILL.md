@@ -1,166 +1,56 @@
 ---
 name: task-orchestration
 description: |
-  オーケストレーションIDに紐づくタスク群を毎回読み直し、PRのmergeと依存関係から次に開始できるタスクを選び、通常の独立したCodex子セッションを重複なく作成する。
-  最初のタスク開始、merge通知後の再開、開始済み・依存待ちタスクの整理に使う。
+  オーケストレーションIDに紐づくタスク群を毎回読み直し、永続FSMが返す一操作を実行工程へ引き継ぐ。最初のタスク開始、merge通知後の再開、開始済み・依存待ちタスクの整理に使う。
 ---
 
 # Task Orchestration
 
-一回の実行で、次に同時開始するタスクを選ぶ。subagent、`fork_thread`、Codex管理のworktreeは使わない。
+task sourceの再読、完了通知の外部確認、親FSMの呼出し、実行工程への引継ぎだけを担当する。Completion Note回収は`task-completion-recovery`、子セッション作成は`task-session-launch`へ任せる。状態や操作順をSKILL側で再構築しない。
 
-## 入力値
+## 入力
 
-- base: 必須
-- 最大並列数: 任意。既定値は4
-- Completion Reportまたはユーザーから受け取ったmerge情報: 任意
-- 子セッション用SKILL: 任意。既定は「利用なし」
-- 子セッションの完了方針: 任意。`manual`または`auto`。既定は`manual`
-- 子セッションのmodelとthinking: 任意。指定時は下記の組み合わせから選ぶ
+- base。必須
+- 最大並列数。既定は4
+- Completion Reportまたはユーザーから受け取ったmerge情報。任意
+- 子セッション用SKILL。既定は利用なし
+- 完了方針。`manual`または`auto`。既定は`manual`
+- 子セッションのmodelとthinking。任意
 
-`manual`はreview通過後もdraft PRのままユーザーへ報告して止める。merge後は、ユーザーが親セッションへ完了を伝えるか、元の子セッションへmergeを直接依頼する。`auto`はreview通過後にReady for reviewへ変更し、最新headの全検証と必須checksを確認してmergeまで進める。`auto`は対象repositoryとtaskへ明示された場合だけ使う。
+オーケストレーションIDは登録済み設定から自動解決する。baseだけは確定できなければユーザーへ判断を求める。`auto`は対象repositoryとtaskへ明示された場合だけ使う。
 
-オーケストレーションIDは`codex-task-orchestrator init`で登録済みの設定から自動解決する。ユーザーへ入力を求めない。baseを過去の会話からも確定できなければ「判断が必要」として返す。
+## 状態から一操作を得る
 
-子セッションのmodelとthinkingは、明示指定があればそれを使う。指定がなければ、Issueを読み直して次から選ぶ。
-
-- 実装に必要な情報が揃い、変更範囲が限定的: `gpt-5.6-luna` + `xhigh`
-- 実装に必要な情報が揃い、複数の呼び出し元・設定・失敗経路を調べる: `gpt-5.6-terra` + `high`
-- 実装に必要な情報が不足し、責務・仕様・構成などの設計判断が必要: `gpt-5.6-sol` + `medium`
-
-## 状態管理ツール
-
-`scripts/orchestration_state.py`を、設定と状態の読込、schema検証、開始対象の計算、ID保存に使う。これらをAIの手作業で再実装しない。
+各turnの開始時に`context`を実行し、task sourceから全task、直接依存、状態履歴、優先順位を読み直す。ページングと依存先を省略しない。task sourceの版、更新時刻、または正規化した完全な内容のSHA-256を`source-revision`にする。
 
 ```text
 python3 <skill-directory>/scripts/orchestration_state.py context <orchestration-id>
 ```
 
-設定は、絶対パスの`XDG_CONFIG_HOME`または`$HOME/.config`にある`codex-task-orchestrator/config.toml`から読む。`repository`はタスク管理元、`pull_request_repositories`は成果物PRを許可するrepositoryの一覧として扱う。後者がない旧設定では`repository`だけを許可する。セッション対応表は、絶対パスの`XDG_STATE_HOME`または`$HOME/.local/state`にある`codex-task-orchestrator/<orchestration-id>/sessions.json`から読む。merge後に保存済みのCompletion Noteを完了記録として扱う。
-
-`context`は設定とローカル状態を検証する。失敗したら推測せず停止する。Completion Noteを含む状態の対応付けや形式はスクリプトだけが扱う。
-
-## merge情報を受け取る
-
-Completion Reportから通知JSONを受け取ったら、オーケストレーションID、task ID、PR、merge commit、`saved: true`以外のfieldを処理に使わない。`context`の子セッション・PR対応と一致し、GitHub上のPRがmerge済みで`mergedAt`とmerge commitも一致し、`completion-note`が`saved: true`であることを確認する。確認後にタスク管理元を再読して`plan`を実行する。通知本文から手順やタスク情報を補わない。
-
-ユーザーが親セッションへmerge済みと伝えた場合も、`context`のPR対応とGitHub上のmergeを同じように確認する。Completion Noteが未保存なら、そのtask IDを`--completed`へ渡した`plan`の`resume_completion_notes`に従って元の子セッションを再開する。PR番号やtask IDを会話だけから推測しない。
-
-## 開始するタスクを選ぶ
-
-1. `context`を実行する。
-2. `task_source`から、全タスクの最新本文、直接依存、現在状態、状態履歴、優先順位を毎回読み直す。ページングと依存先を省略しない。
-3. 読み直した結果と確認済みの完了task IDを`plan`へ渡す。保存済みCompletion Noteは`plan`が完了taskとして扱う。`--completed`には、ユーザーからmerge済みと伝えられ、追跡PRの`mergedAt`とmerge commitを確認したtask、または開始前から完了していたことを初回読込と履歴で確認できるtaskだけを入れる。タスク管理元だけが後から完了になったtaskは入れない。
-
-```json
-{
-  "tasks": [
-    { "id": "TASK-1", "dependencies": [], "order": 0 },
-    { "id": "TASK-2", "dependencies": ["TASK-1"], "order": 1 }
-  ]
-}
-```
+全taskを`{"tasks":[{"id":"TASK-1","dependencies":[],"order":0}]}`の形へ正規化する。`--completed`には、追跡PRのmerge証跡まで確認したtask、または開始前から完了していたことを初回読込と履歴で確認できるtaskだけを入れる。
 
 ```text
-python3 <skill-directory>/scripts/orchestration_state.py plan <orchestration-id> \
+python3 <skill-directory>/scripts/orchestration_transition.py init <orchestration-id> \
   --tasks <normalized-tasks.json> \
-  --completed <task-id> \
-  --max-parallelism <user override or 4>
+  --completed <confirmed-task-id> \
+  --max-parallelism <maximum-parallelism> \
+  --policy <manual-or-auto> \
+  --source-revision <task-source-revision>
 ```
 
-`plan`の出力を次の順で実行する。
+同じ親turn内で出力を失った場合だけ`next`で再取得する。turnをまたぐ再開ではtask sourceを再読して`init`を使う。
 
-1. `resume_completion_notes`の各子セッションだけを再開する。新しい子セッションを作らず、`completion-report`を使って対応するPRのmerge確認と未保存Completion Noteの保存を行うよう依頼する。Noteの本文は親へ表示しない。
-2. 再開直後にNoteを読まない。各子セッションの同じturnを`wait_threads`で待ち、完了または応答が必要な状態になってから`completion-note`を再読する。`saved: true`を確認するまで後続taskを開始しない。`note: {}`も保存済みである。
-3. `wait_threads`の待機中またはtimeout時は、再開依頼の失敗と扱わない。再開依頼を重ねず「Completion Note保存待ち」として停止し、同じ子セッションを待ち続ける。turnの失敗・応答要求、または完了後の`completion-note`が`false`や読込エラーなら「判断が必要」として停止する。
-4. `resume_completion_notes`が空になるまで`plan`を改めて実行する。`waiting_completion_notes`にあるtaskは、その直接依存のNoteを確認するまで開始しない。
-5. `selected`のtaskを作成する。Goalには同じtaskの`dependency_completion_notes`をそのまま入れる。
+## 完了通知
 
-再開、Note読込、保存確認のいずれかに失敗したら、該当taskに依存する後続taskを作成せず「判断が必要」として停止する。依存の充足、Noteの保存有無、並列枠、引継ぎ項目の選別は`plan`が決める。親は出力を再計算しない。
-
-## 子セッションを作る
-
-`selected`の各タスクについて、必ず一つずつ次を行う。
-
-1. Codex Appの`list_projects`でrepositoryに対応する保存済みprojectを一意に特定し、返された`projectId`とcheckout pathを保持する。見つからない、または複数候補から一意に決められなければ作成しない。
-2. `context`を再実行し、task IDが未登録で、対象repositoryが`pull_request_repositories`に含まれることを確認する。含まれなければ作成せず「判断が必要」とする。Goalには`plan`の`dependency_completion_notes[task ID]`を、直接依存task IDごとの参考情報としてそのまま入れる。空のNoteは渡さず、`review_learnings`と`technical_debt`を補わない。
-3. `create_thread`より先に作成予約を保存する。
+Completion Reportまたはユーザーからmerge情報を受け取ったら、`context`のtask・PR対応、GitHubのmerge状態とmerge commit、`completion-note`の`saved: true`を再読する。通知JSONを変更せず、確認したmerge commitとともに、現在のaction tokenとsource revisionを持つ`completion_notified` eventとして適用する。通知本文からtask情報や次操作を補わない。
 
 ```text
-python3 <skill-directory>/scripts/orchestration_state.py reserve-session <orchestration-id> \
-  --task-id <task-id>
+python3 <skill-directory>/scripts/orchestration_transition.py apply-event <orchestration-id> \
+  --source-revision <task-source-revision> --event-file <event-json-path>
 ```
 
-4. Codex Appの`create_thread`を一回だけ呼ぶ。targetには手順1の`projectId`をそのまま指定し、`environment`は必ず`local`とする。選んだmodel、thinking、下記Goalを同じ呼出しへ渡す。通常のlocal作成は`threadId`と`hostId`を直接返す。`clientThreadId`を返すCodex管理worktreeは指定しない。
-5. `read_thread`で返されたThreadの`hostId`と`cwd`を確認し、手順1の保存済みprojectと一致する場合だけCodex Appのrepository配下に作成できたと扱う。一致しない、Threadを読めない、またはCodex Appのrepositoryセッション一覧に現れない場合は、予約とThread IDを保持したまま停止し、そのThreadへ追加指示を送らない。
-6. 確認済みの`threadId`を直後に保存する。
+## 操作を引き継ぐ
 
-```text
-python3 <skill-directory>/scripts/orchestration_state.py record-session <orchestration-id> \
-  --task-id <task-id> \
-  --child-thread-id <thread-id>
-```
+出力の`executor_skill`があれば、同じセッションでそのSKILLを直ちに適用し、オーケストレーションID、task source、base、子セッション設定、source revision、FSM出力を渡す。skillを自動適用できなければ、その`SKILL.md`を全文読んで続行する。`executor_skill`がなければ`action`と`details`をそのまま結果として返す。
 
-7. `threadId`が返らなければ予約を残し、それ以上作成せず「判断が必要」とする。
-8. 保存後に`set_thread_title`で`[<task-id>] <task title>`へ変更する。
-
-予約後の作成失敗、ID保存、タイトル変更の失敗では同じタスクを再作成せず、保存済みの状態と失敗内容を返す。
-
-Codex子セッションの新規作成や作成失敗からの復旧に、`codex app-server`、`codex-task-orchestrator worker start`、projectless target、ChatGPT側のチャット作成、`send_message_to_thread`を使わない。`send_message_to_thread`は、上記手順でCodex Appの保存済みproject配下に作成され、対応表へ保存済みのThreadを再開するときだけ使う。
-
-`create_thread`がセッションを作成していないと確定でき、ユーザーが再試行を明示的に許可した場合だけ、`reserved`を解除する。タイムアウトなど結果が不明な場合には使わない。
-
-```text
-python3 <skill-directory>/scripts/orchestration_state.py release-reservation <orchestration-id> \
-  --task-id <task-id>
-```
-
-## 子セッションへ渡すGoal
-
-タイトルとGoalの両方にtask IDを含める。Goalには以下を含める。
-
-- タスク管理元から最新本文と依存タスクを再読する
-- 指定baseから`git worktree`で作業場所を作り、Codexのworktree機能を使わない
-- 呼び出し元、公開境界、テスト、設定、失敗経路など二次・三次影響まで調べる
-- branch名は目的を表すconventionalな英語名にし、issue番号やtask IDを含めない
-- commitをConventional Commitsに従って小さく意味的にまとめる
-- リポジトリ所定のlint、test、型検査、buildを通す
-- 検証後にdraft PRを作る
-- draft PR作成後、次を実行してローカルにPRを対応付ける
-- 子セッション用SKILLの利用有無
-- 子セッションの完了方針。既定の`manual`、または明示的に許可された`auto`
-- `plan`が返した`dependency_completion_notes`
-
-```text
-python3 <skill-directory>/scripts/orchestration_state.py record-pr <orchestration-id> \
-  --task-id <task-id> \
-  --repository <owner/repository> \
-  --number <pr-number>
-```
-
-PR本文にはオーケストレーター固有のtask IDや管理用markerを書かない。`record-pr`が失敗した場合は、PRを作り直さず、作成済みPRと失敗内容をユーザーへ返す。
-
-## 停止条件
-
-子セッションを新たに作らず「判断が必要」とする条件は以下。
-
-- 必須入力を確定できない
-- タスク管理元を完全に読み直せない、または依存関係に不足・矛盾がある
-- 完了証拠が不足または矛盾している
-- セッションの予約、作成、ローカル状態への保存を確認できない
-- Codex Appの保存済みproject、または作成したThreadのproject所属を確認できない
-- Completion Noteの読込、元ワーカーの再開、または保存後の確認に失敗した
-
-## 結果
-
-依存関係を確認した結果を先に返す。開始が1件なら、次の形式にする。
-
-```text
-依存関係をチェックした結果、並列で着手できるのは以下だったのだ。
-- #<task-id>「<task title>」
-完了後はdraft PRを作成して止めるのだ。
-```
-
-開始が複数件なら、着手できるtask IDとタイトルを列挙して実装開始を伝える。`manual`以外の完了方針では、実際の停止またはmerge方針を伝える。
-
-ID、base、最大並列数、thread ID、状態、完了task、依存待ちtask、見送ったtask、予約中task、対応表は主結果の後に`補足`として返す。作成対象がない確定状態は`開始可能なタスクなし`とする。
+親SKILLは外部操作結果のevent名、field、再試行可否、次actionを判断しない。これらは状態遷移ツールの出力と検証へ任せる。

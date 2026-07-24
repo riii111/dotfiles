@@ -26,6 +26,10 @@ class StateError(ValueError):
     pass
 
 
+def reserved_session() -> dict:
+    return {"creation": {"status": "reserved"}}
+
+
 def config_path() -> Path:
     xdg = Path(value) if (value := os.environ.get("XDG_CONFIG_HOME")) else None
     base = xdg if xdg and xdg.is_absolute() else Path.home() / ".config"
@@ -242,7 +246,7 @@ def load_completion_note_file(path: Path) -> dict:
     return validate_completion_note(note)
 
 
-def write_sessions(path: Path, sessions: dict) -> None:
+def write_json_state(path: Path, value: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary_path = None
     try:
@@ -250,23 +254,32 @@ def write_sessions(path: Path, sessions: dict) -> None:
             mode="w", encoding="utf-8", dir=path.parent, delete=False
         ) as temporary:
             temporary_path = Path(temporary.name)
-            json.dump(sessions, temporary, ensure_ascii=False, indent=2, sort_keys=True)
+            json.dump(value, temporary, ensure_ascii=False, indent=2, sort_keys=True)
             temporary.write("\n")
             temporary.flush()
             os.fsync(temporary.fileno())
         temporary_path.chmod(0o600)
         os.replace(temporary_path, path)
+        directory = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
     finally:
         if temporary_path and temporary_path.exists():
             temporary_path.unlink()
 
 
+def write_sessions(path: Path, sessions: dict) -> None:
+    write_json_state(path, sessions)
+
+
 def write_completion_notes(path: Path, completion_notes: dict) -> None:
-    write_sessions(path, completion_notes)
+    write_json_state(path, completion_notes)
 
 
 @contextmanager
-def lock_sessions(path: Path):
+def lock_state_file(path: Path):
     path.parent.mkdir(parents=True, exist_ok=True)
     lock_path = path.with_suffix(".lock")
     with lock_path.open("a+") as lock:
@@ -275,6 +288,10 @@ def lock_sessions(path: Path):
             yield
         finally:
             fcntl.flock(lock, fcntl.LOCK_UN)
+
+
+def lock_sessions(path: Path):
+    return lock_state_file(path)
 
 
 def reserve_session(orchestration_id: str, task_id: str) -> dict:
@@ -290,7 +307,7 @@ def reserve_session(orchestration_id: str, task_id: str) -> dict:
             raise StateError("task ID must not be empty")
         if task_id in sessions["tasks"]:
             raise StateError(f"task {task_id} already has session creation state")
-        sessions["tasks"][task_id] = {"creation": {"status": "reserved"}}
+        sessions["tasks"][task_id] = reserved_session()
         write_sessions(path, sessions)
         return sessions
 
@@ -304,7 +321,7 @@ def release_reservation(orchestration_id: str, task_id: str) -> dict:
             context["parent_thread_id"],
             context["pull_request_repositories"],
         )
-        if sessions["tasks"].get(task_id) != {"creation": {"status": "reserved"}}:
+        if sessions["tasks"].get(task_id) != reserved_session():
             raise StateError(f"task {task_id} has no releasable session reservation")
         del sessions["tasks"][task_id]
         write_sessions(path, sessions)
@@ -430,13 +447,7 @@ def completion_note(orchestration_id: str, task_id: str) -> dict:
     return {"task_id": task_id, "saved": note is not None, "note": note}
 
 
-def load_tasks(path: Path) -> dict[str, dict]:
-    try:
-        payload = json.loads(path.read_text())
-    except (OSError, json.JSONDecodeError) as error:
-        raise StateError(
-            f"could not read normalized tasks at {path}: {error}"
-        ) from error
+def normalize_tasks(payload: object) -> dict[str, dict]:
     raw_tasks = payload.get("tasks") if isinstance(payload, dict) else None
     if not isinstance(raw_tasks, list):
         raise StateError("normalized tasks must contain a tasks array")
@@ -474,6 +485,16 @@ def load_tasks(path: Path) -> dict[str, dict]:
     return tasks
 
 
+def load_tasks(path: Path) -> dict[str, dict]:
+    try:
+        payload = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as error:
+        raise StateError(
+            f"could not read normalized tasks at {path}: {error}"
+        ) from error
+    return normalize_tasks(payload)
+
+
 def validate_acyclic(tasks: dict[str, dict]) -> None:
     visiting = set()
     visited = set()
@@ -493,9 +514,9 @@ def validate_acyclic(tasks: dict[str, dict]) -> None:
         visit(task_id)
 
 
-def plan(
+def plan_tasks(
     orchestration_id: str,
-    tasks_path: Path,
+    tasks: dict[str, dict],
     completed_ids: list[str],
     maximum_parallelism: int,
 ) -> dict:
@@ -508,7 +529,6 @@ def plan(
         context["pull_request_repositories"],
     )
     completion_notes = load_completion_notes(Path(context["completion_notes_path"]))
-    tasks = load_tasks(tasks_path)
     completed_additional = set(completed_ids)
     noted_tasks = set(
         completion_notes["orchestrations"].get(orchestration_id, {"tasks": {}})["tasks"]
@@ -604,12 +624,6 @@ def parser() -> argparse.ArgumentParser:
     context = commands.add_parser("context")
     context.add_argument("orchestration_id")
 
-    planning = commands.add_parser("plan")
-    planning.add_argument("orchestration_id")
-    planning.add_argument("--tasks", type=Path, required=True)
-    planning.add_argument("--completed", action="append", default=[])
-    planning.add_argument("--max-parallelism", type=int, required=True)
-
     session = commands.add_parser("record-session")
     session.add_argument("orchestration_id")
     session.add_argument("--task-id", required=True)
@@ -652,13 +666,6 @@ def main(argv: list[str] | None = None) -> int:
                 output["pull_request_repositories"],
             )
             load_completion_notes(Path(output["completion_notes_path"]))
-        elif arguments.command == "plan":
-            output = plan(
-                arguments.orchestration_id,
-                arguments.tasks,
-                arguments.completed,
-                arguments.max_parallelism,
-            )
         elif arguments.command == "reserve-session":
             output = reserve_session(arguments.orchestration_id, arguments.task_id)
         elif arguments.command == "release-reservation":

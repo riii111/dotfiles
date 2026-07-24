@@ -54,9 +54,9 @@ class CompletionFlowDriver:
         self.launches = []
 
     def run(self):
-        result = state.plan(
+        result = state.plan_tasks(
             self.orchestration_id,
-            self.tasks_path,
+            state.load_tasks(self.tasks_path),
             self.completed_ids,
             self.maximum_parallelism,
         )
@@ -284,16 +284,31 @@ task_source = "linear://project"
         )
         self.assertEqual(driver.launches, [])
 
-    def test_skills_define_both_manual_merge_entry_points(self):
+    def test_parent_orchestration_skill_stays_thin(self):
         orchestration_skill = (SKILL_ROOT / "SKILL.md").read_text()
         review_skill = (
             SKILL_ROOT.parent / "task-review-cycle" / "SKILL.md"
         ).read_text()
 
-        self.assertIn(
-            "ユーザーが親セッションへmerge済みと伝えた場合", orchestration_skill
-        )
-        self.assertIn("GitHub上のmergeを同じように確認", orchestration_skill)
+        self.assertLessEqual(len(orchestration_skill.splitlines()), 80)
+        self.assertIn("`executor_skill`", orchestration_skill)
+        for implementation_detail in (
+            "operation_failed",
+            "retryable",
+            "reservation_released",
+            "completion_waited",
+            "thread_created",
+            "thread_verified",
+        ):
+            self.assertNotIn(implementation_detail, orchestration_skill)
+        for skill_name in ("task-completion-recovery", "task-session-launch"):
+            self.assertTrue((SKILL_ROOT.parent / skill_name / "SKILL.md").is_file())
+        launch_skill = (
+            SKILL_ROOT.parent / "task-session-launch" / "SKILL.md"
+        ).read_text()
+        self.assertIn("`gpt-5.6-luna` + `xhigh`", launch_skill)
+        self.assertIn("`gpt-5.6-sol` + `medium`", launch_skill)
+        self.assertNotIn("gpt-5.6-terra", launch_skill)
         self.assertIn("この子セッションへmergeを直接依頼", review_skill)
         self.assertIn("`completion-report`まで続け", review_skill)
 

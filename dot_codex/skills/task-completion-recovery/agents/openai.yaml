@@ -1,0 +1,4 @@
+interface:
+  display_name: "Task Completion Recovery"
+  short_description: "保存済み子セッションからCompletion Noteを回収する。"
+  default_prompt: "$task-completion-recoveryを使い、現在の回収操作を一つ進めてください。"

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Task Session Launch"
+  short_description: "予約済みtaskのCodex子セッションを安全に作成する。"
+  default_prompt: "$task-session-launchを使い、現在の子セッション作成操作を一つ進めてください。"

@@ -1,4 +1,4 @@
 interface:
   display_name: "Task Orchestration"
-  short_description: "依存関係から次に開始できるタスクを選び、子セッションを作成する。"
-  default_prompt: "$task-orchestrationを使い、指定したオーケストレーションで次に開始できるタスクを選んでください。"
+  short_description: "保存済み状態から次の親操作を一つずつ進める。"
+  default_prompt: "$task-orchestrationを使い、指定したオーケストレーションの次の操作を進めてください。"
