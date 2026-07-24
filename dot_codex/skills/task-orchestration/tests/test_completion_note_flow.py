@@ -298,6 +298,10 @@ task_source = "linear://project"
             "`orchestration_transition.py init --completed`", orchestration_skill
         )
         self.assertIn("`plan`の複数出力を直接解釈しない", orchestration_skill)
+        self.assertIn("`reservation_released` eventを適用", orchestration_skill)
+        self.assertIn("`開始可能なタスクなし`", orchestration_skill)
+        self.assertIn('`outcome: "needs_attention"`', orchestration_skill)
+        self.assertIn('`outcome: "failed"`', orchestration_skill)
         self.assertIn("この子セッションへmergeを直接依頼", review_skill)
         self.assertIn("`completion-report`まで続け", review_skill)
 

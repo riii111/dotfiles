@@ -189,7 +189,7 @@ task_source = "file:///tasks.md"
         )
         self.assertEqual(transition.action_name(state), "set_thread_title")
 
-        state, _ = self.apply(
+        state, plan = self.apply(
             state,
             "thread_title_set",
             task_id="A",
@@ -211,6 +211,10 @@ task_source = "file:///tasks.md"
                     },
                 }
             ],
+        )
+        self.assertEqual(
+            transition.output("example", state, plan)["details"]["launched"],
+            state["launch_history"],
         )
 
     def test_wait_state_persists_turn_cursor_and_replans_after_note(self):
@@ -322,6 +326,55 @@ task_source = "file:///tasks.md"
         self.assert_retry_preserves_thread(
             "set_thread_title", self.advance_to_recorded_session
         )
+
+    def test_non_retryable_stop_requires_confirmed_reservation_release(self):
+        state, _ = self.new_state([{"id": "A", "dependencies": []}])
+        storage.reserve_session("example", "A")
+        state, _ = self.apply(state, "session_reserved", task_id="A")
+        with self.assertRaisesRegex(
+            transition.TransitionError, "not directly retryable"
+        ):
+            transition.reduce_event(
+                "example",
+                state,
+                self.event(
+                    state,
+                    "operation_failed",
+                    operation="create_thread",
+                    message="thread creation failed",
+                    retryable=True,
+                ),
+            )
+        state, plan = self.apply(
+            state,
+            "operation_failed",
+            operation="create_thread",
+            message="thread creation result is unknown",
+            retryable=False,
+        )
+
+        output = transition.output("example", state, plan)
+        self.assertEqual(output["details"]["task_id"], "A")
+        self.assertNotIn("retry_requested", output["allowed_events"])
+        self.assertIn("reservation_released", output["allowed_events"])
+        legacy_state = json.loads(json.dumps(state))
+        legacy_state["stop"]["retryable"] = True
+        self.assertNotIn(
+            "retry_requested",
+            transition.event_schemas("stop", transition.normalize_state(legacy_state)),
+        )
+        with self.assertRaisesRegex(
+            transition.TransitionError, "invalid for action stop"
+        ):
+            transition.reduce_event(
+                "example", state, self.event(state, "retry_requested")
+            )
+
+        storage.release_reservation("example", "A")
+        state, _ = self.apply(state, "reservation_released", task_id="A")
+
+        self.assertEqual(transition.action_name(state), "reserve_session")
+        self.assertEqual(state["launch"]["status"], "selected")
 
     def _advance_to_verified_thread(self):
         state, _ = self.advance_to_created_thread()
@@ -727,6 +780,129 @@ task_source = "file:///tasks.md"
         self.assertEqual(
             json.loads(stale.stderr),
             {"error": "cycle inputs changed during an active operation"},
+        )
+
+    def test_cli_next_and_apply_event_enforce_replay_boundaries(self):
+        tasks = self.root / "tasks.json"
+        tasks.write_text(json.dumps({"tasks": [{"id": "A", "dependencies": []}]}))
+        environment = {
+            **os.environ,
+            "XDG_CONFIG_HOME": str(self.config_home),
+            "XDG_STATE_HOME": str(self.state_home),
+        }
+        init = subprocess.run(
+            [
+                sys.executable,
+                str(TRANSITION_SPEC.origin),
+                "init",
+                "example",
+                "--tasks",
+                str(tasks),
+                "--max-parallelism",
+                "1",
+                "--policy",
+                "manual",
+                "--source-revision",
+                "source-1",
+            ],
+            capture_output=True,
+            check=False,
+            text=True,
+            env=environment,
+        )
+        self.assertEqual(init.returncode, 0)
+        storage.reserve_session("example", "A")
+        state = transition.load_state(transition.transition_path("example"))
+        event = self.event(state, "session_reserved", task_id="A")
+        event_path = self.root / "session-reserved.json"
+        event_path.write_text(json.dumps(event))
+        apply_command = [
+            sys.executable,
+            str(TRANSITION_SPEC.origin),
+            "apply-event",
+            "example",
+            "--source-revision",
+            "source-1",
+            "--event-file",
+            str(event_path),
+        ]
+
+        first = subprocess.run(
+            apply_command,
+            capture_output=True,
+            check=False,
+            text=True,
+            env=environment,
+        )
+        replay = subprocess.run(
+            apply_command,
+            capture_output=True,
+            check=False,
+            text=True,
+            env=environment,
+        )
+        current = subprocess.run(
+            [
+                sys.executable,
+                str(TRANSITION_SPEC.origin),
+                "next",
+                "example",
+                "--source-revision",
+                "source-1",
+            ],
+            capture_output=True,
+            check=False,
+            text=True,
+            env=environment,
+        )
+        stale = subprocess.run(
+            [
+                sys.executable,
+                str(TRANSITION_SPEC.origin),
+                "next",
+                "example",
+                "--source-revision",
+                "source-0",
+            ],
+            capture_output=True,
+            check=False,
+            text=True,
+            env=environment,
+        )
+        conflicting_path = self.root / "conflicting-event.json"
+        conflicting_path.write_text(
+            json.dumps(
+                {
+                    **event,
+                    "type": "operation_failed",
+                    "operation": "reserve_session",
+                    "message": "conflicting replay",
+                    "retryable": True,
+                    "task_id": "A",
+                }
+            )
+        )
+        conflicting = subprocess.run(
+            [*apply_command[:-1], str(conflicting_path)],
+            capture_output=True,
+            check=False,
+            text=True,
+            env=environment,
+        )
+
+        self.assertEqual(first.returncode, 0)
+        self.assertEqual(replay.returncode, 0)
+        self.assertEqual(current.returncode, 0)
+        self.assertEqual(json.loads(first.stdout), json.loads(replay.stdout))
+        self.assertEqual(json.loads(first.stdout), json.loads(current.stdout))
+        self.assertEqual(stale.returncode, 2)
+        self.assertEqual(
+            json.loads(stale.stderr), {"error": "task source revision is stale"}
+        )
+        self.assertEqual(conflicting.returncode, 2)
+        self.assertEqual(
+            json.loads(conflicting.stderr),
+            {"error": "action token was reused with a different event"},
         )
 
     def test_cli_init_changes_cycle_before_old_plan_is_materialized(self):

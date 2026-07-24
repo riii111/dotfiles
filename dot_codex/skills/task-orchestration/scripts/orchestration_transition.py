@@ -26,7 +26,8 @@
                                          +-----> current plan
 
   no recovery or launch work --> [complete]
-  external operation failure --> [stop] -- retry_requested --> failed operation
+  external operation failure --> [stop] -- retryable --> retry_requested
+       confirmed no Thread --> release reservation --> [reserve_session]
   completion notification -----> validate evidence -------> current plan
 
 The created Thread ID, host, project, and checkout are persisted before
@@ -70,6 +71,7 @@ ACTIONS = {
 }
 LAUNCH_STATUSES = {"selected", "reserved", "created", "verified", "recorded"}
 WAIT_OUTCOMES = {"timed_out", "completed", "needs_attention", "failed"}
+RESERVED_SESSION = {"creation": {"status": "reserved"}}
 EVENT_FIELDS = {
     "completion_notified": {
         "type",
@@ -156,6 +158,12 @@ EVENT_FIELDS = {
         "type",
         "action_token",
         "source_revision",
+    },
+    "reservation_released": {
+        "type",
+        "action_token",
+        "source_revision",
+        "task_id",
     },
 }
 ACTION_EVENTS = {
@@ -421,7 +429,8 @@ def normalize_state(raw: object) -> dict:
     version = require_integer(state["version"], "version", 1)
     if version != VERSION:
         raise TransitionError("unsupported orchestration transition version")
-    tasks = canonical_tasks(tasks_from_state(state["tasks"]))
+    task_map = tasks_from_state(state["tasks"])
+    tasks = canonical_tasks(task_map)
     task_ids = {task["id"] for task in tasks}
     completed = state["completed"]
     if (
@@ -490,7 +499,7 @@ def normalize_state(raw: object) -> dict:
     if launch:
         if launch["task_id"] not in task_ids:
             raise TransitionError("launch task is absent from the current task source")
-        dependencies = set(tasks_from_state(tasks)[launch["task_id"]]["dependencies"])
+        dependencies = set(task_map[launch["task_id"]]["dependencies"])
         validate_dependency_notes(launch["dependency_completion_notes"], dependencies)
     history_task_ids = [entry["task_id"] for entry in normalized_history]
     if not set(history_task_ids) <= task_ids or len(history_task_ids) != len(
@@ -611,18 +620,18 @@ def validate_external_state(orchestration_id: str, state: dict) -> None:
     launch = state["launch"]
     if launch:
         task = sessions["tasks"].get(launch["task_id"])
-        reserved = {"creation": {"status": "reserved"}}
         if launch["status"] == "selected":
-            if task not in (None, reserved):
+            if task not in (None, RESERVED_SESSION):
                 raise TransitionError(
                     "selected launch conflicts with the session mapping"
                 )
         elif launch["status"] in {"reserved", "created"}:
-            if task != reserved:
+            if task != RESERVED_SESSION:
                 raise TransitionError("unrecorded launch lost its session reservation")
         elif launch["status"] == "verified":
+            # record-session may persist before its result event reaches this state.
             thread_id = launch["thread"]["thread_id"]
-            if task != reserved and (
+            if task != RESERVED_SESSION and (
                 not task or task.get("child_thread_id") != thread_id
             ):
                 raise TransitionError(
@@ -716,25 +725,42 @@ def action_details(state: dict, action: str, plan: dict) -> dict:
         return dict(state["launch"])
     if action == "stop":
         details = dict(state["stop"])
-        if state["launch"] and state["launch"]["thread"]:
-            details["thread"] = dict(state["launch"]["thread"])
+        if state["launch_history"]:
+            details["launched"] = list(state["launch_history"])
+        if state["recovery"]:
+            details["task_id"] = state["recovery"]["task_id"]
+        elif state["launch"]:
+            details["task_id"] = state["launch"]["task_id"]
+            if state["launch"]["thread"]:
+                details["thread"] = dict(state["launch"]["thread"])
         return details
     return {
-        key: plan[key]
-        for key in (
-            "completed",
-            "launched_uncompleted",
-            "waiting_dependencies",
-            "waiting_completion_notes",
-            "capacity_deferred",
-        )
+        "launched": list(state["launch_history"]),
+        **{
+            key: plan[key]
+            for key in (
+                "completed",
+                "launched_uncompleted",
+                "waiting_dependencies",
+                "waiting_completion_notes",
+                "capacity_deferred",
+            )
+        },
     }
 
 
 def event_schemas(action: str, state: dict) -> dict:
     events = (*ACTION_EVENTS.get(action, ()), "completion_notified")
-    if action == "stop" and not state["stop"]["retryable"]:
-        events = ("completion_notified",)
+    if action == "stop" and (
+        state["stop"]["operation"] == "create_thread" or not state["stop"]["retryable"]
+    ):
+        events = ["completion_notified"]
+        if (
+            state["stop"]["operation"] == "create_thread"
+            and state["launch"]
+            and state["launch"]["status"] == "reserved"
+        ):
+            events.append("reservation_released")
     return {event: sorted(EVENT_FIELDS[event]) for event in events}
 
 
@@ -771,7 +797,7 @@ def require_matching_event(state: dict, event: object, action: str) -> tuple[dic
     token = action_token(state, action)
     if event["action_token"] != token:
         raise TransitionError("event is based on a stale external observation")
-    if event_type not in (*ACTION_EVENTS.get(action, ()), "completion_notified"):
+    if event_type not in event_schemas(action, state):
         raise TransitionError(f"event {event_type} is invalid for action {action}")
     return event, token
 
@@ -847,6 +873,8 @@ def reduce_event(orchestration_id: str, state: dict, event: dict) -> dict:
             raise TransitionError("failed operation does not match the current action")
         if type(event["retryable"]) is not bool:
             raise TransitionError("event.retryable must be a boolean")
+        if action == "create_thread" and event["retryable"]:
+            raise TransitionError("thread creation failures are not directly retryable")
         state["stop"] = {
             "operation": action,
             "message": require_string(event["message"], "event.message"),
@@ -854,6 +882,21 @@ def reduce_event(orchestration_id: str, state: dict, event: dict) -> dict:
         }
     elif event_type == "retry_requested":
         state["stop"] = None
+    elif event_type == "reservation_released":
+        launch = state["launch"]
+        require_task(event, launch["task_id"])
+        if (
+            state["stop"]["operation"] != "create_thread"
+            or launch["status"] != "reserved"
+        ):
+            raise TransitionError(
+                "reservation release does not match an uncertain thread creation"
+            )
+        sessions = load_sessions(orchestration_id)
+        if launch["task_id"] in sessions["tasks"]:
+            raise TransitionError("session reservation was not released")
+        state["stop"] = None
+        launch["status"] = "selected"
     elif event_type == "completion_note_observed":
         recovery = state["recovery"]
         require_task(event, recovery["task_id"])
@@ -907,9 +950,7 @@ def reduce_event(orchestration_id: str, state: dict, event: dict) -> dict:
         launch = state["launch"]
         require_task(event, launch["task_id"])
         sessions = load_sessions(orchestration_id)
-        if sessions["tasks"].get(launch["task_id"]) != {
-            "creation": {"status": "reserved"}
-        }:
+        if sessions["tasks"].get(launch["task_id"]) != RESERVED_SESSION:
             raise TransitionError("session reservation was not persisted")
         launch["status"] = "reserved"
     elif event_type == "thread_created":
