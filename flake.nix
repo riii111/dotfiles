@@ -252,14 +252,12 @@
 
       darwinConfigurations = {
         personal = nix-darwin.lib.darwinSystem {
-          specialArgs = { inherit codex-task-orchestrator; };
           modules = [
             ./darwin/hosts/personal.nix
           ];
         };
 
         work = nix-darwin.lib.darwinSystem {
-          specialArgs = { inherit codex-task-orchestrator; };
           modules = [
             ./darwin/hosts/work.nix
           ];

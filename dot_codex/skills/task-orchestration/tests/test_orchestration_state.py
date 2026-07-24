@@ -61,12 +61,6 @@ task_source = "linear://project"
         state.record_session("example", task_id, f"thread-{task_id.lower()}")
         state.record_pull_request("example", task_id, repository, number)
 
-    def write_merges(self, pull_requests):
-        path = state.merges_path("example")
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps({"version": 1, "pull_requests": pull_requests}))
-        return path
-
     def completion_note_file(self, note):
         path = self.root / "completion-note.json"
         path.write_text(json.dumps(note))
@@ -135,7 +129,7 @@ task_source = "linear://project"
         ):
             state.plan("example", tasks, [], 1)
 
-    def test_plan_uses_validated_merge_records_as_completed_tasks(self):
+    def test_plan_uses_completion_notes_as_completed_tasks(self):
         tasks = self.tasks_file(
             [
                 {"id": "A", "dependencies": []},
@@ -143,25 +137,31 @@ task_source = "linear://project"
             ]
         )
         self.create_session_with_pull_request()
-        self.write_merges(
-            {
-                "42": {
-                    "task_id": "A",
-                    "merge_commit": "abc123",
-                    "parent_notification": "pending",
-                    "local_notification": "sent",
-                }
-            }
-        )
         state.record_completion_note("example", "A", self.completion_note_file({}))
 
         result = state.plan("example", tasks, [], 1)
 
-        self.assertEqual(result["completed_from_merges"], ["A"])
+        self.assertEqual(result["completed_from_notes"], ["A"])
         self.assertEqual(result["resume_completion_notes"], [])
         self.assertEqual(result["selected"], ["B"])
 
-    def test_plan_uses_cross_repository_merge_records_with_the_same_number(self):
+    def test_plan_rejects_a_note_without_a_tracked_pull_request(self):
+        tasks = self.tasks_file([{"id": "A", "dependencies": []}])
+        path = state.completion_notes_path("example")
+        path.parent.mkdir(parents=True)
+        path.write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "orchestrations": {"example": {"tasks": {"A": {}}}},
+                }
+            )
+        )
+
+        with self.assertRaisesRegex(state.StateError, "tracked pull requests"):
+            state.plan("example", tasks, [], 1)
+
+    def test_plan_uses_notes_for_cross_repository_tasks_with_the_same_pr_number(self):
         tasks = self.tasks_file(
             [
                 {"id": "A", "dependencies": []},
@@ -171,27 +171,15 @@ task_source = "linear://project"
         )
         self.create_session_with_pull_request("A", "owner/repository", 42)
         self.create_session_with_pull_request("B", "other/repository", 42)
-        self.write_merges(
-            {
-                "owner/repository#42": {
-                    "task_id": "A",
-                    "merge_commit": "abc123",
-                },
-                "other/repository#42": {
-                    "task_id": "B",
-                    "merge_commit": "def456",
-                },
-            }
-        )
         state.record_completion_note("example", "A", self.completion_note_file({}))
         state.record_completion_note("example", "B", self.completion_note_file({}))
 
         result = state.plan("example", tasks, [], 1)
 
-        self.assertEqual(result["completed_from_merges"], ["A", "B"])
+        self.assertEqual(result["completed_from_notes"], ["A", "B"])
         self.assertEqual(result["selected"], ["C"])
 
-    def test_plan_waits_for_a_merged_dependency_completion_note(self):
+    def test_plan_waits_for_a_reported_dependency_completion_note(self):
         tasks = self.tasks_file(
             [
                 {"id": "A", "dependencies": []},
@@ -199,9 +187,8 @@ task_source = "linear://project"
             ]
         )
         self.create_session_with_pull_request()
-        self.write_merges({"42": {"task_id": "A", "merge_commit": "abc123"}})
 
-        waiting = state.plan("example", tasks, [], 1)
+        waiting = state.plan("example", tasks, ["A"], 1)
 
         self.assertEqual(waiting["selected"], [])
         self.assertEqual(
@@ -279,20 +266,8 @@ task_source = "linear://project"
         )
         self.create_session_with_pull_request("A", "owner/repository", 42)
         self.create_session_with_pull_request("B", "other/repository", 42)
-        self.write_merges(
-            {
-                "owner/repository#42": {
-                    "task_id": "A",
-                    "merge_commit": "abc123",
-                },
-                "other/repository#42": {
-                    "task_id": "B",
-                    "merge_commit": "def456",
-                },
-            }
-        )
 
-        waiting = state.plan("example", tasks, [], 2)
+        waiting = state.plan("example", tasks, ["A", "B"], 2)
 
         self.assertEqual(waiting["selected"], [])
         self.assertEqual(waiting["waiting_completion_notes"], {"C": ["A", "B"]})
@@ -753,62 +728,7 @@ task_source = "linear://project"
                 path, "parent-thread", ["owner/repository", "other/repository"]
             )
 
-    def test_load_merges_normalizes_legacy_number_key(self):
-        self.create_session_with_pull_request()
-        path = self.write_merges({"42": {"task_id": "A", "merge_commit": "abc123"}})
-
-        merges = state.load_merges(
-            path,
-            state.load_sessions(
-                state.state_path("example"),
-                "parent-thread",
-                ["owner/repository", "other/repository"],
-            ),
-        )
-
-        self.assertEqual(list(merges["pull_requests"]), ["owner/repository#42"])
-
-    def test_load_merges_matches_a_case_normalized_repository_key(self):
-        sessions_path = state.state_path("example")
-        sessions_path.parent.mkdir(parents=True)
-        sessions_path.write_text(
-            json.dumps(
-                {
-                    "version": 1,
-                    "parent_thread_id": "parent-thread",
-                    "tasks": {
-                        "A": {
-                            "child_thread_id": "thread-a",
-                            "pull_request": {
-                                "repository": "Owner/Repository",
-                                "number": 42,
-                            },
-                        }
-                    },
-                }
-            )
-        )
-        path = self.write_merges(
-            {
-                "owner/repository#42": {
-                    "task_id": "A",
-                    "merge_commit": "abc123",
-                }
-            }
-        )
-
-        merges = state.load_merges(
-            path,
-            state.load_sessions(
-                state.state_path("example"),
-                "parent-thread",
-                ["owner/repository", "other/repository"],
-            ),
-        )
-
-        self.assertEqual(list(merges["pull_requests"]), ["owner/repository#42"])
-
-    def test_sessions_and_merges_reject_boolean_versions(self):
+    def test_sessions_reject_boolean_versions(self):
         sessions_path = state.state_path("example")
         sessions_path.parent.mkdir(parents=True)
         sessions_path.write_text(
@@ -823,14 +743,6 @@ task_source = "linear://project"
 
         with self.assertRaisesRegex(state.StateError, "unsupported sessions version"):
             state.load_sessions(sessions_path, "parent-thread", ["owner/repository"])
-
-        merges_path = state.merges_path("example")
-        merges_path.write_text(json.dumps({"version": True, "pull_requests": {}}))
-        with self.assertRaisesRegex(state.StateError, "unsupported merges version"):
-            state.load_merges(
-                merges_path,
-                state.empty_sessions("parent-thread"),
-            )
 
 
 if __name__ == "__main__":

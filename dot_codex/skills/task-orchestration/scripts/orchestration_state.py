@@ -13,11 +13,9 @@ from pathlib import Path
 
 
 SESSION_VERSION = 1
-MERGES_VERSION = 1
 COMPLETION_NOTES_VERSION = 1
 ORCHESTRATION_ID = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 REPOSITORY = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
-PULL_REQUEST_NUMBER = re.compile(r"^[1-9][0-9]*$")
 COMPLETION_NOTE_FIELDS = frozenset(
     {"risks", "handoff", "review_learnings", "technical_debt"}
 )
@@ -38,10 +36,6 @@ def state_path(orchestration_id: str) -> Path:
     xdg = Path(value) if (value := os.environ.get("XDG_STATE_HOME")) else None
     base = xdg if xdg and xdg.is_absolute() else Path.home() / ".local" / "state"
     return base / "codex-task-orchestrator" / orchestration_id / "sessions.json"
-
-
-def merges_path(orchestration_id: str) -> Path:
-    return state_path(orchestration_id).with_name("merges.json")
 
 
 def completion_notes_path(orchestration_id: str) -> Path:
@@ -100,7 +94,6 @@ def load_orchestration(orchestration_id: str) -> dict:
             repository.lower() for repository in pull_request_repositories
         ],
         "sessions_path": str(state_path(orchestration_id)),
-        "merges_path": str(merges_path(orchestration_id)),
         "completion_notes_path": str(completion_notes_path(orchestration_id)),
     }
 
@@ -179,63 +172,6 @@ def validate_pull_request(pull_request: object) -> dict:
     if not isinstance(number, int) or isinstance(number, bool) or number < 1:
         raise StateError("pull request number must be a positive integer")
     return {"repository": repository.lower(), "number": number}
-
-
-def pull_request_key(pull_request: dict) -> str:
-    return f"{pull_request['repository']}#{pull_request['number']}"
-
-
-def load_merges(path: Path, sessions: dict) -> dict:
-    if not path.exists():
-        return {"version": MERGES_VERSION, "pull_requests": {}}
-    try:
-        data = json.loads(path.read_text())
-    except (OSError, json.JSONDecodeError) as error:
-        raise StateError(f"could not read merges at {path}: {error}") from error
-    version = data.get("version") if isinstance(data, dict) else None
-    if type(version) is not int or version != MERGES_VERSION:
-        raise StateError("unsupported merges version")
-    pull_requests = data.get("pull_requests")
-    if not isinstance(pull_requests, dict):
-        raise StateError("merges must contain a pull_requests object")
-
-    normalized = {"version": MERGES_VERSION, "pull_requests": {}}
-    task_ids = set()
-    for key, record in pull_requests.items():
-        if not isinstance(key, str):
-            raise StateError("merges contain an invalid pull request key")
-        if not isinstance(record, dict):
-            raise StateError(f"merge record for PR {key} must be an object")
-        task_id = record.get("task_id")
-        merge_commit = record.get("merge_commit")
-        if not isinstance(task_id, str) or not task_id:
-            raise StateError(f"merge record for PR {key} has no task ID")
-        if task_id in task_ids:
-            raise StateError(f"multiple merge records refer to task {task_id}")
-        if not isinstance(merge_commit, str) or not merge_commit:
-            raise StateError(f"merge record for PR {key} has no merge commit")
-        task = sessions["tasks"].get(task_id)
-        pull_request = task.get("pull_request") if task else None
-        if pull_request is None:
-            raise StateError(
-                f"merge record for PR {key} does not match the session mapping"
-            )
-        canonical_key = pull_request_key(pull_request)
-        is_legacy_key = (
-            PULL_REQUEST_NUMBER.fullmatch(key) and int(key) == pull_request["number"]
-        )
-        if key != canonical_key and not is_legacy_key:
-            raise StateError(
-                f"merge record for PR {key} does not match the session mapping"
-            )
-        if canonical_key in normalized["pull_requests"]:
-            raise StateError(f"multiple merge records refer to PR {canonical_key}")
-        task_ids.add(task_id)
-        normalized["pull_requests"][canonical_key] = {
-            "task_id": task_id,
-            "merge_commit": merge_commit,
-        }
-    return normalized
 
 
 def empty_completion_notes() -> dict:
@@ -571,28 +507,27 @@ def plan(
         context["parent_thread_id"],
         context["pull_request_repositories"],
     )
-    merges = load_merges(Path(context["merges_path"]), sessions)
     completion_notes = load_completion_notes(Path(context["completion_notes_path"]))
     tasks = load_tasks(tasks_path)
-    completed_from_merges = {
-        record["task_id"] for record in merges["pull_requests"].values()
-    }
     completed_additional = set(completed_ids)
-    completed = completed_from_merges | completed_additional
-    unknown_completed = completed - tasks.keys()
-    unknown_launched = sessions["tasks"].keys() - tasks.keys()
     noted_tasks = set(
         completion_notes["orchestrations"].get(orchestration_id, {"tasks": {}})["tasks"]
     )
+    completed = noted_tasks | completed_additional
+    unknown_completed = completed - tasks.keys()
+    unknown_launched = sessions["tasks"].keys() - tasks.keys()
     unknown_noted = noted_tasks - tasks.keys()
+    tracked_tasks = {
+        task_id for task_id, task in sessions["tasks"].items() if "pull_request" in task
+    }
+    orphaned_noted = noted_tasks - tracked_tasks
     if unknown_completed or unknown_launched or unknown_noted:
         raise StateError(
             "completed, launched, or noted tasks are absent from the current task source"
         )
+    if orphaned_noted:
+        raise StateError("completion notes do not match tracked pull requests")
 
-    tracked_tasks = {
-        task_id for task_id, task in sessions["tasks"].items() if "pull_request" in task
-    }
     missing_completion_notes = completed & tracked_tasks - noted_tasks
     completion_ready = completed - missing_completion_notes
 
@@ -649,7 +584,7 @@ def plan(
     return {
         "selected": selected,
         "completed": sorted(completed),
-        "completed_from_merges": sorted(completed_from_merges),
+        "completed_from_notes": sorted(noted_tasks),
         "completed_additional": sorted(completed_additional),
         "launched_uncompleted": sorted(active),
         "waiting_dependencies": waiting,
@@ -716,14 +651,7 @@ def main(argv: list[str] | None = None) -> int:
                 output["parent_thread_id"],
                 output["pull_request_repositories"],
             )
-            output["merges"] = load_merges(
-                Path(output["merges_path"]), output["sessions"]
-            )
             load_completion_notes(Path(output["completion_notes_path"]))
-            output["completed_from_merges"] = sorted(
-                record["task_id"]
-                for record in output["merges"]["pull_requests"].values()
-            )
         elif arguments.command == "plan":
             output = plan(
                 arguments.orchestration_id,
