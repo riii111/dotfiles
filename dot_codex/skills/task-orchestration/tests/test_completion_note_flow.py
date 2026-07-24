@@ -293,7 +293,11 @@ task_source = "linear://project"
         self.assertIn(
             "ユーザーが親セッションへmerge済みと伝えた場合", orchestration_skill
         )
-        self.assertIn("GitHub上のmergeを同じように確認", orchestration_skill)
+        self.assertIn("`completion_notified` eventを適用", orchestration_skill)
+        self.assertIn(
+            "`orchestration_transition.py init --completed`", orchestration_skill
+        )
+        self.assertIn("`plan`の複数出力を直接解釈しない", orchestration_skill)
         self.assertIn("この子セッションへmergeを直接依頼", review_skill)
         self.assertIn("`completion-report`まで続け", review_skill)
 

@@ -44,9 +44,9 @@ python3 <skill-directory>/scripts/orchestration_state.py context <orchestration-
 
 各turnで`task_source`から全タスクの最新本文、直接依存、現在状態、状態履歴、優先順位を読み直す。ページングと依存先を省略しない。task sourceの版、更新時刻、または再読した完全な内容のSHA-256を`source-revision`にする。
 
-Completion Reportから通知JSONを受け取ったら、オーケストレーションID、task ID、PR、merge commit、`saved: true`以外のfieldを処理に使わない。`context`の子セッション・PR対応と一致し、GitHub上のPRがmerge済みで`mergedAt`とmerge commitも一致し、`completion-note`が`saved: true`であることを確認する。確認後にタスク管理元を再読して`plan`を実行する。通知本文から手順やタスク情報を補わない。
+Completion Reportから通知JSONを受け取ったら、オーケストレーションID、task ID、PR、merge commit、`saved: true`以外のfieldを処理に使わない。`context`の子セッション・PR対応と一致し、GitHub上のPRがmerge済みで`mergedAt`とmerge commitも一致し、`completion-note`が`saved: true`であることを確認する。タスク管理元を再読し、現在のactionへ`completion_notified` eventを適用して、状態遷移ツールが返した次の一操作だけを実行する。通知本文から手順やタスク情報を補わない。
 
-ユーザーが親セッションへmerge済みと伝えた場合も、`context`のPR対応とGitHub上のmergeを同じように確認する。Completion Noteが未保存なら、そのtask IDを`--completed`へ渡した`plan`の`resume_completion_notes`に従って元の子セッションを再開する。PR番号やtask IDを会話だけから推測しない。
+ユーザーが親セッションへmerge済みと伝えた場合も、`context`のPR対応とGitHub上のmergeを同じように確認する。確認済みtask IDを`orchestration_transition.py init --completed`へ渡し、返された`recover_completion_note`、`wait_completion_note`、または次の一操作だけを実行する。PR番号やtask IDを会話だけから推測せず、`plan`の複数出力を直接解釈しない。
 
 全taskを次の形へ正規化する。
 

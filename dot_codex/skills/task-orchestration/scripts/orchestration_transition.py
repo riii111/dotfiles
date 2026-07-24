@@ -1009,6 +1009,23 @@ def same_inputs(
     )
 
 
+def completed_inputs(
+    orchestration_id: str,
+    tasks: dict[str, dict],
+    completed: list[str],
+    maximum_parallelism: int,
+) -> list[str]:
+    try:
+        return storage.plan_tasks(
+            orchestration_id,
+            tasks,
+            completed,
+            maximum_parallelism,
+        )["completed"]
+    except storage.StateError as error:
+        raise TransitionError(str(error)) from error
+
+
 def main(argv: list[str] | None = None) -> int:
     arguments = parser().parse_args(argv)
     try:
@@ -1021,13 +1038,19 @@ def main(argv: list[str] | None = None) -> int:
             except storage.StateError as error:
                 raise TransitionError(str(error)) from error
             with lock_state(path):
+                completed = completed_inputs(
+                    arguments.orchestration_id,
+                    tasks,
+                    arguments.completed,
+                    arguments.max_parallelism,
+                )
                 if path.exists():
                     state = load_state(path)
                     if not same_inputs(
                         state,
                         arguments.source_revision,
                         tasks,
-                        arguments.completed,
+                        completed,
                         arguments.max_parallelism,
                         arguments.policy,
                     ):
@@ -1039,7 +1062,7 @@ def main(argv: list[str] | None = None) -> int:
                         state = initial_state(
                             arguments.source_revision,
                             tasks,
-                            arguments.completed,
+                            completed,
                             arguments.max_parallelism,
                             arguments.policy,
                             state["cycle"] + 1,
@@ -1048,7 +1071,7 @@ def main(argv: list[str] | None = None) -> int:
                     state = initial_state(
                         arguments.source_revision,
                         tasks,
-                        arguments.completed,
+                        completed,
                         arguments.max_parallelism,
                         arguments.policy,
                     )
