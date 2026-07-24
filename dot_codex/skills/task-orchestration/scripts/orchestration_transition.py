@@ -1014,16 +1014,21 @@ def completed_inputs(
     tasks: dict[str, dict],
     completed: list[str],
     maximum_parallelism: int,
+    persisted_completed: list[str] | None = None,
 ) -> list[str]:
     try:
-        return storage.plan_tasks(
+        plan = storage.plan_tasks(
             orchestration_id,
             tasks,
             completed,
             maximum_parallelism,
-        )["completed"]
+        )
     except storage.StateError as error:
         raise TransitionError(str(error)) from error
+    if persisted_completed is None:
+        return plan["completed"]
+    confirmed_notes = set(plan["completed_from_notes"]) & set(persisted_completed)
+    return sorted({*completed, *confirmed_notes})
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1038,14 +1043,19 @@ def main(argv: list[str] | None = None) -> int:
             except storage.StateError as error:
                 raise TransitionError(str(error)) from error
             with lock_state(path):
+                state = load_state(path) if path.exists() else None
                 completed = completed_inputs(
                     arguments.orchestration_id,
                     tasks,
                     arguments.completed,
                     arguments.max_parallelism,
+                    (
+                        state["completed"]
+                        if state is not None and action_name(state) != "complete"
+                        else None
+                    ),
                 )
-                if path.exists():
-                    state = load_state(path)
+                if state is not None:
                     if not same_inputs(
                         state,
                         arguments.source_revision,

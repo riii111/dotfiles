@@ -878,6 +878,97 @@ task_source = "file:///tasks.md"
             resumed_output["action_token"], notified_output["action_token"]
         )
 
+    def test_cli_init_does_not_confirm_new_note_before_notification(self):
+        self.create_tracked_session()
+        tasks = self.root / "tasks.json"
+        tasks.write_text(
+            json.dumps(
+                {
+                    "tasks": [
+                        {"id": "A", "dependencies": []},
+                        {"id": "B", "dependencies": []},
+                    ]
+                }
+            )
+        )
+        command = [
+            sys.executable,
+            str(TRANSITION_SPEC.origin),
+            "init",
+            "example",
+            "--tasks",
+            str(tasks),
+            "--max-parallelism",
+            "2",
+            "--policy",
+            "manual",
+            "--source-revision",
+            "source-1",
+        ]
+        environment = {
+            **os.environ,
+            "XDG_CONFIG_HOME": str(self.config_home),
+            "XDG_STATE_HOME": str(self.state_home),
+        }
+        first = subprocess.run(
+            command,
+            capture_output=True,
+            check=False,
+            text=True,
+            env=environment,
+        )
+        self.assertEqual(first.returncode, 0)
+        first_output = json.loads(first.stdout)
+        self.assertEqual(first_output["action"], "reserve_session")
+        self.assertEqual(first_output["details"]["task_id"], "B")
+
+        self.save_note("A", {})
+        resumed = subprocess.run(
+            command,
+            capture_output=True,
+            check=False,
+            text=True,
+            env=environment,
+        )
+        self.assertEqual(resumed.returncode, 0)
+        resumed_output = json.loads(resumed.stdout)
+        self.assertEqual(resumed_output["action"], "reserve_session")
+        self.assertEqual(resumed_output["details"]["task_id"], "B")
+        self.assertEqual(resumed_output["action_token"], first_output["action_token"])
+
+        state = transition.load_state(transition.transition_path("example"))
+        event_path = self.root / "completion-notified-before-launch.json"
+        event_path.write_text(
+            json.dumps(
+                self.event(
+                    state,
+                    "completion_notified",
+                    notification=self.notification(),
+                    observed_merge_commit="a" * 40,
+                )
+            )
+        )
+        notified = subprocess.run(
+            [
+                sys.executable,
+                str(TRANSITION_SPEC.origin),
+                "apply-event",
+                "example",
+                "--source-revision",
+                "source-1",
+                "--event-file",
+                str(event_path),
+            ],
+            capture_output=True,
+            check=False,
+            text=True,
+            env=environment,
+        )
+        self.assertEqual(notified.returncode, 0)
+        notified_output = json.loads(notified.stdout)
+        self.assertEqual(notified_output["action"], "reserve_session")
+        self.assertEqual(notified_output["details"]["task_id"], "B")
+
     def test_cli_init_validates_old_external_state_before_cycle_change(self):
         self.create_tracked_session()
         state = transition.initial_state(
