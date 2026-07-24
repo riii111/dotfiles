@@ -39,4 +39,4 @@ python3 <task-orchestration-skill-directory>/scripts/orchestration_transition.py
 - 子セッション用SKILLと、明示された完了方針
 - FSM detailsの`dependency_completion_notes`
 
-model指定がなければ、限定的な変更は`gpt-5.6-luna` + `xhigh`、広い影響調査は`gpt-5.6-terra` + `high`、仕様判断が必要なら`gpt-5.6-sol` + `medium`を選ぶ。空のNoteを渡さず、PR本文へ管理用task IDやmarkerを書かない。
+model指定がなければ原則として`gpt-5.6-luna` + `xhigh`を使い、設計・仕様判断が必要なtaskだけ`gpt-5.6-sol` + `medium`を使う。空のNoteを渡さず、PR本文へ管理用task IDやmarkerを書かない。

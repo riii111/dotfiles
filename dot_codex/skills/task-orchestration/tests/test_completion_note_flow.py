@@ -303,6 +303,12 @@ task_source = "linear://project"
             self.assertNotIn(implementation_detail, orchestration_skill)
         for skill_name in ("task-completion-recovery", "task-session-launch"):
             self.assertTrue((SKILL_ROOT.parent / skill_name / "SKILL.md").is_file())
+        launch_skill = (
+            SKILL_ROOT.parent / "task-session-launch" / "SKILL.md"
+        ).read_text()
+        self.assertIn("`gpt-5.6-luna` + `xhigh`", launch_skill)
+        self.assertIn("`gpt-5.6-sol` + `medium`", launch_skill)
+        self.assertNotIn("gpt-5.6-terra", launch_skill)
         self.assertIn("この子セッションへmergeを直接依頼", review_skill)
         self.assertIn("`completion-report`まで続け", review_skill)
 
