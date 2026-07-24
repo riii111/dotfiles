@@ -28,7 +28,9 @@
   no recovery or launch work --> [complete]
   external operation failure --> [stop] -- retryable --> retry_requested
        confirmed no Thread --> release reservation --> [reserve_session]
-  completion notification -----> validate evidence -------> current plan
+  completion notification -----> persist evidence
+             |                         |
+             +---- keeps active operation and token
 
 The created Thread ID, host, project, and checkout are persisted before
 verification or session recording. Every external result carries the current
@@ -39,7 +41,6 @@ cannot advance the state.
 import argparse
 import fcntl
 import hashlib
-import importlib.util
 import json
 import os
 import re
@@ -48,13 +49,7 @@ import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 
-
-SPEC = importlib.util.spec_from_file_location(
-    "orchestration_state",
-    Path(__file__).with_name("orchestration_state.py"),
-)
-storage = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(storage)
+import orchestration_state as storage
 
 
 VERSION = 1
@@ -114,6 +109,7 @@ EVENT_FIELDS = {
         "action_token",
         "source_revision",
         "task_id",
+        "repository",
         "thread_id",
         "host_id",
         "project_id",
@@ -124,6 +120,7 @@ EVENT_FIELDS = {
         "action_token",
         "source_revision",
         "task_id",
+        "repository",
         "thread_id",
         "host_id",
         "project_id",
@@ -181,7 +178,7 @@ ACTION_EVENTS = {
     "verify_thread": ("thread_verified", "operation_failed"),
     "record_session": ("session_recorded", "operation_failed"),
     "set_thread_title": ("thread_title_set", "operation_failed"),
-    "stop": ("retry_requested",),
+    "stop": ("retry_requested", "reservation_released"),
 }
 ROOT_FIELDS = {
     "version",
@@ -620,17 +617,17 @@ def validate_external_state(orchestration_id: str, state: dict) -> None:
     if launch:
         task = sessions["tasks"].get(launch["task_id"])
         if launch["status"] == "selected":
-            if task not in (None, storage.RESERVED_SESSION):
+            if task not in (None, storage.reserved_session()):
                 raise TransitionError(
                     "selected launch conflicts with the session mapping"
                 )
         elif launch["status"] in {"reserved", "created"}:
-            if task != storage.RESERVED_SESSION:
+            if task != storage.reserved_session():
                 raise TransitionError("unrecorded launch lost its session reservation")
         elif launch["status"] == "verified":
             # record-session may persist before its result event reaches this state.
             thread_id = launch["thread"]["thread_id"]
-            if task != storage.RESERVED_SESSION and (
+            if task != storage.reserved_session() and (
                 not task or task.get("child_thread_id") != thread_id
             ):
                 raise TransitionError(
@@ -749,17 +746,19 @@ def action_details(state: dict, action: str, plan: dict) -> dict:
 
 
 def event_schemas(action: str, state: dict) -> dict:
-    events = (*ACTION_EVENTS.get(action, ()), "completion_notified")
-    if action == "stop" and (
-        state["stop"]["operation"] == "create_thread" or not state["stop"]["retryable"]
-    ):
-        events = ["completion_notified"]
+    events = [*ACTION_EVENTS.get(action, ()), "completion_notified"]
+    if action == "stop":
         if (
             state["stop"]["operation"] == "create_thread"
-            and state["launch"]
-            and state["launch"]["status"] == "reserved"
+            or not state["stop"]["retryable"]
         ):
-            events.append("reservation_released")
+            events.remove("retry_requested")
+        if (
+            state["stop"]["operation"] != "create_thread"
+            or not state["launch"]
+            or state["launch"]["status"] != "reserved"
+        ):
+            events.remove("reservation_released")
     return {event: sorted(EVENT_FIELDS[event]) for event in events}
 
 
@@ -794,7 +793,9 @@ def require_matching_event(state: dict, event: object, action: str) -> tuple[dic
     if event["source_revision"] != state["source_revision"]:
         raise TransitionError("event is based on a stale task source")
     token = action_token(state, action)
-    if event["action_token"] != token:
+    event_token = require_string(event["action_token"], "event.action_token")
+    # Completion notifications are asynchronous evidence, not action results.
+    if event_type != "completion_notified" and event_token != token:
         raise TransitionError("event is based on a stale external observation")
     if event_type not in event_schemas(action, state):
         raise TransitionError(f"event {event_type} is invalid for action {action}")
@@ -813,6 +814,13 @@ def load_sessions(orchestration_id: str) -> dict:
         context["parent_thread_id"],
         context["pull_request_repositories"],
     )
+
+
+def validate_thread_repository(orchestration_id: str, event: dict) -> None:
+    repository = require_string(event["repository"], "event.repository")
+    context = storage.load_orchestration(orchestration_id)
+    if repository not in context["pull_request_repositories"]:
+        raise TransitionError("thread repository is not allowed by the orchestration")
 
 
 def validate_completion_notification(
@@ -949,12 +957,13 @@ def reduce_event(orchestration_id: str, state: dict, event: dict) -> dict:
         launch = state["launch"]
         require_task(event, launch["task_id"])
         sessions = load_sessions(orchestration_id)
-        if sessions["tasks"].get(launch["task_id"]) != storage.RESERVED_SESSION:
+        if sessions["tasks"].get(launch["task_id"]) != storage.reserved_session():
             raise TransitionError("session reservation was not persisted")
         launch["status"] = "reserved"
     elif event_type == "thread_created":
         launch = state["launch"]
         require_task(event, launch["task_id"])
+        validate_thread_repository(orchestration_id, event)
         launch["thread"] = {
             field: require_string(event[field], f"event.{field}")
             for field in THREAD_FIELDS
@@ -963,6 +972,7 @@ def reduce_event(orchestration_id: str, state: dict, event: dict) -> dict:
     elif event_type == "thread_verified":
         launch = state["launch"]
         require_task(event, launch["task_id"])
+        validate_thread_repository(orchestration_id, event)
         if type(event["verified"]) is not bool or not event["verified"]:
             raise TransitionError("thread verification must be true")
         observed = {field: event[field] for field in THREAD_FIELDS}
@@ -993,19 +1003,24 @@ def reduce_event(orchestration_id: str, state: dict, event: dict) -> dict:
         state["launch"] = None
     else:
         raise AssertionError("validated event was not reduced")
-    state["sequence"] += 1
-    state["last_event"] = {
-        "action_token": token,
-        "digest": event_digest(event),
-    }
+    # Notifications must not invalidate an in-flight external operation token.
+    if event_type != "completion_notified":
+        state["sequence"] += 1
+        state["last_event"] = {
+            "action_token": token,
+            "digest": event_digest(event),
+        }
     return normalize_state(state)
 
 
 def read_event(path: Path) -> dict:
     try:
-        return json.loads(path.read_text())
+        event = json.loads(path.read_text())
     except (OSError, json.JSONDecodeError) as error:
         raise TransitionError(f"could not read orchestration event: {error}") from error
+    if not isinstance(event, dict):
+        raise TransitionError("orchestration event must be an object")
+    return event
 
 
 def parser() -> argparse.ArgumentParser:
@@ -1071,6 +1086,57 @@ def completed_inputs(
     return sorted({*completed, *confirmed_notes})
 
 
+def resolve_init_state(
+    orchestration_id: str,
+    path: Path,
+    tasks: dict[str, dict],
+    completed: list[str],
+    maximum_parallelism: int,
+    policy: str,
+    source_revision: str,
+) -> dict:
+    state = load_state(path) if path.exists() else None
+    normalized_completed = completed_inputs(
+        orchestration_id,
+        tasks,
+        completed,
+        maximum_parallelism,
+        (
+            state["completed"]
+            if state is not None and action_name(state) != "complete"
+            else None
+        ),
+    )
+    if state is None:
+        return initial_state(
+            source_revision,
+            tasks,
+            normalized_completed,
+            maximum_parallelism,
+            policy,
+        )
+    if same_inputs(
+        state,
+        source_revision,
+        tasks,
+        normalized_completed,
+        maximum_parallelism,
+        policy,
+    ):
+        return state
+    if action_name(state) != "complete":
+        raise TransitionError("cycle inputs changed during an active operation")
+    validate_external_state(orchestration_id, state)
+    return initial_state(
+        source_revision,
+        tasks,
+        normalized_completed,
+        maximum_parallelism,
+        policy,
+        state["cycle"] + 1,
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     arguments = parser().parse_args(argv)
     try:
@@ -1083,48 +1149,15 @@ def main(argv: list[str] | None = None) -> int:
             except storage.StateError as error:
                 raise TransitionError(str(error)) from error
             with lock_state(path):
-                state = load_state(path) if path.exists() else None
-                completed = completed_inputs(
+                state = resolve_init_state(
                     arguments.orchestration_id,
+                    path,
                     tasks,
                     arguments.completed,
                     arguments.max_parallelism,
-                    (
-                        state["completed"]
-                        if state is not None and action_name(state) != "complete"
-                        else None
-                    ),
+                    arguments.policy,
+                    arguments.source_revision,
                 )
-                if state is not None:
-                    if not same_inputs(
-                        state,
-                        arguments.source_revision,
-                        tasks,
-                        completed,
-                        arguments.max_parallelism,
-                        arguments.policy,
-                    ):
-                        if action_name(state) != "complete":
-                            raise TransitionError(
-                                "cycle inputs changed during an active operation"
-                            )
-                        validate_external_state(arguments.orchestration_id, state)
-                        state = initial_state(
-                            arguments.source_revision,
-                            tasks,
-                            completed,
-                            arguments.max_parallelism,
-                            arguments.policy,
-                            state["cycle"] + 1,
-                        )
-                else:
-                    state = initial_state(
-                        arguments.source_revision,
-                        tasks,
-                        completed,
-                        arguments.max_parallelism,
-                        arguments.policy,
-                    )
                 state, plan = materialize_next(arguments.orchestration_id, state)
                 write_state(path, state)
             result = output(arguments.orchestration_id, state, plan)
@@ -1144,7 +1177,8 @@ def main(argv: list[str] | None = None) -> int:
                     raise TransitionError("task source revision is stale")
                 digest = event_digest(event)
                 if (
-                    state["last_event"]
+                    event.get("type") != "completion_notified"
+                    and state["last_event"]
                     and event.get("action_token") == state["last_event"]["action_token"]
                 ):
                     if digest != state["last_event"]["digest"]:

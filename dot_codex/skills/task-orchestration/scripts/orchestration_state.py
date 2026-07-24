@@ -20,11 +20,14 @@ COMPLETION_NOTE_FIELDS = frozenset(
     {"risks", "handoff", "review_learnings", "technical_debt"}
 )
 HANDOFF_NOTE_FIELDS = ("risks", "handoff")
-RESERVED_SESSION = {"creation": {"status": "reserved"}}
 
 
 class StateError(ValueError):
     pass
+
+
+def reserved_session() -> dict:
+    return {"creation": {"status": "reserved"}}
 
 
 def config_path() -> Path:
@@ -291,7 +294,7 @@ def reserve_session(orchestration_id: str, task_id: str) -> dict:
             raise StateError("task ID must not be empty")
         if task_id in sessions["tasks"]:
             raise StateError(f"task {task_id} already has session creation state")
-        sessions["tasks"][task_id] = RESERVED_SESSION
+        sessions["tasks"][task_id] = reserved_session()
         write_sessions(path, sessions)
         return sessions
 
@@ -305,7 +308,7 @@ def release_reservation(orchestration_id: str, task_id: str) -> dict:
             context["parent_thread_id"],
             context["pull_request_repositories"],
         )
-        if sessions["tasks"].get(task_id) != RESERVED_SESSION:
+        if sessions["tasks"].get(task_id) != reserved_session():
             raise StateError(f"task {task_id} has no releasable session reservation")
         del sessions["tasks"][task_id]
         write_sessions(path, sessions)
@@ -498,20 +501,6 @@ def validate_acyclic(tasks: dict[str, dict]) -> None:
         visit(task_id)
 
 
-def plan(
-    orchestration_id: str,
-    tasks_path: Path,
-    completed_ids: list[str],
-    maximum_parallelism: int,
-) -> dict:
-    return plan_tasks(
-        orchestration_id,
-        load_tasks(tasks_path),
-        completed_ids,
-        maximum_parallelism,
-    )
-
-
 def plan_tasks(
     orchestration_id: str,
     tasks: dict[str, dict],
@@ -622,12 +611,6 @@ def parser() -> argparse.ArgumentParser:
     context = commands.add_parser("context")
     context.add_argument("orchestration_id")
 
-    planning = commands.add_parser("plan")
-    planning.add_argument("orchestration_id")
-    planning.add_argument("--tasks", type=Path, required=True)
-    planning.add_argument("--completed", action="append", default=[])
-    planning.add_argument("--max-parallelism", type=int, required=True)
-
     session = commands.add_parser("record-session")
     session.add_argument("orchestration_id")
     session.add_argument("--task-id", required=True)
@@ -670,13 +653,6 @@ def main(argv: list[str] | None = None) -> int:
                 output["pull_request_repositories"],
             )
             load_completion_notes(Path(output["completion_notes_path"]))
-        elif arguments.command == "plan":
-            output = plan(
-                arguments.orchestration_id,
-                arguments.tasks,
-                arguments.completed,
-                arguments.max_parallelism,
-            )
         elif arguments.command == "reserve-session":
             output = reserve_session(arguments.orchestration_id, arguments.task_id)
         elif arguments.command == "release-reservation":

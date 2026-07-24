@@ -16,6 +16,9 @@ STATE_SPEC = importlib.util.spec_from_file_location(
 )
 storage = importlib.util.module_from_spec(STATE_SPEC)
 STATE_SPEC.loader.exec_module(storage)
+scripts_root = str(SKILL_ROOT / "scripts")
+if scripts_root not in sys.path:
+    sys.path.insert(0, scripts_root)
 TRANSITION_SPEC = importlib.util.spec_from_file_location(
     "orchestration_transition",
     SKILL_ROOT / "scripts" / "orchestration_transition.py",
@@ -56,6 +59,11 @@ task_source = "file:///tasks.md"
             },
         )
         self.environment.start()
+        self.cli_environment = {
+            **os.environ,
+            "XDG_CONFIG_HOME": str(self.config_home),
+            "XDG_STATE_HOME": str(self.state_home),
+        }
 
     def tearDown(self):
         self.environment.stop()
@@ -76,6 +84,8 @@ task_source = "file:///tasks.md"
 
     def event(self, state, event_type, **fields):
         action = transition.action_name(state)
+        if event_type in {"thread_created", "thread_verified"}:
+            fields.setdefault("repository", "owner/repository")
         return {
             "type": event_type,
             "action_token": transition.action_token(state, action),
@@ -88,6 +98,15 @@ task_source = "file:///tasks.md"
             "example", state, self.event(state, event_type, **fields)
         )
         return transition.materialize_next("example", state)
+
+    def run_cli(self, command):
+        return subprocess.run(
+            command,
+            capture_output=True,
+            check=False,
+            text=True,
+            env=self.cli_environment,
+        )
 
     def create_tracked_session(self, task_id="A", number=42):
         storage.reserve_session("example", task_id)
@@ -327,6 +346,102 @@ task_source = "file:///tasks.md"
             "set_thread_title", self.advance_to_recorded_session
         )
 
+    def test_operation_failures_preserve_current_task_and_retry_policy(self):
+        reserve_state, _ = self.new_state([{"id": "A", "dependencies": []}])
+        reserve_state, reserve_plan = self.apply(
+            reserve_state,
+            "operation_failed",
+            operation="reserve_session",
+            message="reservation failed",
+            retryable=True,
+        )
+        self.assertEqual(transition.action_name(reserve_state), "stop")
+        self.assertEqual(
+            transition.output("example", reserve_state, reserve_plan)["details"][
+                "task_id"
+            ],
+            "A",
+        )
+
+        self.create_tracked_session()
+        recovery_state, _ = self.new_state(
+            [
+                {"id": "A", "dependencies": []},
+                {"id": "B", "dependencies": ["A"]},
+            ],
+            completed=["A"],
+        )
+        recovery_state, recovery_plan = self.apply(
+            recovery_state,
+            "operation_failed",
+            operation="recover_completion_note",
+            message="recovery request failed",
+            retryable=False,
+        )
+        recovery_output = transition.output("example", recovery_state, recovery_plan)
+        self.assertEqual(recovery_output["action"], "stop")
+        self.assertEqual(recovery_output["details"]["task_id"], "A")
+        self.assertNotIn("retry_requested", recovery_output["allowed_events"])
+
+        waiting_state, _ = self.new_state(
+            [
+                {"id": "A", "dependencies": []},
+                {"id": "B", "dependencies": ["A"]},
+            ],
+            completed=["A"],
+        )
+        waiting_state, _ = self.apply(
+            waiting_state,
+            "completion_recovery_requested",
+            task_id="A",
+            child_thread_id="thread-a",
+            turn_id="turn-a",
+            wait_cursor=None,
+        )
+        waiting_state, waiting_plan = self.apply(
+            waiting_state,
+            "operation_failed",
+            operation="wait_completion_note",
+            message="wait failed",
+            retryable=True,
+        )
+        waiting_output = transition.output("example", waiting_state, waiting_plan)
+        self.assertEqual(waiting_output["action"], "stop")
+        self.assertEqual(waiting_output["details"]["task_id"], "A")
+
+    def test_completion_wait_outcomes_set_retry_policy(self):
+        self.create_tracked_session()
+        state, _ = self.new_state(
+            [
+                {"id": "A", "dependencies": []},
+                {"id": "B", "dependencies": ["A"]},
+            ],
+            completed=["A"],
+        )
+        state, _ = self.apply(
+            state,
+            "completion_recovery_requested",
+            task_id="A",
+            child_thread_id="thread-a",
+            turn_id="turn-a",
+            wait_cursor="cursor-a",
+        )
+
+        for outcome, retryable in (("needs_attention", True), ("failed", False)):
+            with self.subTest(outcome=outcome):
+                candidate = json.loads(json.dumps(state))
+                candidate, plan = self.apply(
+                    candidate,
+                    "completion_waited",
+                    task_id="A",
+                    turn_id="turn-a",
+                    outcome=outcome,
+                    wait_cursor=f"cursor-{outcome}",
+                )
+                output = transition.output("example", candidate, plan)
+                self.assertEqual(output["action"], "stop")
+                self.assertEqual(output["details"]["retryable"], retryable)
+
     def test_non_retryable_stop_requires_confirmed_reservation_release(self):
         state, _ = self.new_state([{"id": "A", "dependencies": []}])
         storage.reserve_session("example", "A")
@@ -491,6 +606,98 @@ task_source = "file:///tasks.md"
         self.assertEqual(transition.action_name(state), "reserve_session")
         self.assertEqual(state["launch"]["task_id"], "B")
         self.assertEqual(list(state["notifications"]), ["A"])
+
+    def test_completion_notification_preserves_in_flight_thread_token(self):
+        self.create_tracked_session()
+        self.save_note("A", {})
+        state, _ = self.new_state(
+            [
+                {"id": "A", "dependencies": []},
+                {"id": "B", "dependencies": []},
+            ],
+            maximum_parallelism=2,
+        )
+        self.assertEqual(state["launch"]["task_id"], "B")
+        storage.reserve_session("example", "B")
+        state, _ = self.apply(state, "session_reserved", task_id="B")
+        token = transition.action_token(state, "create_thread")
+        sequence = state["sequence"]
+        thread_created = self.event(
+            state,
+            "thread_created",
+            task_id="B",
+            thread_id="thread-b",
+            host_id="local",
+            project_id="saved-project",
+            checkout="/checkout/repository",
+        )
+
+        state = transition.reduce_event(
+            "example",
+            state,
+            self.event(
+                state,
+                "completion_notified",
+                notification=self.notification(),
+                observed_merge_commit="a" * 40,
+            ),
+        )
+
+        self.assertEqual(state["sequence"], sequence)
+        self.assertEqual(transition.action_token(state, "create_thread"), token)
+        state = transition.reduce_event("example", state, thread_created)
+        self.assertEqual(transition.action_name(state), "verify_thread")
+        self.assertEqual(state["launch"]["thread"]["thread_id"], "thread-b")
+
+    def test_thread_events_reject_disallowed_repository(self):
+        state, _ = self.new_state([{"id": "A", "dependencies": []}])
+        storage.reserve_session("example", "A")
+        state, _ = self.apply(state, "session_reserved", task_id="A")
+        with self.assertRaisesRegex(
+            transition.TransitionError, "repository is not allowed"
+        ):
+            transition.reduce_event(
+                "example",
+                state,
+                self.event(
+                    state,
+                    "thread_created",
+                    task_id="A",
+                    repository="untrusted/repository",
+                    thread_id="thread-a",
+                    host_id="local",
+                    project_id="untrusted-project",
+                    checkout="/checkout/untrusted",
+                ),
+            )
+
+        state, _ = self.apply(
+            state,
+            "thread_created",
+            task_id="A",
+            thread_id="thread-a",
+            host_id="local",
+            project_id="saved-project",
+            checkout="/checkout/repository",
+        )
+        with self.assertRaisesRegex(
+            transition.TransitionError, "repository is not allowed"
+        ):
+            transition.reduce_event(
+                "example",
+                state,
+                self.event(
+                    state,
+                    "thread_verified",
+                    task_id="A",
+                    repository="untrusted/repository",
+                    thread_id="thread-a",
+                    host_id="local",
+                    project_id="saved-project",
+                    checkout="/checkout/repository",
+                    verified=True,
+                ),
+            )
 
     def test_completion_notification_rejects_changed_or_unverified_payload(self):
         self.create_tracked_session()
@@ -709,6 +916,44 @@ task_source = "file:///tasks.md"
         ):
             transition.materialize_next("example", state)
 
+    def test_rejects_verified_launch_with_another_recorded_thread(self):
+        state, _ = self._advance_to_verified_thread()
+        storage.record_session("example", "A", "unexpected-thread")
+
+        with self.assertRaisesRegex(
+            transition.TransitionError,
+            "verified launch conflicts with the session mapping",
+        ):
+            transition.materialize_next("example", state)
+
+    def test_rejects_recorded_launch_with_a_changed_child_thread(self):
+        state, _ = self.advance_to_recorded_session()
+        sessions_path = storage.state_path("example")
+        sessions = storage.load_sessions(
+            sessions_path, "parent-thread", ["owner/repository"]
+        )
+        sessions["tasks"]["A"]["child_thread_id"] = "unexpected-thread"
+        storage.write_sessions(sessions_path, sessions)
+
+        with self.assertRaisesRegex(
+            transition.TransitionError,
+            "recorded launch does not match the session mapping",
+        ):
+            transition.materialize_next("example", state)
+
+    def test_rejects_event_for_another_current_task(self):
+        state, _ = self.new_state([{"id": "A", "dependencies": []}])
+
+        with self.assertRaisesRegex(
+            transition.TransitionError,
+            "event task does not match the current operation",
+        ):
+            transition.reduce_event(
+                "example",
+                state,
+                self.event(state, "session_reserved", task_id="B"),
+            )
+
     def test_parallelism_dependencies_and_order_still_come_from_plan(self):
         state, _ = self.new_state(
             [
@@ -777,33 +1022,9 @@ task_source = "file:///tasks.md"
             "--source-revision",
             "source-1",
         ]
-        environment = {
-            **os.environ,
-            "XDG_CONFIG_HOME": str(self.config_home),
-            "XDG_STATE_HOME": str(self.state_home),
-        }
-
-        first = subprocess.run(
-            command,
-            capture_output=True,
-            check=False,
-            text=True,
-            env=environment,
-        )
-        second = subprocess.run(
-            command,
-            capture_output=True,
-            check=False,
-            text=True,
-            env=environment,
-        )
-        stale = subprocess.run(
-            [*command[:-1], "source-2"],
-            capture_output=True,
-            check=False,
-            text=True,
-            env=environment,
-        )
+        first = self.run_cli(command)
+        second = self.run_cli(command)
+        stale = self.run_cli([*command[:-1], "source-2"])
 
         self.assertEqual(first.returncode, 0)
         self.assertEqual(second.returncode, 0)
@@ -818,12 +1039,7 @@ task_source = "file:///tasks.md"
     def test_cli_next_and_apply_event_enforce_replay_boundaries(self):
         tasks = self.root / "tasks.json"
         tasks.write_text(json.dumps({"tasks": [{"id": "A", "dependencies": []}]}))
-        environment = {
-            **os.environ,
-            "XDG_CONFIG_HOME": str(self.config_home),
-            "XDG_STATE_HOME": str(self.state_home),
-        }
-        init = subprocess.run(
+        init = self.run_cli(
             [
                 sys.executable,
                 str(TRANSITION_SPEC.origin),
@@ -837,11 +1053,7 @@ task_source = "file:///tasks.md"
                 "manual",
                 "--source-revision",
                 "source-1",
-            ],
-            capture_output=True,
-            check=False,
-            text=True,
-            env=environment,
+            ]
         )
         self.assertEqual(init.returncode, 0)
         storage.reserve_session("example", "A")
@@ -860,21 +1072,9 @@ task_source = "file:///tasks.md"
             str(event_path),
         ]
 
-        first = subprocess.run(
-            apply_command,
-            capture_output=True,
-            check=False,
-            text=True,
-            env=environment,
-        )
-        replay = subprocess.run(
-            apply_command,
-            capture_output=True,
-            check=False,
-            text=True,
-            env=environment,
-        )
-        current = subprocess.run(
+        first = self.run_cli(apply_command)
+        replay = self.run_cli(apply_command)
+        current = self.run_cli(
             [
                 sys.executable,
                 str(TRANSITION_SPEC.origin),
@@ -882,13 +1082,9 @@ task_source = "file:///tasks.md"
                 "example",
                 "--source-revision",
                 "source-1",
-            ],
-            capture_output=True,
-            check=False,
-            text=True,
-            env=environment,
+            ]
         )
-        stale = subprocess.run(
+        stale = self.run_cli(
             [
                 sys.executable,
                 str(TRANSITION_SPEC.origin),
@@ -896,11 +1092,7 @@ task_source = "file:///tasks.md"
                 "example",
                 "--source-revision",
                 "source-0",
-            ],
-            capture_output=True,
-            check=False,
-            text=True,
-            env=environment,
+            ]
         )
         conflicting_path = self.root / "conflicting-event.json"
         conflicting_path.write_text(
@@ -915,13 +1107,10 @@ task_source = "file:///tasks.md"
                 }
             )
         )
-        conflicting = subprocess.run(
-            [*apply_command[:-1], str(conflicting_path)],
-            capture_output=True,
-            check=False,
-            text=True,
-            env=environment,
-        )
+        conflicting = self.run_cli([*apply_command[:-1], str(conflicting_path)])
+        non_object_path = self.root / "non-object-event.json"
+        non_object_path.write_text("[]")
+        non_object = self.run_cli([*apply_command[:-1], str(non_object_path)])
 
         self.assertEqual(first.returncode, 0)
         self.assertEqual(replay.returncode, 0)
@@ -937,6 +1126,77 @@ task_source = "file:///tasks.md"
             json.loads(conflicting.stderr),
             {"error": "action token was reused with a different event"},
         )
+        self.assertEqual(non_object.returncode, 2)
+        self.assertEqual(
+            json.loads(non_object.stderr),
+            {"error": "orchestration event must be an object"},
+        )
+
+    def test_concurrent_notification_and_action_event_preserve_both_results(self):
+        self.create_tracked_session()
+        self.save_note("A", {})
+        state, _ = self.new_state(
+            [
+                {"id": "A", "dependencies": []},
+                {"id": "B", "dependencies": []},
+            ],
+            maximum_parallelism=2,
+        )
+        storage.reserve_session("example", "B")
+        state, _ = self.apply(state, "session_reserved", task_id="B")
+        transition.write_state(transition.transition_path("example"), state)
+
+        notification_path = self.root / "notification-event.json"
+        notification_path.write_text(
+            json.dumps(
+                self.event(
+                    state,
+                    "completion_notified",
+                    notification=self.notification(),
+                    observed_merge_commit="a" * 40,
+                )
+            )
+        )
+        thread_path = self.root / "thread-event.json"
+        thread_path.write_text(
+            json.dumps(
+                self.event(
+                    state,
+                    "thread_created",
+                    task_id="B",
+                    thread_id="thread-b",
+                    host_id="local",
+                    project_id="saved-project",
+                    checkout="/checkout/repository",
+                )
+            )
+        )
+        processes = [
+            subprocess.Popen(
+                [
+                    sys.executable,
+                    str(TRANSITION_SPEC.origin),
+                    "apply-event",
+                    "example",
+                    "--source-revision",
+                    "source-1",
+                    "--event-file",
+                    str(event_path),
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                env=self.cli_environment,
+            )
+            for event_path in (notification_path, thread_path)
+        ]
+        results = [process.communicate() for process in processes]
+
+        self.assertEqual([process.returncode for process in processes], [0, 0], results)
+        persisted = transition.load_state(transition.transition_path("example"))
+        self.assertEqual(list(persisted["notifications"]), ["A"])
+        self.assertEqual(transition.action_name(persisted), "verify_thread")
+        self.assertEqual(persisted["launch"]["thread"]["thread_id"], "thread-b")
 
     def test_cli_init_changes_cycle_before_old_plan_is_materialized(self):
         self.create_tracked_session()
@@ -956,18 +1216,7 @@ task_source = "file:///tasks.md"
             "--source-revision",
             "source-1",
         ]
-        environment = {
-            **os.environ,
-            "XDG_CONFIG_HOME": str(self.config_home),
-            "XDG_STATE_HOME": str(self.state_home),
-        }
-        first = subprocess.run(
-            command,
-            capture_output=True,
-            check=False,
-            text=True,
-            env=environment,
-        )
+        first = self.run_cli(command)
         self.assertEqual(first.returncode, 0)
         self.assertEqual(json.loads(first.stdout)["action"], "complete")
 
@@ -982,13 +1231,7 @@ task_source = "file:///tasks.md"
                 }
             )
         )
-        changed = subprocess.run(
-            [*command[:-1], "source-2"],
-            capture_output=True,
-            check=False,
-            text=True,
-            env=environment,
-        )
+        changed = self.run_cli([*command[:-1], "source-2"])
 
         self.assertEqual(changed.returncode, 0)
         output = json.loads(changed.stdout)
@@ -1022,18 +1265,7 @@ task_source = "file:///tasks.md"
             "--source-revision",
             "source-1",
         ]
-        environment = {
-            **os.environ,
-            "XDG_CONFIG_HOME": str(self.config_home),
-            "XDG_STATE_HOME": str(self.state_home),
-        }
-        first = subprocess.run(
-            command,
-            capture_output=True,
-            check=False,
-            text=True,
-            env=environment,
-        )
+        first = self.run_cli(command)
         self.assertEqual(first.returncode, 0)
         self.assertEqual(json.loads(first.stdout)["action"], "complete")
 
@@ -1050,7 +1282,7 @@ task_source = "file:///tasks.md"
                 )
             )
         )
-        notified = subprocess.run(
+        notified = self.run_cli(
             [
                 sys.executable,
                 str(TRANSITION_SPEC.origin),
@@ -1060,24 +1292,14 @@ task_source = "file:///tasks.md"
                 "source-1",
                 "--event-file",
                 str(event_path),
-            ],
-            capture_output=True,
-            check=False,
-            text=True,
-            env=environment,
+            ]
         )
         self.assertEqual(notified.returncode, 0)
         notified_output = json.loads(notified.stdout)
         self.assertEqual(notified_output["action"], "reserve_session")
         self.assertEqual(notified_output["details"]["task_id"], "B")
 
-        resumed = subprocess.run(
-            command,
-            capture_output=True,
-            check=False,
-            text=True,
-            env=environment,
-        )
+        resumed = self.run_cli(command)
 
         self.assertEqual(resumed.returncode, 0)
         resumed_output = json.loads(resumed.stdout)
@@ -1114,31 +1336,14 @@ task_source = "file:///tasks.md"
             "--source-revision",
             "source-1",
         ]
-        environment = {
-            **os.environ,
-            "XDG_CONFIG_HOME": str(self.config_home),
-            "XDG_STATE_HOME": str(self.state_home),
-        }
-        first = subprocess.run(
-            command,
-            capture_output=True,
-            check=False,
-            text=True,
-            env=environment,
-        )
+        first = self.run_cli(command)
         self.assertEqual(first.returncode, 0)
         first_output = json.loads(first.stdout)
         self.assertEqual(first_output["action"], "reserve_session")
         self.assertEqual(first_output["details"]["task_id"], "B")
 
         self.save_note("A", {})
-        resumed = subprocess.run(
-            command,
-            capture_output=True,
-            check=False,
-            text=True,
-            env=environment,
-        )
+        resumed = self.run_cli(command)
         self.assertEqual(resumed.returncode, 0)
         resumed_output = json.loads(resumed.stdout)
         self.assertEqual(resumed_output["action"], "reserve_session")
@@ -1157,7 +1362,7 @@ task_source = "file:///tasks.md"
                 )
             )
         )
-        notified = subprocess.run(
+        notified = self.run_cli(
             [
                 sys.executable,
                 str(TRANSITION_SPEC.origin),
@@ -1167,11 +1372,7 @@ task_source = "file:///tasks.md"
                 "source-1",
                 "--event-file",
                 str(event_path),
-            ],
-            capture_output=True,
-            check=False,
-            text=True,
-            env=environment,
+            ]
         )
         self.assertEqual(notified.returncode, 0)
         notified_output = json.loads(notified.stdout)
@@ -1226,22 +1427,11 @@ task_source = "file:///tasks.md"
             "--source-revision",
             "source-2",
         ]
-        environment = {
-            **os.environ,
-            "XDG_CONFIG_HOME": str(self.config_home),
-            "XDG_STATE_HOME": str(self.state_home),
-        }
         sessions_path = storage.state_path("example")
         sessions = json.loads(sessions_path.read_text())
         sessions["tasks"]["A"]["child_thread_id"] = "contradictory-thread"
         sessions_path.write_text(json.dumps(sessions))
-        changed = subprocess.run(
-            command,
-            capture_output=True,
-            check=False,
-            text=True,
-            env=environment,
-        )
+        changed = self.run_cli(command)
 
         self.assertEqual(changed.returncode, 2)
         self.assertEqual(

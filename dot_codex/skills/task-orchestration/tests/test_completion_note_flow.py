@@ -54,9 +54,9 @@ class CompletionFlowDriver:
         self.launches = []
 
     def run(self):
-        result = state.plan(
+        result = state.plan_tasks(
             self.orchestration_id,
-            self.tasks_path,
+            state.load_tasks(self.tasks_path),
             self.completed_ids,
             self.maximum_parallelism,
         )
@@ -302,6 +302,10 @@ task_source = "linear://project"
         self.assertIn("`開始可能なタスクなし`", orchestration_skill)
         self.assertIn('`outcome: "needs_attention"`', orchestration_skill)
         self.assertIn('`outcome: "failed"`', orchestration_skill)
+        self.assertIn("`complete`または`stop`になるまで", orchestration_skill)
+        self.assertIn("未知fieldがあれば拒否", orchestration_skill)
+        self.assertIn("`clientThreadId`を返す", orchestration_skill)
+        self.assertIn("作成済みPRと失敗内容をユーザーへ返す", orchestration_skill)
         self.assertIn("この子セッションへmergeを直接依頼", review_skill)
         self.assertIn("`completion-report`まで続け", review_skill)
 

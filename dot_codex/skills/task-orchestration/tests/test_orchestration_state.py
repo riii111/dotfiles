@@ -54,6 +54,14 @@ task_source = "linear://project"
         path.write_text(json.dumps({"tasks": tasks}))
         return path
 
+    def plan(self, tasks_path, completed_ids, maximum_parallelism):
+        return state.plan_tasks(
+            "example",
+            state.load_tasks(tasks_path),
+            completed_ids,
+            maximum_parallelism,
+        )
+
     def create_session_with_pull_request(
         self, task_id="A", repository="owner/repository", number=42
     ):
@@ -75,8 +83,8 @@ task_source = "linear://project"
             ]
         )
 
-        first = state.plan("example", tasks, [], 2)
-        next_plan = state.plan("example", tasks, ["A", "B"], 2)
+        first = self.plan(tasks, [], 2)
+        next_plan = self.plan(tasks, ["A", "B"], 2)
 
         self.assertEqual(first["selected"], ["A", "B"])
         self.assertEqual(first["waiting_dependencies"], {"C": ["A", "B"]})
@@ -92,7 +100,7 @@ task_source = "linear://project"
         state.reserve_session("example", "A")
         state.record_session("example", "A", "thread-a")
 
-        result = state.plan("example", tasks, [], 1)
+        result = self.plan(tasks, [], 1)
 
         self.assertEqual(result["selected"], [])
         self.assertEqual(result["launched_uncompleted"], ["A"])
@@ -102,7 +110,7 @@ task_source = "linear://project"
         tasks = self.tasks_file([{"id": "A", "dependencies": ["MISSING"]}])
 
         with self.assertRaisesRegex(state.StateError, "missing task MISSING"):
-            state.plan("example", tasks, [], 1)
+            self.plan(tasks, [], 1)
 
     def test_plan_rejects_a_dependency_cycle(self):
         tasks = self.tasks_file(
@@ -113,7 +121,7 @@ task_source = "linear://project"
         )
 
         with self.assertRaisesRegex(state.StateError, "dependency cycle"):
-            state.plan("example", tasks, [], 1)
+            self.plan(tasks, [], 1)
 
     def test_plan_rejects_unknown_completed_and_launched_tasks(self):
         tasks = self.tasks_file([{"id": "A", "dependencies": []}])
@@ -121,13 +129,13 @@ task_source = "linear://project"
         with self.assertRaisesRegex(
             state.StateError, "absent from the current task source"
         ):
-            state.plan("example", tasks, ["UNKNOWN"], 1)
+            self.plan(tasks, ["UNKNOWN"], 1)
 
         state.reserve_session("example", "UNKNOWN")
         with self.assertRaisesRegex(
             state.StateError, "absent from the current task source"
         ):
-            state.plan("example", tasks, [], 1)
+            self.plan(tasks, [], 1)
 
     def test_plan_uses_completion_notes_as_completed_tasks(self):
         tasks = self.tasks_file(
@@ -139,7 +147,7 @@ task_source = "linear://project"
         self.create_session_with_pull_request()
         state.record_completion_note("example", "A", self.completion_note_file({}))
 
-        result = state.plan("example", tasks, [], 1)
+        result = self.plan(tasks, [], 1)
 
         self.assertEqual(result["completed_from_notes"], ["A"])
         self.assertEqual(result["resume_completion_notes"], [])
@@ -159,7 +167,7 @@ task_source = "linear://project"
         )
 
         with self.assertRaisesRegex(state.StateError, "tracked pull requests"):
-            state.plan("example", tasks, [], 1)
+            self.plan(tasks, [], 1)
 
     def test_plan_uses_notes_for_cross_repository_tasks_with_the_same_pr_number(self):
         tasks = self.tasks_file(
@@ -174,7 +182,7 @@ task_source = "linear://project"
         state.record_completion_note("example", "A", self.completion_note_file({}))
         state.record_completion_note("example", "B", self.completion_note_file({}))
 
-        result = state.plan("example", tasks, [], 1)
+        result = self.plan(tasks, [], 1)
 
         self.assertEqual(result["completed_from_notes"], ["A", "B"])
         self.assertEqual(result["selected"], ["C"])
@@ -188,7 +196,7 @@ task_source = "linear://project"
         )
         self.create_session_with_pull_request()
 
-        waiting = state.plan("example", tasks, ["A"], 1)
+        waiting = self.plan(tasks, ["A"], 1)
 
         self.assertEqual(waiting["selected"], [])
         self.assertEqual(
@@ -214,7 +222,7 @@ task_source = "linear://project"
                 }
             ),
         )
-        ready = state.plan("example", tasks, [], 1)
+        ready = self.plan(tasks, [], 1)
 
         self.assertEqual(ready["selected"], ["B"])
         self.assertEqual(
@@ -238,7 +246,7 @@ task_source = "linear://project"
         )
         self.create_session_with_pull_request()
 
-        waiting = state.plan("example", tasks, ["A"], 1)
+        waiting = self.plan(tasks, ["A"], 1)
 
         self.assertEqual(waiting["selected"], [])
         self.assertEqual(
@@ -254,7 +262,7 @@ task_source = "linear://project"
 
         state.record_completion_note("example", "A", self.completion_note_file({}))
 
-        self.assertEqual(state.plan("example", tasks, ["A"], 1)["selected"], ["B"])
+        self.assertEqual(self.plan(tasks, ["A"], 1)["selected"], ["B"])
 
     def test_plan_waits_for_multiple_notes_and_handoffs_each_direct_dependency(self):
         tasks = self.tasks_file(
@@ -267,7 +275,7 @@ task_source = "linear://project"
         self.create_session_with_pull_request("A", "owner/repository", 42)
         self.create_session_with_pull_request("B", "other/repository", 42)
 
-        waiting = state.plan("example", tasks, ["A", "B"], 2)
+        waiting = self.plan(tasks, ["A", "B"], 2)
 
         self.assertEqual(waiting["selected"], [])
         self.assertEqual(waiting["waiting_completion_notes"], {"C": ["A", "B"]})
@@ -308,7 +316,7 @@ task_source = "linear://project"
             ),
         )
 
-        ready = state.plan("example", tasks, [], 2)
+        ready = self.plan(tasks, [], 2)
 
         self.assertEqual(ready["resume_completion_notes"], [])
         self.assertEqual(ready["selected"], ["C"])
@@ -324,7 +332,7 @@ task_source = "linear://project"
 
         state.reserve_session("example", "C")
 
-        rerun = state.plan("example", tasks, [], 2)
+        rerun = self.plan(tasks, [], 2)
 
         self.assertEqual(rerun["selected"], [])
         self.assertEqual(rerun["launched_uncompleted"], ["C"])
@@ -550,7 +558,7 @@ task_source = "linear://project"
         tasks = self.tasks_file([{"id": "A", "dependencies": []}])
 
         state.reserve_session("example", "A")
-        result = state.plan("example", tasks, [], 1)
+        result = self.plan(tasks, [], 1)
 
         self.assertEqual(result["selected"], [])
         self.assertEqual(result["launched_uncompleted"], ["A"])
@@ -566,7 +574,7 @@ task_source = "linear://project"
         released = state.release_reservation("example", "A")
 
         self.assertNotIn("A", released["tasks"])
-        self.assertEqual(state.plan("example", tasks, [], 1)["selected"], ["A"])
+        self.assertEqual(self.plan(tasks, [], 1)["selected"], ["A"])
 
     def test_record_pull_request_allows_configured_repository_and_rejects_changes(self):
         state.reserve_session("example", "A")
@@ -662,7 +670,7 @@ task_source = "linear://project"
             json.loads(result.stdout)["sessions"]["tasks"]["A"]["pull_request"],
             {"repository": "other/repository", "number": 42},
         )
-        self.assertEqual(state.plan("example", tasks, [], 1)["selected"], [])
+        self.assertEqual(self.plan(tasks, [], 1)["selected"], [])
 
     def test_context_does_not_expose_completion_notes(self):
         self.create_session_with_pull_request()
