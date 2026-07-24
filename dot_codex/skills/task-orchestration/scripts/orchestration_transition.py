@@ -32,37 +32,49 @@
              |                         |
              +---- keeps active operation and token
 
-The created Thread ID, host, project, and checkout are persisted before
+The created Thread repository, ID, host, project, and checkout are persisted before
 verification or session recording. Every external result carries the current
 task-source revision and action token, so stale or contradictory observations
 cannot advance the state.
 """
 
 import argparse
-import fcntl
 import hashlib
 import json
-import os
 import re
 import sys
-import tempfile
-from contextlib import contextmanager
 from pathlib import Path
 
 import orchestration_state as storage
 
 
 VERSION = 1
+ACTION_RECOVER_COMPLETION_NOTE = "recover_completion_note"
+ACTION_WAIT_COMPLETION_NOTE = "wait_completion_note"
+ACTION_RESERVE_SESSION = "reserve_session"
+ACTION_CREATE_THREAD = "create_thread"
+ACTION_VERIFY_THREAD = "verify_thread"
+ACTION_RECORD_SESSION = "record_session"
+ACTION_SET_THREAD_TITLE = "set_thread_title"
+ACTION_COMPLETE = "complete"
+ACTION_STOP = "stop"
+RECOVERY_ACTIONS = {
+    ACTION_RECOVER_COMPLETION_NOTE,
+    ACTION_WAIT_COMPLETION_NOTE,
+}
+LAUNCH_ACTION_BY_STATUS = {
+    "selected": ACTION_RESERVE_SESSION,
+    "reserved": ACTION_CREATE_THREAD,
+    "created": ACTION_VERIFY_THREAD,
+    "verified": ACTION_RECORD_SESSION,
+    "recorded": ACTION_SET_THREAD_TITLE,
+}
+LAUNCH_ACTIONS = set(LAUNCH_ACTION_BY_STATUS.values())
 ACTIONS = {
-    "recover_completion_note",
-    "wait_completion_note",
-    "reserve_session",
-    "create_thread",
-    "verify_thread",
-    "record_session",
-    "set_thread_title",
-    "complete",
-    "stop",
+    *RECOVERY_ACTIONS,
+    *LAUNCH_ACTIONS,
+    ACTION_COMPLETE,
+    ACTION_STOP,
 }
 LAUNCH_STATUSES = {"selected", "reserved", "created", "verified", "recorded"}
 WAIT_OUTCOMES = {"timed_out", "completed", "needs_attention", "failed"}
@@ -163,22 +175,22 @@ EVENT_FIELDS = {
     },
 }
 ACTION_EVENTS = {
-    "recover_completion_note": (
+    ACTION_RECOVER_COMPLETION_NOTE: (
         "completion_note_observed",
         "completion_recovery_requested",
         "operation_failed",
     ),
-    "wait_completion_note": (
+    ACTION_WAIT_COMPLETION_NOTE: (
         "completion_note_observed",
         "completion_waited",
         "operation_failed",
     ),
-    "reserve_session": ("session_reserved", "operation_failed"),
-    "create_thread": ("thread_created", "operation_failed"),
-    "verify_thread": ("thread_verified", "operation_failed"),
-    "record_session": ("session_recorded", "operation_failed"),
-    "set_thread_title": ("thread_title_set", "operation_failed"),
-    "stop": ("retry_requested", "reservation_released"),
+    ACTION_RESERVE_SESSION: ("session_reserved", "operation_failed"),
+    ACTION_CREATE_THREAD: ("thread_created", "operation_failed"),
+    ACTION_VERIFY_THREAD: ("thread_verified", "operation_failed"),
+    ACTION_RECORD_SESSION: ("session_recorded", "operation_failed"),
+    ACTION_SET_THREAD_TITLE: ("thread_title_set", "operation_failed"),
+    ACTION_STOP: ("retry_requested", "reservation_released"),
 }
 ROOT_FIELDS = {
     "version",
@@ -196,7 +208,8 @@ ROOT_FIELDS = {
     "stop",
     "last_event",
 }
-THREAD_FIELDS = {"thread_id", "host_id", "project_id", "checkout"}
+THREAD_IDENTITY_FIELDS = {"thread_id", "host_id", "project_id", "checkout"}
+THREAD_FIELDS = {*THREAD_IDENTITY_FIELDS, "repository"}
 MERGE_COMMIT = re.compile(r"^[0-9a-fA-F]{7,64}$")
 NOTIFICATION_FIELDS = {
     "orchestration_id",
@@ -250,7 +263,9 @@ def canonical_tasks(tasks: dict[str, dict]) -> list[dict]:
             "dependencies": list(task["dependencies"]),
             "order": task["order"],
         }
-        for task_id, task in tasks.items()
+        for task_id, task in sorted(
+            tasks.items(), key=lambda item: (item[1]["order"], item[0])
+        )
     ]
 
 
@@ -262,10 +277,15 @@ def tasks_from_state(tasks: object) -> dict[str, dict]:
 
 
 def normalize_thread(value: object) -> dict:
-    thread = require_object(value, "thread state", THREAD_FIELDS)
+    if not isinstance(value, dict) or (
+        set(value) != THREAD_IDENTITY_FIELDS and set(value) != THREAD_FIELDS
+    ):
+        raise TransitionError("thread state has missing or unknown fields")
+    thread = value
     return {
         field: require_string(thread[field], f"thread.{field}")
         for field in THREAD_FIELDS
+        if field in thread
     }
 
 
@@ -399,7 +419,7 @@ def normalize_stop(value: object) -> dict | None:
         {"operation", "message", "retryable"},
     )
     operation = require_string(stop["operation"], "stop.operation")
-    if operation not in ACTIONS - {"complete", "stop"}:
+    if operation not in ACTIONS - {ACTION_COMPLETE, ACTION_STOP}:
         raise TransitionError("stop contains an unknown operation")
     if type(stop["retryable"]) is not bool:
         raise TransitionError("stop.retryable must be a boolean")
@@ -546,38 +566,11 @@ def load_state(path: Path) -> dict:
 
 
 def write_state(path: Path, state: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary_path = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            mode="w", encoding="utf-8", dir=path.parent, delete=False
-        ) as temporary:
-            temporary_path = Path(temporary.name)
-            json.dump(state, temporary, ensure_ascii=False, indent=2, sort_keys=True)
-            temporary.write("\n")
-            temporary.flush()
-            os.fsync(temporary.fileno())
-        temporary_path.chmod(0o600)
-        os.replace(temporary_path, path)
-        directory = os.open(path.parent, os.O_RDONLY)
-        try:
-            os.fsync(directory)
-        finally:
-            os.close(directory)
-    finally:
-        if temporary_path and temporary_path.exists():
-            temporary_path.unlink()
+    storage.write_json_state(path, state)
 
 
-@contextmanager
 def lock_state(path: Path):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.with_suffix(".lock").open("a+") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
-        try:
-            yield
-        finally:
-            fcntl.flock(lock, fcntl.LOCK_UN)
+    return storage.lock_state_file(path)
 
 
 def current_plan(orchestration_id: str, state: dict) -> dict:
@@ -672,22 +665,16 @@ def materialize_next(orchestration_id: str, state: dict) -> tuple[dict, dict]:
 
 def action_name(state: dict) -> str:
     if state["stop"]:
-        return "stop"
+        return ACTION_STOP
     if state["recovery"]:
         return (
-            "recover_completion_note"
+            ACTION_RECOVER_COMPLETION_NOTE
             if state["recovery"]["status"] == "pending"
-            else "wait_completion_note"
+            else ACTION_WAIT_COMPLETION_NOTE
         )
     if state["launch"]:
-        return {
-            "selected": "reserve_session",
-            "reserved": "create_thread",
-            "created": "verify_thread",
-            "verified": "record_session",
-            "recorded": "set_thread_title",
-        }[state["launch"]["status"]]
-    return "complete"
+        return LAUNCH_ACTION_BY_STATUS[state["launch"]["status"]]
+    return ACTION_COMPLETE
 
 
 def action_token(state: dict, action: str) -> str:
@@ -709,17 +696,11 @@ def action_token(state: dict, action: str) -> str:
 
 
 def action_details(state: dict, action: str, plan: dict) -> dict:
-    if action in {"recover_completion_note", "wait_completion_note"}:
+    if action in RECOVERY_ACTIONS:
         return dict(state["recovery"])
-    if action in {
-        "reserve_session",
-        "create_thread",
-        "verify_thread",
-        "record_session",
-        "set_thread_title",
-    }:
+    if action in LAUNCH_ACTIONS:
         return dict(state["launch"])
-    if action == "stop":
+    if action == ACTION_STOP:
         details = dict(state["stop"])
         if state["launch_history"]:
             details["launched"] = list(state["launch_history"])
@@ -747,14 +728,14 @@ def action_details(state: dict, action: str, plan: dict) -> dict:
 
 def event_schemas(action: str, state: dict) -> dict:
     events = [*ACTION_EVENTS.get(action, ()), "completion_notified"]
-    if action == "stop":
+    if action == ACTION_STOP:
         if (
-            state["stop"]["operation"] == "create_thread"
+            state["stop"]["operation"] == ACTION_CREATE_THREAD
             or not state["stop"]["retryable"]
         ):
             events.remove("retry_requested")
         if (
-            state["stop"]["operation"] != "create_thread"
+            state["stop"]["operation"] != ACTION_CREATE_THREAD
             or not state["launch"]
             or state["launch"]["status"] != "reserved"
         ):
@@ -880,7 +861,7 @@ def reduce_event(orchestration_id: str, state: dict, event: dict) -> dict:
             raise TransitionError("failed operation does not match the current action")
         if type(event["retryable"]) is not bool:
             raise TransitionError("event.retryable must be a boolean")
-        if action == "create_thread" and event["retryable"]:
+        if action == ACTION_CREATE_THREAD and event["retryable"]:
             raise TransitionError("thread creation failures are not directly retryable")
         state["stop"] = {
             "operation": action,
@@ -893,7 +874,7 @@ def reduce_event(orchestration_id: str, state: dict, event: dict) -> dict:
         launch = state["launch"]
         require_task(event, launch["task_id"])
         if (
-            state["stop"]["operation"] != "create_thread"
+            state["stop"]["operation"] != ACTION_CREATE_THREAD
             or launch["status"] != "reserved"
         ):
             raise TransitionError(
@@ -975,9 +956,27 @@ def reduce_event(orchestration_id: str, state: dict, event: dict) -> dict:
         validate_thread_repository(orchestration_id, event)
         if type(event["verified"]) is not bool or not event["verified"]:
             raise TransitionError("thread verification must be true")
-        observed = {field: event[field] for field in THREAD_FIELDS}
-        if observed != launch["thread"]:
+        observed = {
+            field: require_string(event[field], f"event.{field}")
+            for field in THREAD_FIELDS
+        }
+        created = launch["thread"]
+        if (
+            {
+                field: created[field]
+                for field in THREAD_IDENTITY_FIELDS
+            }
+            != {
+                field: observed[field]
+                for field in THREAD_IDENTITY_FIELDS
+            }
+            or (
+                "repository" in created
+                and observed["repository"] != created["repository"]
+            )
+        ):
             raise TransitionError("verified thread does not match the created thread")
+        launch["thread"] = observed
         launch["status"] = "verified"
     elif event_type == "session_recorded":
         launch = state["launch"]
@@ -1103,7 +1102,7 @@ def resolve_init_state(
         maximum_parallelism,
         (
             state["completed"]
-            if state is not None and action_name(state) != "complete"
+            if state is not None and action_name(state) != ACTION_COMPLETE
             else None
         ),
     )
@@ -1124,7 +1123,7 @@ def resolve_init_state(
         policy,
     ):
         return state
-    if action_name(state) != "complete":
+    if action_name(state) != ACTION_COMPLETE:
         raise TransitionError("cycle inputs changed during an active operation")
     validate_external_state(orchestration_id, state)
     return initial_state(
@@ -1187,7 +1186,6 @@ def main(argv: list[str] | None = None) -> int:
                         )
                 else:
                     state = reduce_event(arguments.orchestration_id, state, event)
-                    write_state(path, state)
                 state, plan = materialize_next(arguments.orchestration_id, state)
                 write_state(path, state)
             result = output(arguments.orchestration_id, state, plan)

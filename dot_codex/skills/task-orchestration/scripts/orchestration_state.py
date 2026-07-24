@@ -246,7 +246,7 @@ def load_completion_note_file(path: Path) -> dict:
     return validate_completion_note(note)
 
 
-def write_sessions(path: Path, sessions: dict) -> None:
+def write_json_state(path: Path, value: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary_path = None
     try:
@@ -254,23 +254,32 @@ def write_sessions(path: Path, sessions: dict) -> None:
             mode="w", encoding="utf-8", dir=path.parent, delete=False
         ) as temporary:
             temporary_path = Path(temporary.name)
-            json.dump(sessions, temporary, ensure_ascii=False, indent=2, sort_keys=True)
+            json.dump(value, temporary, ensure_ascii=False, indent=2, sort_keys=True)
             temporary.write("\n")
             temporary.flush()
             os.fsync(temporary.fileno())
         temporary_path.chmod(0o600)
         os.replace(temporary_path, path)
+        directory = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
     finally:
         if temporary_path and temporary_path.exists():
             temporary_path.unlink()
 
 
+def write_sessions(path: Path, sessions: dict) -> None:
+    write_json_state(path, sessions)
+
+
 def write_completion_notes(path: Path, completion_notes: dict) -> None:
-    write_sessions(path, completion_notes)
+    write_json_state(path, completion_notes)
 
 
 @contextmanager
-def lock_sessions(path: Path):
+def lock_state_file(path: Path):
     path.parent.mkdir(parents=True, exist_ok=True)
     lock_path = path.with_suffix(".lock")
     with lock_path.open("a+") as lock:
@@ -279,6 +288,10 @@ def lock_sessions(path: Path):
             yield
         finally:
             fcntl.flock(lock, fcntl.LOCK_UN)
+
+
+def lock_sessions(path: Path):
+    return lock_state_file(path)
 
 
 def reserve_session(orchestration_id: str, task_id: str) -> dict:

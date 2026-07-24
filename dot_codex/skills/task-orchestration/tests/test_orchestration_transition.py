@@ -46,7 +46,7 @@ class OrchestrationTransitionTest(unittest.TestCase):
 [orchestrations.example]
 parent_thread_id = "parent-thread"
 repository = "owner/repository"
-pull_request_repositories = ["owner/repository"]
+pull_request_repositories = ["owner/repository", "other/repository"]
 task_source = "file:///tasks.md"
 """.strip()
             + "\n"
@@ -227,6 +227,7 @@ task_source = "file:///tasks.md"
                         "host_id": "local",
                         "project_id": "saved-project",
                         "checkout": "/checkout/repository",
+                        "repository": "owner/repository",
                     },
                 }
             ],
@@ -306,6 +307,7 @@ task_source = "file:///tasks.md"
                 "host_id": "local",
                 "project_id": "saved-project",
                 "checkout": "/checkout/repository",
+                "repository": "owner/repository",
             },
         )
         self.assertNotIn("thread_created", output["allowed_events"])
@@ -699,6 +701,28 @@ task_source = "file:///tasks.md"
                 ),
             )
 
+    def test_thread_verification_requires_created_repository(self):
+        state, _ = self.advance_to_created_thread()
+
+        with self.assertRaisesRegex(
+            transition.TransitionError, "does not match the created thread"
+        ):
+            transition.reduce_event(
+                "example",
+                state,
+                self.event(
+                    state,
+                    "thread_verified",
+                    task_id="A",
+                    repository="other/repository",
+                    thread_id="created-thread",
+                    host_id="local",
+                    project_id="saved-project",
+                    checkout="/checkout/repository",
+                    verified=True,
+                ),
+            )
+
     def test_completion_notification_rejects_changed_or_unverified_payload(self):
         self.create_tracked_session()
         self.save_note("A", {})
@@ -862,6 +886,164 @@ task_source = "file:///tasks.md"
             transition.same_inputs(state, "source-2", changed, [], 1, "manual")
         )
         self.assertNotEqual(transition.action_name(state), "complete")
+
+    def test_rejects_contradictory_event_details(self):
+        state, _ = self.new_state([{"id": "A", "dependencies": []}])
+        created = json.loads(json.dumps(state))
+        created["launch"]["status"] = "created"
+        created["launch"]["thread"] = {
+            "thread_id": "created-thread",
+            "host_id": "local",
+            "project_id": "saved-project",
+            "checkout": "/checkout/repository",
+            "repository": "owner/repository",
+        }
+        created = transition.normalize_state(created)
+        for fields, message in [
+            (
+                {
+                    "operation": "reserve_session",
+                    "message": "failed",
+                    "retryable": "yes",
+                },
+                "must be a boolean",
+            ),
+            (
+                {
+                    "operation": "create_thread",
+                    "message": "wrong action",
+                    "retryable": False,
+                },
+                "does not match",
+            ),
+        ]:
+            with self.subTest(fields=fields):
+                with self.assertRaisesRegex(transition.TransitionError, message):
+                    transition.reduce_event(
+                        "example",
+                        state,
+                        self.event(state, "operation_failed", **fields),
+                    )
+
+        self.create_tracked_session()
+        waiting, _ = self.new_state(
+            [
+                {"id": "A", "dependencies": []},
+                {"id": "B", "dependencies": ["A"]},
+            ],
+            completed=["A"],
+        )
+        waiting, _ = self.apply(
+            waiting,
+            "completion_recovery_requested",
+            task_id="A",
+            child_thread_id="thread-a",
+            turn_id="turn-a",
+            wait_cursor=None,
+        )
+        for fields, message in [
+            (
+                {
+                    "task_id": "A",
+                    "turn_id": "turn-b",
+                    "outcome": "timed_out",
+                    "wait_cursor": None,
+                },
+                "another turn ID",
+            ),
+            (
+                {
+                    "task_id": "A",
+                    "turn_id": "turn-a",
+                    "outcome": "unknown",
+                    "wait_cursor": None,
+                },
+                "unknown wait outcome",
+            ),
+        ]:
+            with self.subTest(fields=fields):
+                with self.assertRaisesRegex(transition.TransitionError, message):
+                    transition.reduce_event(
+                        "example",
+                        waiting,
+                        self.event(waiting, "completion_waited", **fields),
+                    )
+
+        with self.assertRaisesRegex(
+            transition.TransitionError, "verification must be true"
+        ):
+            transition.reduce_event(
+                "example",
+                created,
+                self.event(
+                    created,
+                    "thread_verified",
+                    task_id="A",
+                    thread_id="created-thread",
+                    host_id="local",
+                    project_id="saved-project",
+                    checkout="/checkout/repository",
+                    verified=False,
+                ),
+            )
+
+    def test_rejects_unknown_or_typeless_events(self):
+        state, _ = self.new_state([{"id": "A", "dependencies": []}])
+        for event, message in [
+            ({}, "object with a type"),
+            ({"type": 1}, "object with a type"),
+            ({"type": "unknown"}, "unknown orchestration event"),
+        ]:
+            with self.subTest(event=event):
+                with self.assertRaisesRegex(transition.TransitionError, message):
+                    transition.reduce_event("example", state, event)
+
+    def test_normalize_state_rejects_inconsistent_substates(self):
+        base, _ = self.new_state([{"id": "A", "dependencies": []}])
+        both = json.loads(json.dumps(base))
+        both["recovery"] = {
+            "task_id": "A",
+            "child_thread_id": "thread-a",
+            "pull_request": {"repository": "owner/repository", "number": 42},
+            "status": "pending",
+            "turn_id": None,
+            "wait_cursor": None,
+        }
+
+        waiting = json.loads(json.dumps(base))
+        waiting["launch"] = None
+        waiting["recovery"] = {
+            "task_id": "A",
+            "child_thread_id": "thread-a",
+            "pull_request": {"repository": "owner/repository", "number": 42},
+            "status": "waiting",
+            "turn_id": None,
+            "wait_cursor": None,
+        }
+
+        premature_thread = json.loads(json.dumps(base))
+        premature_thread["launch"]["thread"] = {
+            "thread_id": "thread-a",
+            "host_id": "local",
+            "project_id": "saved-project",
+            "checkout": "/checkout/repository",
+            "repository": "owner/repository",
+        }
+
+        invalid_note = json.loads(json.dumps(base))
+        invalid_note["launch"]["dependency_completion_notes"] = {
+            "B": {"handoff": "not a dependency"}
+        }
+
+        for malformed, message in [
+            (both, "cannot both be active"),
+            (waiting, "no turn ID"),
+            (premature_thread, "before creation"),
+            (invalid_note, "non-dependency"),
+        ]:
+            with self.subTest(message=message):
+                with self.assertRaisesRegex(transition.TransitionError, message):
+                    transition.normalize_state(malformed)
 
     def test_rejects_session_mapping_that_disagrees_with_persisted_stage(self):
         state, _ = self.advance_to_created_thread()
@@ -1036,6 +1218,49 @@ task_source = "file:///tasks.md"
             {"error": "cycle inputs changed during an active operation"},
         )
 
+    def test_cli_init_canonicalizes_tasks_by_explicit_order(self):
+        tasks = self.root / "tasks.json"
+        tasks.write_text(
+            json.dumps(
+                {
+                    "tasks": [
+                        {"id": "A", "dependencies": [], "order": 0},
+                        {"id": "B", "dependencies": [], "order": 1},
+                    ]
+                }
+            )
+        )
+        command = [
+            sys.executable,
+            str(TRANSITION_SPEC.origin),
+            "init",
+            "example",
+            "--tasks",
+            str(tasks),
+            "--max-parallelism",
+            "1",
+            "--policy",
+            "manual",
+            "--source-revision",
+            "source-1",
+        ]
+        first = self.run_cli(command)
+        tasks.write_text(
+            json.dumps(
+                {
+                    "tasks": [
+                        {"id": "B", "dependencies": [], "order": 1},
+                        {"id": "A", "dependencies": [], "order": 0},
+                    ]
+                }
+            )
+        )
+        reordered = self.run_cli(command)
+
+        self.assertEqual(first.returncode, 0)
+        self.assertEqual(reordered.returncode, 0)
+        self.assertEqual(json.loads(first.stdout), json.loads(reordered.stdout))
+
     def test_cli_next_and_apply_event_enforce_replay_boundaries(self):
         tasks = self.root / "tasks.json"
         tasks.write_text(json.dumps({"tasks": [{"id": "A", "dependencies": []}]}))
@@ -1131,6 +1356,50 @@ task_source = "file:///tasks.md"
             json.loads(non_object.stderr),
             {"error": "orchestration event must be an object"},
         )
+
+    def test_cli_apply_event_does_not_commit_before_next_action_validates(self):
+        state, _ = self.advance_to_created_thread()
+        path = transition.transition_path("example")
+        transition.write_state(path, state)
+        persisted_before = transition.load_state(path)
+        event_path = self.root / "thread-verified.json"
+        event_path.write_text(
+            json.dumps(
+                self.event(
+                    state,
+                    "thread_verified",
+                    task_id="A",
+                    thread_id="created-thread",
+                    host_id="local",
+                    project_id="saved-project",
+                    checkout="/checkout/repository",
+                    verified=True,
+                )
+            )
+        )
+        storage.record_session("example", "A", "another-thread")
+
+        result = self.run_cli(
+            [
+                sys.executable,
+                str(TRANSITION_SPEC.origin),
+                "apply-event",
+                "example",
+                "--source-revision",
+                "source-1",
+                "--event-file",
+                str(event_path),
+            ]
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(
+            json.loads(result.stderr),
+            {"error": "verified launch conflicts with the session mapping"},
+        )
+        persisted = transition.load_state(path)
+        self.assertEqual(persisted["launch"]["status"], "created")
+        self.assertEqual(persisted, persisted_before)
 
     def test_concurrent_notification_and_action_event_preserve_both_results(self):
         self.create_tracked_session()
