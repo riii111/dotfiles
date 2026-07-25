@@ -62,18 +62,62 @@ Homebrew stays for GUI / cask packages and is managed by nix-darwin.
 
 ### Codex task orchestration
 
-Initial setup:
+Register the parent session and install the task tools:
 
 ```bash
 ghq get https://github.com/riii111/codex-task-orchestrator
 chezmoi apply
 ~/bin/dotctl sync-nix-profile
-codex-task-orchestrator init # Use codex-task-orchestration as the ID
+codex-task-orchestrator init
 ```
 
-The six task-orchestration skills in `~/.codex/skills` are symlinked from the
-`codex-task-orchestrator` checkout. Pull that repository to update the suite; run `chezmoi apply`
-to install or repair the links.
+`init` asks for the parent session, orchestration ID, task source, allowed pull-request
+repositories, and allowed agent tools. Add `cursor-cli` when Cursor is permitted for the
+selected repositories; it is not selected automatically. The six task-orchestration skills in
+`~/.codex/skills` are symlinked from the local `codex-task-orchestrator` checkout. Pull that
+repository to update the suite, then run `chezmoi apply` to install or repair the links.
+
+Choose the worker in each JSON task specification:
+
+```text
+Codex:  agent_tool = codex,      runner = codex-app
+Cursor: agent_tool = cursor-cli, runner = herdr
+```
+
+Start and inspect a worker with the shared CLI:
+
+```bash
+codex-task-orchestrator worker start <orchestration-id> task.json
+codex-task-orchestrator worker status <orchestration-id> <task-id> --json
+codex-task-orchestrator worker send <orchestration-id> <task-id> \
+  --message 'Prioritize API compatibility'
+codex-task-orchestrator worker stop <orchestration-id> <task-id>
+codex-task-orchestrator worker resume <orchestration-id> <task-id>
+```
+
+For a Cursor worker, `herdr` owns the workspace and pane while Cursor CLI's `agent` owns the
+conversation. Attach to Herdr with `herdr`, open the worker pane, and send direct instructions
+there when needed. The parent `worker send` command reaches the same Cursor session. `stop` and
+`resume` affect only that worker; `stop` is supported for Herdr workers.
+
+Record the worker's events and recover delivery explicitly:
+
+```bash
+codex-task-orchestrator worker escalate <orchestration-id> <task-id> --message '<reason>'
+codex-task-orchestrator worker record-pr <orchestration-id> <task-id> \
+  --repository owner/repository --number <number> --url <url> \
+  --verification '<checks>'
+codex-task-orchestrator worker record-completion-note <orchestration-id> <task-id>
+codex-task-orchestrator worker retry-parent-delivery <orchestration-id> <task-id>
+```
+
+If startup or delivery is uncertain, inspect `worker status --json` and retry the saved
+operation; do not start a second worker or switch automatically to Codex. A pending parent event
+is retried with `retry-parent-delivery`, not by polling. After a merged pull request, the saved
+Completion Note and parent event drive the next task. `manual` keeps the pull request in Draft;
+`auto` proceeds only after the current checks and conflict state pass.
+
+This setup has no periodic merge poller, merge scanner, or task LaunchAgent.
 
 Reset one orchestration when its tracked state should be discarded:
 
