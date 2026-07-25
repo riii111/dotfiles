@@ -1,0 +1,80 @@
+#!/bin/sh
+#
+# https://github.com/openai/codex/issues/28224
+# Codex が応答断片などの診断ログを SQLite へ永続化し続けることで、
+# logs_2.sqlite と WAL への書き込みが増える問題を回避するスクリプト。
+# logs テーブルへの追加を無視するトリガーを作成し、既存データは削除しない。
+#
+# ChatGPT Desktop、Codex CLI、VS CodeのCodexをすべて完全終了してから実行する。
+#
+
+set -eu
+
+trigger_name="block_log_inserts"
+trigger_sql="CREATE TRIGGER $trigger_name
+BEFORE INSERT ON logs
+BEGIN
+  SELECT RAISE(IGNORE);
+END;"
+
+for required_command in codex jq lsof sqlite3; do
+	if ! command -v "$required_command" >/dev/null 2>&1; then
+		echo "エラー: $required_command が見つかりません。" >&2
+		exit 1
+	fi
+done
+
+doctor_report="$(codex doctor --json || true)"
+
+if ! sqlite_home="$(printf '%s\n' "$doctor_report" |
+	jq -er '.checks["config.load"].details["sqlite home"] | select(type == "string" and length > 0)')"; then
+	echo "エラー: CodexのSQLite保存先を解決できませんでした。" >&2
+	exit 1
+fi
+
+db="${sqlite_home%/}/logs_2.sqlite"
+
+if [ ! -f "$db" ]; then
+	echo "エラー: Codex のログDBが見つかりません: $db" >&2
+	exit 1
+fi
+
+if lsof -t -- "$db" >/dev/null 2>&1; then
+	echo "エラー: Codex のログDBが使用中です。" >&2
+	echo "ChatGPT Desktop、Codex CLI、VS CodeのCodexをすべて完全終了してから再実行してください。" >&2
+	exit 1
+fi
+
+if [ "$(sqlite3 "$db" "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'logs';")" != "1" ]; then
+	echo "エラー: logs テーブルが見つかりません: $db" >&2
+	exit 1
+fi
+
+installed_trigger_sql="$(sqlite3 "$db" \
+	"SELECT sql FROM sqlite_master
+	 WHERE type = 'trigger'
+	   AND name = '$trigger_name';")"
+normalized_expected_sql="$(printf '%s\n' "$trigger_sql" | tr -d '[:space:];')"
+
+if [ -n "$installed_trigger_sql" ]; then
+	normalized_installed_sql="$(printf '%s\n' "$installed_trigger_sql" | tr -d '[:space:];')"
+	if [ "$normalized_installed_sql" != "$normalized_expected_sql" ]; then
+		echo "エラー: 同名で定義が異なるトリガーが存在します: $trigger_name" >&2
+		exit 1
+	fi
+else
+	sqlite3 "$db" "$trigger_sql"
+fi
+
+verified_trigger_sql="$(sqlite3 "$db" \
+	"SELECT sql FROM sqlite_master
+	 WHERE type = 'trigger'
+	   AND name = '$trigger_name';")"
+normalized_verified_sql="$(printf '%s\n' "$verified_trigger_sql" | tr -d '[:space:];')"
+
+if [ "$normalized_verified_sql" != "$normalized_expected_sql" ]; then
+	echo "エラー: 永続ログ停止トリガーの定義を確認できませんでした。" >&2
+	exit 1
+fi
+
+echo "Codex の永続ログ停止トリガーを設定しました: $db"
