@@ -77,6 +77,15 @@ selected repositories; it is not selected automatically. The six task-orchestrat
 `~/.codex/skills` are symlinked from the local `codex-task-orchestrator` checkout. Pull that
 repository to update the suite, then run `chezmoi apply` to install or repair the links.
 
+Cursor CLI's `agent` executable is installed and authenticated separately from this Nix profile.
+When `cursor-cli` is allowed, install it through Cursor's supported installer and verify the
+executable used by Herdr:
+
+```bash
+command -v agent
+agent --version
+```
+
 Choose the worker in each JSON task specification:
 
 ```text
@@ -108,14 +117,16 @@ codex-task-orchestrator worker record-pr <orchestration-id> <task-id> \
   --repository owner/repository --number <number> --url <url> \
   --verification '<checks>'
 codex-task-orchestrator worker record-completion-note <orchestration-id> <task-id>
+codex-task-orchestrator worker retry-operation <orchestration-id> <task-id>
 codex-task-orchestrator worker retry-parent-delivery <orchestration-id> <task-id>
 ```
 
-If startup or delivery is uncertain, inspect `worker status --json` and retry the saved
-operation; do not start a second worker or switch automatically to Codex. A pending parent event
-is retried with `retry-parent-delivery`, not by polling. After a merged pull request, the saved
-Completion Note and parent event drive the next task. `manual` keeps the pull request in Draft;
-`auto` proceeds only after the current checks and conflict state pass.
+If startup or delivery is uncertain, inspect `worker status --json` and do not start a second
+worker or switch automatically to Codex. A pending provider operation is retried with
+`retry-operation`; a pending parent event is retried with `retry-parent-delivery`, not by polling.
+After a merged pull request, the saved Completion Note and parent event drive the next task.
+`manual` keeps the pull request in Draft; `auto` proceeds only after the current checks and
+conflict state pass.
 
 This setup has no periodic merge poller, merge scanner, or task LaunchAgent.
 
