@@ -8,11 +8,11 @@
         "rust-overlay": "rust-overlay"
       },
       "locked": {
-        "lastModified": 1784853573,
-        "narHash": "sha256-gBYltf/7J4+H+SEJ86p6exBCJ0iDTOno7QUni3YHBaQ=",
+        "lastModified": 1784973688,
+        "narHash": "sha256-HFytnJ5DKKg4PY8NHQa8hD0j8ExolQ79o38GrsUa4rk=",
         "owner": "riii111",
         "repo": "codex-task-orchestrator",
-        "rev": "20fc8d7abeae5a37ad6e821df92c5f2e579c7552",
+        "rev": "508c6c30f62c7c2b6bb65f5d1270e3c2eaa4d060",
         "type": "github"
       },
       "original": {
