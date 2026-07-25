@@ -62,7 +62,7 @@ Homebrew stays for GUI / cask packages and is managed by nix-darwin.
 
 ### Codex task orchestration
 
-Register the parent session and install the task tools:
+Install the task orchestrator and register a parent session:
 
 ```bash
 ghq get https://github.com/riii111/codex-task-orchestrator
@@ -71,64 +71,25 @@ chezmoi apply
 codex-task-orchestrator init
 ```
 
-`init` asks for the parent session, orchestration ID, task source, allowed pull-request
-repositories, and allowed agent tools. Add `cursor-cli` when Cursor is permitted for the
-selected repositories; it is not selected automatically. The six task-orchestration skills in
-`~/.codex/skills` are symlinked from the local `codex-task-orchestrator` checkout. Pull that
-repository to update the suite, then run `chezmoi apply` to install or repair the links.
+The six task-orchestration skills in `~/.codex/skills` are symlinked from the local
+`codex-task-orchestrator` checkout. Pull that repository to update the suite, then run
+`chezmoi apply` to install or repair the links. `init` records the parent session, task source,
+allowed pull-request repositories, and explicitly permitted agent tools.
 
-Cursor CLI's `agent` executable is installed and authenticated separately from this Nix profile.
-When `cursor-cli` is allowed, install it through Cursor's supported installer and verify the
-executable used by Herdr:
+When a task permits `cursor-cli`, install and authenticate Cursor CLI separately from this Nix
+profile. Verify the executable used by Herdr before starting a worker:
 
 ```bash
 command -v agent
 agent --version
 ```
 
-Choose the worker in each JSON task specification:
-
-```text
-Codex:  agent_tool = codex,      runner = codex-app
-Cursor: agent_tool = cursor-cli, runner = herdr
-```
-
-Start and inspect a worker with the shared CLI:
-
-```bash
-codex-task-orchestrator worker start <orchestration-id> task.json
-codex-task-orchestrator worker status <orchestration-id> <task-id> --json
-codex-task-orchestrator worker send <orchestration-id> <task-id> \
-  --message 'Prioritize API compatibility'
-codex-task-orchestrator worker stop <orchestration-id> <task-id>
-codex-task-orchestrator worker resume <orchestration-id> <task-id>
-```
-
-For a Cursor worker, `herdr` owns the workspace and pane while Cursor CLI's `agent` owns the
-conversation. Attach to Herdr with `herdr`, open the worker pane, and send direct instructions
-there when needed. The parent `worker send` command reaches the same Cursor session. `stop` and
-`resume` affect only that worker; `stop` is supported for Herdr workers.
-
-Record the worker's events and recover delivery explicitly:
-
-```bash
-codex-task-orchestrator worker escalate <orchestration-id> <task-id> --message '<reason>'
-codex-task-orchestrator worker record-pr <orchestration-id> <task-id> \
-  --repository owner/repository --number <number> --url <url> \
-  --verification '<checks>'
-codex-task-orchestrator worker record-completion-note <orchestration-id> <task-id>
-codex-task-orchestrator worker retry-operation <orchestration-id> <task-id>
-codex-task-orchestrator worker retry-parent-delivery <orchestration-id> <task-id>
-```
-
-If startup or delivery is uncertain, inspect `worker status --json` and do not start a second
-worker or switch automatically to Codex. A pending provider operation is retried with
-`retry-operation`; a pending parent event is retried with `retry-parent-delivery`, not by polling.
-After a merged pull request, the saved Completion Note and parent event drive the next task.
-`manual` keeps the pull request in Draft; `auto` proceeds only after the current checks and
-conflict state pass.
-
-This setup has no periodic merge poller, merge scanner, or task LaunchAgent.
+The orchestrator's [worker guide](https://github.com/riii111/codex-task-orchestrator#run-a-worker)
+defines task selection, Herdr/Cursor boundaries, status and recovery commands, explicit
+`retry-parent-delivery`, and the Completion Note event flow. Use its
+[disposable Herdr/Cursor manual](https://github.com/riii111/codex-task-orchestrator/blob/main/docs/herdr-cursor-worker-manual.md)
+for live verification. The dotfiles setup does not install a periodic poller, merge scanner, or
+task LaunchAgent.
 
 Reset one orchestration when its tracked state should be discarded:
 
