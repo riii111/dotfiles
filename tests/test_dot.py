@@ -10,6 +10,29 @@ from bin.lib.dot import cli
 
 
 class DotCliTest(unittest.TestCase):
+    def test_task_skills_are_sourced_from_orchestrator_checkout(self):
+        repo_root = Path(__file__).resolve().parents[1]
+        skill_root = repo_root / "dot_codex" / "skills"
+        skill_names = (
+            "task-orchestration",
+            "task-session-launch",
+            "task-worker",
+            "task-review-cycle",
+            "task-completion-recovery",
+            "task-completion-report",
+        )
+
+        for skill_name in skill_names:
+            link_template = skill_root / f"symlink_{skill_name}.tmpl"
+            self.assertEqual(
+                link_template.read_text(encoding="utf-8").strip(),
+                "{{ .chezmoi.homeDir }}"
+                f"/ghq/github.com/riii111/codex-task-orchestrator/skills/{skill_name}",
+            )
+            self.assertFalse((skill_root / skill_name).exists())
+
+        self.assertFalse((skill_root / "completion-report").exists())
+
     def test_detect_shell_uses_shebang_and_skips_python(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -211,51 +234,18 @@ class DotCliTest(unittest.TestCase):
         self.assertEqual(
             calls[1][0],
             (
-                "python3",
-                "-m",
-                "unittest",
-                "discover",
-                "dot_codex/skills/task-orchestration/tests",
-            ),
-        )
-        self.assertEqual(
-            calls[2][0],
-            (
-                "python3",
-                "-m",
-                "unittest",
-                "discover",
-                "dot_codex/skills/completion-report/tests",
-            ),
-        )
-        self.assertEqual(
-            calls[3][0],
-            (
-                "python3",
-                "-m",
-                "unittest",
-                "discover",
-                "dot_codex/skills/task-worker/tests",
-            ),
-        )
-        self.assertEqual(
-            calls[4][0],
-            (
                 "/bin/lua",
                 "private_dot_config/wezterm/tests/herdr_mode_test.lua",
             ),
         )
-        self.assertEqual(calls[5][0], ("/bin/bash", "-n", "/repo/scripts/check.sh"))
-        self.assertEqual(calls[6][0], ("/bin/sh", "-n", "/repo/bin/run"))
+        self.assertEqual(calls[2][0], ("/bin/bash", "-n", "/repo/scripts/check.sh"))
+        self.assertEqual(calls[3][0], ("/bin/sh", "-n", "/repo/bin/run"))
 
     def test_command_test_collects_failures_without_traceback(self):
         repo_root = Path("/repo")
         targets = [(repo_root / "scripts/check.sh", "bash")]
         runs = [
             subprocess.CompletedProcess(["python3"], 1, "", "unit failed"),
-            subprocess.CompletedProcess(["python3"], 0, "", ""),
-            subprocess.CompletedProcess(["python3"], 0, "", ""),
-            subprocess.CompletedProcess(["python3"], 0, "", ""),
             subprocess.CompletedProcess(["lua"], 0, "", ""),
             subprocess.CompletedProcess(["bash"], 1, "", "syntax failed"),
         ]

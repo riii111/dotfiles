@@ -65,10 +65,15 @@ Homebrew stays for GUI / cask packages and is managed by nix-darwin.
 Initial setup:
 
 ```bash
+ghq get https://github.com/riii111/codex-task-orchestrator
 chezmoi apply
 ~/bin/dotctl sync-nix-profile
 codex-task-orchestrator init # Use codex-task-orchestration as the ID
 ```
+
+The six task-orchestration skills in `~/.codex/skills` are symlinked from the
+`codex-task-orchestrator` checkout. Pull that repository to update the suite; run `chezmoi apply`
+to install or repair the links.
 
 Reset one orchestration when its tracked state should be discarded:
 
