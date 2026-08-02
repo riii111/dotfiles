@@ -185,6 +185,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="include resolved review threads",
     )
+    parser.add_argument(
+        "--compact",
+        action="store_true",
+        help="omit repeated diff hunks and emit compact JSON",
+    )
     return parser.parse_args()
 
 
@@ -194,6 +199,10 @@ def main() -> int:
     pull_request, threads = fetch_threads(repo, number)
     if not args.include_resolved:
         threads = [thread for thread in threads if not thread["isResolved"]]
+    if args.compact:
+        for thread in threads:
+            for comment in thread["comments"]:
+                comment.pop("diffHunk", None)
 
     result = {
         "pullRequest": pull_request,
@@ -204,7 +213,13 @@ def main() -> int:
         "reviewThreads": threads,
         "includesResolvedThreads": args.include_resolved,
     }
-    json.dump(result, sys.stdout, ensure_ascii=False, indent=2)
+    json.dump(
+        result,
+        sys.stdout,
+        ensure_ascii=False,
+        indent=None if args.compact else 2,
+        separators=(",", ":") if args.compact else None,
+    )
     sys.stdout.write("\n")
     return 0
 

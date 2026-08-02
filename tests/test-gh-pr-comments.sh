@@ -56,6 +56,10 @@ jq -e '
 PATH="$tmpdir/bin:$PATH" python3 "$wrapper" 42 --include-resolved >"$output"
 jq -e '(.reviewThreads | length) == 2 and .includesResolvedThreads == true' "$output" >/dev/null
 
+PATH="$tmpdir/bin:$PATH" python3 "$wrapper" 42 --compact >"$output"
+jq -e '.reviewThreads[0].comments[0] | has("diffHunk") | not' "$output" >/dev/null
+test "$(wc -l <"$output")" -eq 1
+
 if PATH="$tmpdir/bin:$PATH" python3 "$wrapper" 0 >"$output" 2>/dev/null; then
 	printf 'invalid PR number unexpectedly succeeded\n' >&2
 	exit 1

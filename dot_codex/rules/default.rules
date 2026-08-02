@@ -17,7 +17,13 @@ prefix_rule(pattern=["cargo", "fmt"], decision="allow", justification="Rust form
 prefix_rule(pattern=["cargo", "audit"], decision="allow", justification="Rust security audit")
 prefix_rule(pattern=["cargo", "test"], decision="allow", justification="Rust tests")
 prefix_rule(pattern=["cargo", "run"], decision="allow", justification="Run Rust binary")
-prefix_rule(pattern=["cargo", "metadata"], decision="allow", justification="Read Rust workspace metadata")
+prefix_rule(
+    pattern=["cargo", "metadata", "--no-deps"],
+    decision="allow",
+    justification="Read workspace metadata without resolving dependencies",
+    match=["cargo metadata --no-deps", "cargo metadata --no-deps --format-version 1"],
+    not_match=["cargo metadata", "cargo metadata --format-version 1"],
+)
 
 # --- Go ---
 prefix_rule(pattern=["go", "build"], decision="allow", justification="Go build")
@@ -52,16 +58,28 @@ prefix_rule(pattern=["git", "diff"], decision="allow", justification="Show chang
 prefix_rule(pattern=["git", "log"], decision="allow", justification="Show commit history")
 prefix_rule(pattern=["git", "show"], decision="allow", justification="Show commit details")
 prefix_rule(pattern=["git", "blame"], decision="allow", justification="Show file annotations")
-prefix_rule(pattern=["git", "branch"], decision="allow", justification="List/manage branches")
-prefix_rule(pattern=["git", "tag"], decision="allow", justification="List/manage tags")
-prefix_rule(pattern=["git", "remote"], decision="allow", justification="Manage remotes")
+prefix_rule(pattern=["git", "branch", "--show-current"], decision="allow", justification="Show current branch")
+prefix_rule(pattern=["git", "branch", "--list"], decision="allow", justification="List branches")
+prefix_rule(pattern=["git", "branch", "-l"], decision="allow", justification="List branches")
+prefix_rule(pattern=["git", "branch", "--all"], decision="allow", justification="List all branches")
+prefix_rule(pattern=["git", "branch", "-a"], decision="allow", justification="List all branches")
+prefix_rule(pattern=["git", "branch", "--remotes"], decision="allow", justification="List remote branches")
+prefix_rule(pattern=["git", "branch", "-r"], decision="allow", justification="List remote branches")
+prefix_rule(pattern=["git", "tag", "--list"], decision="allow", justification="List tags")
+prefix_rule(pattern=["git", "tag", "-l"], decision="allow", justification="List tags")
+prefix_rule(pattern=["git", "remote", "-v"], decision="allow", justification="List remotes and URLs")
+prefix_rule(pattern=["git", "remote", "get-url"], decision="allow", justification="Read remote URL")
+prefix_rule(pattern=["git", "remote", "show"], decision="allow", justification="Show remote information")
 prefix_rule(pattern=["git", "fetch"], decision="allow", justification="Fetch from remote")
 prefix_rule(pattern=["git", "cherry"], decision="allow", justification="Find commits not merged")
 prefix_rule(pattern=["git", "merge-tree"], decision="allow", justification="Inspect merge result without mutating history")
 prefix_rule(pattern=["git", "merge-base"], decision="allow", justification="Find common Git ancestors")
 prefix_rule(pattern=["git", "ls-tree"], decision="allow", justification="List Git tree contents")
 prefix_rule(pattern=["git", "for-each-ref"], decision="allow", justification="List Git refs")
-prefix_rule(pattern=["git", "stash"], decision="allow", justification="Stash changes")
+prefix_rule(pattern=["git", "cat-file"], decision="allow", justification="Inspect Git objects")
+prefix_rule(pattern=["git", "diff-tree"], decision="allow", justification="Compare Git trees")
+prefix_rule(pattern=["git", "stash", "list"], decision="allow", justification="List stashes")
+prefix_rule(pattern=["git", "stash", "show"], decision="allow", justification="Show stash contents")
 prefix_rule(pattern=["git", "config", "--get"], decision="allow", justification="Read git config value")
 prefix_rule(pattern=["git", "config", "--list"], decision="allow", justification="List git config values")
 prefix_rule(pattern=["git", "config", "--global", "--get"], decision="allow", justification="Read global git config value")
@@ -81,7 +99,6 @@ prefix_rule(pattern=["git", "pull"], decision="allow", justification="Update loc
 
 # --- File search/view tools ---
 prefix_rule(pattern=["rg"], decision="allow", justification="ripgrep search")
-prefix_rule(pattern=["fd"], decision="allow", justification="fd file finder")
 prefix_rule(pattern=["bat"], decision="allow", justification="bat file viewer")
 prefix_rule(pattern=["eza"], decision="allow", justification="eza ls replacement")
 prefix_rule(pattern=["ls"], decision="allow", justification="List files")
@@ -130,7 +147,6 @@ prefix_rule(pattern=["gcloud", "config", "configurations", "list"], decision="al
 prefix_rule(pattern=["pe"], decision="allow", justification="Run prod-errors alert triage")
 prefix_rule(pattern=["echo"], decision="allow", justification="Print text")
 prefix_rule(pattern=["date"], decision="allow", justification="Show date/time")
-prefix_rule(pattern=["env"], decision="allow", justification="Show environment")
 prefix_rule(pattern=["printenv"], decision="allow", justification="Print environment")
 prefix_rule(pattern=["uname"], decision="allow", justification="System info")
 prefix_rule(pattern=["whoami"], decision="allow", justification="Current user")
@@ -145,11 +161,8 @@ prefix_rule(pattern=["yq"], decision="allow", justification="YAML processor")
 prefix_rule(pattern=["sort"], decision="allow", justification="Sort lines")
 prefix_rule(pattern=["uniq"], decision="allow", justification="Filter duplicates")
 prefix_rule(pattern=["grep"], decision="allow", justification="Pattern matching")
-prefix_rule(pattern=["awk"], decision="allow", justification="Text processing")
-prefix_rule(pattern=["sed"], decision="allow", justification="Stream editor")
 prefix_rule(pattern=["cut"], decision="allow", justification="Cut columns")
 prefix_rule(pattern=["tr"], decision="allow", justification="Translate chars")
-prefix_rule(pattern=["xargs"], decision="allow", justification="Build arguments")
 prefix_rule(pattern=["tee"], decision="allow", justification="Pipe to file")
 prefix_rule(pattern=["diff"], decision="allow", justification="Compare files")
 prefix_rule(pattern=["md5"], decision="allow", justification="MD5 checksum")
@@ -170,6 +183,10 @@ prefix_rule(pattern=["git", "checkout"], decision="prompt", justification="May r
 prefix_rule(pattern=["git", "push"], decision="prompt", justification="Updates remote state")
 prefix_rule(pattern=["git", "merge"], decision="prompt", justification="Changes history state")
 prefix_rule(pattern=["git", "rebase"], decision="prompt", justification="Rewrites history state")
+prefix_rule(pattern=["git", "branch", ["-d", "-D", "--delete", "-m", "-M", "--move", "-c", "-C", "--copy"]], decision="prompt", justification="Changes branch refs")
+prefix_rule(pattern=["git", "tag", ["-d", "--delete"]], decision="prompt", justification="Deletes tags")
+prefix_rule(pattern=["git", "stash", ["clear", "drop", "pop", "apply", "push"]], decision="prompt", justification="Changes the working tree or stash entries")
+prefix_rule(pattern=["git", "remote", ["add", "remove", "rename", "set-url", "update", "prune"]], decision="prompt", justification="Changes remote configuration or refs")
 prefix_rule(pattern=["npm", "install"], decision="prompt", justification="Downloads packages and may run install scripts")
 prefix_rule(pattern=["yarn"], decision="prompt", justification="Package manager commands require confirmation")
 prefix_rule(pattern=["pnpm"], decision="prompt", justification="Package manager commands require confirmation")
@@ -182,6 +199,13 @@ prefix_rule(pattern=["gh", "api", "--method", "PUT"], decision="prompt", justifi
 prefix_rule(pattern=["gh", "api", "--method", "DELETE"], decision="prompt", justification="Mutating GitHub API call")
 prefix_rule(pattern=["gh", "api", "graphql"], decision="prompt", justification="GraphQL uses POST")
 prefix_rule(pattern=["git", "config"], decision="prompt", justification="git config may update repository or user configuration")
+prefix_rule(pattern=["git", "reset"], decision="prompt", justification="May rewrite the index or working tree")
+prefix_rule(pattern=["gh", "auth", "status"], decision="prompt", justification="Token-display flags must remain visible for approval")
+prefix_rule(pattern=["env"], decision="prompt", justification="Can execute an arbitrary command with a modified environment")
+prefix_rule(pattern=["fd"], decision="prompt", justification="Can execute arbitrary commands through --exec")
+prefix_rule(pattern=["awk"], decision="prompt", justification="Can execute arbitrary commands through system()")
+prefix_rule(pattern=["xargs"], decision="prompt", justification="Executes commands assembled from input")
+prefix_rule(pattern=["sed"], decision="prompt", justification="Can modify files in place or write files from scripts")
 prefix_rule(pattern=["terraform", "init"], decision="prompt", justification="Downloads providers and configures backend")
 prefix_rule(pattern=["terraform", "plan"], decision="prompt", justification="May refresh remote state and access provider APIs")
 prefix_rule(pattern=["bq", "query"], decision="prompt", justification="BigQuery queries should require confirmation")
@@ -200,10 +224,35 @@ prefix_rule(pattern=["chown"], decision="prompt", justification="Change ownershi
 prefix_rule(pattern=["git", "push", "--force"], decision="forbidden", justification="Force push is forbidden")
 prefix_rule(pattern=["git", "push", "-f"], decision="forbidden", justification="Force push is forbidden")
 prefix_rule(pattern=["gh", "auth", "token"], decision="forbidden", justification="Do not print GitHub access tokens; use authenticated gh commands directly")
-prefix_rule(pattern=["gh", "auth", "status", "--show-token"], decision="forbidden", justification="Do not print GitHub access tokens; omit --show-token")
-prefix_rule(pattern=["gh", "auth", "status", "-t"], decision="forbidden", justification="Do not print GitHub access tokens; omit -t")
+prefix_rule(
+    pattern=["gh", "auth", "status", "--show-token"],
+    decision="forbidden",
+    justification="Do not print GitHub access tokens; omit --show-token",
+    match=["gh auth status --show-token", "gh auth status --show-token --hostname github.com"],
+    not_match=["gh auth status", "gh auth status --hostname github.com --show-token"],
+)
+prefix_rule(
+    pattern=["gh", "auth", "status", "-t"],
+    decision="forbidden",
+    justification="Do not print GitHub access tokens; omit -t",
+    match=["gh auth status -t", "gh auth status -t --hostname github.com"],
+    not_match=["gh auth status", "gh auth status --hostname github.com -t"],
+)
 prefix_rule(pattern=["gcloud", "auth", "print-access-token"], decision="forbidden", justification="Do not print Google Cloud access tokens; use authenticated gcloud commands directly")
-prefix_rule(pattern=["git", "reset", "--hard"], decision="forbidden", justification="Hard reset is forbidden")
+prefix_rule(
+    pattern=["git", "reset", "--hard"],
+    decision="forbidden",
+    justification="Hard reset is forbidden",
+    match=["git reset --hard", "git reset --hard HEAD"],
+    not_match=["git reset HEAD --hard", "git reset --soft HEAD"],
+)
+prefix_rule(
+    pattern=["git", "reset", "HEAD", "--hard"],
+    decision="forbidden",
+    justification="Hard reset is forbidden",
+    match=["git reset HEAD --hard"],
+    not_match=["git reset HEAD", "git reset --hard HEAD"],
+)
 prefix_rule(pattern=["terraform", "apply"], decision="forbidden", justification="Terraform apply is forbidden")
 prefix_rule(pattern=["terraform", "destroy"], decision="forbidden", justification="Terraform destroy is forbidden")
 prefix_rule(pattern=["sudo"], decision="forbidden", justification="Privilege escalation is forbidden")

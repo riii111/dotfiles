@@ -10,10 +10,11 @@ description: GitHub PRのconversation comments、reviews、review threadsを読�
 ## Workflow
 
 1. PR番号またはURLを確定する。
-2. 通常は`gh-pr-comments <PR番号>`を実行する。別repoなら`--repo OWNER/REPO`を加える。
+2. 通常は`gh-pr-comments <PR番号> --compact`を実行する。別repoなら`--repo OWNER/REPO`を加える。
 3. resolvedを含む全review threadが必要な場合だけ`--include-resolved`を加える。
 4. JSONの`conversationComments`、`reviews`、`reviewThreads`を確認する。
 5. `reviewThreads`は既定で未解決threadだけなので、各thread内の全コメントを一つの指摘単位として扱う。
+6. `diffHunk`が必要な場合だけ`--compact`を外す。
 
 ## Rules
 
