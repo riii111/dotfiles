@@ -65,6 +65,17 @@ pre_tool_use '/usr/bin/git reset --hard' | jq -e '.hookSpecificOutput.permission
 pre_tool_use 'echo "$(gh auth token)"' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
 pre_tool_use 'bash --noprofile -c "git reset --hard"' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
 pre_tool_use '/bin/rm -rf build' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
+pre_tool_use "eval 'git reset --hard'" | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
+pre_tool_use 'exec /usr/bin/git reset --hard' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
+pre_tool_use 'printf build | xargs rm -rf' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
+pre_tool_use "find . -exec rm -rf '{}' +" | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
+pre_tool_use 'nice -n 5 /usr/bin/git reset --hard' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
+pre_tool_use 'builtin exec /usr/bin/git reset --hard' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
+pre_tool_use '/usr/bin/env nice git reset --hard' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
+test -z "$(pre_tool_use 'exec git status')"
+test -z "$(pre_tool_use 'nice -n 5 git status')"
+test -z "$(pre_tool_use 'printf file | xargs echo')"
+test -z "$(pre_tool_use 'find . -name file')"
 # shellcheck disable=SC2016 # The literal variable expansion is the hook input under test.
 pre_tool_use 'echo "$HOME"' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
 test -z "$(pre_tool_use "echo '\$HOME'")"

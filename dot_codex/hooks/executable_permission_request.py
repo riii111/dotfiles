@@ -107,21 +107,33 @@ def command_and_args(segment: list[str]) -> tuple[str | None, list[str]]:
         r"[A-Za-z_][A-Za-z0-9_]*=.*", segment[index]
     ):
         index += 1
-    if index < len(segment) and segment[index] == "command":
-        index += 1
-    if index < len(segment) and segment[index] == "env":
-        index += 1
-        options_with_values = {"-C", "-S", "-u", "--chdir", "--split-string", "--unset"}
-        while index < len(segment):
-            arg = segment[index]
-            if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", arg):
-                index += 1
-            elif arg in options_with_values:
-                index += 2
-            elif arg.startswith("-"):
-                index += 1
-            else:
-                break
+    while index < len(segment):
+        executable = segment[index].rsplit("/", 1)[-1]
+        if executable in {"builtin", "command"}:
+            index += 1
+            continue
+        if executable == "env":
+            index += 1
+            options_with_values = {
+                "-C",
+                "-S",
+                "-u",
+                "--chdir",
+                "--split-string",
+                "--unset",
+            }
+            while index < len(segment):
+                arg = segment[index]
+                if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", arg):
+                    index += 1
+                elif arg in options_with_values:
+                    index += 2
+                elif arg.startswith("-"):
+                    index += 1
+                else:
+                    break
+            continue
+        break
     if index >= len(segment):
         return None, []
     return segment[index], segment[index + 1 :]
@@ -219,6 +231,84 @@ def shell_script(args: list[str]) -> str | None:
     return None
 
 
+def wrapped_command(executable: str, args: list[str]) -> list[str] | None:
+    index = 0
+    if executable == "exec":
+        while index < len(args) and args[index].startswith("-"):
+            option = args[index]
+            index += 1
+            if option == "--":
+                break
+            if option == "-a":
+                index += 1
+            elif re.fullmatch(r"-[cl]+", option) is None:
+                return None
+    elif executable == "nice":
+        while index < len(args) and args[index].startswith("-"):
+            option = args[index]
+            index += 1
+            if option == "--":
+                break
+            if option in {"-n", "--adjustment"}:
+                index += 1
+            elif not re.fullmatch(r"-(?:n)?-?\d+|--adjustment=-?\d+", option):
+                return None
+    return args[index:] or None
+
+
+def xargs_command(args: list[str]) -> list[str] | None:
+    flags = {
+        "-0",
+        "--null",
+        "-p",
+        "--interactive",
+        "-r",
+        "--no-run-if-empty",
+        "-t",
+        "--verbose",
+        "-x",
+        "--exit",
+        "-o",
+        "--open-tty",
+    }
+    options_with_values = {
+        "-a",
+        "--arg-file",
+        "-d",
+        "--delimiter",
+        "-E",
+        "--eof",
+        "-I",
+        "--replace",
+        "-L",
+        "--max-lines",
+        "-n",
+        "--max-args",
+        "-P",
+        "--max-procs",
+        "-s",
+        "--max-chars",
+        "--process-slot-var",
+    }
+    index = 0
+    while index < len(args) and args[index].startswith("-"):
+        option = args[index]
+        index += 1
+        if option == "--":
+            break
+        if option in flags:
+            continue
+        if option in options_with_values:
+            if index >= len(args):
+                return None
+            index += 1
+            continue
+        if re.fullmatch(r"-[adEILnPs].+|--[^=]+=.+", option):
+            continue
+        return None
+    return args[index:]
+
+
 def denial_reason(command: str) -> str | None:
     if unsupported_shell_syntax(command):
         return "Dynamic or ambiguous shell syntax is forbidden by command policy."
@@ -226,6 +316,25 @@ def denial_reason(command: str) -> str | None:
     for segment in shell_segments(command):
         executable, args = command_and_args(segment)
         executable_name = None if executable is None else executable.rsplit("/", 1)[-1]
+
+        if executable_name in {"eval", "source", "."}:
+            return "Indirect command evaluation is forbidden by command policy."
+        if executable_name == "xargs":
+            child = xargs_command(args)
+            if child is None:
+                return "Unrecognized xargs syntax is forbidden by command policy."
+            nested_reason = None if not child else denial_reason(shlex.join(child))
+            if nested_reason is not None:
+                return nested_reason
+        if executable_name == "find" and any(
+            arg in {"-exec", "-execdir", "-ok", "-okdir"} for arg in args
+        ):
+            return "Indirect command evaluation is forbidden by command policy."
+        if executable_name in {"exec", "nice"}:
+            child = wrapped_command(executable_name, args)
+            nested_reason = None if child is None else denial_reason(shlex.join(child))
+            if nested_reason is not None:
+                return nested_reason
 
         if executable_name in {"bash", "sh", "zsh"}:
             script = shell_script(args)
