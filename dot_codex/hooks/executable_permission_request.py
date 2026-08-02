@@ -74,10 +74,10 @@ def is_safe_git_read(command: str, cwd: str) -> bool:
     return bool(urls) and all(is_github_url(url) for url in urls)
 
 
-def shell_segments(command: str) -> list[list[str]]:
+def direct_command(command: str) -> tuple[str | None, list[str]]:
     try:
         lexer = shlex.shlex(
-            command.replace("\n", ";"),
+            command,
             posix=True,
             punctuation_chars="();&|",
         )
@@ -85,58 +85,10 @@ def shell_segments(command: str) -> list[list[str]]:
         lexer.commenters = ""
         tokens = list(lexer)
     except ValueError:
-        return []
-
-    segments: list[list[str]] = []
-    segment: list[str] = []
-    for token in tokens:
-        if token and set(token) <= set("();&|"):
-            if segment:
-                segments.append(segment)
-                segment = []
-            continue
-        segment.append(token)
-    if segment:
-        segments.append(segment)
-    return segments
-
-
-def command_and_args(segment: list[str]) -> tuple[str | None, list[str]]:
-    index = 0
-    while index < len(segment) and re.fullmatch(
-        r"[A-Za-z_][A-Za-z0-9_]*=.*", segment[index]
-    ):
-        index += 1
-    while index < len(segment):
-        executable = segment[index].rsplit("/", 1)[-1]
-        if executable in {"builtin", "command"}:
-            index += 1
-            continue
-        if executable == "env":
-            index += 1
-            options_with_values = {
-                "-C",
-                "-S",
-                "-u",
-                "--chdir",
-                "--split-string",
-                "--unset",
-            }
-            while index < len(segment):
-                arg = segment[index]
-                if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", arg):
-                    index += 1
-                elif arg in options_with_values:
-                    index += 2
-                elif arg.startswith("-"):
-                    index += 1
-                else:
-                    break
-            continue
-        break
-    if index >= len(segment):
         return None, []
-    return segment[index], segment[index + 1 :]
+    if not tokens or any(token and set(token) <= set("();&|") for token in tokens):
+        return None, []
+    return tokens[0], tokens[1:]
 
 
 def git_command(args: list[str]) -> tuple[str | None, list[str]]:
@@ -179,244 +131,78 @@ def sequence_index(args: list[str], sequence: list[str]) -> int | None:
     return None
 
 
-def unsupported_shell_syntax(command: str) -> bool:
-    quote: str | None = None
-    escaped = False
-    index = 0
-    while index < len(command):
-        char = command[index]
-        if escaped:
-            escaped = False
-            index += 1
-            continue
-        if char == "\\" and quote != "'":
-            escaped = True
-            index += 1
-            continue
-        if quote == "'":
-            if char == "'":
-                quote = None
-            index += 1
-            continue
-        if quote == '"':
-            if char == '"':
-                quote = None
-            elif char in {"$", "`"}:
-                return True
-            index += 1
-            continue
-        if char in {"'", '"'}:
-            quote = char
-        elif char in {"$", "`", "*", "?", "[", "]", "{", "}"}:
-            return True
-        elif (
-            char in {"<", ">"}
-            and index + 1 < len(command)
-            and command[index + 1] == "("
-        ):
-            return True
-        index += 1
-    return escaped or quote is not None
-
-
-def shell_script(args: list[str]) -> str | None:
-    index = 0
-    while index < len(args):
-        option = args[index]
-        if option == "--":
-            return None
-        if option.startswith("-") and not option.startswith("--") and "c" in option[1:]:
-            return args[index + 1] if index + 1 < len(args) else ""
-        index += 1
-    return None
-
-
-def wrapped_command(executable: str, args: list[str]) -> list[str] | None:
-    index = 0
-    if executable == "exec":
-        while index < len(args) and args[index].startswith("-"):
-            option = args[index]
-            index += 1
-            if option == "--":
-                break
-            if option == "-a":
-                index += 1
-            elif re.fullmatch(r"-[cl]+", option) is None:
-                return None
-    elif executable == "nice":
-        while index < len(args) and args[index].startswith("-"):
-            option = args[index]
-            index += 1
-            if option == "--":
-                break
-            if option in {"-n", "--adjustment"}:
-                index += 1
-            elif not re.fullmatch(r"-(?:n)?-?\d+|--adjustment=-?\d+", option):
-                return None
-    return args[index:] or None
-
-
-def xargs_command(args: list[str]) -> list[str] | None:
-    flags = {
-        "-0",
-        "--null",
-        "-p",
-        "--interactive",
-        "-r",
-        "--no-run-if-empty",
-        "-t",
-        "--verbose",
-        "-x",
-        "--exit",
-        "-o",
-        "--open-tty",
-    }
-    options_with_values = {
-        "-a",
-        "--arg-file",
-        "-d",
-        "--delimiter",
-        "-E",
-        "--eof",
-        "-I",
-        "--replace",
-        "-L",
-        "--max-lines",
-        "-n",
-        "--max-args",
-        "-P",
-        "--max-procs",
-        "-s",
-        "--max-chars",
-        "--process-slot-var",
-    }
-    index = 0
-    while index < len(args) and args[index].startswith("-"):
-        option = args[index]
-        index += 1
-        if option == "--":
-            break
-        if option in flags:
-            continue
-        if option in options_with_values:
-            if index >= len(args):
-                return None
-            index += 1
-            continue
-        if re.fullmatch(r"-[adEILnPs].+|--[^=]+=.+", option):
-            continue
-        return None
-    return args[index:]
-
-
 def denial_reason(command: str) -> str | None:
-    if unsupported_shell_syntax(command):
-        return "Dynamic or ambiguous shell syntax is forbidden by command policy."
+    executable, args = direct_command(command)
+    executable_name = None if executable is None else executable.rsplit("/", 1)[-1]
 
-    for segment in shell_segments(command):
-        executable, args = command_and_args(segment)
-        executable_name = None if executable is None else executable.rsplit("/", 1)[-1]
-
-        if executable_name in {"eval", "source", "."}:
-            return "Indirect command evaluation is forbidden by command policy."
-        if executable_name == "xargs":
-            child = xargs_command(args)
-            if child is None:
-                return "Unrecognized xargs syntax is forbidden by command policy."
-            nested_reason = None if not child else denial_reason(shlex.join(child))
-            if nested_reason is not None:
-                return nested_reason
-        if executable_name == "find" and any(
-            arg in {"-exec", "-execdir", "-ok", "-okdir"} for arg in args
-        ):
-            return "Indirect command evaluation is forbidden by command policy."
-        if executable_name in {"exec", "nice"}:
-            child = wrapped_command(executable_name, args)
-            nested_reason = None if child is None else denial_reason(shlex.join(child))
-            if nested_reason is not None:
-                return nested_reason
-
-        if executable_name in {"bash", "sh", "zsh"}:
-            script = shell_script(args)
-            nested_reason = None if script is None else denial_reason(script)
-            if nested_reason is not None:
-                return nested_reason
-
-        if (
-            executable_name == "gh"
-            and sequence_index(args, ["auth", "token"]) is not None
+    if executable_name == "gh" and sequence_index(args, ["auth", "token"]) is not None:
+        return "GitHub access-token output is forbidden."
+    if executable_name == "gh":
+        status_index = sequence_index(args, ["auth", "status"])
+        status_args = [] if status_index is None else args[status_index + 2 :]
+        if status_index is not None and (
+            has_option(status_args, "--show-token") or has_short_flag(status_args, "t")
         ):
             return "GitHub access-token output is forbidden."
-        if executable_name == "gh":
-            status_index = sequence_index(args, ["auth", "status"])
-            status_args = [] if status_index is None else args[status_index + 2 :]
-            if status_index is not None and (
-                has_option(status_args, "--show-token")
-                or has_short_flag(status_args, "t")
-            ):
-                return "GitHub access-token output is forbidden."
-        if (
-            executable_name == "gh"
-            and sequence_index(args, ["repo", "delete"]) is not None
-        ):
-            return "Repository deletion is forbidden."
+    if executable_name == "gh" and sequence_index(args, ["repo", "delete"]) is not None:
+        return "Repository deletion is forbidden."
 
-        if (
-            executable_name == "gcloud"
-            and sequence_index(args, ["auth", "print-access-token"]) is not None
-        ):
-            return "Google Cloud access-token output is forbidden."
-        if (
-            executable_name == "gcloud"
-            and sequence_index(args, ["projects", "delete"]) is not None
-        ):
-            return "Cloud project deletion is forbidden."
+    if (
+        executable_name == "gcloud"
+        and sequence_index(args, ["auth", "print-access-token"]) is not None
+    ):
+        return "Google Cloud access-token output is forbidden."
+    if (
+        executable_name == "gcloud"
+        and sequence_index(args, ["projects", "delete"]) is not None
+    ):
+        return "Cloud project deletion is forbidden."
 
-        if executable_name == "git":
-            subcommand, subargs = git_command(args)
-            if subcommand == "reset" and has_option(subargs, "--hard"):
-                return "Hard reset is forbidden."
-            if subcommand == "add" and (
-                has_option(subargs, "--force") or has_short_flag(subargs, "f")
-            ):
-                return "Force-add is forbidden."
-            if subcommand == "clean" and (
-                has_option(subargs, "--force") or has_short_flag(subargs, "f")
-            ):
-                return "Forced clean is forbidden."
-            if subcommand == "gc" and (
-                "--prune=now" in subargs
-                or any(
-                    subargs[index : index + 2] == ["--prune", "now"]
-                    for index in range(len(subargs) - 1)
-                )
-            ):
-                return "Immediate Git object pruning is forbidden."
-            if subcommand == "push" and (
-                has_option(subargs, "--force")
-                or has_option(subargs, "--force-with-lease")
-                or has_option(subargs, "--mirror")
-                or has_option(subargs, "--delete")
-                or has_short_flag(subargs, "f")
-                or any(arg.startswith(("+", ":")) for arg in subargs)
-            ):
-                return "Destructive push is forbidden."
-
-        if executable_name == "terraform":
-            terraform_args = [arg for arg in args if not arg.startswith("-chdir=")]
-            if terraform_args and terraform_args[0] in {"apply", "destroy"}:
-                return "Terraform state mutation is forbidden."
-
-        if executable_name in {"sudo", "su"}:
-            return "Privilege escalation and user switching are forbidden."
-        if executable_name == "chmod" and "777" in args:
-            return "World-writable permissions are forbidden."
-        if executable_name == "rm" and (
-            has_option(args, "--recursive")
-            or has_short_flag(args, "r")
-            or has_short_flag(args, "R")
+    if executable_name == "git":
+        subcommand, subargs = git_command(args)
+        if subcommand == "reset" and has_option(subargs, "--hard"):
+            return "Hard reset is forbidden."
+        if subcommand == "add" and (
+            has_option(subargs, "--force") or has_short_flag(subargs, "f")
         ):
-            return "Recursive file deletion is forbidden."
+            return "Force-add is forbidden."
+        if subcommand == "clean" and (
+            has_option(subargs, "--force") or has_short_flag(subargs, "f")
+        ):
+            return "Forced clean is forbidden."
+        if subcommand == "gc" and (
+            "--prune=now" in subargs
+            or any(
+                subargs[index : index + 2] == ["--prune", "now"]
+                for index in range(len(subargs) - 1)
+            )
+        ):
+            return "Immediate Git object pruning is forbidden."
+        if subcommand == "push" and (
+            has_option(subargs, "--force")
+            or has_option(subargs, "--force-with-lease")
+            or has_option(subargs, "--mirror")
+            or has_option(subargs, "--delete")
+            or has_short_flag(subargs, "f")
+            or any(arg.startswith(("+", ":")) for arg in subargs)
+        ):
+            return "Destructive push is forbidden."
+
+    if executable_name == "terraform":
+        terraform_args = [arg for arg in args if not arg.startswith("-chdir=")]
+        if terraform_args and terraform_args[0] in {"apply", "destroy"}:
+            return "Terraform state mutation is forbidden."
+
+    if executable_name in {"sudo", "su"}:
+        return "Privilege escalation and user switching are forbidden."
+    if executable_name == "chmod" and "777" in args:
+        return "World-writable permissions are forbidden."
+    if executable_name == "rm" and (
+        has_option(args, "--recursive")
+        or has_short_flag(args, "r")
+        or has_short_flag(args, "R")
+    ):
+        return "Recursive file deletion is forbidden."
 
     return None
 

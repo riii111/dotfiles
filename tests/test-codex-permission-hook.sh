@@ -61,26 +61,29 @@ done
 # PreToolUse cannot request approval, so prompt-class operations remain governed by the sandbox.
 test -z "$(pre_tool_use 'rm file')"
 pre_tool_use '/usr/bin/git reset --hard' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
-# shellcheck disable=SC2016 # The literal command substitution is the hook input under test.
-pre_tool_use 'echo "$(gh auth token)"' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
-pre_tool_use 'bash --noprofile -c "git reset --hard"' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
 pre_tool_use '/bin/rm -rf build' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
-pre_tool_use "eval 'git reset --hard'" | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
-pre_tool_use 'exec /usr/bin/git reset --hard' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
-pre_tool_use 'printf build | xargs rm -rf' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
-pre_tool_use "find . -exec rm -rf '{}' +" | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
-pre_tool_use 'nice -n 5 /usr/bin/git reset --hard' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
-pre_tool_use 'builtin exec /usr/bin/git reset --hard' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
-pre_tool_use '/usr/bin/env nice git reset --hard' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
-test -z "$(pre_tool_use 'exec git status')"
-test -z "$(pre_tool_use 'nice -n 5 git status')"
-test -z "$(pre_tool_use 'printf file | xargs echo')"
-test -z "$(pre_tool_use 'find . -name file')"
-# shellcheck disable=SC2016 # The literal variable expansion is the hook input under test.
-pre_tool_use 'echo "$HOME"' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
-test -z "$(pre_tool_use "echo '\$HOME'")"
-pre_tool_use 'env -i git reset --hard' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
-pre_tool_use "bash -lc 'git push --mirror origin'" | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
+
+# Indirection and compound shell syntax are outside this best-effort hook's contract.
+for command in \
+	"eval 'git reset --hard'" \
+	'exec /usr/bin/git reset --hard' \
+	'printf build | xargs rm -rf' \
+	"find . -exec rm -rf '{}' +" \
+	'nice -n 5 /usr/bin/git reset --hard' \
+	'command -p git reset --hard' \
+	"env -S 'git reset --hard'" \
+	'if true; then git reset --hard; fi' \
+	"printf 'git reset --hard\\n' | sh" \
+	"git -c alias.x='!git reset --hard' x" \
+	'nohup git reset --hard'; do
+	test -z "$(pre_tool_use "$command")"
+done
+
+# Normal shell composition must not interrupt autonomous development work.
+# shellcheck disable=SC2016 # Literal expansions are hook inputs, not test-shell operations.
+for command in 'echo "$HOME"' 'git diff "$(git merge-base main HEAD)"' 'rg foo src/*.rs' 'source .venv/bin/activate'; do
+	test -z "$(pre_tool_use "$command")"
+done
 
 git -C "$tmpdir" remote set-url origin https://example.com/riii111/test.git
 test -z "$(permission_request 'git push origin HEAD')"

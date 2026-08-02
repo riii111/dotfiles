@@ -6,16 +6,16 @@ repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 rules="$repo_root/dot_codex/rules/default.rules"
 
 decision() {
-	codex execpolicy check --rules "$rules" -- "$@" | jq -r '.decision'
+	codex execpolicy check --rules "$rules" -- "$@" | jq -r '.decision // "no_match"'
 }
 
-test "$(decision cargo metadata --no-deps)" != allow
-test "$(decision git status)" != allow
+test "$(decision cargo metadata --no-deps)" = no_match
+test "$(decision git status)" = no_match
 test "$(decision rg pattern)" = prompt
-test "$(decision jq . file.json)" != allow
-test "$(decision mkdir build)" != allow
+test "$(decision jq . file.json)" = no_match
+test "$(decision mkdir build)" = no_match
 test "$(decision git branch --show-current)" = prompt
-test "$(decision git remote -v)" != allow
+test "$(decision git remote -v)" = no_match
 test "$(decision gh pr view 26)" = allow
 test "$(decision gcloud run jobs list)" = allow
 test "$(decision gh-pr-comments 26 --compact)" = allow

@@ -173,7 +173,9 @@ rg -n '^network_access = false$' ~/.codex/config.toml
 codex execpolicy check --pretty --rules ~/.codex/rules/default.rules -- gh pr view 1
 ```
 
-The `PreToolUse` policy rejects recursive `rm`, destructive Git/GitHub/cloud commands, and shell forms it cannot safely analyze, including command substitution and unquoted expansion. `prompt` rules still apply only to commands that require sandbox escalation; current hooks cannot force an approval prompt for a command already permitted inside the sandbox.
+The `PreToolUse` policy reduces accidental direct invocations of recursive `rm` and common destructive Git/GitHub/cloud commands by cooperative agents. It is not a complete enforcement boundary and does not defend against shell indirection, aliases, scripts, interpreters, subprocesses, malicious repository code, disabled hooks, or deliberate bypass attempts. Use the sandbox, fixed-purpose wrappers, and repository or platform protections when an operation requires a strong guarantee.
+
+`prompt` rules still apply only to commands that require sandbox escalation; current hooks cannot force an approval prompt for a command already permitted inside the sandbox.
 
 ## Trade-offs
 
