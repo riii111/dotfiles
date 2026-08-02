@@ -60,6 +60,14 @@ for command in \
 done
 # PreToolUse cannot request approval, so prompt-class operations remain governed by the sandbox.
 test -z "$(pre_tool_use 'rm file')"
+pre_tool_use '/usr/bin/git reset --hard' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
+# shellcheck disable=SC2016 # The literal command substitution is the hook input under test.
+pre_tool_use 'echo "$(gh auth token)"' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
+pre_tool_use 'bash --noprofile -c "git reset --hard"' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
+pre_tool_use '/bin/rm -rf build' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
+# shellcheck disable=SC2016 # The literal variable expansion is the hook input under test.
+pre_tool_use 'echo "$HOME"' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
+test -z "$(pre_tool_use "echo '\$HOME'")"
 pre_tool_use 'env -i git reset --hard' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
 pre_tool_use "bash -lc 'git push --mirror origin'" | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
 

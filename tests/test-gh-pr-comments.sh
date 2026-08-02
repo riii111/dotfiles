@@ -20,20 +20,32 @@ fi
 if [ "$1 $2" = "api graphql" ]; then
   payload="$(cat)"
   if jq -e '.query | contains("reviewThreads")' <<<"$payload" >/dev/null; then
+    if jq -e '.variables.cursor == "thread-cursor"' <<<"$payload" >/dev/null; then
+      cat <<'JSON'
+{"data":{"repository":{"pullRequest":{"number":42,"url":"https://github.com/riii111/dotfiles/pull/42","title":"Test","state":"OPEN","isDraft":false,"headRefOid":"head","baseRefOid":"base","reviewThreads":{"nodes":[{"id":"thread-resolved","isResolved":true,"isOutdated":false,"path":"b.rs","line":2,"originalLine":2,"startLine":null,"diffSide":"RIGHT","resolvedBy":{"login":"author"},"comments":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":null}}}],"pageInfo":{"hasNextPage":false,"endCursor":null}}}}}}
+JSON
+    else
+      cat <<'JSON'
+{"data":{"repository":{"pullRequest":{"number":42,"url":"https://github.com/riii111/dotfiles/pull/42","title":"Test","state":"OPEN","isDraft":false,"headRefOid":"head","baseRefOid":"base","reviewThreads":{"nodes":[{"id":"thread-unresolved","isResolved":false,"isOutdated":false,"path":"a.rs","line":10,"originalLine":9,"startLine":null,"diffSide":"RIGHT","resolvedBy":null,"comments":{"nodes":[{"id":"comment-1","databaseId":1,"url":"https://example.test/1","body":"fix this","author":{"login":"reviewer"},"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z","path":"a.rs","line":10,"originalLine":9,"diffHunk":"@@","replyTo":null}],"pageInfo":{"hasNextPage":true,"endCursor":"comment-cursor"}}}],"pageInfo":{"hasNextPage":true,"endCursor":"thread-cursor"}}}}}}
+JSON
+    fi
+    exit 0
+  fi
+  if jq -e '.query | contains("PullRequestReviewThread")' <<<"$payload" >/dev/null; then
     cat <<'JSON'
-{"data":{"repository":{"pullRequest":{"number":42,"url":"https://github.com/riii111/dotfiles/pull/42","title":"Test","state":"OPEN","isDraft":false,"headRefOid":"head","baseRefOid":"base","reviewThreads":{"nodes":[{"id":"thread-unresolved","isResolved":false,"isOutdated":false,"path":"a.rs","line":10,"originalLine":9,"startLine":null,"diffSide":"RIGHT","resolvedBy":null,"comments":{"nodes":[{"id":"comment-1","databaseId":1,"url":"https://example.test/1","body":"fix this","author":{"login":"reviewer"},"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z","path":"a.rs","line":10,"originalLine":9,"diffHunk":"@@","replyTo":null}],"pageInfo":{"hasNextPage":false,"endCursor":null}}},{"id":"thread-resolved","isResolved":true,"isOutdated":false,"path":"b.rs","line":2,"originalLine":2,"startLine":null,"diffSide":"RIGHT","resolvedBy":{"login":"author"},"comments":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":null}}}],"pageInfo":{"hasNextPage":false,"endCursor":null}}}}}}
+{"data":{"node":{"comments":{"nodes":[{"id":"comment-2","databaseId":2,"url":"https://example.test/2","body":"follow-up","author":{"login":"author"},"createdAt":"2026-01-02T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","path":"a.rs","line":10,"originalLine":9,"diffHunk":"@@","replyTo":{"id":"comment-1"}}],"pageInfo":{"hasNextPage":false,"endCursor":null}}}}}
 JSON
     exit 0
   fi
 fi
 
 if [ "$1" = api ] && [[ "$*" == *issues/42/comments* ]]; then
-  printf '[[{"id":2,"body":"conversation"}]]\n'
+  printf '[[{"id":2,"body":"conversation"}],[{"id":4,"body":"conversation page 2"}]]\n'
   exit 0
 fi
 
 if [ "$1" = api ] && [[ "$*" == *pulls/42/reviews* ]]; then
-  printf '[[{"id":3,"state":"CHANGES_REQUESTED"}]]\n'
+  printf '[[{"id":3,"state":"CHANGES_REQUESTED"}],[{"id":5,"state":"COMMENTED"}]]\n'
   exit 0
 fi
 
@@ -47,9 +59,13 @@ PATH="$tmpdir/bin:$PATH" python3 "$wrapper" 42 >"$output"
 jq -e '
   .pullRequest.number == 42 and
   .conversationComments[0].body == "conversation" and
+  .conversationComments[1].body == "conversation page 2" and
   .reviews[0].state == "CHANGES_REQUESTED" and
+  .reviews[1].state == "COMMENTED" and
   (.reviewThreads | length) == 1 and
   .reviewThreads[0].id == "thread-unresolved" and
+  (.reviewThreads[0].comments | length) == 2 and
+  .reviewThreads[0].comments[1].body == "follow-up" and
   .includesResolvedThreads == false
 ' "$output" >/dev/null
 

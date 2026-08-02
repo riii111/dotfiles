@@ -160,6 +160,21 @@ sub: Claude Code
 
 `~/.codex/config.toml` is rewritten by the Codex desktop app, so it is `.chezmoiignore`d and not applied. `dot_codex/config.toml.tmpl` is kept only as a hand-maintained reference for base settings; edit the live file directly.
 
+### Codex command policy
+
+`dot_codex/rules/default.rules` controls commands that need to run outside the sandbox. Keep `sandbox_workspace_write.network_access = false` in the live `~/.codex/config.toml`; otherwise network commands can run inside the sandbox without consulting these rules.
+
+After `chezmoi apply`, restart Codex and open `/hooks`. Trust and enable the `PreToolUse` and `PermissionRequest` definitions from `~/.codex/hooks.json`. Codex invalidates that trust when a hook definition changes, so repeat this check after updating the hooks.
+
+Verify the live setup with:
+
+```sh
+rg -n '^network_access = false$' ~/.codex/config.toml
+codex execpolicy check --pretty --rules ~/.codex/rules/default.rules -- gh pr view 1
+```
+
+The `PreToolUse` policy rejects recursive `rm`, destructive Git/GitHub/cloud commands, and shell forms it cannot safely analyze, including command substitution and unquoted expansion. `prompt` rules still apply only to commands that require sandbox escalation; current hooks cannot force an approval prompt for a command already permitted inside the sandbox.
+
 ## Trade-offs
 
 - macOS only (AppleScript, pbcopy, etc.)
