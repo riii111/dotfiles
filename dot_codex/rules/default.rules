@@ -34,11 +34,20 @@ prefix_rule(pattern=["gh-pr-comments"], decision="allow", justification="Read PR
 prefix_rule(pattern=["gcloud", "storage", "ls"], decision="allow", justification="List GCS buckets or objects")
 prefix_rule(pattern=["gcloud", "run", "jobs", "list"], decision="allow", justification="List Cloud Run jobs")
 prefix_rule(pattern=["gcloud", "run", "jobs", "describe"], decision="allow", justification="Describe Cloud Run job")
+prefix_rule(pattern=["gcloud", "run", "jobs", "executions", "list"], decision="allow", justification="List Cloud Run job executions")
 prefix_rule(pattern=["gcloud", "run", "jobs", "executions", "describe"], decision="allow", justification="Describe Cloud Run job execution")
+prefix_rule(pattern=["gcloud", "run", "services", "list"], decision="allow", justification="List Cloud Run services")
+prefix_rule(pattern=["gcloud", "run", "services", "describe"], decision="allow", justification="Describe Cloud Run service")
+prefix_rule(pattern=["gcloud", "run", "revisions", "list"], decision="allow", justification="List Cloud Run revisions")
+prefix_rule(pattern=["gcloud", "run", "revisions", "describe"], decision="allow", justification="Describe Cloud Run revision")
 prefix_rule(pattern=["gcloud", "logging", "read"], decision="allow", justification="Read Cloud Logging entries")
 prefix_rule(pattern=["gcloud", "auth", "list"], decision="allow", justification="List active gcloud credentials")
 prefix_rule(pattern=["gcloud", "config", "list"], decision="allow", justification="List gcloud config values")
 prefix_rule(pattern=["gcloud", "config", "configurations", "list"], decision="allow", justification="List gcloud configurations")
+
+# --- BigQuery CLI (metadata reads) ---
+prefix_rule(pattern=["bq", "ls"], decision="allow", justification="List BigQuery resources")
+prefix_rule(pattern=["bq", "show"], decision="allow", justification="Show BigQuery resource metadata")
 
 # --- Dedicated wrappers ---
 prefix_rule(pattern=["pe"], decision="allow", justification="Run prod-errors alert triage")
@@ -135,6 +144,13 @@ prefix_rule(
 )
 prefix_rule(pattern=["gcloud", "auth", "print-access-token"], decision="forbidden", justification="Do not print Google Cloud access tokens; use authenticated gcloud commands directly")
 prefix_rule(pattern=["gcloud", "projects", "delete"], decision="forbidden", justification="Cloud project deletion is forbidden")
+prefix_rule(pattern=["gcloud", "storage", "rm"], decision="forbidden", justification="Cloud Storage deletion is forbidden")
+prefix_rule(pattern=["gcloud", "run", "jobs", "delete"], decision="forbidden", justification="Cloud Run job deletion is forbidden")
+prefix_rule(pattern=["gcloud", "run", "services", "delete"], decision="forbidden", justification="Cloud Run service deletion is forbidden")
+prefix_rule(pattern=["gcloud", "iam", "service-accounts", "keys", "create"], decision="forbidden", justification="Service account key creation is forbidden")
+prefix_rule(pattern=["gh", "ssh-key", "add"], decision="forbidden", justification="Adding account SSH keys is forbidden")
+prefix_rule(pattern=["gh", "gpg-key", "add"], decision="forbidden", justification="Adding account GPG keys is forbidden")
+prefix_rule(pattern=["gh", "auth", ["login", "refresh", "setup-git"]], decision="forbidden", justification="Changing GitHub authentication is forbidden")
 prefix_rule(
     pattern=["git", "reset", "--hard"],
     decision="forbidden",
@@ -151,8 +167,15 @@ prefix_rule(
 )
 prefix_rule(pattern=["terraform", "apply"], decision="forbidden", justification="Terraform apply is forbidden")
 prefix_rule(pattern=["terraform", "destroy"], decision="forbidden", justification="Terraform destroy is forbidden")
+prefix_rule(pattern=["terraform", "state", ["rm", "mv"]], decision="forbidden", justification="Direct Terraform state mutation is forbidden")
+prefix_rule(pattern=["terraform", ["taint", "import", "force-unlock"]], decision="forbidden", justification="Direct Terraform state mutation is forbidden")
+prefix_rule(pattern=["terraform", "workspace", "delete"], decision="forbidden", justification="Terraform workspace deletion is forbidden")
 prefix_rule(pattern=["git", "restore", [".", ":/"]], decision="forbidden", justification="Restoring the entire working tree is forbidden")
+prefix_rule(pattern=["git", "checkout", "--", [".", ":/"]], decision="forbidden", justification="Discarding the entire working tree is forbidden")
+prefix_rule(pattern=["git", "stash", ["clear", "drop"]], decision="forbidden", justification="Deleting stash entries is forbidden")
 prefix_rule(pattern=["find", ".", "-delete"], decision="forbidden", justification="Recursive deletion through find is forbidden")
+prefix_rule(pattern=["chezmoi", ["purge", "destroy"]], decision="forbidden", justification="Deleting chezmoi source or target state is forbidden")
+prefix_rule(pattern=["bq", "rm"], decision="forbidden", justification="BigQuery resource deletion is forbidden")
 prefix_rule(pattern=["sudo"], decision="forbidden", justification="Privilege escalation is forbidden")
 prefix_rule(pattern=["su"], decision="forbidden", justification="User switching is forbidden")
 prefix_rule(pattern=["chmod", "777"], decision="forbidden", justification="World-writable permissions forbidden")

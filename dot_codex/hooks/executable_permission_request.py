@@ -74,7 +74,10 @@ def is_safe_git_permission_request(command: str, cwd: str) -> bool:
 
     if argv == ("git", "branch", "--show-current"):
         return True
-    if argv != ("git", "fetch", "origin"):
+    if argv not in {
+        ("git", "fetch", "origin"),
+        ("git", "ls-remote", "origin"),
+    }:
         return False
 
     urls = origin_urls(cwd, push=False)
@@ -154,6 +157,16 @@ def denial_reason(command: str) -> str | None:
             return "GitHub access-token output is forbidden."
     if executable_name == "gh" and starts_with(args, ["repo", "delete"]):
         return "Repository deletion is forbidden."
+    if executable_name == "gh" and (
+        starts_with(args, ["ssh-key", "add"])
+        or starts_with(args, ["gpg-key", "add"])
+        or (
+            starts_with(args, ["auth"])
+            and len(args) >= 2
+            and args[1] in {"login", "refresh", "setup-git"}
+        )
+    ):
+        return "Changing persistent GitHub authentication is forbidden."
 
     if executable_name == "gcloud" and starts_with(
         args, ["auth", "print-access-token"]
@@ -161,6 +174,13 @@ def denial_reason(command: str) -> str | None:
         return "Google Cloud access-token output is forbidden."
     if executable_name == "gcloud" and starts_with(args, ["projects", "delete"]):
         return "Cloud project deletion is forbidden."
+    if executable_name == "gcloud" and (
+        starts_with(args, ["storage", "rm"])
+        or starts_with(args, ["run", "jobs", "delete"])
+        or starts_with(args, ["run", "services", "delete"])
+        or starts_with(args, ["iam", "service-accounts", "keys", "create"])
+    ):
+        return "Destructive cloud or credential mutation is forbidden."
 
     if executable_name == "git":
         subcommand, subargs = git_command(args)
@@ -171,6 +191,10 @@ def denial_reason(command: str) -> str | None:
             worktree = has_option(subargs, "--worktree") or has_short_flag(subargs, "W")
             if not staged or worktree:
                 return "Restoring the entire working tree is forbidden."
+        if subcommand == "checkout" and any(arg in {".", ":/"} for arg in subargs):
+            return "Discarding the entire working tree is forbidden."
+        if subcommand == "stash" and subargs and subargs[0] in {"clear", "drop"}:
+            return "Deleting stash entries is forbidden; leave them intact."
         if subcommand == "add" and (
             has_option(subargs, "--force") or has_short_flag(subargs, "f")
         ):
@@ -201,7 +225,12 @@ def denial_reason(command: str) -> str | None:
 
     if executable_name == "terraform":
         terraform_args = [arg for arg in args if not arg.startswith("-chdir=")]
-        if terraform_args and terraform_args[0] in {"apply", "destroy"}:
+        if terraform_args and (
+            terraform_args[0] in {"apply", "destroy", "taint", "import", "force-unlock"}
+            or starts_with(terraform_args, ["state", "rm"])
+            or starts_with(terraform_args, ["state", "mv"])
+            or starts_with(terraform_args, ["workspace", "delete"])
+        ):
             return "Terraform state mutation is forbidden."
 
     if executable_name in {"sudo", "su"}:
@@ -216,6 +245,10 @@ def denial_reason(command: str) -> str | None:
         return "Recursive file deletion is forbidden."
     if executable_name == "find" and has_option(args, "-delete"):
         return "Recursive deletion through find is forbidden."
+    if executable_name == "chezmoi" and args and args[0] in {"purge", "destroy"}:
+        return "Deleting chezmoi source or target state is forbidden."
+    if executable_name == "bq" and starts_with(args, ["rm"]):
+        return "BigQuery resource deletion is forbidden."
 
     return None
 

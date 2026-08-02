@@ -30,6 +30,8 @@ permission_request 'git push --set-upstream origin HEAD' | jq -e '.hookSpecificO
 permission_request 'gh auth status' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
 permission_request 'git branch --show-current' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
 permission_request 'git fetch origin' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
+permission_request 'git ls-remote origin' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
+test -z "$(permission_request 'git pull --ff-only')"
 test -z "$(permission_request 'git fetch --force origin')"
 test -z "$(permission_request 'git fetch origin +main:main')"
 test -z "$(permission_request 'git fetch --update-head-ok origin')"
@@ -47,6 +49,9 @@ for command in \
 	'git restore .' \
 	'git restore :/' \
 	'git restore --staged --worktree .' \
+	'git checkout -- .' \
+	'git stash clear' \
+	'git stash drop' \
 	'git add -f ignored' \
 	'git clean -fdx' \
 	'git gc --prune=now' \
@@ -57,9 +62,27 @@ for command in \
 	'gh auth token' \
 	'gh auth status --hostname github.com --show-token' \
 	'gh repo delete owner/repo' \
+	'gh ssh-key add key.pub' \
+	'gh gpg-key add key.asc' \
+	'gh auth login' \
+	'gh auth refresh' \
+	'gh auth setup-git' \
 	'gcloud auth print-access-token' \
 	'gcloud projects delete project' \
+	'gcloud storage rm gs://bucket/object' \
+	'gcloud run jobs delete job' \
+	'gcloud run services delete service' \
+	'gcloud iam service-accounts keys create key.json' \
 	'terraform apply' \
+	'terraform state rm resource.name' \
+	'terraform state mv old new' \
+	'terraform taint resource.name' \
+	'terraform import resource.name id' \
+	'terraform force-unlock lock-id' \
+	'terraform workspace delete old' \
+	'chezmoi purge' \
+	'chezmoi destroy' \
+	'bq rm dataset' \
 	'sudo command' \
 	'chmod 777 file' \
 	'find . -delete'; do
@@ -94,10 +117,13 @@ done
 test -z "$(pre_tool_use 'GIT_PAGER=cat git status')"
 test -z "$(pre_tool_use 'git restore --staged .')"
 test -z "$(pre_tool_use 'gh search code "auth token"')"
+test -z "$(pre_tool_use 'git stash pop')"
+test -z "$(pre_tool_use 'terraform state list')"
 
 git -C "$tmpdir" remote set-url origin https://example.com/riii111/test.git
 test -z "$(permission_request 'git push origin HEAD')"
 test -z "$(permission_request 'git fetch origin')"
+test -z "$(permission_request 'git ls-remote origin')"
 
 git -C "$tmpdir" remote set-url origin git@github.com:riii111/test.git
 permission_request 'git push origin HEAD' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
