@@ -17,6 +17,7 @@ prefix_rule(pattern=["cargo", "fmt"], decision="allow", justification="Rust form
 prefix_rule(pattern=["cargo", "audit"], decision="allow", justification="Rust security audit")
 prefix_rule(pattern=["cargo", "test"], decision="allow", justification="Rust tests")
 prefix_rule(pattern=["cargo", "run"], decision="allow", justification="Run Rust binary")
+prefix_rule(pattern=["cargo", "metadata"], decision="allow", justification="Read Rust workspace metadata")
 
 # --- Go ---
 prefix_rule(pattern=["go", "build"], decision="allow", justification="Go build")
@@ -57,6 +58,9 @@ prefix_rule(pattern=["git", "remote"], decision="allow", justification="Manage r
 prefix_rule(pattern=["git", "fetch"], decision="allow", justification="Fetch from remote")
 prefix_rule(pattern=["git", "cherry"], decision="allow", justification="Find commits not merged")
 prefix_rule(pattern=["git", "merge-tree"], decision="allow", justification="Inspect merge result without mutating history")
+prefix_rule(pattern=["git", "merge-base"], decision="allow", justification="Find common Git ancestors")
+prefix_rule(pattern=["git", "ls-tree"], decision="allow", justification="List Git tree contents")
+prefix_rule(pattern=["git", "for-each-ref"], decision="allow", justification="List Git refs")
 prefix_rule(pattern=["git", "stash"], decision="allow", justification="Stash changes")
 prefix_rule(pattern=["git", "config", "--get"], decision="allow", justification="Read git config value")
 prefix_rule(pattern=["git", "config", "--list"], decision="allow", justification="List git config values")
@@ -92,8 +96,6 @@ prefix_rule(pattern=["which"], decision="allow", justification="Locate command")
 prefix_rule(pattern=["pwd"], decision="allow", justification="Print working directory")
 
 # --- GitHub CLI (read operations) ---
-prefix_rule(pattern=["gh", "auth"], decision="allow", justification="GitHub auth")
-prefix_rule(pattern=["gh", "api"], decision="allow", justification="Read-only GitHub API access")
 prefix_rule(pattern=["gh", "pr", "view"], decision="allow", justification="View PR")
 prefix_rule(pattern=["gh", "pr", "list"], decision="allow", justification="List PRs")
 prefix_rule(pattern=["gh", "pr", "checkout"], decision="allow", justification="Checkout PR")
@@ -111,6 +113,8 @@ prefix_rule(pattern=["gh", "workflow", "list"], decision="allow", justification=
 prefix_rule(pattern=["gh", "workflow", "view"], decision="allow", justification="View workflow")
 prefix_rule(pattern=["gh", "release", "list"], decision="allow", justification="List releases")
 prefix_rule(pattern=["gh", "release", "view"], decision="allow", justification="View release")
+prefix_rule(pattern=["gh", "search"], decision="allow", justification="Search GitHub resources")
+prefix_rule(pattern=["gh-pr-comments"], decision="allow", justification="Read PR comments through the fixed read-only wrapper")
 
 # --- gCloud CLI (read operations) ---
 prefix_rule(pattern=["gcloud", "storage", "ls"], decision="allow", justification="List GCS buckets or objects")
@@ -119,7 +123,6 @@ prefix_rule(pattern=["gcloud", "run", "jobs", "describe"], decision="allow", jus
 prefix_rule(pattern=["gcloud", "run", "jobs", "executions", "describe"], decision="allow", justification="Describe Cloud Run job execution")
 prefix_rule(pattern=["gcloud", "logging", "read"], decision="allow", justification="Read Cloud Logging entries")
 prefix_rule(pattern=["gcloud", "auth", "list"], decision="allow", justification="List active gcloud credentials")
-prefix_rule(pattern=["gcloud", "auth", "print-access-token"], decision="allow", justification="Print access token for authenticated gcloud calls")
 prefix_rule(pattern=["gcloud", "config", "list"], decision="allow", justification="List gcloud config values")
 prefix_rule(pattern=["gcloud", "config", "configurations", "list"], decision="allow", justification="List gcloud configurations")
 
@@ -196,7 +199,10 @@ prefix_rule(pattern=["chown"], decision="prompt", justification="Change ownershi
 
 prefix_rule(pattern=["git", "push", "--force"], decision="forbidden", justification="Force push is forbidden")
 prefix_rule(pattern=["git", "push", "-f"], decision="forbidden", justification="Force push is forbidden")
-prefix_rule(pattern=["git", "push", "--force-with-lease"], decision="prompt", justification="Force push with lease updates remote history")
+prefix_rule(pattern=["gh", "auth", "token"], decision="forbidden", justification="Do not print GitHub access tokens; use authenticated gh commands directly")
+prefix_rule(pattern=["gh", "auth", "status", "--show-token"], decision="forbidden", justification="Do not print GitHub access tokens; omit --show-token")
+prefix_rule(pattern=["gh", "auth", "status", "-t"], decision="forbidden", justification="Do not print GitHub access tokens; omit -t")
+prefix_rule(pattern=["gcloud", "auth", "print-access-token"], decision="forbidden", justification="Do not print Google Cloud access tokens; use authenticated gcloud commands directly")
 prefix_rule(pattern=["git", "reset", "--hard"], decision="forbidden", justification="Hard reset is forbidden")
 prefix_rule(pattern=["terraform", "apply"], decision="forbidden", justification="Terraform apply is forbidden")
 prefix_rule(pattern=["terraform", "destroy"], decision="forbidden", justification="Terraform destroy is forbidden")
