@@ -227,6 +227,18 @@ def command_test(_: argparse.Namespace) -> int:
             failures += 1
             print_process_failure(label, test_result)
 
+    bash = shutil.which("bash")
+    for test_path in sorted((repo_root / "tests").glob("test-*.sh")):
+        label = f"shell test ({test_path.relative_to(repo_root)})"
+        if bash is None:
+            failures += 1
+            print(f"{label}: bash not found", file=sys.stderr)
+            continue
+        test_result = run_command([bash, str(test_path)], repo_root)
+        if test_result.returncode != 0:
+            failures += 1
+            print_process_failure(label, test_result)
+
     lua = shutil.which("lua")
     if lua is None:
         failures += 1

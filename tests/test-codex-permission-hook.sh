@@ -43,11 +43,17 @@ test -z "$(permission_request 'git push origin feat/test')"
 
 for command in \
 	'git reset HEAD~1 --hard' \
+	'FOO=1 git reset --hard' \
+	'git restore .' \
+	'git restore :/' \
+	'git restore --staged --worktree .' \
 	'git add -f ignored' \
 	'git clean -fdx' \
 	'git gc --prune=now' \
 	'git -C repo push origin +main:main' \
 	'git push origin :old' \
+	'git push -d origin old' \
+	'git push --prune origin' \
 	'gh auth token' \
 	'gh auth status --hostname github.com --show-token' \
 	'gh repo delete owner/repo' \
@@ -55,7 +61,8 @@ for command in \
 	'gcloud projects delete project' \
 	'terraform apply' \
 	'sudo command' \
-	'chmod 777 file'; do
+	'chmod 777 file' \
+	'find . -delete'; do
 	pre_tool_use "$command" | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
 done
 # PreToolUse cannot request approval, so prompt-class operations remain governed by the sandbox.
@@ -84,6 +91,9 @@ done
 for command in 'echo "$HOME"' 'git diff "$(git merge-base main HEAD)"' 'rg foo src/*.rs' 'source .venv/bin/activate'; do
 	test -z "$(pre_tool_use "$command")"
 done
+test -z "$(pre_tool_use 'GIT_PAGER=cat git status')"
+test -z "$(pre_tool_use 'git restore --staged .')"
+test -z "$(pre_tool_use 'gh search code "auth token"')"
 
 git -C "$tmpdir" remote set-url origin https://example.com/riii111/test.git
 test -z "$(permission_request 'git push origin HEAD')"

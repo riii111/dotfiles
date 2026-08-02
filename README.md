@@ -173,9 +173,11 @@ rg -n '^network_access = false$' ~/.codex/config.toml
 codex execpolicy check --pretty --rules ~/.codex/rules/default.rules -- gh pr view 1
 ```
 
-The `PreToolUse` policy reduces accidental direct invocations of recursive `rm` and common destructive Git/GitHub/cloud commands by cooperative agents. It is not a complete enforcement boundary and does not defend against shell indirection, aliases, scripts, interpreters, subprocesses, malicious repository code, disabled hooks, or deliberate bypass attempts. Use the sandbox, fixed-purpose wrappers, and repository or platform protections when an operation requires a strong guarantee.
+The `PreToolUse` policy reduces accidental direct invocations of recursive `rm` and common destructive Git/GitHub/cloud commands by cooperative agents. It is not a complete enforcement boundary and does not defend against shell indirection, aliases, scripts, interpreters, subprocesses, PATH shadowing, malicious repository code, disabled hooks, or deliberate bypass attempts. Use the sandbox, fixed-purpose wrappers, and repository or platform protections when an operation requires a strong guarantee.
 
 `prompt` rules still apply only to commands that require sandbox escalation; current hooks cannot force an approval prompt for a command already permitted inside the sandbox.
+
+Compared with the previous broad allow list, network-dependent builds, `git pull`, direct `gh api`, and `gh pr checkout` can require approval. This is an intentional trade-off: fixed read-only network commands and dedicated wrappers remain autonomous, while commands with broader execution or mutation paths stop for review.
 
 ## Trade-offs
 

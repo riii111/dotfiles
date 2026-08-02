@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
 
+"""Best-effort command policy for cooperative agents.
+
+Direct deny checks fail open when the shell command is not a single parseable
+invocation. PermissionRequest auto-allow checks instead require exact forms and
+fail closed. Execpolicy rules separately govern sandbox escalation.
+"""
+
 import json
 import re
 import shlex
@@ -59,7 +66,7 @@ def is_safe_auth_status(command: str) -> bool:
         return False
 
 
-def is_safe_git_read(command: str, cwd: str) -> bool:
+def is_safe_git_permission_request(command: str, cwd: str) -> bool:
     try:
         argv = tuple(shlex.split(command))
     except ValueError:
@@ -88,7 +95,14 @@ def direct_command(command: str) -> tuple[str | None, list[str]]:
         return None, []
     if not tokens or any(token and set(token) <= set("();&|") for token in tokens):
         return None, []
-    return tokens[0], tokens[1:]
+    index = 0
+    while index < len(tokens) and re.fullmatch(
+        r"[A-Za-z_][A-Za-z0-9_]*=.*", tokens[index], re.DOTALL
+    ):
+        index += 1
+    if index >= len(tokens):
+        return None, []
+    return tokens[index], tokens[index + 1 :]
 
 
 def git_command(args: list[str]) -> tuple[str | None, list[str]]:
@@ -124,44 +138,39 @@ def has_short_flag(args: list[str], flag: str) -> bool:
     )
 
 
-def sequence_index(args: list[str], sequence: list[str]) -> int | None:
-    for index in range(len(args) - len(sequence) + 1):
-        if args[index : index + len(sequence)] == sequence:
-            return index
-    return None
+def starts_with(args: list[str], prefix: list[str]) -> bool:
+    return args[: len(prefix)] == prefix
 
 
 def denial_reason(command: str) -> str | None:
     executable, args = direct_command(command)
     executable_name = None if executable is None else executable.rsplit("/", 1)[-1]
 
-    if executable_name == "gh" and sequence_index(args, ["auth", "token"]) is not None:
+    if executable_name == "gh" and starts_with(args, ["auth", "token"]):
         return "GitHub access-token output is forbidden."
-    if executable_name == "gh":
-        status_index = sequence_index(args, ["auth", "status"])
-        status_args = [] if status_index is None else args[status_index + 2 :]
-        if status_index is not None and (
-            has_option(status_args, "--show-token") or has_short_flag(status_args, "t")
-        ):
+    if executable_name == "gh" and starts_with(args, ["auth", "status"]):
+        status_args = args[2:]
+        if has_option(status_args, "--show-token") or has_short_flag(status_args, "t"):
             return "GitHub access-token output is forbidden."
-    if executable_name == "gh" and sequence_index(args, ["repo", "delete"]) is not None:
+    if executable_name == "gh" and starts_with(args, ["repo", "delete"]):
         return "Repository deletion is forbidden."
 
-    if (
-        executable_name == "gcloud"
-        and sequence_index(args, ["auth", "print-access-token"]) is not None
+    if executable_name == "gcloud" and starts_with(
+        args, ["auth", "print-access-token"]
     ):
         return "Google Cloud access-token output is forbidden."
-    if (
-        executable_name == "gcloud"
-        and sequence_index(args, ["projects", "delete"]) is not None
-    ):
+    if executable_name == "gcloud" and starts_with(args, ["projects", "delete"]):
         return "Cloud project deletion is forbidden."
 
     if executable_name == "git":
         subcommand, subargs = git_command(args)
         if subcommand == "reset" and has_option(subargs, "--hard"):
             return "Hard reset is forbidden."
+        if subcommand == "restore" and any(arg in {".", ":/"} for arg in subargs):
+            staged = has_option(subargs, "--staged") or has_short_flag(subargs, "S")
+            worktree = has_option(subargs, "--worktree") or has_short_flag(subargs, "W")
+            if not staged or worktree:
+                return "Restoring the entire working tree is forbidden."
         if subcommand == "add" and (
             has_option(subargs, "--force") or has_short_flag(subargs, "f")
         ):
@@ -183,7 +192,9 @@ def denial_reason(command: str) -> str | None:
             or has_option(subargs, "--force-with-lease")
             or has_option(subargs, "--mirror")
             or has_option(subargs, "--delete")
+            or has_option(subargs, "--prune")
             or has_short_flag(subargs, "f")
+            or has_short_flag(subargs, "d")
             or any(arg.startswith(("+", ":")) for arg in subargs)
         ):
             return "Destructive push is forbidden."
@@ -203,6 +214,8 @@ def denial_reason(command: str) -> str | None:
         or has_short_flag(args, "R")
     ):
         return "Recursive file deletion is forbidden."
+    if executable_name == "find" and has_option(args, "-delete"):
+        return "Recursive deletion through find is forbidden."
 
     return None
 
@@ -263,7 +276,7 @@ def main() -> int:
         return 0
     if (
         not is_safe_auth_status(command)
-        and not is_safe_git_read(command, cwd)
+        and not is_safe_git_permission_request(command, cwd)
         and not is_safe_push(command, cwd)
     ):
         return 0

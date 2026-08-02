@@ -208,6 +208,7 @@ class DotCliTest(unittest.TestCase):
             (repo_root / "scripts/check.sh", "bash"),
             (repo_root / "bin/run", "sh"),
         ]
+        shell_test = repo_root / "tests/test-example.sh"
         calls = []
 
         def fake_run(args, **kwargs):
@@ -217,6 +218,7 @@ class DotCliTest(unittest.TestCase):
         with (
             mock.patch.object(cli, "resolve_repo_root", return_value=repo_root),
             mock.patch.object(cli, "collect_shell_targets", return_value=targets),
+            mock.patch.object(Path, "glob", return_value=[shell_test]),
             mock.patch(
                 "shutil.which",
                 side_effect=lambda name: f"/bin/{name}",
@@ -233,13 +235,17 @@ class DotCliTest(unittest.TestCase):
         )
         self.assertEqual(
             calls[1][0],
+            ("/bin/bash", "/repo/tests/test-example.sh"),
+        )
+        self.assertEqual(
+            calls[2][0],
             (
                 "/bin/lua",
                 "private_dot_config/wezterm/tests/herdr_mode_test.lua",
             ),
         )
-        self.assertEqual(calls[2][0], ("/bin/bash", "-n", "/repo/scripts/check.sh"))
-        self.assertEqual(calls[3][0], ("/bin/sh", "-n", "/repo/bin/run"))
+        self.assertEqual(calls[3][0], ("/bin/bash", "-n", "/repo/scripts/check.sh"))
+        self.assertEqual(calls[4][0], ("/bin/sh", "-n", "/repo/bin/run"))
 
     def test_command_test_collects_failures_without_traceback(self):
         repo_root = Path("/repo")

@@ -12,17 +12,26 @@ cat >"$tmpdir/bin/gh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [ "${GH_TEST_FAILURE:-}" = 1 ]; then
+  printf 'simulated gh failure\n' >&2
+  exit 23
+fi
+
 if [ "$1 $2" = "repo view" ]; then
-  printf 'riii111/dotfiles\n'
+  printf '{"nameWithOwner":"riii111/dotfiles"}\n'
   exit 0
 fi
 
 if [ "$1 $2" = "api graphql" ]; then
   payload="$(cat)"
+  if [ "${GH_TEST_MISSING_PR:-}" = 1 ]; then
+    printf '{"data":{"repository":{"pullRequest":null}}}\n'
+    exit 0
+  fi
   if jq -e '.query | contains("reviewThreads")' <<<"$payload" >/dev/null; then
     if jq -e '.variables.cursor == "thread-cursor"' <<<"$payload" >/dev/null; then
       cat <<'JSON'
-{"data":{"repository":{"pullRequest":{"number":42,"url":"https://github.com/riii111/dotfiles/pull/42","title":"Test","state":"OPEN","isDraft":false,"headRefOid":"head","baseRefOid":"base","reviewThreads":{"nodes":[{"id":"thread-resolved","isResolved":true,"isOutdated":false,"path":"b.rs","line":2,"originalLine":2,"startLine":null,"diffSide":"RIGHT","resolvedBy":{"login":"author"},"comments":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":null}}}],"pageInfo":{"hasNextPage":false,"endCursor":null}}}}}}
+{"data":{"repository":{"pullRequest":{"number":42,"url":"https://github.com/riii111/dotfiles/pull/42","title":"Test","state":"OPEN","isDraft":false,"headRefOid":"head","baseRefOid":"base","reviewThreads":{"nodes":[{"id":"thread-resolved","isResolved":true,"isOutdated":false,"path":"b.rs","line":2,"originalLine":2,"startLine":null,"diffSide":"RIGHT","resolvedBy":{"login":"author"},"comments":{"nodes":[],"pageInfo":{"hasNextPage":true,"endCursor":"resolved-comment-cursor"}}}],"pageInfo":{"hasNextPage":false,"endCursor":null}}}}}}
 JSON
     else
       cat <<'JSON'
@@ -32,6 +41,16 @@ JSON
     exit 0
   fi
   if jq -e '.query | contains("PullRequestReviewThread")' <<<"$payload" >/dev/null; then
+    if jq -e '.variables.id == "thread-resolved"' <<<"$payload" >/dev/null; then
+      if [ "${GH_FAIL_RESOLVED_COMMENTS:-}" = 1 ]; then
+        printf 'resolved comments should not be fetched\n' >&2
+        exit 88
+      fi
+      cat <<'JSON'
+{"data":{"node":{"comments":{"nodes":[{"id":"comment-resolved","databaseId":6,"url":"https://example.test/6","body":"resolved follow-up","author":{"login":"author"},"createdAt":"2026-01-03T00:00:00Z","updatedAt":"2026-01-03T00:00:00Z","path":"b.rs","line":2,"originalLine":2,"diffHunk":"@@","replyTo":null}],"pageInfo":{"hasNextPage":false,"endCursor":null}}}}}
+JSON
+      exit 0
+    fi
     cat <<'JSON'
 {"data":{"node":{"comments":{"nodes":[{"id":"comment-2","databaseId":2,"url":"https://example.test/2","body":"follow-up","author":{"login":"author"},"createdAt":"2026-01-02T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","path":"a.rs","line":10,"originalLine":9,"diffHunk":"@@","replyTo":{"id":"comment-1"}}],"pageInfo":{"hasNextPage":false,"endCursor":null}}}}}
 JSON
@@ -55,7 +74,7 @@ EOF
 chmod +x "$tmpdir/bin/gh"
 
 output="$tmpdir/output.json"
-PATH="$tmpdir/bin:$PATH" python3 "$wrapper" 42 >"$output"
+GH_FAIL_RESOLVED_COMMENTS=1 PATH="$tmpdir/bin:$PATH" python3 "$wrapper" 42 >"$output"
 jq -e '
   .pullRequest.number == 42 and
   .conversationComments[0].body == "conversation" and
@@ -70,7 +89,14 @@ jq -e '
 ' "$output" >/dev/null
 
 PATH="$tmpdir/bin:$PATH" python3 "$wrapper" 42 --include-resolved >"$output"
-jq -e '(.reviewThreads | length) == 2 and .includesResolvedThreads == true' "$output" >/dev/null
+jq -e '
+  (.reviewThreads | length) == 2 and
+  .includesResolvedThreads == true and
+  .reviewThreads[1].comments[0].body == "resolved follow-up"
+' "$output" >/dev/null
+
+PATH="$tmpdir/bin:$PATH" python3 "$wrapper" https://github.com/riii111/dotfiles/pull/42 >"$output"
+jq -e '.pullRequest.number == 42' "$output" >/dev/null
 
 PATH="$tmpdir/bin:$PATH" python3 "$wrapper" 42 --compact >"$output"
 jq -e '.reviewThreads[0].comments[0] | has("diffHunk") | not' "$output" >/dev/null
@@ -80,5 +106,30 @@ if PATH="$tmpdir/bin:$PATH" python3 "$wrapper" 0 >"$output" 2>/dev/null; then
 	printf 'invalid PR number unexpectedly succeeded\n' >&2
 	exit 1
 fi
+
+expect_failure() {
+	if PATH="$tmpdir/bin:$PATH" python3 "$wrapper" "$@" >"$output" 2>/dev/null; then
+		printf 'invalid arguments unexpectedly succeeded: %s\n' "$*" >&2
+		exit 1
+	fi
+}
+
+expect_failure '²'
+expect_failure 42 --repo ../..
+expect_failure https://github.com/riii111/dotfiles/pull/42 --repo other/repo
+
+set +e
+GH_TEST_FAILURE=1 PATH="$tmpdir/bin:$PATH" python3 "$wrapper" 42 >"$output" 2>"$tmpdir/error"
+status=$?
+set -e
+test "$status" -eq 23
+grep -q 'simulated gh failure' "$tmpdir/error"
+
+set +e
+GH_TEST_MISSING_PR=1 PATH="$tmpdir/bin:$PATH" python3 "$wrapper" 42 >"$output" 2>"$tmpdir/error"
+status=$?
+set -e
+test "$status" -eq 1
+grep -q 'pull request not found: riii111/dotfiles#42' "$tmpdir/error"
 
 printf 'gh-pr-comments tests passed\n'

@@ -1,6 +1,6 @@
 ---
 name: gh-pr-comments
-description: GitHub PRのconversation comments、reviews、review threadsを読み取り専用wrapperで取得する。PRコメント、未解決コメント、unresolved review thread、GraphQLでしか取れないreview threadの確認を依頼されたときに使う。
+description: GitHub PRのconversation comments、reviews、review threadsを読み取り専用wrapperで取得する。PRコメントや未解決threadを依頼されたとき、または自律的なPRレビューでコメントを確認するときに使う。
 ---
 
 # PR comments

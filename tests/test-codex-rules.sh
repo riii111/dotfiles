@@ -2,6 +2,11 @@
 
 set -euo pipefail
 
+if ! command -v codex >/dev/null 2>&1; then
+	printf 'codex rules tests skipped: codex not installed\n'
+	exit 0
+fi
+
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 rules="$repo_root/dot_codex/rules/default.rules"
 
@@ -17,6 +22,7 @@ test "$(decision mkdir build)" = no_match
 test "$(decision git branch --show-current)" = prompt
 test "$(decision git remote -v)" = no_match
 test "$(decision gh pr view 26)" = allow
+test "$(decision gh search auth token)" = allow
 test "$(decision gcloud run jobs list)" = allow
 test "$(decision gh-pr-comments 26 --compact)" = allow
 test "$(decision env rm -rf target)" = prompt
@@ -55,13 +61,16 @@ test "$(decision git fetch --update-head-ok origin)" = prompt
 test "$(decision git clean -fdx)" = forbidden
 test "$(decision git gc --prune=now)" = forbidden
 test "$(decision git push --mirror origin)" = forbidden
+test "$(decision git push -d origin old)" = forbidden
+test "$(decision git push --prune origin)" = forbidden
 test "$(decision gh repo delete owner/repo)" = forbidden
 test "$(decision gcloud projects delete project)" = forbidden
+test "$(decision git restore .)" = forbidden
+test "$(decision git restore :/)" = forbidden
+test "$(decision find . -delete)" = forbidden
 test "$(decision git worktree remove ../worktree)" = prompt
 test "$(decision git submodule update --init)" = prompt
 test "$(decision gh pr review 26 --approve)" = prompt
 test "$(decision gh workflow run ci.yml)" = prompt
-
-rg -q '^# このrulesは、コマンドをsandbox外で実行する必要がある場合だけ参照される。$' "$rules"
 
 printf 'codex rules tests passed\n'

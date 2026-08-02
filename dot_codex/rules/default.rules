@@ -68,11 +68,6 @@ prefix_rule(pattern=["pnpm"], decision="prompt", justification="Package manager 
 prefix_rule(pattern=["bun"], decision="prompt", justification="Package manager commands require confirmation")
 prefix_rule(pattern=["curl"], decision="prompt", justification="Network access requires confirmation")
 prefix_rule(pattern=["gh", "api"], decision="prompt", justification="GitHub API may perform mutations depending on method and endpoint")
-prefix_rule(pattern=["gh", "api", "--method", "POST"], decision="prompt", justification="Mutating GitHub API call")  # -f みたいなパターンはカバーできないので不完全
-prefix_rule(pattern=["gh", "api", "--method", "PATCH"], decision="prompt", justification="Mutating GitHub API call")
-prefix_rule(pattern=["gh", "api", "--method", "PUT"], decision="prompt", justification="Mutating GitHub API call")
-prefix_rule(pattern=["gh", "api", "--method", "DELETE"], decision="prompt", justification="Mutating GitHub API call")
-prefix_rule(pattern=["gh", "api", "graphql"], decision="prompt", justification="GraphQL uses POST")
 prefix_rule(pattern=["gh", "pr", "checkout"], decision="prompt", justification="May reset an existing branch")
 prefix_rule(pattern=["gh", "pr", ["comment", "review", "merge"]], decision="prompt", justification="Changes pull request state")
 prefix_rule(pattern=["gh", "issue", "comment"], decision="prompt", justification="Posts an issue comment")
@@ -107,6 +102,8 @@ prefix_rule(pattern=["chown"], decision="prompt", justification="Change ownershi
 
 # -----------------------------------------------------------------------------
 # FORBIDDEN: Dangerous commands
+# sandbox内でも止める直接形式はhooks/command policyにも回帰テストを追加する。
+# rulesとhookは対象となる実行層が異なるため、完全に同一の判定表にはしない。
 # -----------------------------------------------------------------------------
 
 prefix_rule(pattern=["git", "push", "--force"], decision="forbidden", justification="Force push is forbidden")
@@ -114,6 +111,8 @@ prefix_rule(pattern=["git", "push", "-f"], decision="forbidden", justification="
 prefix_rule(pattern=["git", "push", "--force-with-lease"], decision="forbidden", justification="History-rewriting push is forbidden")
 prefix_rule(pattern=["git", "push", "--mirror"], decision="forbidden", justification="Mirroring all refs is forbidden")
 prefix_rule(pattern=["git", "push", "--delete"], decision="forbidden", justification="Deleting remote refs is forbidden")
+prefix_rule(pattern=["git", "push", "-d"], decision="forbidden", justification="Deleting remote refs is forbidden")
+prefix_rule(pattern=["git", "push", "--prune"], decision="forbidden", justification="Pruning remote refs is forbidden")
 prefix_rule(pattern=["git", "clean", "-fdx"], decision="forbidden", justification="Deleting ignored and untracked files is forbidden")
 prefix_rule(pattern=["git", "gc", "--prune=now"], decision="forbidden", justification="Immediate object pruning is forbidden")
 prefix_rule(pattern=["git", "add", "-f"], decision="forbidden", justification="Force-add bypasses .gitignore; omit -f")
@@ -152,6 +151,8 @@ prefix_rule(
 )
 prefix_rule(pattern=["terraform", "apply"], decision="forbidden", justification="Terraform apply is forbidden")
 prefix_rule(pattern=["terraform", "destroy"], decision="forbidden", justification="Terraform destroy is forbidden")
+prefix_rule(pattern=["git", "restore", [".", ":/"]], decision="forbidden", justification="Restoring the entire working tree is forbidden")
+prefix_rule(pattern=["find", ".", "-delete"], decision="forbidden", justification="Recursive deletion through find is forbidden")
 prefix_rule(pattern=["sudo"], decision="forbidden", justification="Privilege escalation is forbidden")
 prefix_rule(pattern=["su"], decision="forbidden", justification="User switching is forbidden")
 prefix_rule(pattern=["chmod", "777"], decision="forbidden", justification="World-writable permissions forbidden")
