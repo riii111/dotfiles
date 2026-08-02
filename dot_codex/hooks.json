@@ -1,6 +1,19 @@
 {
   "description": "Deterministic approval for narrowly scoped development operations.",
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "^Bash$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.codex/hooks/permission_request.py",
+            "timeout": 5,
+            "statusMessage": "Checking forbidden commands"
+          }
+        ]
+      }
+    ],
     "PermissionRequest": [
       {
         "matcher": "^Bash$",

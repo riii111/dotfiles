@@ -9,10 +9,16 @@ decision() {
 	codex execpolicy check --rules "$rules" -- "$@" | jq -r '.decision'
 }
 
-test "$(decision cargo metadata --no-deps)" = allow
-test "$(decision cargo metadata)" != allow
+test "$(decision cargo metadata --no-deps)" != allow
+test "$(decision git status)" != allow
+test "$(decision rg pattern)" = prompt
+test "$(decision jq . file.json)" != allow
+test "$(decision mkdir build)" != allow
 test "$(decision git branch --show-current)" = prompt
-test "$(decision git remote -v)" = allow
+test "$(decision git remote -v)" != allow
+test "$(decision gh pr view 26)" = allow
+test "$(decision gcloud run jobs list)" = allow
+test "$(decision gh-pr-comments 26 --compact)" = allow
 test "$(decision env rm -rf target)" = prompt
 test "$(decision fd -x rm '{}')" = prompt
 test "$(decision awk 'BEGIN { system("rm file") }')" = prompt
@@ -46,5 +52,16 @@ test "$(decision ps e)" = prompt
 test "$(decision git fetch --force origin)" = prompt
 test "$(decision git fetch origin +main:main)" = prompt
 test "$(decision git fetch --update-head-ok origin)" = prompt
+test "$(decision git clean -fdx)" = forbidden
+test "$(decision git gc --prune=now)" = forbidden
+test "$(decision git push --mirror origin)" = forbidden
+test "$(decision gh repo delete owner/repo)" = forbidden
+test "$(decision gcloud projects delete project)" = forbidden
+test "$(decision git worktree remove ../worktree)" = prompt
+test "$(decision git submodule update --init)" = prompt
+test "$(decision gh pr review 26 --approve)" = prompt
+test "$(decision gh workflow run ci.yml)" = prompt
+
+rg -q '^# このrulesは、コマンドをsandbox外で実行する必要がある場合だけ参照される。$' "$rules"
 
 printf 'codex rules tests passed\n'
