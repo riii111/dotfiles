@@ -24,9 +24,13 @@ def current_branch(cwd: str) -> str | None:
     return result.stdout.strip() or None
 
 
-def push_urls(cwd: str) -> list[str]:
+def origin_urls(cwd: str, *, push: bool) -> list[str]:
+    args = ["git", "remote", "get-url"]
+    if push:
+        args.append("--push")
+    args.extend(["--all", "origin"])
     result = subprocess.run(
-        ["git", "remote", "get-url", "--push", "--all", "origin"],
+        args,
         cwd=cwd,
         check=False,
         capture_output=True,
@@ -55,6 +59,46 @@ def is_safe_auth_status(command: str) -> bool:
         return False
 
 
+def is_safe_git_read(command: str, cwd: str) -> bool:
+    try:
+        argv = tuple(shlex.split(command))
+    except ValueError:
+        return False
+
+    if argv == ("git", "branch", "--show-current"):
+        return True
+    if argv != ("git", "fetch", "origin"):
+        return False
+
+    urls = origin_urls(cwd, push=False)
+    return bool(urls) and all(is_github_url(url) for url in urls)
+
+
+def denial_reason(command: str) -> str | None:
+    try:
+        argv = shlex.split(command)
+    except ValueError:
+        return None
+
+    for index in range(len(argv) - 2):
+        if argv[index : index + 3] == ["gh", "auth", "status"]:
+            segment = argv[index + 3 :]
+            if any(
+                arg == "--show-token"
+                or (arg.startswith("-") and not arg.startswith("--") and "t" in arg[1:])
+                for arg in segment
+            ):
+                return "GitHub access-token output is forbidden."
+
+    for index in range(len(argv) - 1):
+        if argv[index : index + 2] == ["git", "reset"]:
+            segment = argv[index + 2 :]
+            if "--hard" in segment:
+                return "Hard reset is forbidden."
+
+    return None
+
+
 def is_safe_push(command: str, cwd: str) -> bool:
     try:
         argv = shlex.split(command)
@@ -65,7 +109,7 @@ def is_safe_push(command: str, cwd: str) -> bool:
     if branch is None or branch in PROTECTED_BRANCHES:
         return False
 
-    urls = push_urls(cwd)
+    urls = origin_urls(cwd, push=True)
     if not urls or not all(is_github_url(url) for url in urls):
         return False
 
@@ -82,7 +126,23 @@ def main() -> int:
     cwd = event.get("cwd")
     if not isinstance(command, str) or not isinstance(cwd, str):
         return 0
-    if not is_safe_auth_status(command) and not is_safe_push(command, cwd):
+    reason = denial_reason(command)
+    if reason is not None:
+        json.dump(
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": "PermissionRequest",
+                    "decision": {"behavior": "deny", "message": reason},
+                }
+            },
+            sys.stdout,
+        )
+        return 0
+    if (
+        not is_safe_auth_status(command)
+        and not is_safe_git_read(command, cwd)
+        and not is_safe_push(command, cwd)
+    ):
         return 0
 
     json.dump(
