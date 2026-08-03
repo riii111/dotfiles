@@ -21,29 +21,22 @@ project_doc_max_bytes = 65536
 # =============================================================================
 # Global Approval Policy
 # =============================================================================
-sandbox_mode = "workspace-write"
-approvals_reviewer = "auto_review"
-
 approval_policy = { granular = {
   sandbox_approval = true,
   rules = true,
   mcp_elicitations = false,
-  request_permissions = true,
+  request_permissions = false,
   skill_approval = false,
 } }
 
-[sandbox_workspace_write]
-network_access = true
-writable_roots = [
-  "{{ .chezmoi.homeDir }}/ghq/github.com",
-]
-
-model = "gpt-5.5"
+sandbox_mode = "danger-full-access"
+approvals_reviewer = "auto_review"
+model = "gpt-5.6-sol"
 model_provider = "openai"
-model_reasoning_effort = "high"
+model_reasoning_effort = "medium"
 model_verbosity = "low"
 model_reasoning_summary = "concise"
-service_tier = "fast"
+service_tier = "default"
 web_search = "cached"
 hide_agent_reasoning = true
 
@@ -51,8 +44,10 @@ hide_agent_reasoning = true
 # Global Features
 # =============================================================================
 [features]
+hooks = true
 fast_mode = true
 memories = true
+js_repl = false
 
 # =============================================================================
 # Subagents
@@ -74,6 +69,7 @@ experimental_use_profile = true
 # =============================================================================
 # No API key: anonymous tier only (lower rate limits, no billing possible).
 # Free tier with API key blocks at 1,000 calls/month; Pro requires explicit subscription.
+# App-owned MCP (node_repl / computer-use) is intentionally omitted.
 [mcp_servers.context7]
 command = "npx"
 args = ["-y", "@upstash/context7-mcp"]
@@ -99,6 +95,7 @@ trust_level = "trusted"
 
 [tui]
 status_line = ["model-with-reasoning", "git-branch", "context-remaining", "five-hour-limit", "weekly-limit"]
+session_picker_view = "dense"
 
 # =============================================================================
 # Desktop Preferences
@@ -106,31 +103,35 @@ status_line = ["model-with-reasoning", "git-branch", "context-remaining", "five-
 [desktop]
 composerEnterBehavior = "cmdIfMultiline"
 appearanceLightCodeThemeId = "linear"
-appearanceDarkCodeThemeId = "sentry"
+appearanceDarkCodeThemeId = "catppuccin"
 appearanceTheme = "system"
 git-branch-prefix = ""
 git-pr-instructions = """
-- .github配下にpull request templateがあればそれに準拠。
+- create-pr SKILLに従う
 - 内容について
-  変更内容は、diffを見ればわかるレベルの内容は冗長なので書かない。物理レベルではなく論理レベルでの情報を記述する。"""
+  変更内容は、diffを見ればわかるレベルの内容は冗長なので書かない。物理レベルではなく論理レベルでの情報を記述する。
+"""
 git-commit-instructions = """
 Conventional Commitに準拠。
 bodyは指示されない限りは書かない。タイトルだけで表現"""
-default-service-tier = "priority"
+followUpQueueMode = "queue"
+dock-icon-preference = "codex-system"
+show-context-window-usage = false
+defaultTerminalLocation = "right"
+conversationDetailMode = "STEPS_COMMANDS"
 
 [desktop.open-in-target-preferences]
 global = "ghostty"
 
 [desktop.appearanceLightChromeTheme]
 accent = "#5e6ad2"
-contrast = 40
+contrast = 55
 ink = "#1b1b1b"
 opaqueWindows = false
-surface = "#f7f7f7"
+surface = "#f1f1f1"
 
 [desktop.appearanceLightChromeTheme.fonts]
 ui = "Inter"
-code = '"Geist Mono", ui-monospace, "SFMono-Regular"'
 
 [desktop.appearanceLightChromeTheme.semanticColors]
 diffAdded = "#52a450"
@@ -138,16 +139,15 @@ diffRemoved = "#c94446"
 skill = "#8160d8"
 
 [desktop.appearanceDarkChromeTheme]
-accent = "#7055f6"
+accent = "#f9b98c"
 contrast = 60
-ink = "#e6dff9"
+ink = "#cdd6f4"
 opaqueWindows = false
-surface = "#1a171f"
+surface = "#181825"
 
 [desktop.appearanceDarkChromeTheme.fonts]
-ui = "Inter"
 
 [desktop.appearanceDarkChromeTheme.semanticColors]
-diffAdded = "#8ee6d7"
-diffRemoved = "#fa423e"
-skill = "#7055f6"
+diffAdded = "#a6e3a1"
+diffRemoved = "#f38ba8"
+skill = "#cba6f7"
