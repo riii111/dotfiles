@@ -6,6 +6,10 @@ description: |
 
 # Task Session Launch
 
-選択済みtaskのrepositoryに対応する保存済みprojectを決め、`environment.local`でCodex Taskを一度作成する。launcherはworktreeを作らず、タイトルは`[<task-id>] <task title>`にする。
+選択済みtaskのrepositoryに対応する保存済みprojectを決め、`environment.local`でCodex Taskを一度作成する。
+launcherはworktreeを作らず、タイトルは`[<task-id>] <task title>`にする。
 
-Goalにはtaskの最新本文、直接依存と成果物、repository、base、完了条件を入れる。`$task-worker`を使い、repo規約を読んで専用worktree/branchで実装し、全検証後にDraft PRを作るよう依頼する。専用worktreeはworkerが作成する。作成後の進行はworker Taskに任せる。
+Goalにはtaskの最新本文、直接依存と成果物、repository、base、完了条件を入れる。
+`$task-worker`を使い、repo規約を読んで専用worktree/branchで実装し、全検証後にDraft PRを作るよう依頼する。
+専用worktreeはworkerが作成する。
+作成後の進行はworker Taskに任せる。
