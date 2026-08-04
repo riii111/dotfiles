@@ -9,7 +9,6 @@ description: |
 worker checkoutを共有するため、Draft PRのreview Taskをworker Taskからsame-directoryで一度forkし、`[Review] <task-id>: <PR title>`にする。
 再開時は同じtitleのreview Taskを再利用する。
 `$code-review`を使ってbaseとの差分をレビューするよう依頼する。
-reviewerはreview対象headを固定し、結果の先頭に`Reviewed head: <head SHA>`を付けて、Blocking、Non-blocking、LGTMをまとめてworkerへ返す。
 PRへの投稿、修正、Ready化、mergeはreviewerにさせない。
 
 review依頼にはworker Task IDとreview対象headを含める。
