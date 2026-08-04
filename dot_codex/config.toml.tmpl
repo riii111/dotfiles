@@ -21,16 +21,9 @@ project_doc_max_bytes = 65536
 # =============================================================================
 # Global Approval Policy
 # =============================================================================
-approval_policy = { granular = {
-  sandbox_approval = true,
-  rules = true,
-  mcp_elicitations = false,
-  request_permissions = false,
-  skill_approval = false,
-} }
-
-sandbox_mode = "danger-full-access"
-approvals_reviewer = "auto_review"
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+approvals_reviewer = "guardian_subagent"
 model = "gpt-5.6-sol"
 model_provider = "openai"
 model_reasoning_effort = "medium"
@@ -39,6 +32,9 @@ model_reasoning_summary = "concise"
 service_tier = "default"
 web_search = "cached"
 hide_agent_reasoning = true
+
+[sandbox_workspace_write]
+network_access = true
 
 # =============================================================================
 # Global Features
