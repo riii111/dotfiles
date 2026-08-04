@@ -31,6 +31,8 @@
       "Shell(npm test*)",
 
       "Shell(nix)",
+      "Shell(chezmoi)",
+      "Shell(find)",
 
       "Shell(terraform fmt*)",
       "Shell(terraform validate*)",
