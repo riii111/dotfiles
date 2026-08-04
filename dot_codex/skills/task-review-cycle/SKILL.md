@@ -33,15 +33,27 @@ PR: <PR URL>
 現在の比較範囲全体をレビューしてください。
 再レビューでも前回の指摘だけに限定せず、新しい問題がないか確認してください。
 PRへの投稿、修正、Ready化、mergeは行わないでください。
+```
+
+worker Taskへ返すmessageは次の形式にしてください。
+
+```text
+$task-review-cycle
+
+<レビュー結果>
+```
+
+この`$task-review-cycle`はworker Taskへのmessageの先頭に置く文字列であり、reviewerは適用しません。
+reviewerは`$code-review`でレビューします。
+
 レビュー完了後、`codex_app__send_message_to_thread`の`threadId`にworker Task IDを指定して結果を返してください。
 送信が受理されたことを確認したらreviewerのturnを終了してください。
-```
 
 ## 制約
 
 workerは指摘を現在のコードと規約で確かめ、妥当なものを修正する。
 所定の全検証、commit、pushの後に再レビューを依頼し、LGTMまで反復する。
-reviewerからの結果が届くことでworker Taskの新しいturnが始まり、workerは修正または次の判断を行う。
+reviewerから`$task-review-cycle`で始まるmessageが届くことでworker Taskの新しいturnが始まり、workerは同じSkillを適用して指摘確認、修正、再レビューを行う。
 
 既定はmanualであり、明示許可なしにReady化やmergeをしない。
 許可された場合だけ、最新headと必要なchecksを再確認して実行する。
