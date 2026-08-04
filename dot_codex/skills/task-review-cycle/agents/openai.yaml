@@ -1,0 +1,4 @@
+interface:
+  display_name: "Task Review Cycle"
+  short_description: "Draft PRのレビュー、Ready化、mergeを進める。"
+  default_prompt: "$task-review-cycleを使い、担当PRのレビュー工程を再開してください。"
