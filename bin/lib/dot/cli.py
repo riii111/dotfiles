@@ -219,7 +219,21 @@ def command_test(_: argparse.Namespace) -> int:
     repo_root = resolve_repo_root()
     failures = 0
 
-    for directory, label in (("tests", "python tests"),):
+    for directory, label in (
+        ("tests", "python tests"),
+        (
+            "dot_codex/skills/task-orchestration/tests",
+            "task orchestration tests",
+        ),
+        (
+            "dot_codex/skills/completion-report/tests",
+            "completion report tests",
+        ),
+        (
+            "dot_codex/skills/task-worker/tests",
+            "task worker tests",
+        ),
+    ):
         test_result = run_command(
             ["python3", "-m", "unittest", "discover", directory], repo_root
         )
