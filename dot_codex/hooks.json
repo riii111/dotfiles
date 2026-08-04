@@ -1,6 +1,17 @@
 {
   "description": "Deterministic approval for narrowly scoped development operations.",
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "command": "bash ~/.codex/herdr-agent-state.sh session",
+            "timeout": 10,
+            "type": "command"
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "^Bash$",
