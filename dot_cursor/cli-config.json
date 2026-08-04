@@ -158,7 +158,6 @@
       "Shell(tmux list-sessions*)",
 
       "Shell(codex)",
-      "Shell(./scripts/test-skills.sh)",
 
       "WebFetch(**)"
     ],

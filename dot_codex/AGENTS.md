@@ -41,8 +41,8 @@
 
 ## Codex操作
 
-セッションIDへの情報共有を依頼されたら、multi_agent_v1__send_inputのtargetへセッションIDを指定する。
-submission_idの取得を成功条件とする。
+レビューTaskからworker Taskへ結果を返すときは、`send_message_to_thread`でworker Task IDをtargetに指定する。
+返却が受理されたことを確認する。
 
 ## コメント規律
 
