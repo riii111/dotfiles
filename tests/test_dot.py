@@ -15,7 +15,6 @@ class DotCliTest(unittest.TestCase):
         skill_root = repo_root / "dot_codex" / "skills"
         skill_names = (
             "task-orchestration",
-            "task-session-launch",
             "task-worker",
             "task-review-cycle",
             "task-completion-recovery",
@@ -31,6 +30,7 @@ class DotCliTest(unittest.TestCase):
             )
             self.assertFalse((skill_root / skill_name).exists())
 
+        self.assertFalse((skill_root / "symlink_task-session-launch.tmpl").exists())
         self.assertFalse((skill_root / "completion-report").exists())
 
     def test_detect_shell_uses_shebang_and_skips_python(self):

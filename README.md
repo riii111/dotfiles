@@ -71,7 +71,7 @@ chezmoi apply
 codex-task-orchestrator init
 ```
 
-The six task-orchestration skills in `~/.codex/skills` are symlinked from the local
+Task-orchestration skills in `~/.codex/skills` are symlinked from the local
 `codex-task-orchestrator` checkout. Pull that repository to update the suite, then run
 `chezmoi apply` to install or repair the links. `init` records the parent session, task source,
 allowed pull-request repositories, and explicitly permitted agent tools.
