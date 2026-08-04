@@ -29,8 +29,15 @@ approval_policy = { granular = {
   skill_approval = false,
 } }
 
-sandbox_mode = "danger-full-access"
-approvals_reviewer = "auto_review"
+sandbox_mode = "workspace-write"
+approvals_reviewer = "user"
+
+[sandbox_workspace_write]
+network_access = false
+writable_roots = [
+  "{{ .chezmoi.homeDir }}/ghq/github.com",
+]
+
 model = "gpt-5.6-sol"
 model_provider = "openai"
 model_reasoning_effort = "medium"

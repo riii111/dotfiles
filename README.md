@@ -160,6 +160,25 @@ sub: Claude Code
 
 `~/.codex/config.toml` is rewritten by the Codex desktop app, so it is `.chezmoiignore`d and not applied. `dot_codex/config.toml.tmpl` is kept only as a hand-maintained reference for base settings; edit the live file directly.
 
+### Codex command policy
+
+`dot_codex/rules/default.rules` controls commands that need to run outside the sandbox. Keep `sandbox_workspace_write.network_access = false` in the live `~/.codex/config.toml`; otherwise network commands can run inside the sandbox without consulting these rules.
+
+After `chezmoi apply`, restart Codex and open `/hooks`. Trust and enable the `PreToolUse` and `PermissionRequest` definitions from `~/.codex/hooks.json`. Codex invalidates that trust when a hook definition changes, so repeat this check after updating the hooks.
+
+Verify the live setup with:
+
+```sh
+rg -n '^network_access = false$' ~/.codex/config.toml
+codex execpolicy check --pretty --rules ~/.codex/rules/default.rules -- gh pr view 1
+```
+
+The `PreToolUse` policy reduces accidental direct invocations of recursive `rm` and common destructive Git/GitHub/cloud commands by cooperative agents. It is not a complete enforcement boundary and does not defend against shell indirection, aliases, scripts, interpreters, subprocesses, PATH shadowing, malicious repository code, disabled hooks, or deliberate bypass attempts. Use the sandbox, fixed-purpose wrappers, and repository or platform protections when an operation requires a strong guarantee.
+
+`prompt` rules still apply only to commands that require sandbox escalation; current hooks cannot force an approval prompt for a command already permitted inside the sandbox.
+
+Compared with the previous broad allow list, network-dependent builds, `git pull`, direct `gh api`, and `gh pr checkout` can require approval. This is an intentional trade-off: fixed read-only network commands and dedicated wrappers remain autonomous, while commands with broader execution or mutation paths stop for review.
+
 ## Trade-offs
 
 - macOS only (AppleScript, pbcopy, etc.)
