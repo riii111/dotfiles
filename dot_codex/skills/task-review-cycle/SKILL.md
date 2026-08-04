@@ -1,20 +1,40 @@
 ---
 name: task-review-cycle
 description: |
-  task-workerが作成したDraft PRを独立review Taskでレビューし、修正と再レビューをLGTMまで反復する。PR作成後やレビュー工程の再開時に使う。
+  `$task-worker`が作成したDraft PRを独立review Taskでレビューし、修正と再レビューをLGTMまで反復する。
+  PR作成後やレビュー工程の再開時に使う。
 ---
 
 # Task Review Cycle
 
-worker checkoutを共有するため、Draft PRのreview Taskをworker Taskからsame-directoryで一度forkし、`[Review] <task-id>: <PR title>`にする。
-再開時は同じtitleのreview Taskを再利用する。
-`$code-review`を使ってbaseとの差分をレビューするよう依頼する。
-PRへの投稿、修正、Ready化、mergeはreviewerにさせない。
+## 初回手順
 
-review依頼にはworker Task IDとreview対象headを含める。
-reviewerは`send_message_to_thread`でworker Taskへ結果を返す。
-再レビューは新しいTaskを作らず同じreview Taskへ依頼し、毎回、最新headのbase差分全体を先入観なく確認する。
-再レビュー依頼では前回の指摘を詳しく説明しない。
+1. worker checkoutを共有するため、worker Taskから`codex_app__fork_thread`を`same-directory`で一度呼ぶ。
+2. 返された`threadId`へ`codex_app__set_thread_title`で`Review <identifier>`を設定する。
+   - worker Taskと同じ`<identifier>`を使う。
+   - `title`にPR titleやtask titleを含めない。
+3. 同じ`threadId`へ`codex_app__send_message_to_thread`で、現在のPR URL、base、head SHAを入れた`## 依頼文`を送る。
+4. `codex_app__wait_threads`でreview Taskの結果を待つ。
+
+## 再レビュー手順
+
+1. 同じreview Taskへ`codex_app__send_message_to_thread`で、最新のPR URL、base、head SHAを入れた`## 依頼文`を送る。
+2. 前回の指摘は依頼文へ書かない。
+3. `codex_app__wait_threads`でreview Taskの結果を待つ。
+
+## 依頼文
+
+```text
+$code-review
+PR: <PR URL>
+比較範囲: <base>...<head SHA>
+
+現在の比較範囲全体をレビューしてください。
+再レビューでも前回の指摘だけに限定せず、新しい問題がないか確認してください。
+PRへの投稿、修正、Ready化、mergeは行わないでください。
+```
+
+## 制約
 
 workerは指摘を現在のコードと規約で確かめ、妥当なものを修正する。
 所定の全検証、commit、pushの後に再レビューを依頼し、LGTMまで反復する。

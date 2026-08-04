@@ -39,11 +39,6 @@
 - JSON: jq / YAML・XML: yq
 - コマンド出力は最小限に。必要なら `--json | jq` を使う
 
-## Codex操作
-
-レビューTaskからworker Taskへ結果を返すときは、`send_message_to_thread`のthreadIdにworker Task IDを指定する。
-返却が受理されたことを確認する。
-
 ## コメント規律
 
 - **禁止**: 挙動の説明、自明な言い換え

@@ -2,12 +2,14 @@
 name: task-worker
 description: |
   割り当てられたtaskを再読し、Git worktreeで実装、全検証、Draft PR作成、レビュー反復まで進める。
-  task-session-launchから起動された実装Taskで使う。
+  `$task-session-launch`から起動された実装Taskで使う。
 ---
 
 # Task Worker
 
-開始時と再開時に、タスク管理元の最新本文、直接依存と成果物、添付資料、repository規約を読む。
+開始時は、`prompt`で渡されたタスク管理元から開始対象のtask情報を読む。
+直接依存、成果物、添付資料、リポジトリ規約を確認する。
+再開時に必要なら同じタスク管理元を読み直す。
 割り当てられたGit worktreeで目的を表すConventionalな英語branchを作り、実装、所定のformat・lint・test・buildを完了する。
 
 PR templateと直近の慣例に従ってDraft PRを作る。
