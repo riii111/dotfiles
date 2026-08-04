@@ -12,10 +12,6 @@
       url = "github:ogulcancelik/herdr/v0.8.0";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    codex-task-orchestrator = {
-      url = "github:riii111/codex-task-orchestrator";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
   };
 
   outputs =
@@ -24,7 +20,6 @@
       zigpkgs,
       nix-darwin,
       herdr,
-      codex-task-orchestrator,
       ...
     }:
     let
@@ -78,7 +73,6 @@
           '';
           mkVersionEntry = name: value: { inherit name value; };
           herdrPkg = herdr.packages.${system}.default;
-          codexTaskOrchestratorPkg = codex-task-orchestrator.packages.${system}.default;
           python3WithPyYAML = pkgs.python3.withPackages (pythonPackages: [ pythonPackages.pyyaml ]);
           dailyCliPackages = with pkgs; [
             # Editor-integrated tooling that should exist in the normal shell too.
@@ -157,7 +151,6 @@
             tbls
             uv
             herdrPkg
-            codexTaskOrchestratorPkg
           ];
           devShellOnlyPackages = with pkgs; [
             alejandra

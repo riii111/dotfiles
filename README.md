@@ -60,24 +60,6 @@ exec zsh
 
 Homebrew stays for GUI / cask packages and is managed by nix-darwin.
 
-### Codex task orchestration
-
-Install the task orchestrator and register a parent session:
-
-```bash
-chezmoi apply
-~/bin/dotctl sync-nix-profile
-codex-task-orchestrator init
-```
-
-Reset one orchestration when its tracked state should be discarded:
-
-```bash
-codex-task-orchestrator reset codex-task-orchestration
-```
-
-`reset` destructively discards that orchestration's tracked sessions and Completion Notes; Completion Notes for other orchestrations remain.
-
 ### Store maintenance
 
 nix-darwin runs weekly store maintenance for every host: GC deletes profile generations older than 30 days at 03:15 on Sunday, and store optimisation hard-links duplicate files at 04:15 on Sunday.

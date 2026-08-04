@@ -1,4 +1,4 @@
 interface:
   display_name: "Task Worker"
-  short_description: "担当タスクを実装してDraft PRを作成する。"
-  default_prompt: "$task-workerを使い、担当タスクを実装してDraft PRを作成してください。"
+  short_description: "担当taskを実装し、Draft PRとレビュー反復を進める。"
+  default_prompt: "$task-workerを使い、担当taskを実装してDraft PRを作成してください。"
