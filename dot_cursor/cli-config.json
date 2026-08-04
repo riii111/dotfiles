@@ -157,9 +157,7 @@
       "Shell(tmux list-panes -a -F*)",
       "Shell(tmux list-sessions*)",
 
-      "Shell(codex-task-orchestrator)",
       "Shell(codex)",
-      "Shell(./scripts/test-skills.sh)",
 
       "WebFetch(**)"
     ],
