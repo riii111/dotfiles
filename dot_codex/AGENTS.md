@@ -41,7 +41,7 @@
 
 ## Codex操作
 
-レビューTaskからworker Taskへ結果を返すときは、`send_message_to_thread`のthreadIdにworker Task IDを指定する。
+review Taskからworker Taskへ結果を返すときは、`codex_app__send_message_to_thread`の`threadId`にworker Task IDを指定する。
 返却が受理されたことを確認する。
 
 ## コメント規律
