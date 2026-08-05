@@ -56,6 +56,8 @@
     "git config --global --list",
     "git rev-parse",
     "git ls-files",
+    "git ls-tree",
+    "git merge-base",
     "rg",
     "fd",
     "bat",

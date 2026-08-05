@@ -31,6 +31,11 @@ prefix_rule(pattern=["goimports"], decision="allow", justification="Go imports f
 prefix_rule(pattern=["npm", "run"], decision="allow", justification="npm scripts")
 prefix_rule(pattern=["npm", "test"], decision="allow", justification="npm test")
 
+# --- Kotlin / Gradle ---
+prefix_rule(pattern=["./gradlew"], decision="allow", justification="Run repository Gradle verification")
+prefix_rule(pattern=["./scripts/ktlint.sh"], decision="allow", justification="Run repository Kotlin lint")
+prefix_rule(pattern=["./scripts/detekt.sh"], decision="allow", justification="Run repository Kotlin static analysis")
+
 # --- Terraform ---
 prefix_rule(pattern=["terraform", "fmt"], decision="allow", justification="Format Terraform files")
 prefix_rule(pattern=["terraform", "validate"], decision="allow", justification="Validate Terraform configuration")
@@ -74,6 +79,7 @@ prefix_rule(pattern=["git", "commit"], decision="allow", justification="Commit c
 prefix_rule(pattern=["git", "cherry-pick"], decision="allow", justification="Apply a specific commit onto the current branch")
 prefix_rule(pattern=["git", "switch"], decision="allow", justification="Switch branches")
 prefix_rule(pattern=["git", "pull"], decision="allow", justification="Update local branch from remote")
+prefix_rule(pattern=["git", "push"], decision="allow", justification="Push explicitly requested implementation changes")
 
 # --- File search/view tools ---
 prefix_rule(pattern=["rg"], decision="allow", justification="ripgrep search")
@@ -111,6 +117,7 @@ prefix_rule(pattern=["gh", "workflow", "list"], decision="allow", justification=
 prefix_rule(pattern=["gh", "workflow", "view"], decision="allow", justification="View workflow")
 prefix_rule(pattern=["gh", "release", "list"], decision="allow", justification="List releases")
 prefix_rule(pattern=["gh", "release", "view"], decision="allow", justification="View release")
+prefix_rule(pattern=["gh", "pr", "create", "--draft"], decision="allow", justification="Create an explicitly requested Draft PR")
 
 # --- gCloud CLI (read operations) ---
 prefix_rule(pattern=["gcloud", "storage", "ls"], decision="allow", justification="List GCS buckets or objects")
@@ -164,7 +171,6 @@ prefix_rule(pattern=["mv"], decision="allow", justification="Move files")
 # -----------------------------------------------------------------------------
 
 prefix_rule(pattern=["git", "checkout"], decision="prompt", justification="May rewrite working tree or index")
-prefix_rule(pattern=["git", "push"], decision="prompt", justification="Updates remote state")
 prefix_rule(pattern=["git", "merge"], decision="prompt", justification="Changes history state")
 prefix_rule(pattern=["git", "rebase"], decision="prompt", justification="Rewrites history state")
 prefix_rule(pattern=["npm", "install"], decision="prompt", justification="Downloads packages and may run install scripts")
