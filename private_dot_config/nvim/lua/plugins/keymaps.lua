@@ -240,6 +240,12 @@ local function setup_keymaps()
 				end,
 				desc = "Markdown preview toggle",
 			},
+			["<Leader>mm"] = {
+				function()
+					require("utils.mdroll").open()
+				end,
+				desc = "Markdown viewer (mdroll)",
+			},
 
 			-- Oil.nvim file explorer
 			["<Leader>o"] = {
@@ -433,6 +439,7 @@ return {
 				{ "<leader>R", group = "+replace global" },
 				{ "<leader>m", group = "+markdown" },
 				{ "<leader>mp", desc = "Markdown preview (browser)" },
+				{ "<leader>mm", desc = "Markdown viewer (mdroll)" },
 				{ "<C-g>", group = "+grep/search" },
 				{ "<C-p>", group = "+files" },
 				{ "<C-S-f>", group = "+search" },
