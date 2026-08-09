@@ -369,7 +369,7 @@ return {
 
 	-- Line moving
 	{
-		"echasnovski/mini.move",
+		"nvim-mini/mini.move",
 		version = "*",
 		event = "VeryLazy",
 		config = function()
