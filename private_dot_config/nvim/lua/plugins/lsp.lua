@@ -5,7 +5,7 @@ return {
 		lazy = false,
 		cond = not vim.g.vscode,
 		dependencies = {
-			"williamboman/mason.nvim",
+			"mason-org/mason.nvim",
 		},
 		priority = 50,
 		config = function()
@@ -68,6 +68,9 @@ return {
 			null_ls.setup({
 				sources = {
 					null_ls.builtins.formatting.stylua,
+					null_ls.builtins.formatting.clang_format.with({
+						filetypes = { "c", "cpp", "objc", "objcpp", "cuda" },
+					}),
 					null_ls.builtins.diagnostics.golangci_lint.with({
 						cwd = function(params)
 							local found = vim.fs.find("go.mod", { upward = true, path = params.bufname })

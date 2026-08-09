@@ -183,8 +183,8 @@ return {
 		priority = 1000,
 		lazy = false,
 		opts = {
-			modules = { "scratch", "picker" },
 			picker = {
+				enabled = true,
 				ui_select = true,
 				layouts = {
 					cursor = {
@@ -206,9 +206,26 @@ return {
 					},
 				},
 			},
+			notifier = {
+				enabled = true,
+				timeout = 5000,
+				width = { min = 50, max = 0.4 },
+				level = vim.log.levels.INFO,
+				style = "compact",
+				top_down = false,
+			},
 			-- Image floating preview felt awkward in WezTerm; browser preview (mkdp)
 			-- is used for rich viewing instead. img-clip handles paste independently.
 			image = { enabled = false },
+		},
+		keys = {
+			{
+				"<Leader>H",
+				function()
+					Snacks.notifier.show_history()
+				end,
+				desc = "Notification history",
+			},
 		},
 	},
 

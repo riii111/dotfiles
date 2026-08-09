@@ -28,7 +28,6 @@
     │   │                      # (includes plugin-specific keymaps: hlslens, mini.move)
     │   ├── lualine.lua
     │   ├── editor.lua         # treesitter, autopairs, todo-comments, etc.
-    │   ├── noice.lua          # noice + notify
     │   └── languages          # per-language modules (Treesitter, LSP, keymaps)
     │       ├── cpp.lua
     │       ├── go.lua
@@ -137,7 +136,7 @@ return {
 
 - Modern Completion: `saghen/blink.cmp` with `friendly-snippets`.
 - Enhanced LSP UX: `nvimdev/lspsaga.nvim` and `Wansmer/symbol-usage.nvim`.
-- Rich Command UI: `folke/noice.nvim` + `rcarriga/nvim-notify`.
+- Picker and notifications: `folke/snacks.nvim`.
 - Project Navigation: `nvim-telescope/telescope.nvim` with `fzf-native` and `live-grep-args`.
 - Editor Ergonomics: Treesitter, `windwp/nvim-autopairs`, `folke/which-key.nvim`, and native window resizing.
 - Smart Keymaps: Smart 0 (toggle ^ and 0), auto-indent on empty lines (i/A), delete without yank (x/X), visual mode improvements.

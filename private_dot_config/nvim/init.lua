@@ -1,11 +1,6 @@
 -- Enable Lua module loader cache for faster startup
 vim.loader.enable()
 
--- Polyfill: vim.tbl_flatten was removed in Nvim 0.12+
-vim.tbl_flatten = function(t)
-  return vim.iter(t):flatten(math.huge):totable()
-end
-
 -- Bootstrap lazy.nvim
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
 if not (vim.uv or vim.loop).fs_stat(lazypath) then
@@ -29,4 +24,3 @@ local ok, _ = pcall(vim.cmd.colorscheme, "custom-theme-riii111")
 if not ok then
 	vim.cmd.colorscheme("custom-theme-riii111")
 end
-

@@ -1,7 +1,7 @@
 return {
 	"stevearc/oil.nvim",
 	lazy = false,
-	dependencies = { "echasnovski/mini.icons" },
+	dependencies = { "nvim-mini/mini.icons" },
 	opts = {
 		-- Take over directory buffers (e.g. `vim .` or `:e src/`)
 		default_file_explorer = true,
@@ -70,7 +70,7 @@ return {
 			},
 		},
 
-		preview = {
+		preview_win = {
 			max_width = 0.9,
 			min_width = { 40, 0.4 },
 			width = nil,

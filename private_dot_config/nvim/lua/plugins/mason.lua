@@ -1,7 +1,7 @@
 return {
 	-- Mason tool installer
 	{
-		"williamboman/mason.nvim",
+		"mason-org/mason.nvim",
 		priority = 100,
 		config = function()
 			require("mason").setup({
@@ -12,7 +12,7 @@ return {
 
 	{
 		"WhoIsSethDaniel/mason-tool-installer.nvim",
-		dependencies = { "williamboman/mason.nvim" },
+		dependencies = { "mason-org/mason.nvim" },
 		priority = 80,
 		opts = {
 			ensure_installed = {
