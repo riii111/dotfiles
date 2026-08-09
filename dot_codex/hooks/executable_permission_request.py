@@ -12,6 +12,7 @@ import re
 import shlex
 import subprocess
 import sys
+from pathlib import Path
 from urllib.parse import urlparse
 
 
@@ -48,14 +49,46 @@ def origin_urls(cwd: str, *, push: bool) -> list[str]:
     return [line for line in result.stdout.splitlines() if line]
 
 
-def is_github_url(url: str) -> bool:
-    if re.fullmatch(r"git@github\.com:[^/\s]+/[^/\s]+(?:\.git)?", url):
-        return True
+def github_repository(url: str) -> tuple[str, str] | None:
+    scp_match = re.fullmatch(r"git@github\.com:([^/\s]+)/([^/\s]+?)(?:\.git)?", url)
+    if scp_match:
+        return tuple(part.lower() for part in scp_match.groups())
     parsed = urlparse(url)
+    path_match = re.fullmatch(r"/([^/\s]+)/([^/\s]+?)(?:\.git)?", parsed.path)
+    if (
+        parsed.scheme not in {"https", "ssh"}
+        or parsed.hostname != "github.com"
+        or path_match is None
+    ):
+        return None
+    return tuple(part.lower() for part in path_match.groups())
+
+
+def checkout_repository(cwd: str) -> tuple[str, str] | None:
+    result = subprocess.run(
+        ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+        cwd=cwd,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return None
+    common_dir = Path(result.stdout.strip())
+    repository_dir = common_dir.parent if common_dir.name == ".git" else None
+    if repository_dir is None or len(repository_dir.parts) < 4:
+        return None
+    if repository_dir.parts[-4:-2] != ("ghq", "github.com"):
+        return None
+    return repository_dir.parts[-2].lower(), repository_dir.parts[-1].lower()
+
+
+def urls_match_checkout(urls: list[str], cwd: str) -> bool:
+    expected = checkout_repository(cwd)
     return (
-        parsed.scheme in {"https", "ssh"}
-        and parsed.hostname == "github.com"
-        and re.fullmatch(r"/[^/\s]+/[^/\s]+(?:\.git)?", parsed.path) is not None
+        expected is not None
+        and bool(urls)
+        and all(github_repository(url) == expected for url in urls)
     )
 
 
@@ -81,7 +114,7 @@ def is_safe_git_permission_request(command: str, cwd: str) -> bool:
         return False
 
     urls = origin_urls(cwd, push=False)
-    return bool(urls) and all(is_github_url(url) for url in urls)
+    return urls_match_checkout(urls, cwd)
 
 
 def direct_command(command: str) -> tuple[str | None, list[str]]:
@@ -264,7 +297,7 @@ def is_safe_push(command: str, cwd: str) -> bool:
         return False
 
     urls = origin_urls(cwd, push=True)
-    if not urls or not all(is_github_url(url) for url in urls):
+    if not urls_match_checkout(urls, cwd):
         return False
 
     return tuple(argv) in {

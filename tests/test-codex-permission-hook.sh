@@ -5,8 +5,10 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 hook="$repo_root/dot_codex/hooks/executable_permission_request.py"
 hooks_config="$repo_root/dot_codex/hooks.json"
-tmpdir="$(mktemp -d "${TMPDIR:-/tmp}/codex-permission-hook-test.XXXXXX")"
-trap 'rm -rf "$tmpdir"' EXIT
+test_root="$(mktemp -d "${TMPDIR:-/tmp}/codex-permission-hook-test.XXXXXX")"
+tmpdir="$test_root/ghq/github.com/riii111/test"
+trap 'rm -rf "$test_root"' EXIT
+mkdir -p "$tmpdir"
 git -C "$tmpdir" init -q
 git -C "$tmpdir" switch -q -c feat/test
 git -C "$tmpdir" remote add origin https://github.com/riii111/test.git
@@ -127,6 +129,16 @@ test -z "$(permission_request 'git ls-remote origin')"
 
 git -C "$tmpdir" remote set-url origin git@github.com:riii111/test.git
 permission_request 'git push origin HEAD' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
+
+git -C "$tmpdir" remote set-url origin https://github.com/attacker/other.git
+test -z "$(permission_request 'git push origin HEAD')"
+test -z "$(permission_request 'git fetch origin')"
+test -z "$(permission_request 'git ls-remote origin')"
+git -C "$tmpdir" remote set-url origin git@github.com:riii111/test.git
+
+git -C "$tmpdir" remote set-url --push origin https://github.com/attacker/other.git
+test -z "$(permission_request 'git push origin HEAD')"
+git -C "$tmpdir" remote set-url --delete --push origin https://github.com/attacker/other.git
 
 git -C "$tmpdir" remote set-url --add --push origin https://github.com/riii111/test.git
 git -C "$tmpdir" remote set-url --add --push origin https://example.com/riii111/test.git
