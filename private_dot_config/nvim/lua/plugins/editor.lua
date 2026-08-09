@@ -177,26 +177,6 @@ return {
 		opts = {},
 	},
 
-	-- Smart splits for window navigation
-	{
-		"mrjones2014/smart-splits.nvim",
-		opts = {
-			default_amount = 3,
-		},
-		keys = {
-			{ "<A-h>", function() require("smart-splits").resize_left() end, desc = "Resize left" },
-			{ "<A-j>", function() require("smart-splits").resize_down() end, desc = "Resize down" },
-			{ "<A-k>", function() require("smart-splits").resize_up() end, desc = "Resize up" },
-			{ "<A-l>", function() require("smart-splits").resize_right() end, desc = "Resize right" },
-		},
-	},
-
-	-- Guess indent
-	{
-		"NMAC427/guess-indent.nvim",
-		opts = {},
-	},
-
 	-- Snacks (modern UI components)
 	{
 		"folke/snacks.nvim",
@@ -248,5 +228,4 @@ return {
 			{ "<C-v>", "<cmd>PasteImage<cr>", mode = "n", ft = "markdown", desc = "Paste image from clipboard" },
 		},
 	},
-
 }
