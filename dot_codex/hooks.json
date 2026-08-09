@@ -1,0 +1,42 @@
+{
+  "description": "Deterministic approval for narrowly scoped development operations.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "command": "bash ~/.codex/herdr-agent-state.sh session",
+            "timeout": 10,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "^Bash$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.codex/hooks/permission_request.py",
+            "timeout": 5,
+            "statusMessage": "Checking forbidden commands"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "^Bash$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.codex/hooks/permission_request.py",
+            "timeout": 5,
+            "statusMessage": "Checking command policy"
+          }
+        ]
+      }
+    ]
+  }
+}
