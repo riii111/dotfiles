@@ -84,7 +84,6 @@ local keys = {
 	{ key = "]", mods = "CMD|CTRL", action = act.EmitEvent("increase-opacity") },
 	{ key = "b", mods = "CMD|CTRL", action = act.EmitEvent("toggle-blur") },
 
-
 	---------------------------------------------------------------
 	-- Select All: enter CopyMode and select text above cursor
 	---------------------------------------------------------------
@@ -122,8 +121,6 @@ local keys = {
 	---------------------------------------------------------------
 	{ key = "¥", mods = "ALT", action = act.SendString("|") },
 	{ key = "|", mods = "ALT|SHIFT", action = act.SendString("\\") },
-
-
 }
 
 return keys
