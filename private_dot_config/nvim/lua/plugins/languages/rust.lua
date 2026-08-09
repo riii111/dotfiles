@@ -1,77 +1,81 @@
 return {
-  {
-    "mrcjkb/rustaceanvim",
-    version = "^5",
-    lazy = false,
-    init = function()
-      -- Configure rustaceanvim before loading
-      local rust_analyzer_target = vim.fn.stdpath("cache") .. "/rust-analyzer-target"
+	{
+		"mrcjkb/rustaceanvim",
+		version = "^5",
+		lazy = false,
+		init = function()
+			-- Configure rustaceanvim before loading
+			local rust_analyzer_target = vim.fn.stdpath("cache") .. "/rust-analyzer-target"
 
-      vim.g.rustaceanvim = {
-        server = {
-          load_vscode_settings = false,
-          default_settings = {
-            ["rust-analyzer"] = {
-              checkOnSave = true,
-              check = {
-                command = "check",
-                allTargets = false,
-              },
-              cargo = {
-                allTargets = false,
-                targetDir = rust_analyzer_target,
-              },
-              procMacro = {
-                enable = true,
-              },
-              diagnostics = {
-                enable = true,
-                enableExperimental = true,
-              },
-              files = {
-                exclude = {
-                  ".direnv",
-                  ".nvim",
-                  "target",
-                },
-              },
-              inlayHints = {
-                bindingModeHints = { enable = false },
-                chainingHints = { enable = false },
-                closingBraceHints = { enable = false, minLines = 25 },
-                closureReturnTypeHints = { enable = "never" },
-                lifetimeElisionHints = { enable = "never", useParameterNames = false },
-                maxLength = 25,
-                parameterHints = { enable = false },
-                reborrowHints = { enable = "never" },
-                renderColons = true,
-                typeHints = { enable = false, hideClosureInitialization = false, hideNamedConstructor = false },
-              },
-            },
-          },
-        },
-      }
-    end,
-    config = function()
-      local lsp_actions = require("utils.lsp-actions")
+			vim.g.rustaceanvim = {
+				server = {
+					load_vscode_settings = false,
+					default_settings = {
+						["rust-analyzer"] = {
+							checkOnSave = true,
+							check = {
+								command = "check",
+								allTargets = false,
+							},
+							cargo = {
+								allTargets = false,
+								targetDir = rust_analyzer_target,
+							},
+							procMacro = {
+								enable = true,
+							},
+							diagnostics = {
+								enable = true,
+								enableExperimental = true,
+							},
+							files = {
+								exclude = {
+									".direnv",
+									".nvim",
+									"target",
+								},
+							},
+							inlayHints = {
+								bindingModeHints = { enable = false },
+								chainingHints = { enable = false },
+								closingBraceHints = { enable = false, minLines = 25 },
+								closureReturnTypeHints = { enable = "never" },
+								lifetimeElisionHints = { enable = "never", useParameterNames = false },
+								maxLength = 25,
+								parameterHints = { enable = false },
+								reborrowHints = { enable = "never" },
+								renderColons = true,
+								typeHints = {
+									enable = false,
+									hideClosureInitialization = false,
+									hideNamedConstructor = false,
+								},
+							},
+						},
+					},
+				},
+			}
+		end,
+		config = function()
+			local lsp_actions = require("utils.lsp-actions")
 
-      vim.api.nvim_create_autocmd("FileType", {
-        pattern = "rust",
-        callback = function()
-          local opts = { buffer = true, silent = true }
+			vim.api.nvim_create_autocmd("FileType", {
+				pattern = "rust",
+				callback = function()
+					local opts = { buffer = true, silent = true }
 
-          vim.keymap.set("n", "<M-CR>", lsp_actions.language_specific_code_action, opts)
-          vim.keymap.set("n", "<D-S-r>", lsp_actions.rust_refactor_menu, opts)
-          vim.keymap.set("n", "<M-S-r>", lsp_actions.rust_refactor_menu, opts)
-          vim.keymap.set("n", "<leader>rr", function()
-            vim.cmd("RustLsp runnables")
-          end, { desc = "Rust runnables", buffer = true })
+					vim.keymap.set("n", "<M-CR>", lsp_actions.language_specific_code_action, opts)
+					vim.keymap.set("n", "<D-S-r>", lsp_actions.rust_refactor_menu, opts)
+					vim.keymap.set("n", "<M-S-r>", lsp_actions.rust_refactor_menu, opts)
+					vim.keymap.set("n", "<leader>rr", function()
+						vim.cmd("RustLsp runnables")
+					end, { desc = "Rust runnables", buffer = true })
 
-          vim.keymap.set("n", "<leader>rt", function()
-            vim.cmd("RustLsp testables")
-          end, { desc = "Rust testables", buffer = true })
-        end,
-      })
-    end,
-  },
+					vim.keymap.set("n", "<leader>rt", function()
+						vim.cmd("RustLsp testables")
+					end, { desc = "Rust testables", buffer = true })
+				end,
+			})
+		end,
+	},
 }

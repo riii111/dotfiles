@@ -60,7 +60,10 @@ local function launch(path)
 	}, function(result)
 		state.busy = false
 		if result.code ~= 0 then
-			notify(vim.trim(result.stderr) ~= "" and vim.trim(result.stderr) or "failed to split a WezTerm pane", vim.log.levels.ERROR)
+			notify(
+				vim.trim(result.stderr) ~= "" and vim.trim(result.stderr) or "failed to split a WezTerm pane",
+				vim.log.levels.ERROR
+			)
 			return
 		end
 
@@ -82,7 +85,10 @@ local function close_then_launch(path)
 
 	run({ "wezterm", "cli", "kill-pane", "--pane-id", tostring(pane_id) }, function(result)
 		if result.code ~= 0 then
-			notify(vim.trim(result.stderr) ~= "" and vim.trim(result.stderr) or "failed to close the previous mdroll pane", vim.log.levels.ERROR)
+			notify(
+				vim.trim(result.stderr) ~= "" and vim.trim(result.stderr) or "failed to close the previous mdroll pane",
+				vim.log.levels.ERROR
+			)
 			return
 		end
 		launch(path)

@@ -1,0 +1,4 @@
+interface:
+  display_name: "PR Comments"
+  short_description: "PRのコメントと未解決review threadを安全に取得する。"
+  default_prompt: "$gh-pr-commentsを使って、このPRの未解決コメントを確認してください。"

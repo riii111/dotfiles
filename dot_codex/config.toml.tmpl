@@ -23,7 +23,7 @@ project_doc_max_bytes = 65536
 # =============================================================================
 approval_policy = "on-request"
 sandbox_mode = "workspace-write"
-approvals_reviewer = "guardian_subagent"
+approvals_reviewer = "user"
 model = "gpt-5.6-sol"
 model_provider = "openai"
 model_reasoning_effort = "medium"
@@ -34,7 +34,7 @@ web_search = "cached"
 hide_agent_reasoning = true
 
 [sandbox_workspace_write]
-network_access = true
+network_access = false
 
 # =============================================================================
 # Global Features

@@ -290,13 +290,17 @@ local function section_separator_left()
 	return {
 		function()
 			local colors = get_colors()
-			if not colors then return "" end
+			if not colors then
+				return ""
+			end
 			return ""
 		end,
 		padding = { left = 0, right = 0 },
 		color = function()
 			local colors = get_colors()
-			if colors then return { fg = colors.section_y_bg } end
+			if colors then
+				return { fg = colors.section_y_bg }
+			end
 		end,
 	}
 end
@@ -306,17 +310,20 @@ local function section_separator_right()
 	return {
 		function()
 			local colors = get_colors()
-			if not colors then return "" end
+			if not colors then
+				return ""
+			end
 			return ""
 		end,
 		padding = { left = 0, right = 0 },
 		color = function()
 			local colors = get_colors()
-			if colors then return { fg = colors.section_c_bg } end
+			if colors then
+				return { fg = colors.section_c_bg }
+			end
 		end,
 	}
 end
-
 
 local function treesitter()
 	local colors = get_colors()
