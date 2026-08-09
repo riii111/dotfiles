@@ -27,6 +27,7 @@ vim.opt.relativenumber = true
 vim.opt.number = true
 vim.opt.spell = false
 vim.opt.signcolumn = "yes"
+vim.opt.cmdheight = 0
 vim.opt.wrap = false
 
 -- Additional useful options
@@ -51,74 +52,74 @@ vim.opt.writebackup = false
 
 -- Auto commands for file change detection
 vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter", "CursorHold", "CursorHoldI" }, {
-  pattern = "*",
-  callback = function()
-    if vim.fn.mode() ~= "c" then
-      vim.cmd("checktime")
-    end
-  end,
+	pattern = "*",
+	callback = function()
+		if vim.fn.mode() ~= "c" then
+			vim.cmd("checktime")
+		end
+	end,
 })
 
 -- Notify LSP about buffer content change (used after external file changes)
 local function notify_lsp_buffer_changed(bufnr)
-  bufnr = bufnr or vim.api.nvim_get_current_buf()
-  local uri = vim.uri_from_bufnr(bufnr)
-  local filetype = vim.bo[bufnr].filetype
+	bufnr = bufnr or vim.api.nvim_get_current_buf()
+	local uri = vim.uri_from_bufnr(bufnr)
+	local filetype = vim.bo[bufnr].filetype
 
-  for _, client in pairs(vim.lsp.get_clients({ bufnr = bufnr })) do
-    -- Close and reopen to force full content sync
-    client:notify("textDocument/didClose", {
-      textDocument = { uri = uri }
-    })
+	for _, client in pairs(vim.lsp.get_clients({ bufnr = bufnr })) do
+		-- Close and reopen to force full content sync
+		client:notify("textDocument/didClose", {
+			textDocument = { uri = uri },
+		})
 
-    local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-    client:notify("textDocument/didOpen", {
-      textDocument = {
-        uri = uri,
-        languageId = filetype,
-        version = (vim.lsp.util.buf_versions[bufnr] or 0) + 1,
-        text = table.concat(lines, "\n")
-      }
-    })
-  end
+		local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+		client:notify("textDocument/didOpen", {
+			textDocument = {
+				uri = uri,
+				languageId = filetype,
+				version = (vim.lsp.util.buf_versions[bufnr] or 0) + 1,
+				text = table.concat(lines, "\n"),
+			},
+		})
+	end
 end
 
 -- Auto-reload and notify LSP when files change externally
 vim.api.nvim_create_autocmd({ "FileChangedShellPost" }, {
-  pattern = "*",
-  callback = function()
-    vim.notify("File changed on disk. Buffer reloaded!", vim.log.levels.INFO)
-    vim.schedule(function()
-      notify_lsp_buffer_changed()
-    end)
-  end,
+	pattern = "*",
+	callback = function()
+		vim.notify("File changed on disk. Buffer reloaded!", vim.log.levels.INFO)
+		vim.schedule(function()
+			notify_lsp_buffer_changed()
+		end)
+	end,
 })
 
 -- Fix LSP diagnostics UI not updating after publishDiagnostics (Neovim issue #30385)
 vim.lsp.handlers["textDocument/publishDiagnostics"] = function(err, result, ctx, config)
-  require("vim.lsp.diagnostic").on_publish_diagnostics(err, result, ctx, config)
-  vim.schedule(function()
-    vim.diagnostic.show()
-  end)
+	require("vim.lsp.diagnostic").on_publish_diagnostics(err, result, ctx, config)
+	vim.schedule(function()
+		vim.diagnostic.show()
+	end)
 end
 
 -- Clipboard integration
 -- Check if running inside tmux
 if vim.env.TMUX then
-  -- Use OSC 52 for clipboard operations in tmux
-  vim.g.clipboard = {
-    name = 'OSC 52',
-    copy = {
-      ['+'] = require('vim.ui.clipboard.osc52').copy('+'),
-      ['*'] = require('vim.ui.clipboard.osc52').copy('*'),
-    },
-    paste = {
-      ['+'] = require('vim.ui.clipboard.osc52').paste('+'),
-      ['*'] = require('vim.ui.clipboard.osc52').paste('*'),
-    },
-  }
+	-- Use OSC 52 for clipboard operations in tmux
+	vim.g.clipboard = {
+		name = "OSC 52",
+		copy = {
+			["+"] = require("vim.ui.clipboard.osc52").copy("+"),
+			["*"] = require("vim.ui.clipboard.osc52").copy("*"),
+		},
+		paste = {
+			["+"] = require("vim.ui.clipboard.osc52").paste("+"),
+			["*"] = require("vim.ui.clipboard.osc52").paste("*"),
+		},
+	}
 else
-  vim.opt.clipboard = "unnamedplus"
+	vim.opt.clipboard = "unnamedplus"
 end
 
 -- Disable netrw (for file explorer)
@@ -127,4 +128,3 @@ vim.g.loaded_netrwPlugin = 1
 
 -- Disable winbar breadcrumbs
 vim.o.winbar = ""
-
