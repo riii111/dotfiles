@@ -3,3 +3,4 @@
 .config/nvim/lua/plugins/github-actions.lua
 .config/nvim/lua/plugins/dial.lua
 .config/nvim/lua/plugins/flash.lua
+.config/nvim/lua/plugins/noice.lua
