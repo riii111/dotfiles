@@ -138,43 +138,4 @@ return {
       end
     end,
   },
-  {
-    "mfussenegger/nvim-dap-python",
-    dependencies = {
-      "mfussenegger/nvim-dap",
-    },
-    config = function()
-      local function get_python_path()
-        local cwd = vim.fn.getcwd()
-        if vim.fn.executable(cwd .. "/.venv/bin/python") == 1 then
-          return cwd .. "/.venv/bin/python"
-        elseif vim.fn.executable(cwd .. "/venv/bin/python") == 1 then
-          return cwd .. "/venv/bin/python"
-        else
-          return "python3"
-        end
-      end
-      
-      require("dap-python").setup(get_python_path())
-      
-      vim.api.nvim_create_autocmd("FileType", {
-        pattern = "python",
-        callback = function()
-          local opts = { buffer = true, silent = true }
-          vim.keymap.set("n", "<F5>", function()
-            require("dap-python").test_method()
-          end, vim.tbl_extend("force", opts, { desc = "Debug Python test method" }))
-
-          vim.keymap.set("n", "<leader>dt", function()
-            require("dap-python").test_method()
-          end, vim.tbl_extend("force", opts, { desc = "Debug Python test method" }))
-
-          vim.keymap.set("n", "<leader>dc", function()
-            require("dap-python").test_class()
-          end, vim.tbl_extend("force", opts, { desc = "Debug Python test class" }))
-        end,
-      })
-    end,
-    ft = "python",
-  },
 }

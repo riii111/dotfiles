@@ -25,13 +25,11 @@ return {
         "terraform-ls",
 
         -- Formatters
-        "stylua",
         "goimports",
         "ruff",
         "ktlint",
         -- C/C++
         "clangd",
-        "codelldb",
         "clang-format",
 
         -- Linters
@@ -39,10 +37,6 @@ return {
         "ruff",
         "tflint",
         "ktlint",
-
-        -- Debuggers
-        "debugpy",
-        "delve",
 
         -- Other tools
         "tree-sitter-cli",

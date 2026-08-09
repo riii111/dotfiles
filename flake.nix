@@ -95,6 +95,7 @@
             python3WithPyYAML
             shellcheck
             shfmt
+            stylua
             taplo
             zig
             zls

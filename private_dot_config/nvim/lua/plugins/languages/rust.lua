@@ -70,10 +70,6 @@ return {
           vim.keymap.set("n", "<leader>rt", function()
             vim.cmd("RustLsp testables")
           end, { desc = "Rust testables", buffer = true })
-
-          vim.keymap.set("n", "<leader>rd", function()
-            vim.cmd("RustLsp debuggables")
-          end, { desc = "Rust debuggables", buffer = true })
         end,
       })
     end,

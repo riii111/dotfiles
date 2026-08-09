@@ -11,43 +11,6 @@ return {
   },
 
   {
-    "mfussenegger/nvim-dap",
-    ft = { "c", "cpp", "objc", "objcpp" },
-    dependencies = { "nvim-neotest/nvim-nio" },
-    config = function()
-      local ok, dap = pcall(require, "dap")
-      if not ok then return end
-
-      local mason = vim.fn.stdpath("data") .. "/mason"
-      local adapter = mason .. "/bin/codelldb"
-      if vim.fn.executable(adapter) ~= 1 then return end
-
-      dap.adapters.codelldb = {
-        type = "server",
-        port = "${port}",
-        executable = { command = adapter, args = { "--port", "${port}" } },
-      }
-
-      local cfg = {
-        {
-          name = "Launch (codelldb)",
-          type = "codelldb",
-          request = "launch",
-          program = function()
-            return vim.fn.input("Path to executable: ", vim.fn.getcwd() .. "/", "file")
-          end,
-          cwd = "${workspaceFolder}",
-          stopOnEntry = false,
-        },
-      }
-      dap.configurations.cpp = cfg
-      dap.configurations.c = cfg
-      dap.configurations.objc = cfg
-      dap.configurations.objcpp = cfg
-    end,
-  },
-
-  {
     "p00f/clangd_extensions.nvim",
     ft = { "c", "cpp", "objc", "objcpp" },
     dependencies = { "neovim/nvim-lspconfig" },

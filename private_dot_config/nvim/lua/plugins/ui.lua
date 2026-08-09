@@ -33,9 +33,7 @@ return {
 						priority = 2,
 						auto_close = true,
 						matcher = function(buf)
-							return buf.name:match("%.md$")
-								or buf.name:match("README")
-								or buf.name:match("%.rst$")
+							return buf.name:match("%.md$") or buf.name:match("README") or buf.name:match("%.rst$")
 						end,
 					},
 					{
@@ -273,153 +271,6 @@ return {
 		opts = {},
 	},
 
-	-- Terminal
-	{
-		"akinsho/toggleterm.nvim",
-		version = "*",
-		opts = function()
-			local palette = require("custom-theme-riii111").palette()
-			local term_highlights = {
-				Normal = { guibg = "NONE" },
-				NormalFloat = { guibg = "NONE" },
-				FloatBorder = { guifg = palette.base.accent, guibg = palette.base.bg },
-			}
-
-			return {
-				size = function(term)
-					if term.direction == "horizontal" then
-						return 15
-					elseif term.direction == "vertical" then
-						return vim.o.columns * 0.4
-					end
-				end,
-				open_mapping = [[<c-\>]],
-				hide_numbers = true,
-				shade_terminals = false,
-				start_in_insert = true,
-				insert_mappings = true,
-				terminal_mappings = true,
-				persist_size = true,
-				persist_mode = true,
-				direction = "float",
-				close_on_exit = true,
-				shell = vim.o.shell,
-				auto_scroll = true,
-				float_opts = {
-					border = "rounded",
-					width = function()
-						return math.floor(vim.o.columns * 0.9)
-					end,
-					height = function()
-						return math.floor(vim.o.lines * 0.6)
-					end,
-					winblend = 0,
-				},
-				highlights = term_highlights,
-			}
-		end,
-		config = function(_, opts)
-			require("toggleterm").setup(opts)
-
-			local Terminal = require("toggleterm.terminal").Terminal
-
-			-- Horizontal terminal
-			local horizontal_term = Terminal:new({
-				direction = "horizontal",
-				size = 15,
-			})
-
-			-- Vertical terminal
-			local vertical_term = Terminal:new({
-				direction = "vertical",
-				size = function()
-					return math.floor(vim.o.columns * 0.4)
-				end,
-			})
-
-			-- Float terminal (default)
-			local float_term = Terminal:new({
-				direction = "float",
-			})
-
-			-- Lazygit terminal (full window size)
-			local lazygit_term = Terminal:new({
-				cmd = "lazygit",
-				direction = "float",
-				float_opts = {
-					border = "rounded",
-					width = function()
-						return vim.o.columns
-					end,
-					height = function()
-						return vim.o.lines - 2
-					end,
-					row = 0,
-					col = 0,
-				},
-				on_open = function(term)
-					-- lazygit uses <esc> internally, so don't map it to close
-					pcall(vim.keymap.del, "t", "<esc>", { buffer = term.bufnr })
-				end,
-				hidden = true,
-			})
-
-			local ghui_term = Terminal:new({
-				cmd = "ghui",
-				direction = "float",
-				float_opts = {
-					border = "rounded",
-					width = function()
-						return vim.o.columns
-					end,
-					height = function()
-						return vim.o.lines - 2
-					end,
-					row = 0,
-					col = 0,
-				},
-				on_open = function(term)
-					pcall(vim.keymap.del, "t", "<esc>", { buffer = term.bufnr })
-				end,
-				hidden = true,
-			})
-
-			-- Key mappings for different layouts
-			vim.keymap.set("n", "<Leader>tf", function()
-				float_term:toggle()
-			end, { desc = "Float terminal" })
-			vim.keymap.set("n", "<Leader>lg", function()
-				lazygit_term:toggle()
-			end, { desc = "Lazygit" })
-			vim.keymap.set("n", "<Leader>gh", function()
-				ghui_term:toggle()
-			end, { desc = "GitHub UI" })
-			vim.keymap.set("n", "<Leader>th", function()
-				horizontal_term:toggle()
-			end, { desc = "Horizontal terminal" })
-			vim.keymap.set("n", "<Leader>tv", function()
-				vertical_term:toggle()
-			end, { desc = "Vertical terminal" })
-
-			-- Terminal mode mappings
-			function _G.set_terminal_keymaps()
-				local kopts = { buffer = 0 }
-				-- 1st Esc: terminal → normal mode, 2nd Esc: close terminal
-				vim.keymap.set("t", "<esc>", [[<C-\><C-n>]], kopts)
-				vim.keymap.set("n", "<esc>", [[<Cmd>ToggleTerm<CR>]], kopts)
-				-- q: normal mode → back to terminal input
-				vim.keymap.set("n", "q", "i", kopts)
-				vim.keymap.set("t", "<C-h>", [[<Cmd>wincmd h<CR>]], kopts)
-				vim.keymap.set("t", "<C-j>", [[<Cmd>wincmd j<CR>]], kopts)
-				vim.keymap.set("t", "<C-k>", [[<Cmd>wincmd k<CR>]], kopts)
-				vim.keymap.set("t", "<C-l>", [[<Cmd>wincmd l<CR>]], kopts)
-				vim.keymap.set("t", "<C-w>", [[<C-\><C-n><C-w>]], kopts)
-			end
-
-			vim.cmd("autocmd! TermOpen term://* lua set_terminal_keymaps()")
-		end,
-	},
-
 	-- Markdown rendering
 	{
 		"MeanderingProgrammer/render-markdown.nvim",
@@ -451,17 +302,6 @@ return {
 				style = "full",
 				cell = "padded",
 			},
-		},
-	},
-
-	-- Browser-based markdown preview (complements render-markdown.nvim's inline render)
-	{
-		"iamcco/markdown-preview.nvim",
-		cmd = { "MarkdownPreviewToggle", "MarkdownPreview", "MarkdownPreviewStop" },
-		ft = "markdown",
-		build = "cd app && ./install.sh",
-		keys = {
-			{ "<leader>mp", "<cmd>MarkdownPreviewToggle<cr>", ft = "markdown", desc = "Markdown preview (browser)" },
 		},
 	},
 
