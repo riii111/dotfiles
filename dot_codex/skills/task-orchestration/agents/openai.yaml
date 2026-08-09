@@ -1,0 +1,4 @@
+interface:
+  display_name: "Task Orchestration"
+  short_description: "開始可能なtaskを選び、実装Taskへ渡す。"
+  default_prompt: "$task-orchestrationを使い、開始可能なtaskを選んでください。"

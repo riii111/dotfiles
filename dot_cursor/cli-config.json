@@ -31,6 +31,8 @@
       "Shell(npm test*)",
 
       "Shell(nix)",
+      "Shell(chezmoi)",
+      "Shell(find)",
 
       "Shell(terraform fmt*)",
       "Shell(terraform validate*)",
@@ -61,6 +63,8 @@
       "Shell(git config --global --list*)",
       "Shell(git rev-parse*)",
       "Shell(git ls-files*)",
+      "Shell(git ls-tree*)",
+      "Shell(git merge-base*)",
       "Shell(git add*)",
       "Shell(git apply*)",
       "Shell(git commit)",
@@ -155,9 +159,7 @@
       "Shell(tmux list-panes -a -F*)",
       "Shell(tmux list-sessions*)",
 
-      "Shell(codex-task-orchestrator)",
       "Shell(codex)",
-      "Shell(./scripts/test-skills.sh)",
 
       "WebFetch(**)"
     ],

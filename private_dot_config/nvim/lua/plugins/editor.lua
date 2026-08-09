@@ -129,15 +129,6 @@ return {
 		end,
 	},
 
-	-- Treesitter textobjects
-	{
-		"nvim-treesitter/nvim-treesitter-textobjects",
-		branch = "main",
-		enabled = false,
-		event = "VeryLazy",
-		dependencies = { "nvim-treesitter/nvim-treesitter" },
-	},
-
 	-- Auto pairs
 	{
 		"windwp/nvim-autopairs",
@@ -179,55 +170,10 @@ return {
 		end,
 	},
 
-	-- Comment
-	{
-		"numToStr/Comment.nvim",
-		dependencies = { "JoosepAlviste/nvim-ts-context-commentstring" },
-		opts = function()
-			local ok, ts_integ = pcall(require, "ts_context_commentstring.integrations.comment_nvim")
-			return {
-				pre_hook = ok and ts_integ.create_pre_hook() or nil,
-			}
-		end,
-		lazy = false,
-	},
-
-	-- Context-aware commentstring (JSX/TSX 等)
-	{
-		"JoosepAlviste/nvim-ts-context-commentstring",
-		opts = { enable_autocmd = false },
-	},
-
 	-- Todo comments
 	{
 		"folke/todo-comments.nvim",
 		dependencies = { "nvim-lua/plenary.nvim" },
-		opts = {},
-	},
-
-	-- Smart splits for window navigation
-	{
-		"mrjones2014/smart-splits.nvim",
-		opts = {
-			default_amount = 3,
-		},
-		keys = {
-			{ "<A-h>", function() require("smart-splits").resize_left() end, desc = "Resize left" },
-			{ "<A-j>", function() require("smart-splits").resize_down() end, desc = "Resize down" },
-			{ "<A-k>", function() require("smart-splits").resize_up() end, desc = "Resize up" },
-			{ "<A-l>", function() require("smart-splits").resize_right() end, desc = "Resize right" },
-		},
-	},
-
-	-- Better escape
-	{
-		"max397574/better-escape.nvim",
-		enabled = false,
-	},
-
-	-- Guess indent
-	{
-		"NMAC427/guess-indent.nvim",
 		opts = {},
 	},
 
@@ -282,5 +228,4 @@ return {
 			{ "<C-v>", "<cmd>PasteImage<cr>", mode = "n", ft = "markdown", desc = "Paste image from clipboard" },
 		},
 	},
-
 }

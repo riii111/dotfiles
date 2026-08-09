@@ -21,16 +21,15 @@
     │   └── theme.lua
     ├── plugins                # plugin specs (LSP core, UI, tooling)
     │   ├── keymaps.lua        # plugin-dependent keymaps (Telescope, Oil, etc.)
-    │   ├── lsp.lua            # lspconfig, none-ls, cmp, DAP, symbol-usage
+    │   ├── lsp.lua            # lspconfig, none-ls, cmp, symbol-usage
     │   ├── lspsaga.lua        # LSP-specific keymaps (gd, K, [d, etc.)
     │   ├── mason.lua          # mason + mason-tool-installer
     │   ├── ui.lua             # bufferline, incline, gitsigns, etc.
     │   │                      # (includes plugin-specific keymaps: hlslens, mini.move)
     │   ├── lualine.lua
-    │   ├── editor.lua         # treesitter, textobjects, autopairs, comment, etc.
+    │   ├── editor.lua         # treesitter, autopairs, todo-comments, etc.
     │   ├── noice.lua          # noice + notify
-    │   ├── dial.lua           # dial.nvim (increment/decrement)
-    │   └── languages          # per-language modules (Treesitter, LSP, DAP, keymaps)
+    │   └── languages          # per-language modules (Treesitter, LSP, keymaps)
     │       ├── cpp.lua
     │       ├── go.lua
     │       ├── rust.lua
@@ -65,14 +64,13 @@
 ## New Language Support – Checklist
 
 1) Mason tools
-   - Edit `lua/plugins/mason.lua`: add server/formatter/debugger to `ensure_installed`.
+   - Edit `lua/plugins/mason.lua`: add server/formatter to `ensure_installed`.
 
 2) Language module
    - Create `lua/plugins/languages/<lang>.lua` and:
      - Extend Treesitter parser/filetype registration via `utils.treesitter.extend`.
      - Configure LSP with `lspconfig` (root detection via `lspconfig.util.root_pattern`).
      - Register formatters/linters with null‑ls only if the LSP lacks them.
-     - Add DAP adapter (optional) resolved from Mason.
      - Bind `<M-CR>` and refactor menu via `utils.lsp-actions`.
 
 3) UI accents (optional)
@@ -82,7 +80,6 @@
 4) Validate
    - `:Lazy sync` → `:Mason` shows tools installed.
    - Open a file and verify diagnostics/hover/rename/jump/format.
-   - If DAP added: `:lua require('dap').continue()` boots with the adapter.
 
 ## Example Skeleton (new `plugins/languages/<lang>.lua`)
 
@@ -121,7 +118,6 @@ return {
 ## C/C++ Case Notes (2025‑09‑08)
 
 - Added `clangd` with `--clang-tidy`; avoided `null-ls` diagnostics for clang‑tidy to prevent nil lookups and duplication.
-- DAP via `codelldb` from Mason; server adapter resolved from Mason `bin`.
 - Bufferline items for `c` and `cpp`; colors aligned to GitHub Linguist (C `#555555`, C++ `#F34B7D`).
 
 ## Troubleshooting
@@ -129,7 +125,6 @@ return {
 - No diagnostics? Check server is installed in Mason and buffer `filetype` is correct.
 - clang‑tidy: let clangd handle it; do not add `null-ls` diagnostics.
 - Format conflicts: ensure only one of LSP or null‑ls formats for the filetype.
-- DAP not launching: verify adapter path under Mason and that the executable exists.
 - LSP not starting ("No active clients"): If you roll your own `vim.lsp.config/enable`, run config+enable *after* FileType. The safe path is to put config + `vim.lsp.enable` in `ftplugin/<lang>.lua`, or just use `lspconfig.setup` which already wires FileType autostart.
 
 ## Do & Don’t
@@ -144,10 +139,8 @@ return {
 - Enhanced LSP UX: `nvimdev/lspsaga.nvim` and `Wansmer/symbol-usage.nvim`.
 - Rich Command UI: `folke/noice.nvim` + `rcarriga/nvim-notify`.
 - Project Navigation: `nvim-telescope/telescope.nvim` with `fzf-native` and `live-grep-args`.
-- Editor Ergonomics: Treesitter + textobjects, `windwp/nvim-autopairs`, `numToStr/Comment.nvim`, `folke/which-key.nvim`, `NMAC427/guess-indent.nvim`, `max397574/better-escape.nvim`, `mrjones2014/smart-splits.nvim`.
+- Editor Ergonomics: Treesitter, `windwp/nvim-autopairs`, `folke/which-key.nvim`, and native window resizing.
 - Smart Keymaps: Smart 0 (toggle ^ and 0), auto-indent on empty lines (i/A), delete without yank (x/X), visual mode improvements.
-- Smart Editing: `monaqa/dial.nvim` (increment dates, booleans, case conversion).
 - File Management: `stevearc/oil.nvim` (buffered file explorer).
-- UI Polish: `akinsho/bufferline.nvim` (language‑grouped labels), `b0o/incline.nvim`, `lukas-reineke/indent-blankline.nvim`, `lewis6991/gitsigns.nvim`, `akinsho/toggleterm.nvim`, `kevinhwang91/nvim-hlslens`.
-- Debugging: `mfussenegger/nvim-dap` + `rcarriga/nvim-dap-ui`; language adapters configured per module (e.g., C/C++ with `codelldb`).
+- UI Polish: `akinsho/bufferline.nvim` (language‑grouped labels), `b0o/incline.nvim`, `lukas-reineke/indent-blankline.nvim`, `lewis6991/gitsigns.nvim`, `kevinhwang91/nvim-hlslens`.
 - Performance: Lua module loader cache enabled, unused providers/plugins disabled for faster startup.

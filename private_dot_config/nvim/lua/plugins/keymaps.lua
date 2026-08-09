@@ -56,27 +56,11 @@ end
 
 local function open_branch_diff_with_hunk()
 	select_diff_base(function(diff_range)
-		local Terminal = require("toggleterm.terminal").Terminal
-		local hunk_term = Terminal:new({
-			cmd = "hunk diff " .. vim.fn.shellescape(diff_range),
-			direction = "float",
-			float_opts = {
-				border = "rounded",
-				width = function()
-					return vim.o.columns
-				end,
-				height = function()
-					return vim.o.lines - 2
-				end,
-				row = 0,
-				col = 0,
-			},
-			on_open = function(term)
-				pcall(vim.keymap.del, "t", "<esc>", { buffer = term.bufnr })
-			end,
-			hidden = true,
+		require("utils.terminal").toggle({
+			key = "hunk-diff",
+			command = { "hunk", "diff", diff_range },
+			fullscreen = true,
 		})
-		hunk_term:toggle()
 	end)
 end
 
@@ -193,30 +177,58 @@ local function setup_keymaps()
 			},
 
 			-- Commenting
-			["<D-/>"] = {
-				function()
-					require("Comment.api").toggle.linewise.current()
-				end,
-				desc = "Toggle comment",
-			},
-			["<M-/>"] = {
-				function()
-					require("Comment.api").toggle.linewise.current()
-				end,
-				desc = "Toggle comment (tmux)",
-			},
-			["<D-k>c"] = {
-				function()
-					require("Comment.api").toggle.linewise.current()
-				end,
-				desc = "Add line comment (chord)",
-			},
+			["<D-/>"] = { "gcc", desc = "Toggle comment", remap = true },
+			["<M-/>"] = { "gcc", desc = "Toggle comment (tmux)", remap = true },
+			["<D-k>c"] = { "gcc", desc = "Add line comment (chord)", remap = true },
 
-			["<C-S-@>"] = { ":ToggleTerm<CR>", desc = "Toggle terminal" },
-			["<C-@>"] = { ":ToggleTerm<CR>", desc = "Toggle terminal (tmux compatible)" },
-			["<C-S-2>"] = { ":ToggleTerm<CR>", desc = "Toggle terminal (tmux fallback)" },
-			["<F12>"] = { ":ToggleTerm<CR>", desc = "Toggle terminal (universal)" },
-			["<Leader>tt"] = { ":ToggleTerm<CR>", desc = "Toggle terminal (leader)" },
+			["<C-S-@>"] = {
+				function()
+					require("utils.terminal").toggle()
+				end,
+				desc = "Toggle terminal",
+			},
+			["<C-\\>"] = {
+				function()
+					require("utils.terminal").toggle()
+				end,
+				desc = "Toggle terminal",
+			},
+			["<C-@>"] = {
+				function()
+					require("utils.terminal").toggle()
+				end,
+				desc = "Toggle terminal (tmux compatible)",
+			},
+			["<C-S-2>"] = {
+				function()
+					require("utils.terminal").toggle()
+				end,
+				desc = "Toggle terminal (tmux fallback)",
+			},
+			["<F12>"] = {
+				function()
+					require("utils.terminal").toggle()
+				end,
+				desc = "Toggle terminal (universal)",
+			},
+			["<Leader>tt"] = {
+				function()
+					require("utils.terminal").toggle()
+				end,
+				desc = "Toggle terminal (leader)",
+			},
+			["<Leader>lg"] = {
+				function()
+					require("utils.terminal").toggle({ key = "lazygit", command = { "lazygit" }, fullscreen = true })
+				end,
+				desc = "Lazygit",
+			},
+			["<Leader>gh"] = {
+				function()
+					require("utils.terminal").toggle({ key = "ghui", command = { "ghui" }, fullscreen = true })
+				end,
+				desc = "GitHub UI",
+			},
 
 			-- Buffer navigation (WezTerm: Cmd+Opt+Arrow → Alt+Shift+Arrow)
 			["<D-M-Right>"] = { ":bnext<CR>", desc = "Next buffer" },
@@ -239,6 +251,12 @@ local function setup_keymaps()
 					vim.cmd("RenderMarkdown toggle")
 				end,
 				desc = "Markdown preview toggle",
+			},
+			["<Leader>mm"] = {
+				function()
+					require("utils.mdroll").open()
+				end,
+				desc = "Markdown viewer (mdroll)",
 			},
 
 			-- Oil.nvim file explorer
@@ -364,14 +382,35 @@ local function setup_keymaps()
 			["<C-Tab>"] = { "<Esc>:bnext<CR>a", desc = "Next buffer" },
 			["<C-S-Tab>"] = { "<Esc>:bprevious<CR>a", desc = "Previous buffer" },
 			["<C-d>"] = { "<Del>", desc = "Forward delete character" },
+			["<C-\\>"] = {
+				function()
+					require("utils.terminal").toggle()
+				end,
+				desc = "Toggle terminal",
+			},
 
 			-- Indentation
 			["<S-Tab>"] = { "<C-d>", desc = "Unindent line" },
 		},
 		t = {
-			["<C-S-@>"] = { "<C-\\><C-n>:ToggleTerm<CR>", desc = "Toggle terminal from terminal" },
-			["<C-S-2>"] = { "<C-\\><C-n>:ToggleTerm<CR>", desc = "Toggle terminal from terminal (tmux)" },
-			["<F12>"] = { "<C-\\><C-n>:ToggleTerm<CR>", desc = "Toggle terminal from terminal (fallback)" },
+			["<C-S-@>"] = {
+				function()
+					require("utils.terminal").toggle()
+				end,
+				desc = "Toggle terminal from terminal",
+			},
+			["<C-S-2>"] = {
+				function()
+					require("utils.terminal").toggle()
+				end,
+				desc = "Toggle terminal from terminal (tmux)",
+			},
+			["<F12>"] = {
+				function()
+					require("utils.terminal").toggle()
+				end,
+				desc = "Toggle terminal from terminal (fallback)",
+			},
 		},
 		v = {
 			["<D-F>"] = {
@@ -399,7 +438,7 @@ local function setup_keymaps()
 	for mode, mode_mappings in pairs(mappings) do
 		for lhs, mapping in pairs(mode_mappings) do
 			local rhs = mapping[1]
-			local opts = { desc = mapping.desc, silent = true }
+			local opts = { desc = mapping.desc, silent = true, remap = mapping.remap }
 
 			if type(rhs) == "function" then
 				vim.keymap.set(mode, lhs, rhs, opts)
@@ -432,7 +471,7 @@ return {
 				{ "<leader>r", group = "+replace" },
 				{ "<leader>R", group = "+replace global" },
 				{ "<leader>m", group = "+markdown" },
-				{ "<leader>mp", desc = "Markdown preview (browser)" },
+				{ "<leader>mm", desc = "Markdown viewer (mdroll)" },
 				{ "<C-g>", group = "+grep/search" },
 				{ "<C-p>", group = "+files" },
 				{ "<C-S-f>", group = "+search" },
@@ -459,10 +498,6 @@ return {
 				{ "<leader>g", group = "+git" },
 				{ "<leader>gd", desc = "Branch diff with difit" },
 				{ "<leader>gh", desc = "GitHub UI" },
-				{ "<leader>gA", group = "+actions history" },
-				{ "<leader>gB", group = "+actions history by PR" },
-				{ "<leader>gX", group = "+actions dispatch" },
-				{ "<leader>gW", group = "+actions watch" },
 				{ "-", group = "+oil parent directory" },
 			})
 

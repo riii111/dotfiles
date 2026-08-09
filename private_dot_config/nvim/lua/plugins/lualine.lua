@@ -32,16 +32,6 @@ local function get_treesitter_parsers()
 	return _cache.ts_parsers
 end
 
-local function get_dap()
-	if _cache.dap == nil then
-		local ok, mod = pcall(require, "dap")
-		if ok then
-			_cache.dap = mod
-		end
-	end
-	return _cache.dap
-end
-
 local function is_custom_theme_active()
 	return vim.g.colors_name == "custom-theme-riii111"
 end
@@ -73,7 +63,6 @@ local icons = {
 	ls_inactive = "󰒲 ",
 	ls_active = " ",
 	lock = "",
-	debug = " ",
 	code_lens_action = "",
 	typos = "󰗊",
 }
@@ -301,13 +290,17 @@ local function section_separator_left()
 	return {
 		function()
 			local colors = get_colors()
-			if not colors then return "" end
+			if not colors then
+				return ""
+			end
 			return ""
 		end,
 		padding = { left = 0, right = 0 },
 		color = function()
 			local colors = get_colors()
-			if colors then return { fg = colors.section_y_bg } end
+			if colors then
+				return { fg = colors.section_y_bg }
+			end
 		end,
 	}
 end
@@ -317,17 +310,20 @@ local function section_separator_right()
 	return {
 		function()
 			local colors = get_colors()
-			if not colors then return "" end
+			if not colors then
+				return ""
+			end
 			return ""
 		end,
 		padding = { left = 0, right = 0 },
 		color = function()
 			local colors = get_colors()
-			if colors then return { fg = colors.section_c_bg } end
+			if colors then
+				return { fg = colors.section_c_bg }
+			end
 		end,
 	}
 end
-
 
 local function treesitter()
 	local colors = get_colors()
@@ -519,30 +515,6 @@ local function diagnostics()
 	return component
 end
 
-local function dap_status()
-	local colors = get_colors()
-	local component = {
-		function()
-			local dap = get_dap()
-			if dap and dap.status then
-				local status = dap.status()
-				if status ~= "" then
-					return icons.debug .. status
-				end
-			end
-			return ""
-		end,
-		cond = function()
-			local dap = get_dap()
-			return dap and dap.status and dap.status() ~= ""
-		end,
-	}
-	if colors then
-		component.color = { fg = colors.red }
-	end
-	return component
-end
-
 local function space()
 	return {
 		function()
@@ -688,7 +660,6 @@ return {
 					diagnostic_ok(),
 					diagnostics(),
 					space(),
-					dap_status(),
 					treesitter(),
 					typos_lsp(),
 					harper_ls(),
@@ -742,7 +713,6 @@ return {
 							diagnostic_ok(),
 							diagnostics(),
 							space(),
-							dap_status(),
 							treesitter(),
 							typos_lsp(),
 							harper_ls(),

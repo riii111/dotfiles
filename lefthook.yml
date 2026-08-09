@@ -3,6 +3,10 @@ pre-commit:
     shell-fast-check:
       stage_fixed: true
       run: ./bin/executable_dotctl lint-staged-shell
+    lua-format:
+      glob: "*.lua"
+      stage_fixed: true
+      run: stylua {staged_files}
 
 post-merge:
   commands:

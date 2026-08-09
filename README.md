@@ -47,8 +47,6 @@ bash ~/ghq/github.com/riii111/dotfiles/scripts/setup-default-apps.sh
 
 Routing: text / code → Neovim, csv / tsv → csvlens, parquet / sqlite / jsonl → VisiData, images / pdf → Preview (untouched). Re-run both scripts after a macOS update if associations break.
 
-Markdown clipboard-to-image paste: `<C-v>` in normal mode (uses `pngpaste`, managed by the Nix CLI profile).
-
 ## Nix
 
 Daily CLI tools are managed by the default user Nix profile.
@@ -59,45 +57,6 @@ exec zsh
 ```
 
 Homebrew stays for GUI / cask packages and is managed by nix-darwin.
-
-### Codex task orchestration
-
-Install the task orchestrator and register a parent session:
-
-```bash
-ghq get https://github.com/riii111/codex-task-orchestrator
-chezmoi apply
-~/bin/dotctl sync-nix-profile
-codex-task-orchestrator init
-```
-
-The six task-orchestration skills in `~/.codex/skills` are symlinked from the local
-`codex-task-orchestrator` checkout. Pull that repository to update the suite, then run
-`chezmoi apply` to install or repair the links. `init` records the parent session, task source,
-allowed pull-request repositories, and explicitly permitted agent tools.
-
-When a task permits `cursor-cli`, install and authenticate Cursor CLI separately from this Nix
-profile. Verify the executable used by Herdr before starting a worker:
-
-```bash
-command -v agent
-agent --version
-```
-
-The orchestrator's [worker guide](https://github.com/riii111/codex-task-orchestrator#run-a-worker)
-defines task selection, Herdr/Cursor boundaries, status and recovery commands, explicit
-`retry-parent-delivery`, and the Completion Note event flow. Use its
-[disposable Herdr/Cursor manual](https://github.com/riii111/codex-task-orchestrator/blob/main/docs/herdr-cursor-worker-manual.md)
-for live verification. The dotfiles setup does not install a periodic poller, merge scanner, or
-task LaunchAgent.
-
-Reset one orchestration when its tracked state should be discarded:
-
-```bash
-codex-task-orchestrator reset codex-task-orchestration
-```
-
-`reset` destructively discards that orchestration's tracked sessions and Completion Notes; Completion Notes for other orchestrations remain.
 
 ### Store maintenance
 

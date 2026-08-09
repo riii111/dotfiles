@@ -1,0 +1,4 @@
+interface:
+  display_name: "Task Session Launch"
+  short_description: "開始対象taskのCodex TaskをGit worktreeで作成する。"
+  default_prompt: "$task-session-launchを使い、開始対象taskのCodex TaskをGit worktreeで作成してください。"

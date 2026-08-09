@@ -9,11 +9,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     herdr = {
-      url = "github:ogulcancelik/herdr/v0.7.5";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    codex-task-orchestrator = {
-      url = "github:riii111/codex-task-orchestrator";
+      url = "github:ogulcancelik/herdr/v0.8.0";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
@@ -24,7 +20,6 @@
       zigpkgs,
       nix-darwin,
       herdr,
-      codex-task-orchestrator,
       ...
     }:
     let
@@ -78,8 +73,18 @@
           '';
           mkVersionEntry = name: value: { inherit name value; };
           herdrPkg = herdr.packages.${system}.default;
-          codexTaskOrchestratorPkg = codex-task-orchestrator.packages.${system}.default;
           python3WithPyYAML = pkgs.python3.withPackages (pythonPackages: [ pythonPackages.pyyaml ]);
+          mdroll = pkgs.rustPlatform.buildRustPackage {
+            pname = "mdroll";
+            version = "0.4.2";
+            src = pkgs.fetchFromGitHub {
+              owner = "tokuhirom";
+              repo = "mdroll";
+              rev = "f2bce169dd845dc71ab20fbca5b3b882d1d418b6";
+              hash = "sha256-f3rXbLi9WFRid/BG2PcNF0JPWOE3scWhz3Smmohzy5w=";
+            };
+            cargoHash = "sha256-rgGOsyIIhtij4FTyPVb4W3XnOK0J/YigcnDus3zVZYk=";
+          };
           dailyCliPackages = with pkgs; [
             # Editor-integrated tooling that should exist in the normal shell too.
             _1password-cli
@@ -90,6 +95,7 @@
             python3WithPyYAML
             shellcheck
             shfmt
+            stylua
             taplo
             zig
             zls
@@ -126,6 +132,7 @@
             lazygit
             lefthook
             llvm
+            mdroll
             neovim
             ninja
             nix-direnv
@@ -157,7 +164,6 @@
             tbls
             uv
             herdrPkg
-            codexTaskOrchestratorPkg
           ];
           devShellOnlyPackages = with pkgs; [
             alejandra

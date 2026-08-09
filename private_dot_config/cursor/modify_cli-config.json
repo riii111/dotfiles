@@ -1,0 +1,15 @@
+#!/bin/sh
+# Cursor reads this target (local state lives here).
+# Permissions source of truth: dot_cursor/cli-config.json
+set -eu
+
+src="${CHEZMOI_SOURCE_DIR:-$(chezmoi source-path)}/dot_cursor/cli-config.json"
+tmp="$(mktemp)"
+trap 'rm -f "$tmp"' EXIT
+cat >"$tmp"
+
+if [ -s "$tmp" ]; then
+	jq --slurpfile src "$src" '.permissions = $src[0].permissions' "$tmp"
+else
+	jq '{permissions: .permissions}' "$src"
+fi

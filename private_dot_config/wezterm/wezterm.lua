@@ -10,6 +10,9 @@ require("zen-mode")
 -- Font
 ---------------------------------------------------------------
 -- Fallback prevents CJK punctuation from rendering at vertical center (HK/TW font style)
+config.font_dirs = {
+	wezterm.home_dir .. "/Library/Fonts",
+}
 config.font = wezterm.font_with_fallback({
 	"DroidSansM Nerd Font Mono",
 	"Hiragino Sans",
@@ -236,13 +239,13 @@ config.hide_mouse_cursor_when_typing = true
 -- wezterm-git-status-bridge setup begin
 local git_status = require("right-status")
 git_status.setup({
-  auto_update = false,
-  binary_path = os.getenv("WEZTERM_GIT_STATUS_BRIDGE_BIN")
-    or os.getenv("HOME") .. "/.local/bin/wezterm-git-status-bridge",
-  mode_styles = herdr_mode.styles,
-  on_reload = function()
-    herdr_mode.clear_all_modes()
-  end,
+	auto_update = false,
+	binary_path = os.getenv("WEZTERM_GIT_STATUS_BRIDGE_BIN")
+		or os.getenv("HOME") .. "/.local/bin/wezterm-git-status-bridge",
+	mode_styles = herdr_mode.styles,
+	on_reload = function()
+		herdr_mode.clear_all_modes()
+	end,
 })
 -- wezterm-git-status-bridge setup end
 return config
