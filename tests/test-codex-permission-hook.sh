@@ -39,7 +39,7 @@ permission_request 'git ls-remote origin' | jq -e '.hookSpecificOutput.decision.
 for command in \
 	'git status --short' \
 	'git diff --check' \
-	'git log -1' \
+	'git log --oneline -1' \
 	'git show HEAD' \
 	'git rev-parse HEAD' \
 	'git ls-files' \
@@ -78,6 +78,13 @@ for command in \
 	'git branch --delete --force old' \
 	'git branch --delete -f old' \
 	'git fetch -f origin' \
+	'git rebase --exec "touch outside" main' \
+	'git switch --orphan empty' \
+	'git diff --output=/tmp/codex-leak main' \
+	'git diff --no-index /etc/hosts /etc/passwd' \
+	'GIT_SEQUENCE_EDITOR="touch outside" git rebase -i main' \
+	'GIT_SSH_COMMAND="touch outside" git fetch origin' \
+	'GIT_EDITOR="touch outside" git commit' \
 	'git fetch --force origin' \
 	'git fetch origin +main:main' \
 	'git fetch --update-head-ok origin' \
@@ -149,6 +156,8 @@ for command in 'echo "$HOME"' 'git diff "$(git merge-base main HEAD)"' 'rg foo s
 done
 test -z "$(pre_tool_use 'git diff --no-ext-diff --no-textconv')"
 test -z "$(pre_tool_use 'rg textconv src')"
+test -z "$(permission_request 'git diff -- /etc/hosts')"
+test -z "$(permission_request 'git diff -- ../outside')"
 test -z "$(pre_tool_use 'GIT_PAGER=cat git status')"
 test -z "$(pre_tool_use 'git restore --staged .')"
 test -z "$(pre_tool_use 'gh search code "auth token"')"

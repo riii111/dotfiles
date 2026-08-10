@@ -18,6 +18,7 @@ from urllib.parse import urlparse
 
 
 PROTECTED_BRANCHES = {"main", "master"}
+SAFE_GIT_ENVIRONMENT = {"GIT_PAGER"}
 
 
 def git_environment() -> dict[str, str]:
@@ -143,11 +144,6 @@ def is_safe_auth_status(command: str) -> bool:
 
 
 def is_safe_git_permission_request(command: str, cwd: str) -> bool:
-    try:
-        argv = tuple(shlex.split(command))
-    except ValueError:
-        return False
-
     executable, args = direct_command(command)
     if executable is None or executable.rsplit("/", 1)[-1] != "git":
         return False
@@ -190,6 +186,8 @@ def is_safe_git_permission_request(command: str, cwd: str) -> bool:
         return False
 
     if git_denial_reason(subcommand, subargs) is not None:
+        return False
+    if unsafe_git_arguments(subcommand, subargs, target_cwd):
         return False
 
     return trusted_repository(str(target_cwd))
@@ -250,15 +248,7 @@ def has_git_environment_override(command: str) -> bool:
         if "=" not in token or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", token.split("=", 1)[0]):
             break
         name = token.split("=", 1)[0]
-        if name in {
-            "GIT_DIR",
-            "GIT_WORK_TREE",
-            "GIT_INDEX_FILE",
-            "GIT_COMMON_DIR",
-            "GIT_OBJECT_DIRECTORY",
-            "GIT_ALTERNATE_OBJECT_DIRECTORIES",
-            "GIT_EXTERNAL_DIFF",
-        } or name.startswith("GIT_CONFIG"):
+        if name.startswith("GIT_") and name not in SAFE_GIT_ENVIRONMENT:
             return True
     return False
 
@@ -276,6 +266,71 @@ def has_external_helper_config(args: list[str]) -> bool:
             or ".textconv=" in value
         ):
             return True
+    return False
+
+
+def has_output_option(args: list[str]) -> bool:
+    return any(
+        arg in {"-o", "--output"}
+        or (arg.startswith("-o") and not arg.startswith("--"))
+        or arg.startswith("--output=")
+        for arg in args
+    )
+
+
+def has_rebase_exec_option(args: list[str]) -> bool:
+    return any(
+        arg == "-x"
+        or arg.startswith("-x")
+        or arg == "--exec"
+        or arg.startswith("--exec=")
+        for arg in args
+    )
+
+
+def path_is_within_worktree(cwd: str, raw_path: str) -> bool:
+    path = Path(raw_path)
+    if path.is_absolute():
+        return False
+    root_result = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"],
+        cwd=cwd,
+        env=git_environment(),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if root_result.returncode != 0:
+        return False
+    root = Path(root_result.stdout.strip()).resolve()
+    try:
+        (Path(cwd).resolve() / path).resolve().relative_to(root)
+    except ValueError:
+        return False
+    return True
+
+
+def unsafe_git_arguments(
+    subcommand: str | None, subargs: list[str], cwd: str
+) -> bool:
+    if subcommand == "rebase" and has_rebase_exec_option(subargs):
+        return True
+    if subcommand == "switch" and has_option(subargs, "--orphan"):
+        return True
+    if subcommand in {"diff", "show", "log"} and has_output_option(subargs):
+        return True
+    if subcommand == "diff" and has_option(subargs, "--no-index"):
+        return True
+    if subcommand in {"diff", "show", "log"}:
+        for arg in subargs:
+            if arg.startswith("/"):
+                return True
+        if "--" in subargs:
+            separator = subargs.index("--")
+            return any(
+                not path_is_within_worktree(cwd, arg)
+                for arg in subargs[separator + 1 :]
+            )
     return False
 
 
@@ -385,6 +440,14 @@ def git_denial_reason(subcommand: str | None, subargs: list[str]) -> str | None:
         for arg in subargs
     ):
         return "External Git diff helpers are forbidden."
+    if subcommand == "rebase" and has_rebase_exec_option(subargs):
+        return "Git rebase command execution is forbidden."
+    if subcommand == "switch" and has_option(subargs, "--orphan"):
+        return "Orphan branch switching is forbidden."
+    if subcommand in {"diff", "show", "log"} and has_output_option(subargs):
+        return "Git output redirection is forbidden."
+    if subcommand == "diff" and has_option(subargs, "--no-index"):
+        return "Git no-index diff is forbidden."
     return None
 
 
