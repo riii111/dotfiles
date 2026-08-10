@@ -169,6 +169,8 @@ def is_safe_git_permission_request(command: str, cwd: str) -> bool:
         return False
     if has_unsafe_environment_override(command) or has_unsafe_ambient_git_environment():
         return False
+    if has_git_config_override(args):
+        return False
     invocation = safe_git_invocation(args, cwd)
     if invocation is None:
         return False
@@ -328,12 +330,31 @@ def has_external_helper_config(args: list[str]) -> bool:
 
 
 def has_git_config_override(args: list[str]) -> bool:
+    global_options = []
+    index = 0
+    options_with_values = {
+        "-C",
+        "-c",
+        "--config-env",
+        "--exec-path",
+        "--git-dir",
+        "--namespace",
+        "--super-prefix",
+        "--work-tree",
+    }
+    while index < len(args) and args[index].startswith("-") and args[index] != "--":
+        option = args[index]
+        global_options.append(option)
+        index += 1
+        if option in options_with_values and index < len(args):
+            global_options.append(args[index])
+            index += 1
     return any(
         arg == "-c"
         or (arg.startswith("-c") and not arg.startswith("--") and len(arg) > 2)
         or arg == "--config-env"
         or arg.startswith("--config-env=")
-        for arg in option_arguments(args)
+        for arg in global_options
     )
 
 
@@ -357,8 +378,6 @@ def has_effective_git_config(cwd: str, pattern: str) -> bool:
 def unsafe_git_configuration(
     subcommand: str | None, subargs: list[str], cwd: str
 ) -> bool:
-    if has_git_config_override(subargs):
-        return True
     if subcommand in {"diff", "show", "log"}:
         if has_effective_git_config(cwd, r"^diff\.external$") and not has_option(
             subargs, "--no-ext-diff"

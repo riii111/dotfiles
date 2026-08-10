@@ -61,7 +61,10 @@ for command in \
 	'git --no-pager show HEAD' \
 	'git --no-pager diff --stat' \
 	'git switch feat/test' \
+	'git switch -c feat/new' \
 	'git add file' \
+	'git commit -c HEAD' \
+	'git log -c -1' \
 	'git commit --amend --no-edit' \
 	'git merge feat/test' \
 	'git rebase --continue' \
