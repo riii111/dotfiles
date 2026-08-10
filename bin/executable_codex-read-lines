@@ -59,14 +59,17 @@ def worktree_root(cwd: Path) -> Path | None:
 def github_host(host: str | None) -> bool:
     if not host:
         return False
-    result = subprocess.run(
-        ["ssh", "-G", host],
-        env=git_environment(),
-        check=False,
-        capture_output=True,
-        text=True,
-        timeout=2,
-    )
+    try:
+        result = subprocess.run(
+            ["ssh", "-G", host],
+            env=git_environment(),
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
     return result.returncode == 0 and any(
         line == "hostname github.com" for line in result.stdout.splitlines()
     )
@@ -75,7 +78,7 @@ def github_host(host: str | None) -> bool:
 def github_repository(url: str) -> tuple[str, str] | None:
     if url.startswith("git@") and ":" in url:
         user_host, path = url[4:].split(":", 1)
-        if user_host == "github.com" or github_host(user_host):
+        if github_host(user_host):
             parts = path.removesuffix(".git").split("/")
             if len(parts) == 2 and all(parts):
                 return parts[0].lower(), parts[1].lower()
@@ -120,6 +123,40 @@ def skill_root() -> Path:
     return (Path.home() / ".codex" / "skills").resolve()
 
 
+def plugin_skill_roots() -> list[Path]:
+    cache = (Path.home() / ".codex" / "plugins" / "cache").resolve()
+    roots = []
+    try:
+        providers = list(cache.iterdir())
+    except OSError:
+        return roots
+    for provider in providers:
+        if provider.is_symlink() or not provider.is_dir():
+            continue
+        try:
+            plugins = list(provider.iterdir())
+        except OSError:
+            continue
+        for plugin in plugins:
+            if plugin.is_symlink() or not plugin.is_dir():
+                continue
+            try:
+                versions = list(plugin.iterdir())
+            except OSError:
+                continue
+            for version in versions:
+                skills = version / "skills"
+                if version.is_symlink() or not version.is_dir() or not skills.is_dir():
+                    continue
+                try:
+                    resolved = skills.resolve(strict=True)
+                    resolved.relative_to(cache)
+                except (OSError, ValueError):
+                    continue
+                roots.append(resolved)
+    return roots
+
+
 def allowed_file(raw_path: str, cwd: Path) -> Path | None:
     candidate = Path(raw_path)
     if not candidate.is_absolute():
@@ -130,7 +167,7 @@ def allowed_file(raw_path: str, cwd: Path) -> Path | None:
         return None
     if not resolved.is_file():
         return None
-    roots = [skill_root()]
+    roots = [skill_root(), *plugin_skill_roots()]
     repository = trusted_repository(cwd)
     if repository is not None:
         roots.append(repository.resolve())

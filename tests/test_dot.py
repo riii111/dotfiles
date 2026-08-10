@@ -207,27 +207,30 @@ class DotCliTest(unittest.TestCase):
             result = cli.command_test(mock.Mock())
 
         self.assertEqual(result, 0)
-        self.assertEqual(
-            calls[0][0], ("python3", "-m", "unittest", "discover", "tests")
-        )
+        self.assertEqual(calls[0][0], ("/bin/ruff", "check", "."))
         self.assertEqual(
             calls[1][0],
-            ("/bin/bash", "/repo/tests/test-example.sh"),
+            ("python3", "-m", "unittest", "discover", "tests"),
         )
         self.assertEqual(
             calls[2][0],
+            ("/bin/bash", "/repo/tests/test-example.sh"),
+        )
+        self.assertEqual(
+            calls[3][0],
             (
                 "/bin/lua",
                 "private_dot_config/wezterm/tests/herdr_mode_test.lua",
             ),
         )
-        self.assertEqual(calls[3][0], ("/bin/bash", "-n", "/repo/scripts/check.sh"))
-        self.assertEqual(calls[4][0], ("/bin/sh", "-n", "/repo/bin/run"))
+        self.assertEqual(calls[4][0], ("/bin/bash", "-n", "/repo/scripts/check.sh"))
+        self.assertEqual(calls[5][0], ("/bin/sh", "-n", "/repo/bin/run"))
 
     def test_command_test_collects_failures_without_traceback(self):
         repo_root = Path("/repo")
         targets = [(repo_root / "scripts/check.sh", "bash")]
         runs = [
+            subprocess.CompletedProcess(["ruff"], 0, "", ""),
             subprocess.CompletedProcess(["python3"], 1, "", "unit failed"),
             subprocess.CompletedProcess(["lua"], 0, "", ""),
             subprocess.CompletedProcess(["bash"], 1, "", "syntax failed"),
@@ -262,12 +265,17 @@ class DotCliTest(unittest.TestCase):
             mock.patch("shutil.which", side_effect=fake_which),
             mock.patch(
                 "subprocess.run",
-                return_value=subprocess.CompletedProcess(
-                    ["python3", "-m", "unittest", "discover", "tests"],
-                    0,
-                    "",
-                    "",
-                ),
+                side_effect=[
+                    subprocess.CompletedProcess(["ruff"], 0, "", ""),
+                    subprocess.CompletedProcess(
+                        ["python3", "-m", "unittest", "discover", "tests"],
+                        0,
+                        "",
+                        "",
+                    ),
+                    subprocess.CompletedProcess(["lua"], 0, "", ""),
+                    subprocess.CompletedProcess(["zsh", "-n"], 1, "", ""),
+                ],
             ),
             mock.patch("sys.stdout", new=io.StringIO()),
             mock.patch("sys.stderr", new=io.StringIO()) as stderr,

@@ -9,7 +9,16 @@ import sys
 from pathlib import Path
 
 
-REQUIRED_COMMANDS = ("git", "python3", "chezmoi", "brew", "nvim", "lefthook", "nix")
+REQUIRED_COMMANDS = (
+    "git",
+    "python3",
+    "chezmoi",
+    "brew",
+    "nvim",
+    "lefthook",
+    "nix",
+    "ruff",
+)
 OPTIONAL_COMMANDS = ("shellcheck", "shfmt")
 LINTABLE_SHELLS = frozenset({"bash", "sh"})
 # Keep in sync with NIX_DOTFILES_PROFILE in dot_zshrc.tmpl.
@@ -218,6 +227,16 @@ def print_process_failure(
 def command_test(_: argparse.Namespace) -> int:
     repo_root = resolve_repo_root()
     failures = 0
+
+    ruff = shutil.which("ruff")
+    if ruff is None:
+        failures += 1
+        print("ruff check: ruff not found", file=sys.stderr)
+    else:
+        ruff_result = run_command([ruff, "check", "."], repo_root)
+        if ruff_result.returncode != 0:
+            failures += 1
+            print_process_failure("ruff check", ruff_result)
 
     for directory, label in (("tests", "python tests"),):
         test_result = run_command(

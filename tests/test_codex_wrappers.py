@@ -14,14 +14,18 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def load_wrapper(filename="executable_codex-force-with-lease"):
-    path = ROOT / "bin" / filename
-    loader = importlib.machinery.SourceFileLoader(filename.replace("-", "_"), str(path))
+def load_script(path, name):
+    loader = importlib.machinery.SourceFileLoader(name, str(path))
     spec = importlib.util.spec_from_loader(loader.name, loader)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def load_wrapper(filename="executable_codex-force-with-lease"):
+    path = ROOT / "bin" / filename
+    return load_script(path, filename.replace("-", "_"))
 
 
 class ForceWithLeaseTest(unittest.TestCase):
@@ -35,6 +39,9 @@ class ForceWithLeaseTest(unittest.TestCase):
                 module.github_repository("https://work-github/riii111/test.git")
             )
             module.github_host = lambda host: host == "work-github"
+            self.assertIsNone(
+                module.github_repository("git@github.com:riii111/test.git")
+            )
             self.assertEqual(
                 module.github_repository("git@work-github:riii111/test.git"),
                 ("riii111", "test"),
@@ -43,6 +50,23 @@ class ForceWithLeaseTest(unittest.TestCase):
                 module.github_repository("ssh://work-github/riii111/test.git"),
                 ("riii111", "test"),
             )
+
+    def test_ssh_config_timeout_is_untrusted(self):
+        modules = [
+            load_wrapper("executable_codex-force-with-lease"),
+            load_wrapper("executable_codex-read-lines"),
+            load_script(
+                ROOT / "dot_codex/hooks/executable_permission_request.py",
+                "permission_request_hook",
+            ),
+        ]
+        for module in modules:
+            with mock.patch.object(
+                module.subprocess,
+                "run",
+                side_effect=subprocess.TimeoutExpired(["ssh", "-G"], 2),
+            ):
+                self.assertFalse(module.github_host("github.com"))
 
     def test_effective_push_url_must_be_trusted(self):
         module = load_wrapper()
@@ -61,7 +85,9 @@ class ForceWithLeaseTest(unittest.TestCase):
             raise AssertionError(args)
 
         with tempfile.TemporaryDirectory() as directory:
-            root = (Path(directory) / "ghq" / "github.com" / "riii111" / "test").resolve()
+            root = (
+                Path(directory) / "ghq" / "github.com" / "riii111" / "test"
+            ).resolve()
             with mock.patch.object(module.Path, "home", return_value=Path(directory)):
                 module.run_git = fake_run_git
                 self.assertFalse(module.trusted_repository(root, root))
@@ -83,15 +109,21 @@ class ForceWithLeaseTest(unittest.TestCase):
         def fake_run_git(cwd, *args):
             calls.append(args)
             if args[:3] == ("symbolic-ref", "--quiet", "--short"):
-                return subprocess.CompletedProcess(args, 0, stdout="feat/test\n", stderr="")
+                return subprocess.CompletedProcess(
+                    args, 0, stdout="feat/test\n", stderr=""
+                )
             if args[:3] == ("ls-remote", "--heads", "origin"):
                 return subprocess.CompletedProcess(
                     args, 0, stdout=f"{old_oid}\trefs/heads/feat/test\n", stderr=""
                 )
             if args[:3] == ("rev-parse", "--verify", "refs/heads/feat/test"):
-                return subprocess.CompletedProcess(args, 0, stdout=f"{local_oid}\n", stderr="")
+                return subprocess.CompletedProcess(
+                    args, 0, stdout=f"{local_oid}\n", stderr=""
+                )
             if args[:2] == ("push", "origin"):
-                return subprocess.CompletedProcess(args, 1, stdout="", stderr="stale lease\n")
+                return subprocess.CompletedProcess(
+                    args, 1, stdout="", stderr="stale lease\n"
+                )
             raise AssertionError(args)
 
         with tempfile.TemporaryDirectory() as directory:
@@ -124,17 +156,25 @@ class ForceWithLeaseTest(unittest.TestCase):
         def fake_run_git(cwd, *args):
             calls.append(args)
             if args[:3] == ("symbolic-ref", "--quiet", "--short"):
-                return subprocess.CompletedProcess(args, 0, stdout="feat/test\n", stderr="")
+                return subprocess.CompletedProcess(
+                    args, 0, stdout="feat/test\n", stderr=""
+                )
             if args[:3] == ("ls-remote", "--heads", "origin"):
                 return subprocess.CompletedProcess(
                     args, 0, stdout=f"{remote_oid}\trefs/heads/feat/test\n", stderr=""
                 )
             if args[:3] == ("rev-parse", "--verify", "refs/heads/feat/test"):
-                return subprocess.CompletedProcess(args, 0, stdout=f"{captured_oid}\n", stderr="")
+                return subprocess.CompletedProcess(
+                    args, 0, stdout=f"{captured_oid}\n", stderr=""
+                )
             if args[:3] == ("rev-parse", "--verify", "HEAD"):
-                return subprocess.CompletedProcess(args, 0, stdout=f"{changed_head_oid}\n", stderr="")
+                return subprocess.CompletedProcess(
+                    args, 0, stdout=f"{changed_head_oid}\n", stderr=""
+                )
             if args[:2] == ("push", "origin"):
-                return subprocess.CompletedProcess(args, 1, stdout="", stderr="stale lease\n")
+                return subprocess.CompletedProcess(
+                    args, 1, stdout="", stderr="stale lease\n"
+                )
             raise AssertionError(args)
 
         with tempfile.TemporaryDirectory() as directory:

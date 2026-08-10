@@ -43,6 +43,9 @@ for command in \
 	'git show HEAD' \
 	'git rev-parse HEAD' \
 	'git ls-files' \
+	'git --no-pager log --oneline -1' \
+	'git --no-pager show HEAD' \
+	'git --no-pager diff --stat' \
 	'git switch feat/test' \
 	'git add file' \
 	'git commit --amend --no-edit' \
@@ -94,6 +97,16 @@ for command in \
 	'git fetch --force origin' \
 	'git fetch origin +main:main' \
 	'git fetch --update-head-ok origin' \
+	'git add --for ignored' \
+	'git switch --disc old' \
+	'git switch --force-c old' \
+	'git switch --or empty' \
+	'git rebase --ex "touch outside" main' \
+	'git reset --har HEAD' \
+	'git push --mir origin' \
+	'git push --del origin old' \
+	'git push --pru origin' \
+	'git clean --for -d' \
 	'git checkout -- .' \
 	'git stash clear' \
 	'git stash drop' \
@@ -133,6 +146,27 @@ for command in \
 	'find . -delete'; do
 	pre_tool_use "$command" | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
 done
+
+for command in \
+	'git add --for ignored' \
+	'git switch --disc old' \
+	'git switch --force-c old' \
+	'git switch --or empty' \
+	'git rebase --ex "touch outside" main'; do
+	permission_request "$command" | jq -e '.hookSpecificOutput.decision.behavior == "deny"' >/dev/null
+done
+for command in \
+	'git reset --har HEAD' \
+	'git push --mir origin' \
+	'git push --del origin old' \
+	'git push --pru origin' \
+	'git clean --for -d'; do
+	permission_request "$command" | jq -e '.hookSpecificOutput.decision.behavior == "deny"' >/dev/null
+done
+permission_request 'git add -- --force' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
+test -z "$(pre_tool_use 'git add -- --force')"
+test -z "$(permission_request 'git --paginate log')"
+test -z "$(permission_request 'git -c core.pager=cat log')"
 # PreToolUse cannot request approval, so prompt-class operations remain governed by the sandbox.
 test -z "$(pre_tool_use 'rm file')"
 pre_tool_use '/usr/bin/git reset --hard' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null

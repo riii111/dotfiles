@@ -3,6 +3,10 @@ pre-commit:
     shell-fast-check:
       stage_fixed: true
       run: ./bin/executable_dotctl lint-staged-shell
+    python-quality:
+      glob: "*.py"
+      stage_fixed: true
+      run: ruff format {staged_files} && ruff check {staged_files}
     lua-format:
       glob: "*.lua"
       stage_fixed: true

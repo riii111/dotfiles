@@ -34,14 +34,17 @@ def run_git(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
 def github_host(host: str | None) -> bool:
     if not host:
         return False
-    result = subprocess.run(
-        ["ssh", "-G", host],
-        env=git_environment(),
-        check=False,
-        capture_output=True,
-        text=True,
-        timeout=2,
-    )
+    try:
+        result = subprocess.run(
+            ["ssh", "-G", host],
+            env=git_environment(),
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
     return result.returncode == 0 and any(
         line == "hostname github.com" for line in result.stdout.splitlines()
     )
@@ -50,7 +53,7 @@ def github_host(host: str | None) -> bool:
 def github_repository(url: str) -> tuple[str, str] | None:
     if url.startswith("git@") and ":" in url:
         user_host, path = url[4:].split(":", 1)
-        if user_host != "github.com" and not github_host(user_host):
+        if not github_host(user_host):
             return None
         parts = path.removesuffix(".git").split("/")
         if len(parts) != 2 or not all(parts):

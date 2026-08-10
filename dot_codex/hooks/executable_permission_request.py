@@ -62,12 +62,7 @@ def origin_urls(cwd: str, *, push: bool) -> list[str]:
 
 
 def github_repository(url: str) -> tuple[str, str] | None:
-    scp_match = re.fullmatch(r"git@github\.com:([^/\s]+)/([^/\s]+?)(?:\.git)?", url)
-    if scp_match:
-        return tuple(part.lower() for part in scp_match.groups())
-    scp_match = re.fullmatch(
-        r"git@([^:\s]+):([^/\s]+)/([^/\s]+?)(?:\.git)?", url
-    )
+    scp_match = re.fullmatch(r"git@([^:\s]+):([^/\s]+)/([^/\s]+?)(?:\.git)?", url)
     if scp_match and github_host(scp_match.group(1)):
         return tuple(part.lower() for part in scp_match.groups()[1:])
     parsed = urlparse(url)
@@ -86,14 +81,17 @@ def github_repository(url: str) -> tuple[str, str] | None:
 def github_host(host: str | None) -> bool:
     if host is None:
         return False
-    result = subprocess.run(
-        ["ssh", "-G", host],
-        check=False,
-        capture_output=True,
-        text=True,
-        timeout=2,
-        env=git_environment(),
-    )
+    try:
+        result = subprocess.run(
+            ["ssh", "-G", host],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=2,
+            env=git_environment(),
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
     if result.returncode != 0:
         return False
     return any(line == "hostname github.com" for line in result.stdout.splitlines())
@@ -133,9 +131,9 @@ def urls_match_checkout(urls: list[str], cwd: str) -> bool:
 
 
 def trusted_repository(cwd: str) -> bool:
-    return urls_match_checkout(origin_urls(cwd, push=False), cwd) and urls_match_checkout(
-        origin_urls(cwd, push=True), cwd
-    )
+    return urls_match_checkout(
+        origin_urls(cwd, push=False), cwd
+    ) and urls_match_checkout(origin_urls(cwd, push=True), cwd)
 
 
 def is_safe_auth_status(command: str) -> bool:
@@ -281,7 +279,9 @@ def has_unsafe_environment_override(command: str) -> bool:
     except ValueError:
         return True
     for token in tokens:
-        if "=" not in token or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", token.split("=", 1)[0]):
+        if "=" not in token or not re.fullmatch(
+            r"[A-Za-z_][A-Za-z0-9_]*", token.split("=", 1)[0]
+        ):
             break
         name = token.split("=", 1)[0]
         value = token.split("=", 1)[1]
@@ -291,10 +291,11 @@ def has_unsafe_environment_override(command: str) -> bool:
 
 
 def has_external_helper_config(args: list[str]) -> bool:
-    for index, arg in enumerate(args):
+    options = option_arguments(args)
+    for index, arg in enumerate(options):
         value = None
-        if arg == "-c" and index + 1 < len(args):
-            value = args[index + 1]
+        if arg == "-c" and index + 1 < len(options):
+            value = options[index + 1]
         elif arg.startswith("-c") and len(arg) > 2:
             value = arg[2:]
         if value is not None and (
@@ -307,21 +308,19 @@ def has_external_helper_config(args: list[str]) -> bool:
 
 
 def has_output_option(args: list[str]) -> bool:
+    options = option_arguments(args)
     return any(
-        arg in {"-o", "--output"}
+        arg == "-o"
         or (arg.startswith("-o") and not arg.startswith("--"))
-        or arg.startswith("--output=")
-        for arg in args
+        or is_long_option(arg, "--output")
+        for arg in options
     )
 
 
 def has_rebase_exec_option(args: list[str]) -> bool:
-    return any(
-        arg == "-x"
-        or arg.startswith("-x")
-        or arg == "--exec"
-        or arg.startswith("--exec=")
-        for arg in args
+    options = option_arguments(args)
+    return any(arg == "-x" or arg.startswith("-x") for arg in options) or any(
+        is_long_option(arg, "--exec") for arg in options
     )
 
 
@@ -347,9 +346,7 @@ def path_is_within_worktree(cwd: str, raw_path: str) -> bool:
     return True
 
 
-def unsafe_git_arguments(
-    subcommand: str | None, subargs: list[str], cwd: str
-) -> bool:
+def unsafe_git_arguments(subcommand: str | None, subargs: list[str], cwd: str) -> bool:
     if subcommand == "rebase" and has_rebase_exec_option(subargs):
         return True
     if subcommand == "switch" and has_option(subargs, "--orphan"):
@@ -371,18 +368,21 @@ def unsafe_git_arguments(
     return False
 
 
-def safe_git_invocation(
-    args: list[str], cwd: str
-) -> tuple[str, str, list[str]] | None:
+def safe_git_invocation(args: list[str], cwd: str) -> tuple[str, str, list[str]] | None:
     target = Path(cwd).resolve()
     index = 0
     while index < len(args) and args[index].startswith("-"):
         option = args[index]
+        if option == "--no-pager":
+            index += 1
+            continue
         if option == "-C":
             if index + 1 >= len(args):
                 return None
             candidate = Path(args[index + 1])
-            target = (candidate if candidate.is_absolute() else target / candidate).resolve()
+            target = (
+                candidate if candidate.is_absolute() else target / candidate
+            ).resolve()
             index += 2
             continue
         if option.startswith("-C") and len(option) > 2:
@@ -396,13 +396,52 @@ def safe_git_invocation(
 
 
 def has_option(args: list[str], option: str) -> bool:
-    return any(arg == option or arg.startswith(f"{option}=") for arg in args)
+    if option.startswith("--"):
+        return any(is_long_option(arg, option) for arg in option_arguments(args))
+    return option in option_arguments(args)
+
+
+LONG_OPTION_PREFIX_LENGTH = {
+    "--delete": 5,
+    "--discard-changes": 6,
+    "--exec": 4,
+    "--force": 5,
+    "--force-create": 9,
+    "--force-with-lease": 9,
+    "--hard": 5,
+    "--mirror": 5,
+    "--no-index": 6,
+    "--orphan": 4,
+    "--output": 5,
+    "--prune": 5,
+    "--staged": 5,
+    "--textconv": 7,
+    "--update-head-ok": 8,
+    "--worktree": 6,
+}
+
+
+def option_arguments(args: list[str]) -> list[str]:
+    try:
+        return args[: args.index("--")]
+    except ValueError:
+        return args
+
+
+def is_long_option(arg: str, option: str) -> bool:
+    if not arg.startswith("--"):
+        return False
+    candidate = arg.split("=", 1)[0]
+    minimum = LONG_OPTION_PREFIX_LENGTH.get(option, len(option))
+    return candidate == option or (
+        len(candidate) >= minimum and option.startswith(candidate)
+    )
 
 
 def has_short_flag(args: list[str], flag: str) -> bool:
     return any(
         arg.startswith("-") and not arg.startswith("--") and flag in arg[1:]
-        for arg in args
+        for arg in option_arguments(args)
     )
 
 
@@ -431,10 +470,13 @@ def git_denial_reason(subcommand: str | None, subargs: list[str]) -> str | None:
     ):
         return "Forced clean is forbidden."
     if subcommand == "gc" and (
-        "--prune=now" in subargs
+        any(
+            is_long_option(arg, "--prune") and arg.split("=", 1)[-1] == "now"
+            for arg in option_arguments(subargs)
+        )
         or any(
-            subargs[index : index + 2] == ["--prune", "now"]
-            for index in range(len(subargs) - 1)
+            option_arguments(subargs)[index : index + 2] == ["--prune", "now"]
+            for index in range(len(option_arguments(subargs)) - 1)
         )
     ):
         return "Immediate Git object pruning is forbidden."
@@ -472,9 +514,8 @@ def git_denial_reason(subcommand: str | None, subargs: list[str]) -> str | None:
         or any(arg.startswith(("+", ":")) for arg in subargs)
     ):
         return "Destructive push is forbidden."
-    if subcommand in {"diff", "show", "log"} and any(
-        arg in {"--ext-diff", "--textconv"} or arg.startswith("--textconv=")
-        for arg in subargs
+    if subcommand in {"diff", "show", "log"} and (
+        has_option(subargs, "--ext-diff") or has_option(subargs, "--textconv")
     ):
         return "External Git diff helpers are forbidden."
     if subcommand == "rebase" and has_rebase_exec_option(subargs):
@@ -513,7 +554,9 @@ def compound_denial_reason(command: str) -> str | None:
         reason = git_denial_reason(*git_command(segment))
         if reason is not None:
             return reason
-    if re.search(r"\bgit(?:\s+[^;&|]*)?\s+reset\s+[^;&|]*--hard(?:[^A-Za-z0-9_-]|$)", command):
+    if re.search(
+        r"\bgit(?:\s+[^;&|]*)?\s+reset\s+[^;&|]*--hard(?:[^A-Za-z0-9_-]|$)", command
+    ):
         return "Hard reset is forbidden."
     if re.search(r"\bgit(?:\s+[^;&|]*)?\s+add\s+[^;&|]*\s-f(?:\s'\"]|$)", command):
         return "Force-add is forbidden."
