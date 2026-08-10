@@ -8,6 +8,7 @@ fail closed. Execpolicy rules separately govern sandbox escalation.
 """
 
 import json
+import os
 import re
 import shlex
 import subprocess
@@ -19,10 +20,19 @@ from urllib.parse import urlparse
 PROTECTED_BRANCHES = {"main", "master"}
 
 
+def git_environment() -> dict[str, str]:
+    environment = dict(os.environ)
+    for name in list(environment):
+        if name.startswith("GIT_"):
+            del environment[name]
+    return environment
+
+
 def current_branch(cwd: str) -> str | None:
     result = subprocess.run(
         ["git", "branch", "--show-current"],
         cwd=cwd,
+        env=git_environment(),
         check=False,
         capture_output=True,
         text=True,
@@ -33,17 +43,18 @@ def current_branch(cwd: str) -> str | None:
 
 
 def origin_urls(cwd: str, *, push: bool) -> list[str]:
-    args = ["git", "remote", "get-url"]
-    if push:
-        args.append("--push")
-    args.extend(["--all", "origin"])
+    args = ["git", "config", "--get-all"]
+    args.append("remote.origin.pushurl" if push else "remote.origin.url")
     result = subprocess.run(
         args,
         cwd=cwd,
+        env=git_environment(),
         check=False,
         capture_output=True,
         text=True,
     )
+    if result.returncode != 0 and push:
+        return origin_urls(cwd, push=False)
     if result.returncode != 0:
         return []
     return [line for line in result.stdout.splitlines() if line]
@@ -53,15 +64,36 @@ def github_repository(url: str) -> tuple[str, str] | None:
     scp_match = re.fullmatch(r"git@github\.com:([^/\s]+)/([^/\s]+?)(?:\.git)?", url)
     if scp_match:
         return tuple(part.lower() for part in scp_match.groups())
+    scp_match = re.fullmatch(
+        r"git@([^:\s]+):([^/\s]+)/([^/\s]+?)(?:\.git)?", url
+    )
+    if scp_match and github_host(scp_match.group(1)):
+        return tuple(part.lower() for part in scp_match.groups()[1:])
     parsed = urlparse(url)
     path_match = re.fullmatch(r"/([^/\s]+)/([^/\s]+?)(?:\.git)?", parsed.path)
     if (
         parsed.scheme not in {"https", "ssh"}
-        or parsed.hostname != "github.com"
+        or not github_host(parsed.hostname)
         or path_match is None
     ):
         return None
     return tuple(part.lower() for part in path_match.groups())
+
+
+def github_host(host: str | None) -> bool:
+    if host is None:
+        return False
+    result = subprocess.run(
+        ["ssh", "-G", host],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=2,
+        env=git_environment(),
+    )
+    if result.returncode != 0:
+        return False
+    return any(line == "hostname github.com" for line in result.stdout.splitlines())
 
 
 def checkout_repository(cwd: str) -> tuple[str, str] | None:
@@ -74,13 +106,18 @@ def checkout_repository(cwd: str) -> tuple[str, str] | None:
     )
     if result.returncode != 0:
         return None
-    common_dir = Path(result.stdout.strip())
+    common_dir = Path(result.stdout.strip()).resolve()
     repository_dir = common_dir.parent if common_dir.name == ".git" else None
-    if repository_dir is None or len(repository_dir.parts) < 4:
+    if repository_dir is None:
         return None
-    if repository_dir.parts[-4:-2] != ("ghq", "github.com"):
+    ghq_root = (Path.home() / "ghq" / "github.com").resolve()
+    try:
+        relative = repository_dir.relative_to(ghq_root)
+    except ValueError:
         return None
-    return repository_dir.parts[-2].lower(), repository_dir.parts[-1].lower()
+    if len(relative.parts) != 2:
+        return None
+    return relative.parts[0].lower(), relative.parts[1].lower()
 
 
 def urls_match_checkout(urls: list[str], cwd: str) -> bool:
@@ -89,6 +126,12 @@ def urls_match_checkout(urls: list[str], cwd: str) -> bool:
         expected is not None
         and bool(urls)
         and all(github_repository(url) == expected for url in urls)
+    )
+
+
+def trusted_repository(cwd: str) -> bool:
+    return urls_match_checkout(origin_urls(cwd, push=False), cwd) and urls_match_checkout(
+        origin_urls(cwd, push=True), cwd
     )
 
 
@@ -113,8 +156,7 @@ def is_safe_git_permission_request(command: str, cwd: str) -> bool:
     }:
         return False
 
-    urls = origin_urls(cwd, push=False)
-    return urls_match_checkout(urls, cwd)
+    return trusted_repository(cwd)
 
 
 def direct_command(command: str) -> tuple[str | None, list[str]]:
@@ -178,6 +220,110 @@ def starts_with(args: list[str], prefix: list[str]) -> bool:
     return args[: len(prefix)] == prefix
 
 
+def git_denial_reason(subcommand: str | None, subargs: list[str]) -> str | None:
+    if subcommand == "reset" and has_option(subargs, "--hard"):
+        return "Hard reset is forbidden."
+    if subcommand == "restore" and any(arg in {".", ":/"} for arg in subargs):
+        staged = has_option(subargs, "--staged") or has_short_flag(subargs, "S")
+        worktree = has_option(subargs, "--worktree") or has_short_flag(subargs, "W")
+        if not staged or worktree:
+            return "Restoring the entire working tree is forbidden."
+    if subcommand == "checkout" and any(arg in {".", ":/"} for arg in subargs):
+        return "Discarding the entire working tree is forbidden."
+    if subcommand == "stash" and subargs and subargs[0] in {"clear", "drop"}:
+        return "Deleting stash entries is forbidden; leave them intact."
+    if subcommand == "add" and (
+        has_option(subargs, "--force") or has_short_flag(subargs, "f")
+    ):
+        return "Force-add is forbidden."
+    if subcommand == "clean" and (
+        has_option(subargs, "--force") or has_short_flag(subargs, "f")
+    ):
+        return "Forced clean is forbidden."
+    if subcommand == "gc" and (
+        "--prune=now" in subargs
+        or any(
+            subargs[index : index + 2] == ["--prune", "now"]
+            for index in range(len(subargs) - 1)
+        )
+    ):
+        return "Immediate Git object pruning is forbidden."
+    if subcommand == "switch" and (
+        has_option(subargs, "--force")
+        or has_option(subargs, "--discard-changes")
+        or has_short_flag(subargs, "f")
+        or has_short_flag(subargs, "C")
+    ):
+        return "Forced branch switching is forbidden."
+    if subcommand == "branch" and has_short_flag(subargs, "D"):
+        return "Deleting a branch is forbidden."
+    if subcommand == "fetch" and (
+        has_option(subargs, "--force")
+        or has_option(subargs, "--update-head-ok")
+        or any(arg.startswith("+") for arg in subargs)
+    ):
+        return "Forced fetch is forbidden."
+    if subcommand == "push" and (
+        has_option(subargs, "--force")
+        or has_option(subargs, "--force-with-lease")
+        or has_option(subargs, "--mirror")
+        or has_option(subargs, "--delete")
+        or has_option(subargs, "--prune")
+        or has_short_flag(subargs, "f")
+        or has_short_flag(subargs, "d")
+        or any(arg.startswith(("+", ":")) for arg in subargs)
+    ):
+        return "Destructive push is forbidden."
+    if subcommand in {"diff", "show", "log"} and any(
+        arg in {"--ext-diff", "--textconv"} or arg.startswith("--textconv=")
+        for arg in subargs
+    ):
+        return "External Git diff helpers are forbidden."
+    return None
+
+
+def shell_tokens(command: str) -> list[str]:
+    lexer = shlex.shlex(command, posix=True, punctuation_chars="();&|")
+    lexer.whitespace_split = True
+    lexer.commenters = ""
+    return list(lexer)
+
+
+def compound_denial_reason(command: str) -> str | None:
+    try:
+        tokens = shell_tokens(command)
+    except ValueError:
+        return None
+    for index, token in enumerate(tokens):
+        if token.rsplit("/", 1)[-1] != "git":
+            continue
+        segment = []
+        for candidate in tokens[index + 1 :]:
+            if candidate in {";", "&", "|", "(", ")"}:
+                break
+            segment.append(candidate)
+        reason = git_denial_reason(*git_command(segment))
+        if reason is not None:
+            return reason
+    if re.search(r"\bgit(?:\s+[^;&|]*)?\s+reset\s+[^;&|]*--hard(?:[^A-Za-z0-9_-]|$)", command):
+        return "Hard reset is forbidden."
+    if re.search(r"\bgit(?:\s+[^;&|]*)?\s+add\s+[^;&|]*\s-f(?:\s'\"]|$)", command):
+        return "Force-add is forbidden."
+    if re.search(r"\brm\s+[^;&|]*-[^;&|]*r", command):
+        return "Recursive file deletion is forbidden."
+    if any(
+        marker in command
+        for marker in (
+            "diff.external=",
+            "textconv",
+            "filter.",
+            "GIT_EXTERNAL_DIFF=",
+        )
+    ):
+        return "External Git diff helpers are forbidden."
+    return None
+
+
 def denial_reason(command: str) -> str | None:
     executable, args = direct_command(command)
     executable_name = None if executable is None else executable.rsplit("/", 1)[-1]
@@ -217,44 +363,9 @@ def denial_reason(command: str) -> str | None:
 
     if executable_name == "git":
         subcommand, subargs = git_command(args)
-        if subcommand == "reset" and has_option(subargs, "--hard"):
-            return "Hard reset is forbidden."
-        if subcommand == "restore" and any(arg in {".", ":/"} for arg in subargs):
-            staged = has_option(subargs, "--staged") or has_short_flag(subargs, "S")
-            worktree = has_option(subargs, "--worktree") or has_short_flag(subargs, "W")
-            if not staged or worktree:
-                return "Restoring the entire working tree is forbidden."
-        if subcommand == "checkout" and any(arg in {".", ":/"} for arg in subargs):
-            return "Discarding the entire working tree is forbidden."
-        if subcommand == "stash" and subargs and subargs[0] in {"clear", "drop"}:
-            return "Deleting stash entries is forbidden; leave them intact."
-        if subcommand == "add" and (
-            has_option(subargs, "--force") or has_short_flag(subargs, "f")
-        ):
-            return "Force-add is forbidden."
-        if subcommand == "clean" and (
-            has_option(subargs, "--force") or has_short_flag(subargs, "f")
-        ):
-            return "Forced clean is forbidden."
-        if subcommand == "gc" and (
-            "--prune=now" in subargs
-            or any(
-                subargs[index : index + 2] == ["--prune", "now"]
-                for index in range(len(subargs) - 1)
-            )
-        ):
-            return "Immediate Git object pruning is forbidden."
-        if subcommand == "push" and (
-            has_option(subargs, "--force")
-            or has_option(subargs, "--force-with-lease")
-            or has_option(subargs, "--mirror")
-            or has_option(subargs, "--delete")
-            or has_option(subargs, "--prune")
-            or has_short_flag(subargs, "f")
-            or has_short_flag(subargs, "d")
-            or any(arg.startswith(("+", ":")) for arg in subargs)
-        ):
-            return "Destructive push is forbidden."
+        reason = git_denial_reason(subcommand, subargs)
+        if reason is not None:
+            return reason
 
     if executable_name == "terraform":
         terraform_args = [arg for arg in args if not arg.startswith("-chdir=")]
@@ -283,7 +394,9 @@ def denial_reason(command: str) -> str | None:
     if executable_name == "bq" and starts_with(args, ["rm"]):
         return "BigQuery resource deletion is forbidden."
 
-    return None
+    if executable is None:
+        return compound_denial_reason(command)
+    return compound_denial_reason(command)
 
 
 def is_safe_push(command: str, cwd: str) -> bool:
@@ -296,8 +409,7 @@ def is_safe_push(command: str, cwd: str) -> bool:
     if branch is None or branch in PROTECTED_BRANCHES:
         return False
 
-    urls = origin_urls(cwd, push=True)
-    if not urls_match_checkout(urls, cwd):
+    if not trusted_repository(cwd):
         return False
 
     return tuple(argv) in {

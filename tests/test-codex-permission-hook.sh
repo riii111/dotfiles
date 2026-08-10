@@ -4,9 +4,11 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 hook="$repo_root/dot_codex/hooks/executable_permission_request.py"
+runner="$repo_root/tests/run-codex-python-with-home.py"
 hooks_config="$repo_root/dot_codex/hooks.json"
 test_root="$(mktemp -d "${TMPDIR:-/tmp}/codex-permission-hook-test.XXXXXX")"
-tmpdir="$test_root/ghq/github.com/riii111/test"
+test_home="$test_root/home"
+tmpdir="$test_home/ghq/github.com/riii111/test"
 trap 'rm -rf "$test_root"' EXIT
 mkdir -p "$tmpdir"
 git -C "$tmpdir" init -q
@@ -16,12 +18,13 @@ git -C "$tmpdir" remote add origin https://github.com/riii111/test.git
 run_hook() {
 	local event_name="$1"
 	local command="$2"
-	jq -n --arg cwd "$tmpdir" --arg event_name "$event_name" --arg command "$command" \
+	HOME="$test_home" jq -n --arg cwd "$tmpdir" --arg event_name "$event_name" --arg command "$command" \
 		'{cwd:$cwd,hook_event_name:$event_name,tool_input:{command:$command}}' |
-		python3 "$hook"
+		HOME="$test_home" python3 "$runner" "$hook" "$test_home"
 }
 
 jq -e '.hooks.PreToolUse[0].matcher == "^Bash$"' "$hooks_config" >/dev/null
+jq -e '.hooks.PermissionRequest[0].matcher == "^Bash$"' "$hooks_config" >/dev/null
 
 permission_request() { run_hook PermissionRequest "$1"; }
 pre_tool_use() { run_hook PreToolUse "$1"; }
@@ -34,9 +37,9 @@ permission_request 'git branch --show-current' | jq -e '.hookSpecificOutput.deci
 permission_request 'git fetch origin' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
 permission_request 'git ls-remote origin' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
 test -z "$(permission_request 'git pull --ff-only')"
-test -z "$(permission_request 'git fetch --force origin')"
-test -z "$(permission_request 'git fetch origin +main:main')"
-test -z "$(permission_request 'git fetch --update-head-ok origin')"
+permission_request 'git fetch --force origin' | jq -e '.hookSpecificOutput.decision.behavior == "deny"' >/dev/null
+permission_request 'git fetch origin +main:main' | jq -e '.hookSpecificOutput.decision.behavior == "deny"' >/dev/null
+permission_request 'git fetch --update-head-ok origin' | jq -e '.hookSpecificOutput.decision.behavior == "deny"' >/dev/null
 permission_request 'gh auth status --show-token' | jq -e '.hookSpecificOutput.decision.behavior == "deny"' >/dev/null
 permission_request 'gh auth status --hostname github.com --show-token' | jq -e '.hookSpecificOutput.decision.behavior == "deny"' >/dev/null
 permission_request 'gh auth status --hostname github.com -t' | jq -e '.hookSpecificOutput.decision.behavior == "deny"' >/dev/null
@@ -51,6 +54,13 @@ for command in \
 	'git restore .' \
 	'git restore :/' \
 	'git restore --staged --worktree .' \
+	'git switch -f old' \
+	'git switch -C old' \
+	'git switch --discard-changes old' \
+	'git branch -D old' \
+	'git fetch --force origin' \
+	'git fetch origin +main:main' \
+	'git fetch --update-head-ok origin' \
 	'git checkout -- .' \
 	'git stash clear' \
 	'git stash drop' \
@@ -95,7 +105,7 @@ test -z "$(pre_tool_use 'rm file')"
 pre_tool_use '/usr/bin/git reset --hard' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
 pre_tool_use '/bin/rm -rf build' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
 
-# Indirection and compound shell syntax are outside this best-effort hook's contract.
+# Indirection and compound shell syntax must not bypass the deny checks.
 for command in \
 	"eval 'git reset --hard'" \
 	'exec /usr/bin/git reset --hard' \
@@ -107,8 +117,9 @@ for command in \
 	'if true; then git reset --hard; fi' \
 	"printf 'git reset --hard\\n' | sh" \
 	"git -c alias.x='!git reset --hard' x" \
-	'nohup git reset --hard'; do
-	test -z "$(pre_tool_use "$command")"
+	'nohup git reset --hard' \
+	"printf 'git reset --hard\\n' | sh"; do
+	pre_tool_use "$command" | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
 done
 
 # Normal shell composition must not interrupt autonomous development work.

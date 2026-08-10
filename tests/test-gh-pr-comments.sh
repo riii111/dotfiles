@@ -22,6 +22,11 @@ if [ "$1 $2" = "repo view" ]; then
   exit 0
 fi
 
+if [ "$1 $2" = "pr checks" ]; then
+  printf '[{"name":"ci","state":"SUCCESS","bucket":"pass","link":"https://example.test/ci"}]\n'
+  exit 0
+fi
+
 if [ "$1 $2" = "api graphql" ]; then
   payload="$(cat)"
   if [ "${GH_TEST_MISSING_PR:-}" = 1 ]; then
@@ -59,7 +64,20 @@ JSON
 fi
 
 if [ "$1" = api ] && [[ "$*" == *issues/42/comments* ]]; then
+  if [ "${GH_TEST_PAGINATION_FAILURE:-}" = 1 ]; then
+    printf 'simulated pagination failure\n' >&2
+    exit 31
+  fi
   printf '[[{"id":2,"body":"conversation"}],[{"id":4,"body":"conversation page 2"}]]\n'
+  exit 0
+fi
+
+if [ "$1" = api ] && [[ "$*" == *repos/riii111/dotfiles/issues/42* ]]; then
+  if [ "${GH_TEST_MISSING_ISSUE:-}" = 1 ]; then
+    printf 'missing issue\n' >&2
+    exit 44
+  fi
+  printf '{"number":42,"title":"Issue","state":"open","body":"body"}\n'
   exit 0
 fi
 
@@ -77,6 +95,7 @@ output="$tmpdir/output.json"
 GH_FAIL_RESOLVED_COMMENTS=1 PATH="$tmpdir/bin:$PATH" python3 "$wrapper" 42 >"$output"
 jq -e '
   .pullRequest.number == 42 and
+  .checks[0].name == "ci" and
   .conversationComments[0].body == "conversation" and
   .conversationComments[1].body == "conversation page 2" and
   .reviews[0].state == "CHANGES_REQUESTED" and
@@ -98,6 +117,11 @@ jq -e '
 PATH="$tmpdir/bin:$PATH" python3 "$wrapper" https://github.com/riii111/dotfiles/pull/42 >"$output"
 jq -e '.pullRequest.number == 42' "$output" >/dev/null
 
+PATH="$tmpdir/bin:$PATH" python3 "$repo_root/bin/executable_gh-read" issue 42 >"$output"
+jq -e '.issue.number == 42 and .comments[1].body == "conversation page 2"' "$output" >/dev/null
+PATH="$tmpdir/bin:$PATH" python3 "$repo_root/bin/executable_gh-read" issue https://github.com/riii111/dotfiles/issues/42 --compact >"$output"
+jq -e '.issue.number == 42' "$output" >/dev/null
+
 PATH="$tmpdir/bin:$PATH" python3 "$wrapper" 42 --compact >"$output"
 jq -e '.reviewThreads[0].comments[0] | has("diffHunk") | not' "$output" >/dev/null
 test "$(wc -l <"$output")" -eq 1
@@ -117,6 +141,7 @@ expect_failure() {
 expect_failure '²'
 expect_failure 42 --repo ../..
 expect_failure https://github.com/riii111/dotfiles/pull/42 --repo other/repo
+expect_failure https://github.com/riii111/dotfiles/issues/42 --repo other/repo
 
 set +e
 GH_TEST_FAILURE=1 PATH="$tmpdir/bin:$PATH" python3 "$wrapper" 42 >"$output" 2>"$tmpdir/error"
@@ -131,5 +156,19 @@ status=$?
 set -e
 test "$status" -eq 1
 grep -q 'pull request not found: riii111/dotfiles#42' "$tmpdir/error"
+
+set +e
+GH_TEST_MISSING_ISSUE=1 PATH="$tmpdir/bin:$PATH" python3 "$repo_root/bin/executable_gh-read" issue 42 >"$output" 2>"$tmpdir/error"
+status=$?
+set -e
+test "$status" -eq 44
+grep -q 'missing issue' "$tmpdir/error"
+
+set +e
+GH_TEST_PAGINATION_FAILURE=1 PATH="$tmpdir/bin:$PATH" python3 "$repo_root/bin/executable_gh-read" pr 42 >"$output" 2>"$tmpdir/error"
+status=$?
+set -e
+test "$status" -eq 31
+grep -q 'simulated pagination failure' "$tmpdir/error"
 
 printf 'gh-pr-comments tests passed\n'

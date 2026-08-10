@@ -28,7 +28,7 @@ prefix_rule(pattern=["gh", "workflow", "view"], decision="allow", justification=
 prefix_rule(pattern=["gh", "release", "list"], decision="allow", justification="List releases")
 prefix_rule(pattern=["gh", "release", "view"], decision="allow", justification="View release")
 prefix_rule(pattern=["gh", "search"], decision="allow", justification="Search GitHub resources")
-prefix_rule(pattern=["gh-pr-comments"], decision="allow", justification="Read PR comments through the fixed read-only wrapper")
+prefix_rule(pattern=["gh-read"], decision="allow", justification="Read fixed GitHub PR and Issue data through the read-only wrapper")
 
 # --- gCloud CLI (read operations) ---
 prefix_rule(pattern=["gcloud", "storage", "ls"], decision="allow", justification="List GCS buckets or objects")
@@ -51,24 +51,19 @@ prefix_rule(pattern=["bq", "show"], decision="allow", justification="Show BigQue
 
 # --- Dedicated wrappers ---
 prefix_rule(pattern=["pe"], decision="allow", justification="Run prod-errors alert triage")
+prefix_rule(pattern=["codex-read-lines"], decision="allow", justification="Read an approved line range without sed execution features")
+prefix_rule(pattern=["codex-force-with-lease"], decision="allow", justification="Push the current trusted branch with an explicit remote lease")
 
 # -----------------------------------------------------------------------------
 # PROMPT: Potentially destructive commands (require confirmation)
 # -----------------------------------------------------------------------------
 
 prefix_rule(pattern=["git", "checkout"], decision="prompt", justification="May rewrite working tree or index")
-prefix_rule(pattern=["git", "push"], decision="prompt", justification="Updates remote state")
-prefix_rule(pattern=["git", "merge"], decision="prompt", justification="Changes history state")
-prefix_rule(pattern=["git", "rebase"], decision="prompt", justification="Rewrites history state")
-prefix_rule(pattern=["git", "diff"], decision="prompt", justification="May execute configured diff helpers")
-prefix_rule(pattern=["git", "show"], decision="prompt", justification="May execute configured diff helpers")
-prefix_rule(pattern=["git", "log"], decision="prompt", justification="May execute configured diff helpers")
+prefix_rule(pattern=["git", "tag", ["-d", "--delete"]], decision="prompt", justification="Deletes tags")
+prefix_rule(pattern=["git", "branch", "-D"], decision="prompt", justification="Deletes a branch")
+prefix_rule(pattern=["git", "branch", "-r", "-d"], decision="prompt", justification="Deletes a remote-tracking branch")
 prefix_rule(pattern=["git", "diff-tree"], decision="prompt", justification="May execute configured diff helpers")
 prefix_rule(pattern=["git", "cat-file"], decision="prompt", justification="May execute configured filters")
-prefix_rule(pattern=["git", "branch"], decision="prompt", justification="Branch flags may change refs")
-prefix_rule(pattern=["git", "switch"], decision="prompt", justification="May discard changes or reset a branch")
-prefix_rule(pattern=["git", "fetch"], decision="prompt", justification="Force flags and refspecs may overwrite refs")
-prefix_rule(pattern=["git", "tag", ["-d", "--delete"]], decision="prompt", justification="Deletes tags")
 prefix_rule(pattern=["git", "stash", ["clear", "drop", "pop", "apply", "push"]], decision="prompt", justification="Changes the working tree or stash entries")
 prefix_rule(pattern=["git", "remote", ["add", "remove", "rename", "set-url", "update", "prune"]], decision="prompt", justification="Changes remote configuration or refs")
 prefix_rule(pattern=["npm", "install"], decision="prompt", justification="Downloads packages and may run install scripts")
