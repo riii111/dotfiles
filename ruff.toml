@@ -1,0 +1,6 @@
+line-length = 88
+
+[lint]
+# Ruff's default rules are preferred; keep this baseline narrow until existing
+# violations outside this task are addressed deliberately.
+select = ["E4", "E7", "E9", "F"]
