@@ -19,6 +19,7 @@ from urllib.parse import urlparse
 
 PROTECTED_BRANCHES = {"main", "master"}
 SAFE_GIT_ENVIRONMENT = {"GIT_PAGER"}
+GITHUB_SSH_ENDPOINTS = {("github.com", "22"), ("ssh.github.com", "443")}
 
 
 def git_environment() -> dict[str, str]:
@@ -27,6 +28,14 @@ def git_environment() -> dict[str, str]:
         if name.startswith("GIT_"):
             del environment[name]
     return environment
+
+
+def has_unsafe_ambient_git_environment() -> bool:
+    return any(
+        name.startswith("GIT_")
+        and not (name in SAFE_GIT_ENVIRONMENT and os.environ[name] == "cat")
+        for name in os.environ
+    )
 
 
 def current_branch(cwd: str) -> str | None:
@@ -94,13 +103,22 @@ def github_host(host: str | None) -> bool:
         return False
     if result.returncode != 0:
         return False
-    return any(line == "hostname github.com" for line in result.stdout.splitlines())
+    settings = dict(
+        line.split(maxsplit=1)
+        for line in result.stdout.splitlines()
+        if len(line.split(maxsplit=1)) == 2
+    )
+    return (
+        settings.get("hostname"),
+        settings.get("port", "22"),
+    ) in GITHUB_SSH_ENDPOINTS
 
 
 def checkout_repository(cwd: str) -> tuple[str, str] | None:
     result = subprocess.run(
         ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
         cwd=cwd,
+        env=git_environment(),
         check=False,
         capture_output=True,
         text=True,
@@ -149,7 +167,7 @@ def is_safe_git_permission_request(command: str, cwd: str) -> bool:
     executable, args = direct_command(command)
     if executable != "git":
         return False
-    if has_unsafe_environment_override(command):
+    if has_unsafe_environment_override(command) or has_unsafe_ambient_git_environment():
         return False
     invocation = safe_git_invocation(args, cwd)
     if invocation is None:
@@ -190,6 +208,8 @@ def is_safe_git_permission_request(command: str, cwd: str) -> bool:
     if git_denial_reason(subcommand, subargs) is not None:
         return False
     if unsafe_git_arguments(subcommand, subargs, target_cwd):
+        return False
+    if unsafe_git_configuration(subcommand, subargs, target_cwd):
         return False
 
     return trusted_repository(str(target_cwd))
@@ -304,6 +324,55 @@ def has_external_helper_config(args: list[str]) -> bool:
             or ".textconv=" in value
         ):
             return True
+    return False
+
+
+def has_git_config_override(args: list[str]) -> bool:
+    return any(
+        arg == "-c"
+        or (arg.startswith("-c") and not arg.startswith("--") and len(arg) > 2)
+        or arg == "--config-env"
+        or arg.startswith("--config-env=")
+        for arg in option_arguments(args)
+    )
+
+
+def has_effective_git_config(cwd: str, pattern: str) -> bool:
+    try:
+        result = subprocess.run(
+            ["git", "config", "--null", "--get-regexp", pattern],
+            cwd=cwd,
+            env=git_environment(),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        return True
+    if result.returncode not in {0, 1}:
+        return True
+    return bool(result.stdout)
+
+
+def unsafe_git_configuration(
+    subcommand: str | None, subargs: list[str], cwd: str
+) -> bool:
+    if has_git_config_override(subargs):
+        return True
+    if subcommand in {"diff", "show", "log"}:
+        if has_effective_git_config(cwd, r"^diff\.external$") and not has_option(
+            subargs, "--no-ext-diff"
+        ):
+            return True
+        if has_effective_git_config(cwd, r"^filter\..*\.textconv$") and not has_option(
+            subargs, "--no-textconv"
+        ):
+            return True
+    if subcommand in {"fetch", "ls-remote", "push"} and (
+        has_effective_git_config(cwd, r"^core\.sshcommand$")
+        or has_effective_git_config(cwd, r"^core\.gitproxy$")
+    ):
+        return True
     return False
 
 
@@ -536,7 +605,7 @@ def shell_tokens(command: str) -> list[str]:
     return list(lexer)
 
 
-def compound_denial_reason(command: str) -> str | None:
+def compound_denial_reason(command: str, cwd: str | None = None) -> str | None:
     try:
         tokens = shell_tokens(command)
     except ValueError:
@@ -551,9 +620,17 @@ def compound_denial_reason(command: str) -> str | None:
             segment.append(candidate)
         if has_external_helper_config(segment):
             return "External Git diff helpers are forbidden."
+        if has_git_config_override(segment):
+            return "Git config overrides are forbidden."
         reason = git_denial_reason(*git_command(segment))
         if reason is not None:
             return reason
+        if cwd is not None:
+            subcommand, subargs = git_command(segment)
+            if subcommand is not None and unsafe_git_configuration(
+                subcommand, subargs, cwd
+            ):
+                return "Unsafe Git configuration is forbidden."
     if re.search(
         r"\bgit(?:\s+[^;&|]*)?\s+reset\s+[^;&|]*--hard(?:[^A-Za-z0-9_-]|$)", command
     ):
@@ -567,7 +644,7 @@ def compound_denial_reason(command: str) -> str | None:
     return None
 
 
-def denial_reason(command: str) -> str | None:
+def denial_reason(command: str, cwd: str | None = None) -> str | None:
     executable, args = direct_command(command)
     executable_name = None if executable is None else executable.rsplit("/", 1)[-1]
 
@@ -610,6 +687,14 @@ def denial_reason(command: str) -> str | None:
         if has_external_helper_config(args):
             return "External Git diff helpers are forbidden."
         subcommand, subargs = git_command(args)
+        if has_git_config_override(args):
+            return "Git config overrides are forbidden."
+        if (
+            subcommand is not None
+            and cwd is not None
+            and unsafe_git_configuration(subcommand, subargs, cwd)
+        ):
+            return "Unsafe Git configuration is forbidden."
         reason = git_denial_reason(subcommand, subargs)
         if reason is not None:
             return reason
@@ -642,8 +727,8 @@ def denial_reason(command: str) -> str | None:
         return "BigQuery resource deletion is forbidden."
 
     if executable is None:
-        return compound_denial_reason(command)
-    return compound_denial_reason(command)
+        return compound_denial_reason(command, cwd)
+    return compound_denial_reason(command, cwd)
 
 
 def is_safe_push(command: str, cwd: str) -> bool:
@@ -654,11 +739,16 @@ def is_safe_push(command: str, cwd: str) -> bool:
     except ValueError:
         return False
 
+    if has_unsafe_ambient_git_environment():
+        return False
     branch = current_branch(cwd)
     if branch is None or branch in PROTECTED_BRANCHES:
         return False
 
     if not trusted_repository(cwd):
+        return False
+
+    if unsafe_git_configuration("push", ["origin", "HEAD"], cwd):
         return False
 
     return tuple(argv) in {
@@ -675,7 +765,7 @@ def main() -> int:
     event_name = event.get("hook_event_name")
     if not isinstance(command, str) or not isinstance(cwd, str):
         return 0
-    reason = denial_reason(command)
+    reason = denial_reason(command, cwd)
     if reason is not None:
         if event_name == "PreToolUse":
             json.dump(

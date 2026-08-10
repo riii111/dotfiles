@@ -68,6 +68,29 @@ class ForceWithLeaseTest(unittest.TestCase):
             ):
                 self.assertFalse(module.github_host("github.com"))
 
+    def test_github_ssh_over_https_port_is_trusted(self):
+        output = "hostname ssh.github.com\nport 443\n"
+        for filename in (
+            "executable_codex-force-with-lease",
+            "executable_codex-read-lines",
+        ):
+            module = load_wrapper(filename)
+            with mock.patch.object(
+                module.subprocess,
+                "run",
+                return_value=subprocess.CompletedProcess(
+                    ["ssh", "-G", "github.com"],
+                    0,
+                    stdout=output,
+                    stderr="",
+                ),
+            ):
+                self.assertTrue(module.github_host("github.com"))
+                self.assertEqual(
+                    module.github_repository("git@github.com:riii111/test.git"),
+                    ("riii111", "test"),
+                )
+
     def test_effective_push_url_must_be_trusted(self):
         module = load_wrapper()
         calls = []

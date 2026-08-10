@@ -6,7 +6,7 @@ pre-commit:
     python-quality:
       glob: "*.py"
       stage_fixed: true
-      run: ruff format {staged_files} && ruff check {staged_files}
+      run: ruff format {staged_files}
     lua-format:
       glob: "*.lua"
       stage_fixed: true

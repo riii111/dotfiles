@@ -10,6 +10,7 @@ from pathlib import Path
 
 
 PROTECTED_BRANCHES = {"main", "master"}
+GITHUB_SSH_ENDPOINTS = {("github.com", "22"), ("ssh.github.com", "443")}
 
 
 def git_environment() -> dict[str, str]:
@@ -45,9 +46,17 @@ def github_host(host: str | None) -> bool:
         )
     except (OSError, subprocess.TimeoutExpired):
         return False
-    return result.returncode == 0 and any(
-        line == "hostname github.com" for line in result.stdout.splitlines()
+    if result.returncode != 0:
+        return False
+    settings = dict(
+        line.split(maxsplit=1)
+        for line in result.stdout.splitlines()
+        if len(line.split(maxsplit=1)) == 2
     )
+    return (
+        settings.get("hostname"),
+        settings.get("port", "22"),
+    ) in GITHUB_SSH_ENDPOINTS
 
 
 def github_repository(url: str) -> tuple[str, str] | None:
@@ -95,7 +104,9 @@ def repository_root(cwd: Path) -> Path | None:
 
 
 def trusted_repository(cwd: Path, root: Path) -> bool:
-    expected = tuple(root.relative_to((Path.home() / "ghq" / "github.com").resolve()).parts)
+    expected = tuple(
+        root.relative_to((Path.home() / "ghq" / "github.com").resolve()).parts
+    )
     if len(expected) != 2:
         return False
     for push in (False, True):

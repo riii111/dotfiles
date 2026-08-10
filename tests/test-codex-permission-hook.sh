@@ -2,6 +2,11 @@
 
 set -euo pipefail
 
+while IFS= read -r variable; do
+	unset "$variable"
+done < <(env | sed -n 's/=.*//p' | sed -n '/^GIT_/p')
+export GIT_PAGER=cat
+
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 hook="$repo_root/dot_codex/hooks/executable_permission_request.py"
 runner="$repo_root/tests/run-codex-python-with-home.py"
@@ -28,6 +33,15 @@ jq -e '.hooks.PermissionRequest[0].matcher == "^Bash$"' "$hooks_config" >/dev/nu
 
 permission_request() { run_hook PermissionRequest "$1"; }
 pre_tool_use() { run_hook PreToolUse "$1"; }
+permission_request_with_env() {
+	local name="$1"
+	local value="$2"
+	local command="$3"
+	(
+		export "$name=$value"
+		permission_request "$command"
+	)
+}
 
 permission_request 'git push -u origin HEAD' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
 permission_request 'git push origin HEAD' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
@@ -113,6 +127,9 @@ for command in \
 	'git add -f ignored' \
 	'git clean -fdx' \
 	'git gc --prune=now' \
+	"git -c alias.x='!git push --force origin HEAD' x" \
+	"git -c core.sshCommand='touch /tmp/outside' fetch origin" \
+	'git --config-env=alias.x=GIT_ALIAS x' \
 	'git -C repo push origin +main:main' \
 	'git push origin :old' \
 	'git push -d origin old' \
@@ -166,7 +183,8 @@ done
 permission_request 'git add -- --force' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
 test -z "$(pre_tool_use 'git add -- --force')"
 test -z "$(permission_request 'git --paginate log')"
-test -z "$(permission_request 'git -c core.pager=cat log')"
+permission_request 'git -c core.pager=cat log' | jq -e '.hookSpecificOutput.decision.behavior == "deny"' >/dev/null
+pre_tool_use 'git -c core.pager=cat log' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
 # PreToolUse cannot request approval, so prompt-class operations remain governed by the sandbox.
 test -z "$(pre_tool_use 'rm file')"
 pre_tool_use '/usr/bin/git reset --hard' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
@@ -216,6 +234,24 @@ done
 permission_request "git log --format='a>b'" | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
 permission_request 'GIT_PAGER=cat git log --oneline -1' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
 test -z "$(pre_tool_use 'GIT_PAGER=cat git status')"
+
+for variable in GIT_SSH_COMMAND GIT_DIR GIT_WORK_TREE; do
+	if [ "$variable" = GIT_SSH_COMMAND ]; then
+		value=false
+	else
+		value="$tmpdir/.git"
+	fi
+	test -z "$(permission_request_with_env "$variable" "$value" 'git fetch origin')"
+done
+
+git -C "$tmpdir" config diff.external 'touch /tmp/outside'
+permission_request 'git diff' | jq -e '.hookSpecificOutput.decision.behavior == "deny"' >/dev/null
+pre_tool_use 'git diff' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
+git -C "$tmpdir" config --unset-all diff.external
+git -C "$tmpdir" config core.sshCommand 'touch /tmp/outside'
+permission_request 'git fetch origin' | jq -e '.hookSpecificOutput.decision.behavior == "deny"' >/dev/null
+pre_tool_use 'git fetch origin' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
+git -C "$tmpdir" config --unset-all core.sshCommand
 test -z "$(pre_tool_use 'git restore --staged .')"
 test -z "$(pre_tool_use 'gh search code "auth token"')"
 test -z "$(pre_tool_use 'git stash pop')"
@@ -228,6 +264,11 @@ test -z "$(permission_request 'git ls-remote origin')"
 
 git -C "$tmpdir" remote set-url origin git@github.com:riii111/test.git
 permission_request 'git push origin HEAD' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
+
+mkdir -p "$test_home/.ssh"
+printf 'Host github.com\n  HostName ssh.github.com\n  Port 443\n' >"$test_home/.ssh/config"
+permission_request 'git push origin HEAD' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
+rm -f "$test_home/.ssh/config"
 
 mkdir -p "$test_home/.ssh"
 printf 'Host work-github\n  HostName github.com\n' >"$test_home/.ssh/config"
