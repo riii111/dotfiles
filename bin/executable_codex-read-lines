@@ -81,7 +81,13 @@ def github_repository(url: str) -> tuple[str, str] | None:
                 return parts[0].lower(), parts[1].lower()
         return None
     parsed = urlparse(url)
-    if parsed.scheme not in {"https", "ssh"} or not github_host(parsed.hostname):
+    if parsed.scheme == "https":
+        valid_host = parsed.hostname == "github.com"
+    elif parsed.scheme == "ssh":
+        valid_host = github_host(parsed.hostname)
+    else:
+        valid_host = False
+    if not valid_host:
         return None
     parts = parsed.path.removeprefix("/").removesuffix(".git").split("/")
     if len(parts) != 2 or not all(parts) or parsed.query or parsed.fragment:

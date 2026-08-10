@@ -158,6 +158,23 @@ test -z "$(pre_tool_use 'git diff --no-ext-diff --no-textconv')"
 test -z "$(pre_tool_use 'rg textconv src')"
 test -z "$(permission_request 'git diff -- /etc/hosts')"
 test -z "$(permission_request 'git diff -- ../outside')"
+# shellcheck disable=SC2016 # Literal expansions are hook inputs, not test-shell operations.
+for command in \
+	$'git status\ntouch /tmp/outside' \
+	'git status `id`' \
+	'git status > /tmp/outside' \
+	'/tmp/git status'; do
+	test -z "$(permission_request "$command")"
+done
+# shellcheck disable=SC2016 # Literal expansions are hook inputs, not test-shell operations.
+for command in \
+	'PATH=/tmp:$PATH git status' \
+	"GIT_PAGER='touch /tmp/outside' git log" \
+	"PAGER='touch /tmp/outside' git log"; do
+	permission_request "$command" | jq -e '.hookSpecificOutput.decision.behavior == "deny"' >/dev/null
+done
+permission_request "git log --format='a>b'" | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
+permission_request 'GIT_PAGER=cat git log --oneline -1' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
 test -z "$(pre_tool_use 'GIT_PAGER=cat git status')"
 test -z "$(pre_tool_use 'git restore --staged .')"
 test -z "$(pre_tool_use 'gh search code "auth token"')"
@@ -171,6 +188,12 @@ test -z "$(permission_request 'git ls-remote origin')"
 
 git -C "$tmpdir" remote set-url origin git@github.com:riii111/test.git
 permission_request 'git push origin HEAD' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
+
+mkdir -p "$test_home/.ssh"
+printf 'Host work-github\n  HostName github.com\n' >"$test_home/.ssh/config"
+git -C "$tmpdir" remote set-url origin https://work-github/riii111/test.git
+test -z "$(permission_request 'git fetch origin')"
+git -C "$tmpdir" remote set-url origin git@github.com:riii111/test.git
 
 git -C "$tmpdir" remote set-url origin https://github.com/riii111/test.git
 git -C "$tmpdir" config url."https://attacker.example/other.git".insteadOf https://github.com/riii111/test.git

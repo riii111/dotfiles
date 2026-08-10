@@ -11,6 +11,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -72,11 +73,13 @@ def github_repository(url: str) -> tuple[str, str] | None:
         return tuple(part.lower() for part in scp_match.groups()[1:])
     parsed = urlparse(url)
     path_match = re.fullmatch(r"/([^/\s]+)/([^/\s]+?)(?:\.git)?", parsed.path)
-    if (
-        parsed.scheme not in {"https", "ssh"}
-        or not github_host(parsed.hostname)
-        or path_match is None
-    ):
+    if parsed.scheme == "https":
+        valid_host = parsed.hostname == "github.com"
+    elif parsed.scheme == "ssh":
+        valid_host = github_host(parsed.hostname)
+    else:
+        valid_host = False
+    if not valid_host or path_match is None:
         return None
     return tuple(part.lower() for part in path_match.groups())
 
@@ -145,9 +148,9 @@ def is_safe_auth_status(command: str) -> bool:
 
 def is_safe_git_permission_request(command: str, cwd: str) -> bool:
     executable, args = direct_command(command)
-    if executable is None or executable.rsplit("/", 1)[-1] != "git":
+    if executable != "git":
         return False
-    if has_git_environment_override(command):
+    if has_unsafe_environment_override(command):
         return False
     invocation = safe_git_invocation(args, cwd)
     if invocation is None:
@@ -194,18 +197,20 @@ def is_safe_git_permission_request(command: str, cwd: str) -> bool:
 
 
 def direct_command(command: str) -> tuple[str | None, list[str]]:
+    if has_shell_syntax(command):
+        return None, []
     try:
         lexer = shlex.shlex(
             command,
             posix=True,
-            punctuation_chars="();&|",
+            punctuation_chars="();&|<>",
         )
         lexer.whitespace_split = True
         lexer.commenters = ""
         tokens = list(lexer)
     except ValueError:
         return None, []
-    if not tokens or any(token and set(token) <= set("();&|") for token in tokens):
+    if not tokens or any(token and set(token) <= set("();&|<>") for token in tokens):
         return None, []
     index = 0
     while index < len(tokens) and re.fullmatch(
@@ -239,7 +244,37 @@ def git_command(args: list[str]) -> tuple[str | None, list[str]]:
     return args[index], args[index + 1 :]
 
 
-def has_git_environment_override(command: str) -> bool:
+def has_shell_syntax(command: str) -> bool:
+    quote = None
+    escaped = False
+    for index, char in enumerate(command):
+        if escaped:
+            escaped = False
+            continue
+        if quote == "'":
+            if char == "'":
+                quote = None
+            continue
+        if quote == '"':
+            if char == '"':
+                quote = None
+            elif char == "\\":
+                escaped = True
+            elif char == "`" or (char == "$" and command[index + 1 : index + 2] == "("):
+                return True
+            continue
+        if char in {"'", '"'}:
+            quote = char
+        elif char == "\\":
+            escaped = True
+        elif char in {"\n", "\r", "`", "<", ">", ";", "&", "|", "(", ")"}:
+            return True
+        elif char == "$" and command[index + 1 : index + 2] == "(":
+            return True
+    return False
+
+
+def has_unsafe_environment_override(command: str) -> bool:
     try:
         tokens = shlex.split(command)
     except ValueError:
@@ -248,7 +283,8 @@ def has_git_environment_override(command: str) -> bool:
         if "=" not in token or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", token.split("=", 1)[0]):
             break
         name = token.split("=", 1)[0]
-        if name.startswith("GIT_") and name not in SAFE_GIT_ENVIRONMENT:
+        value = token.split("=", 1)[1]
+        if name not in SAFE_GIT_ENVIRONMENT or value != "cat":
             return True
     return False
 
@@ -525,7 +561,7 @@ def denial_reason(command: str) -> str | None:
         return "Destructive cloud or credential mutation is forbidden."
 
     if executable_name == "git":
-        if has_git_environment_override(command):
+        if has_unsafe_environment_override(command):
             return "Git environment overrides are forbidden."
         if has_external_helper_config(args):
             return "External Git diff helpers are forbidden."

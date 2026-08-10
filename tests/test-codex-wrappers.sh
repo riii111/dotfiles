@@ -55,6 +55,11 @@ test "$(run_read_lines 2 3 file.txt)" = $'two\nthree'
 skill_output="$(cd "$test_home" && HOME="$test_home" python3 "$runner" "$read_lines" "$test_home" 1 2 "$skill/SKILL.md")"
 test "$skill_output" = $'skill one\nskill two'
 test "$(run_read_lines 1 1 ../test/file.txt)" = one
+mkdir -p "$test_home/.ssh"
+printf 'Host work-github\n  HostName github.com\n' >"$test_home/.ssh/config"
+git -C "$repo" remote set-url origin https://work-github/riii111/test.git
+expect_failure run_read_lines 2 3 file.txt
+git -C "$repo" remote set-url origin https://github.com/riii111/test.git
 git -C "$repo" config url."file://$remote".insteadOf https://github.com/riii111/test.git
 expect_failure run_read_lines 2 3 file.txt
 git -C "$repo" config --unset-all url."file://$remote".insteadOf

@@ -14,9 +14,9 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def load_wrapper():
-    path = ROOT / "bin" / "executable_codex-force-with-lease"
-    loader = importlib.machinery.SourceFileLoader("codex_force_with_lease", str(path))
+def load_wrapper(filename="executable_codex-force-with-lease"):
+    path = ROOT / "bin" / filename
+    loader = importlib.machinery.SourceFileLoader(filename.replace("-", "_"), str(path))
     spec = importlib.util.spec_from_loader(loader.name, loader)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -25,6 +25,25 @@ def load_wrapper():
 
 
 class ForceWithLeaseTest(unittest.TestCase):
+    def test_https_alias_is_not_a_github_host(self):
+        for filename in (
+            "executable_codex-force-with-lease",
+            "executable_codex-read-lines",
+        ):
+            module = load_wrapper(filename)
+            self.assertIsNone(
+                module.github_repository("https://work-github/riii111/test.git")
+            )
+            module.github_host = lambda host: host == "work-github"
+            self.assertEqual(
+                module.github_repository("git@work-github:riii111/test.git"),
+                ("riii111", "test"),
+            )
+            self.assertEqual(
+                module.github_repository("ssh://work-github/riii111/test.git"),
+                ("riii111", "test"),
+            )
+
     def test_effective_push_url_must_be_trusted(self):
         module = load_wrapper()
         calls = []
