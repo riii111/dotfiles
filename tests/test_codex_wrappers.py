@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stderr
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,6 +25,36 @@ def load_wrapper():
 
 
 class ForceWithLeaseTest(unittest.TestCase):
+    def test_effective_push_url_must_be_trusted(self):
+        module = load_wrapper()
+        calls = []
+
+        def fake_run_git(cwd, *args):
+            calls.append(args)
+            if args == ("remote", "get-url", "--all", "origin"):
+                return subprocess.CompletedProcess(
+                    args, 0, stdout="git@github.com:riii111/test.git\n", stderr=""
+                )
+            if args == ("remote", "get-url", "--push", "--all", "origin"):
+                return subprocess.CompletedProcess(
+                    args, 0, stdout="file:///tmp/remote.git\n", stderr=""
+                )
+            raise AssertionError(args)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = (Path(directory) / "ghq" / "github.com" / "riii111" / "test").resolve()
+            with mock.patch.object(module.Path, "home", return_value=Path(directory)):
+                module.run_git = fake_run_git
+                self.assertFalse(module.trusted_repository(root, root))
+
+        self.assertEqual(
+            calls,
+            [
+                ("remote", "get-url", "--all", "origin"),
+                ("remote", "get-url", "--push", "--all", "origin"),
+            ],
+        )
+
     def test_remote_change_is_reported_as_push_failure(self):
         module = load_wrapper()
         calls = []

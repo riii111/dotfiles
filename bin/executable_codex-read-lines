@@ -97,11 +97,11 @@ def trusted_repository(cwd: Path) -> Path | None:
     if len(expected) != 2:
         return None
     for push in (False, True):
-        args = ["config", "--get-all"]
-        args.append("remote.origin.pushurl" if push else "remote.origin.url")
+        args = ["remote", "get-url"]
+        if push:
+            args.append("--push")
+        args.extend(["--all", "origin"])
         result = run_git(cwd, *args)
-        if result.returncode != 0 and push:
-            result = run_git(cwd, "config", "--get-all", "remote.origin.url")
         if result.returncode != 0:
             return None
         urls = [line for line in result.stdout.splitlines() if line]

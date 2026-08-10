@@ -43,8 +43,10 @@ def current_branch(cwd: str) -> str | None:
 
 
 def origin_urls(cwd: str, *, push: bool) -> list[str]:
-    args = ["git", "config", "--get-all"]
-    args.append("remote.origin.pushurl" if push else "remote.origin.url")
+    args = ["git", "remote", "get-url"]
+    if push:
+        args.append("--push")
+    args.extend(["--all", "origin"])
     result = subprocess.run(
         args,
         cwd=cwd,
@@ -53,8 +55,6 @@ def origin_urls(cwd: str, *, push: bool) -> list[str]:
         capture_output=True,
         text=True,
     )
-    if result.returncode != 0 and push:
-        return origin_urls(cwd, push=False)
     if result.returncode != 0:
         return []
     return [line for line in result.stdout.splitlines() if line]
@@ -148,15 +148,51 @@ def is_safe_git_permission_request(command: str, cwd: str) -> bool:
     except ValueError:
         return False
 
-    if argv == ("git", "branch", "--show-current"):
-        return True
-    if argv not in {
-        ("git", "fetch", "origin"),
-        ("git", "ls-remote", "origin"),
+    executable, args = direct_command(command)
+    if executable is None or executable.rsplit("/", 1)[-1] != "git":
+        return False
+    if has_git_environment_override(command):
+        return False
+    invocation = safe_git_invocation(args, cwd)
+    if invocation is None:
+        return False
+    target_cwd, subcommand, subargs = invocation
+    if subcommand == "branch":
+        if subargs and tuple(subargs) not in {
+            ("--show-current",),
+            ("--list",),
+            ("-a",),
+            ("-r",),
+            ("--all",),
+            ("--remotes",),
+        }:
+            return False
+    elif subcommand == "fetch":
+        if subargs != ["origin"]:
+            return False
+    elif subcommand == "ls-remote":
+        if subargs != ["origin"]:
+            return False
+    elif subcommand not in {
+        "status",
+        "diff",
+        "log",
+        "show",
+        "rev-parse",
+        "ls-files",
+        "switch",
+        "add",
+        "commit",
+        "merge",
+        "rebase",
+        "cherry-pick",
     }:
         return False
 
-    return trusted_repository(cwd)
+    if git_denial_reason(subcommand, subargs) is not None:
+        return False
+
+    return trusted_repository(str(target_cwd))
 
 
 def direct_command(command: str) -> tuple[str | None, list[str]]:
@@ -205,6 +241,68 @@ def git_command(args: list[str]) -> tuple[str | None, list[str]]:
     return args[index], args[index + 1 :]
 
 
+def has_git_environment_override(command: str) -> bool:
+    try:
+        tokens = shlex.split(command)
+    except ValueError:
+        return True
+    for token in tokens:
+        if "=" not in token or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", token.split("=", 1)[0]):
+            break
+        name = token.split("=", 1)[0]
+        if name in {
+            "GIT_DIR",
+            "GIT_WORK_TREE",
+            "GIT_INDEX_FILE",
+            "GIT_COMMON_DIR",
+            "GIT_OBJECT_DIRECTORY",
+            "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+            "GIT_EXTERNAL_DIFF",
+        } or name.startswith("GIT_CONFIG"):
+            return True
+    return False
+
+
+def has_external_helper_config(args: list[str]) -> bool:
+    for index, arg in enumerate(args):
+        value = None
+        if arg == "-c" and index + 1 < len(args):
+            value = args[index + 1]
+        elif arg.startswith("-c") and len(arg) > 2:
+            value = arg[2:]
+        if value is not None and (
+            value.startswith("diff.external=")
+            or value.startswith("filter.")
+            or ".textconv=" in value
+        ):
+            return True
+    return False
+
+
+def safe_git_invocation(
+    args: list[str], cwd: str
+) -> tuple[str, str, list[str]] | None:
+    target = Path(cwd).resolve()
+    index = 0
+    while index < len(args) and args[index].startswith("-"):
+        option = args[index]
+        if option == "-C":
+            if index + 1 >= len(args):
+                return None
+            candidate = Path(args[index + 1])
+            target = (candidate if candidate.is_absolute() else target / candidate).resolve()
+            index += 2
+            continue
+        if option.startswith("-C") and len(option) > 2:
+            target = (target / option[2:]).resolve()
+            index += 1
+            continue
+        return None
+    if index >= len(args) or not target.is_dir():
+        return None
+    return str(target), args[index], args[index + 1 :]
+
+
 def has_option(args: list[str], option: str) -> bool:
     return any(arg == option or arg.startswith(f"{option}=") for arg in args)
 
@@ -250,15 +348,23 @@ def git_denial_reason(subcommand: str | None, subargs: list[str]) -> str | None:
         return "Immediate Git object pruning is forbidden."
     if subcommand == "switch" and (
         has_option(subargs, "--force")
+        or has_option(subargs, "--force-create")
         or has_option(subargs, "--discard-changes")
         or has_short_flag(subargs, "f")
         or has_short_flag(subargs, "C")
     ):
         return "Forced branch switching is forbidden."
-    if subcommand == "branch" and has_short_flag(subargs, "D"):
+    if subcommand == "branch" and (
+        has_short_flag(subargs, "D")
+        or (
+            has_option(subargs, "--delete")
+            and (has_option(subargs, "--force") or has_short_flag(subargs, "f"))
+        )
+    ):
         return "Deleting a branch is forbidden."
     if subcommand == "fetch" and (
         has_option(subargs, "--force")
+        or has_short_flag(subargs, "f")
         or has_option(subargs, "--update-head-ok")
         or any(arg.startswith("+") for arg in subargs)
     ):
@@ -302,6 +408,8 @@ def compound_denial_reason(command: str) -> str | None:
             if candidate in {";", "&", "|", "(", ")"}:
                 break
             segment.append(candidate)
+        if has_external_helper_config(segment):
+            return "External Git diff helpers are forbidden."
         reason = git_denial_reason(*git_command(segment))
         if reason is not None:
             return reason
@@ -311,15 +419,7 @@ def compound_denial_reason(command: str) -> str | None:
         return "Force-add is forbidden."
     if re.search(r"\brm\s+[^;&|]*-[^;&|]*r", command):
         return "Recursive file deletion is forbidden."
-    if any(
-        marker in command
-        for marker in (
-            "diff.external=",
-            "textconv",
-            "filter.",
-            "GIT_EXTERNAL_DIFF=",
-        )
-    ):
+    if any(token.startswith("GIT_EXTERNAL_DIFF=") for token in shell_tokens(command)):
         return "External Git diff helpers are forbidden."
     return None
 
@@ -362,6 +462,10 @@ def denial_reason(command: str) -> str | None:
         return "Destructive cloud or credential mutation is forbidden."
 
     if executable_name == "git":
+        if has_git_environment_override(command):
+            return "Git environment overrides are forbidden."
+        if has_external_helper_config(args):
+            return "External Git diff helpers are forbidden."
         subcommand, subargs = git_command(args)
         reason = git_denial_reason(subcommand, subargs)
         if reason is not None:

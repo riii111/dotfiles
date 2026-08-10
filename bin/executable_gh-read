@@ -90,7 +90,12 @@ query($id: ID!, $cursor: String) {
 """
 
 
-def gh_json(args: list[str], payload: dict[str, Any] | None = None) -> Any:
+def gh_json(
+    args: list[str],
+    payload: dict[str, Any] | None = None,
+    *,
+    allow_nonzero_json: bool = False,
+) -> Any:
     result = subprocess.run(
         ["gh", *args],
         check=False,
@@ -98,13 +103,17 @@ def gh_json(args: list[str], payload: dict[str, Any] | None = None) -> Any:
         capture_output=True,
         text=True,
     )
-    if result.returncode != 0:
+    if result.returncode != 0 and not allow_nonzero_json:
         print(result.stderr.rstrip(), file=sys.stderr)
         raise SystemExit(result.returncode or 1)
     try:
-        return json.loads(result.stdout)
+        response = json.loads(result.stdout)
     except json.JSONDecodeError as error:
+        if result.returncode != 0:
+            print(result.stderr.rstrip(), file=sys.stderr)
+            raise SystemExit(result.returncode or 1)
         raise SystemExit(f"GitHub returned invalid JSON: {error}") from error
+    return response
 
 
 def graphql(query: str, variables: dict[str, Any]) -> dict[str, Any]:
@@ -212,7 +221,8 @@ def fetch_checks(repo: str, number: int) -> list[dict[str, Any]]:
             repo,
             "--json",
             "name,state,bucket,link,workflow,startedAt,completedAt",
-        ]
+        ],
+        allow_nonzero_json=True,
     )
     if not isinstance(checks, list):
         raise SystemExit("GitHub returned an invalid checks response")

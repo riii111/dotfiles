@@ -24,6 +24,10 @@ fi
 
 if [ "$1 $2" = "pr checks" ]; then
   printf '[{"name":"ci","state":"SUCCESS","bucket":"pass","link":"https://example.test/ci"}]\n'
+  case "${GH_TEST_CHECKS_STATUS:-success}" in
+    pending) exit 8 ;;
+    failure) exit 1 ;;
+  esac
   exit 0
 fi
 
@@ -116,6 +120,11 @@ jq -e '
 
 PATH="$tmpdir/bin:$PATH" python3 "$wrapper" https://github.com/riii111/dotfiles/pull/42 >"$output"
 jq -e '.pullRequest.number == 42' "$output" >/dev/null
+
+for status in pending failure; do
+	GH_TEST_CHECKS_STATUS="$status" PATH="$tmpdir/bin:$PATH" python3 "$wrapper" 42 >"$output"
+	jq -e '.checks[0].name == "ci"' "$output" >/dev/null
+done
 
 PATH="$tmpdir/bin:$PATH" python3 "$repo_root/bin/executable_gh-read" issue 42 >"$output"
 jq -e '.issue.number == 42 and .comments[1].body == "conversation page 2"' "$output" >/dev/null

@@ -36,6 +36,22 @@ permission_request 'gh auth status' | jq -e '.hookSpecificOutput.decision.behavi
 permission_request 'git branch --show-current' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
 permission_request 'git fetch origin' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
 permission_request 'git ls-remote origin' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
+for command in \
+	'git status --short' \
+	'git diff --check' \
+	'git log -1' \
+	'git show HEAD' \
+	'git rev-parse HEAD' \
+	'git ls-files' \
+	'git switch feat/test' \
+	'git add file' \
+	'git commit --amend --no-edit' \
+	'git merge feat/test' \
+	'git rebase --continue' \
+	'git cherry-pick --abort'; do
+	permission_request "$command" | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
+done
+permission_request "git -C $tmpdir status" | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
 test -z "$(permission_request 'git pull --ff-only')"
 permission_request 'git fetch --force origin' | jq -e '.hookSpecificOutput.decision.behavior == "deny"' >/dev/null
 permission_request 'git fetch origin +main:main' | jq -e '.hookSpecificOutput.decision.behavior == "deny"' >/dev/null
@@ -56,8 +72,12 @@ for command in \
 	'git restore --staged --worktree .' \
 	'git switch -f old' \
 	'git switch -C old' \
+	'git switch --force-create old' \
 	'git switch --discard-changes old' \
 	'git branch -D old' \
+	'git branch --delete --force old' \
+	'git branch --delete -f old' \
+	'git fetch -f origin' \
 	'git fetch --force origin' \
 	'git fetch origin +main:main' \
 	'git fetch --update-head-ok origin' \
@@ -127,6 +147,8 @@ done
 for command in 'echo "$HOME"' 'git diff "$(git merge-base main HEAD)"' 'rg foo src/*.rs' 'source .venv/bin/activate'; do
 	test -z "$(pre_tool_use "$command")"
 done
+test -z "$(pre_tool_use 'git diff --no-ext-diff --no-textconv')"
+test -z "$(pre_tool_use 'rg textconv src')"
 test -z "$(pre_tool_use 'GIT_PAGER=cat git status')"
 test -z "$(pre_tool_use 'git restore --staged .')"
 test -z "$(pre_tool_use 'gh search code "auth token"')"
@@ -140,6 +162,13 @@ test -z "$(permission_request 'git ls-remote origin')"
 
 git -C "$tmpdir" remote set-url origin git@github.com:riii111/test.git
 permission_request 'git push origin HEAD' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
+
+git -C "$tmpdir" remote set-url origin https://github.com/riii111/test.git
+git -C "$tmpdir" config url."https://attacker.example/other.git".insteadOf https://github.com/riii111/test.git
+test -z "$(permission_request 'git fetch origin')"
+test -z "$(permission_request 'git push origin HEAD')"
+git -C "$tmpdir" config --unset-all url."https://attacker.example/other.git".insteadOf
+git -C "$tmpdir" remote set-url origin git@github.com:riii111/test.git
 
 git -C "$tmpdir" remote set-url origin https://github.com/attacker/other.git
 test -z "$(permission_request 'git push origin HEAD')"
