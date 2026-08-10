@@ -78,6 +78,7 @@ class ForceWithLeaseTest(unittest.TestCase):
         module = load_wrapper()
         calls = []
         old_oid = "1" * 40
+        local_oid = "2" * 40
 
         def fake_run_git(cwd, *args):
             calls.append(args)
@@ -87,8 +88,8 @@ class ForceWithLeaseTest(unittest.TestCase):
                 return subprocess.CompletedProcess(
                     args, 0, stdout=f"{old_oid}\trefs/heads/feat/test\n", stderr=""
                 )
-            if args[:3] == ("rev-parse", "--verify", "HEAD"):
-                return subprocess.CompletedProcess(args, 0, stdout=f"{'2' * 40}\n", stderr="")
+            if args[:3] == ("rev-parse", "--verify", "refs/heads/feat/test"):
+                return subprocess.CompletedProcess(args, 0, stdout=f"{local_oid}\n", stderr="")
             if args[:2] == ("push", "origin"):
                 return subprocess.CompletedProcess(args, 1, stdout="", stderr="stale lease\n")
             raise AssertionError(args)
@@ -111,4 +112,44 @@ class ForceWithLeaseTest(unittest.TestCase):
             f"--force-with-lease=refs/heads/feat/test:{old_oid}",
             push,
         )
-        self.assertIn("HEAD:refs/heads/feat/test", push)
+        self.assertIn(f"{local_oid}:refs/heads/feat/test", push)
+
+    def test_push_uses_captured_local_branch_oid(self):
+        module = load_wrapper()
+        calls = []
+        remote_oid = "1" * 40
+        captured_oid = "2" * 40
+        changed_head_oid = "3" * 40
+
+        def fake_run_git(cwd, *args):
+            calls.append(args)
+            if args[:3] == ("symbolic-ref", "--quiet", "--short"):
+                return subprocess.CompletedProcess(args, 0, stdout="feat/test\n", stderr="")
+            if args[:3] == ("ls-remote", "--heads", "origin"):
+                return subprocess.CompletedProcess(
+                    args, 0, stdout=f"{remote_oid}\trefs/heads/feat/test\n", stderr=""
+                )
+            if args[:3] == ("rev-parse", "--verify", "refs/heads/feat/test"):
+                return subprocess.CompletedProcess(args, 0, stdout=f"{captured_oid}\n", stderr="")
+            if args[:3] == ("rev-parse", "--verify", "HEAD"):
+                return subprocess.CompletedProcess(args, 0, stdout=f"{changed_head_oid}\n", stderr="")
+            if args[:2] == ("push", "origin"):
+                return subprocess.CompletedProcess(args, 1, stdout="", stderr="stale lease\n")
+            raise AssertionError(args)
+
+        with tempfile.TemporaryDirectory() as directory:
+            original_cwd = Path.cwd()
+            os.chdir(directory)
+            try:
+                module.repository_root = lambda cwd: Path(directory)
+                module.trusted_repository = lambda cwd, root: True
+                module.run_git = fake_run_git
+                sys.argv = [str(ROOT / "bin" / "executable_codex-force-with-lease")]
+                with redirect_stderr(io.StringIO()):
+                    self.assertEqual(module.main(), 1)
+            finally:
+                os.chdir(original_cwd)
+
+        push = next(args for args in calls if args[:2] == ("push", "origin"))
+        self.assertIn(f"{captured_oid}:refs/heads/feat/test", push)
+        self.assertNotIn(f"{changed_head_oid}:refs/heads/feat/test", push)

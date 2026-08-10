@@ -11,7 +11,6 @@ import json
 import os
 import re
 import shlex
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -140,6 +139,8 @@ def trusted_repository(cwd: str) -> bool:
 
 
 def is_safe_auth_status(command: str) -> bool:
+    if has_shell_syntax(command):
+        return False
     try:
         return tuple(shlex.split(command)) == ("gh", "auth", "status")
     except ValueError:
@@ -603,6 +604,8 @@ def denial_reason(command: str) -> str | None:
 
 
 def is_safe_push(command: str, cwd: str) -> bool:
+    if has_shell_syntax(command):
+        return False
     try:
         argv = shlex.split(command)
     except ValueError:

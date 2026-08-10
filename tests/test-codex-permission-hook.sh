@@ -63,6 +63,12 @@ permission_request 'git reset HEAD~1 --hard' | jq -e '.hookSpecificOutput.decisi
 test -z "$(permission_request 'gh auth status --hostname github.com')"
 test -z "$(permission_request 'git push')"
 test -z "$(permission_request 'git push origin feat/test')"
+for command in \
+	$'git push\norigin HEAD' \
+	$'gh auth\nstatus' \
+	$'gh\nauth status'; do
+	test -z "$(permission_request "$command")"
+done
 
 for command in \
 	'git reset HEAD~1 --hard' \

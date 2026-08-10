@@ -155,16 +155,17 @@ def main() -> int:
         print("remote branch does not exist; refusing to create it", file=sys.stderr)
         return 1
     oid = matches[0].lower()
-    head_result = run_git(cwd, "rev-parse", "--verify", "HEAD")
-    if head_result.returncode != 0:
-        print("could not resolve HEAD", file=sys.stderr)
+    local_result = run_git(cwd, "rev-parse", "--verify", remote_ref)
+    local_oid = local_result.stdout.strip().lower()
+    if local_result.returncode != 0 or not re.fullmatch(r"[0-9a-f]{40}", local_oid):
+        print("could not resolve the local branch OID", file=sys.stderr)
         return 1
     push = run_git(
         cwd,
         "push",
         "origin",
         f"--force-with-lease={remote_ref}:{oid}",
-        f"HEAD:{remote_ref}",
+        f"{local_oid}:{remote_ref}",
     )
     if push.returncode != 0:
         sys.stderr.write(push.stderr)
