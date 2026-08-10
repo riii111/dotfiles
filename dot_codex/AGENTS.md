@@ -37,7 +37,7 @@
 - 全文検索: rg
 - 対話選択: fzf
 - JSON: jq / YAML・XML: yq
-- PRコメント取得: `gh-pr-comments`
+- GitHubの定型読み取りは`gh-read`を使い、直接`gh api`を組み立てない。
 - コマンド出力は最小限に。必要なら `--json | jq` を使う
 
 ## Codex操作

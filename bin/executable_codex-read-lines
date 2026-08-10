@@ -1,0 +1,226 @@
+#!/usr/bin/env python3
+
+"""Read an inclusive line range from a trusted repository or Codex skill."""
+
+import os
+import subprocess
+import sys
+from pathlib import Path
+from urllib.parse import urlparse
+
+
+MAX_LINE = 1_000_000
+GITHUB_SSH_ENDPOINTS = {("github.com", "22"), ("ssh.github.com", "443")}
+
+
+def git_environment() -> dict[str, str]:
+    environment = dict(os.environ)
+    for name in list(environment):
+        if name.startswith("GIT_"):
+            del environment[name]
+    return environment
+
+
+def run_git(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        env=git_environment(),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
+def repository_root(cwd: Path) -> Path | None:
+    result = run_git(cwd, "rev-parse", "--path-format=absolute", "--git-common-dir")
+    if result.returncode != 0:
+        return None
+    common_dir = Path(result.stdout.strip()).resolve()
+    if common_dir.name != ".git":
+        return None
+    root = common_dir.parent
+    trusted_root = (Path.home() / "ghq" / "github.com").resolve()
+    try:
+        relative = root.relative_to(trusted_root)
+    except ValueError:
+        return None
+    if len(relative.parts) != 2:
+        return None
+    return root
+
+
+def worktree_root(cwd: Path) -> Path | None:
+    result = run_git(cwd, "rev-parse", "--show-toplevel")
+    if result.returncode != 0:
+        return None
+    return Path(result.stdout.strip()).resolve()
+
+
+def github_host(host: str | None) -> bool:
+    if not host:
+        return False
+    try:
+        result = subprocess.run(
+            ["ssh", "-G", host],
+            env=git_environment(),
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    if result.returncode != 0:
+        return False
+    settings = dict(
+        line.split(maxsplit=1)
+        for line in result.stdout.splitlines()
+        if len(line.split(maxsplit=1)) == 2
+    )
+    return (
+        settings.get("hostname"),
+        settings.get("port", "22"),
+    ) in GITHUB_SSH_ENDPOINTS
+
+
+def github_repository(url: str) -> tuple[str, str] | None:
+    if url.startswith("git@") and ":" in url:
+        user_host, path = url[4:].split(":", 1)
+        if github_host(user_host):
+            parts = path.removesuffix(".git").split("/")
+            if len(parts) == 2 and all(parts):
+                return parts[0].lower(), parts[1].lower()
+        return None
+    parsed = urlparse(url)
+    if parsed.scheme == "https":
+        valid_host = parsed.hostname == "github.com"
+    elif parsed.scheme == "ssh":
+        valid_host = github_host(parsed.hostname)
+    else:
+        valid_host = False
+    if not valid_host:
+        return None
+    parts = parsed.path.removeprefix("/").removesuffix(".git").split("/")
+    if len(parts) != 2 or not all(parts) or parsed.query or parsed.fragment:
+        return None
+    return parts[0].lower(), parts[1].lower()
+
+
+def trusted_repository(cwd: Path) -> Path | None:
+    root = repository_root(cwd)
+    if root is None:
+        return None
+    expected = tuple(
+        root.relative_to((Path.home() / "ghq" / "github.com").resolve()).parts
+    )
+    if len(expected) != 2:
+        return None
+    for push in (False, True):
+        args = ["remote", "get-url"]
+        if push:
+            args.append("--push")
+        args.extend(["--all", "origin"])
+        result = run_git(cwd, *args)
+        if result.returncode != 0:
+            return None
+        urls = [line for line in result.stdout.splitlines() if line]
+        if not urls or any(github_repository(url) != expected for url in urls):
+            return None
+    return root
+
+
+def skill_root() -> Path:
+    return (Path.home() / ".codex" / "skills").resolve()
+
+
+def plugin_skill_roots() -> list[Path]:
+    cache = (Path.home() / ".codex" / "plugins" / "cache").resolve()
+    roots = []
+    try:
+        providers = list(cache.iterdir())
+    except OSError:
+        return roots
+    for provider in providers:
+        if provider.is_symlink() or not provider.is_dir():
+            continue
+        try:
+            plugins = list(provider.iterdir())
+        except OSError:
+            continue
+        for plugin in plugins:
+            if plugin.is_symlink() or not plugin.is_dir():
+                continue
+            try:
+                versions = list(plugin.iterdir())
+            except OSError:
+                continue
+            for version in versions:
+                skills = version / "skills"
+                if version.is_symlink() or not version.is_dir() or not skills.is_dir():
+                    continue
+                try:
+                    resolved = skills.resolve(strict=True)
+                    resolved.relative_to(cache)
+                except (OSError, ValueError):
+                    continue
+                roots.append(resolved)
+    return roots
+
+
+def allowed_file(raw_path: str, cwd: Path) -> Path | None:
+    candidate = Path(raw_path)
+    if not candidate.is_absolute():
+        candidate = cwd / candidate
+    try:
+        resolved = candidate.resolve(strict=True)
+    except OSError:
+        return None
+    if not resolved.is_file():
+        return None
+    roots = [skill_root(), *plugin_skill_roots()]
+    repository = trusted_repository(cwd)
+    if repository is not None:
+        roots.append(repository.resolve())
+        current_worktree = worktree_root(cwd)
+        if current_worktree is not None:
+            roots.append(current_worktree)
+    for root in roots:
+        try:
+            resolved.relative_to(root)
+            return resolved
+        except ValueError:
+            continue
+    return None
+
+
+def main() -> int:
+    if len(sys.argv) != 4:
+        print("usage: codex-read-lines START END FILE", file=sys.stderr)
+        return 2
+    if not all(value.isascii() and value.isdecimal() for value in sys.argv[1:3]):
+        print("line numbers must be positive decimal integers", file=sys.stderr)
+        return 2
+    start, end = (int(value) for value in sys.argv[1:3])
+    if start < 1 or end < start or end > MAX_LINE:
+        print("invalid line range", file=sys.stderr)
+        return 2
+    path = allowed_file(sys.argv[3], Path.cwd().resolve())
+    if path is None:
+        print("file is outside an approved root", file=sys.stderr)
+        return 1
+    try:
+        with path.open(encoding="utf-8") as handle:
+            for number, line in enumerate(handle, start=1):
+                if number > end:
+                    break
+                if number >= start:
+                    sys.stdout.write(line)
+    except (OSError, UnicodeError) as error:
+        print(f"cannot read file: {error}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

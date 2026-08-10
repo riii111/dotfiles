@@ -28,7 +28,8 @@ prefix_rule(pattern=["gh", "workflow", "view"], decision="allow", justification=
 prefix_rule(pattern=["gh", "release", "list"], decision="allow", justification="List releases")
 prefix_rule(pattern=["gh", "release", "view"], decision="allow", justification="View release")
 prefix_rule(pattern=["gh", "search"], decision="allow", justification="Search GitHub resources")
-prefix_rule(pattern=["gh-pr-comments"], decision="allow", justification="Read PR comments through the fixed read-only wrapper")
+prefix_rule(pattern=["gh-read"], decision="allow", justification="Read fixed GitHub PR and Issue data through the read-only wrapper")
+prefix_rule(pattern=["gh-pr-comments"], decision="allow", justification="Read GitHub PR comments through the compatibility wrapper")
 
 # --- gCloud CLI (read operations) ---
 prefix_rule(pattern=["gcloud", "storage", "ls"], decision="allow", justification="List GCS buckets or objects")
@@ -51,24 +52,19 @@ prefix_rule(pattern=["bq", "show"], decision="allow", justification="Show BigQue
 
 # --- Dedicated wrappers ---
 prefix_rule(pattern=["pe"], decision="allow", justification="Run prod-errors alert triage")
+prefix_rule(pattern=["codex-read-lines"], decision="allow", justification="Read an approved line range without sed execution features")
+prefix_rule(pattern=["codex-force-with-lease"], decision="allow", justification="Push the current trusted branch with an explicit remote lease")
 
 # -----------------------------------------------------------------------------
 # PROMPT: Potentially destructive commands (require confirmation)
 # -----------------------------------------------------------------------------
 
 prefix_rule(pattern=["git", "checkout"], decision="prompt", justification="May rewrite working tree or index")
-prefix_rule(pattern=["git", "push"], decision="prompt", justification="Updates remote state")
-prefix_rule(pattern=["git", "merge"], decision="prompt", justification="Changes history state")
-prefix_rule(pattern=["git", "rebase"], decision="prompt", justification="Rewrites history state")
-prefix_rule(pattern=["git", "diff"], decision="prompt", justification="May execute configured diff helpers")
-prefix_rule(pattern=["git", "show"], decision="prompt", justification="May execute configured diff helpers")
-prefix_rule(pattern=["git", "log"], decision="prompt", justification="May execute configured diff helpers")
+prefix_rule(pattern=["git", "tag", ["-d", "--delete"]], decision="prompt", justification="Deletes tags")
+prefix_rule(pattern=["git", "branch", "-D"], decision="prompt", justification="Deletes a branch")
+prefix_rule(pattern=["git", "branch", "-r", "-d"], decision="prompt", justification="Deletes a remote-tracking branch")
 prefix_rule(pattern=["git", "diff-tree"], decision="prompt", justification="May execute configured diff helpers")
 prefix_rule(pattern=["git", "cat-file"], decision="prompt", justification="May execute configured filters")
-prefix_rule(pattern=["git", "branch"], decision="prompt", justification="Branch flags may change refs")
-prefix_rule(pattern=["git", "switch"], decision="prompt", justification="May discard changes or reset a branch")
-prefix_rule(pattern=["git", "fetch"], decision="prompt", justification="Force flags and refspecs may overwrite refs")
-prefix_rule(pattern=["git", "tag", ["-d", "--delete"]], decision="prompt", justification="Deletes tags")
 prefix_rule(pattern=["git", "stash", ["clear", "drop", "pop", "apply", "push"]], decision="prompt", justification="Changes the working tree or stash entries")
 prefix_rule(pattern=["git", "remote", ["add", "remove", "rename", "set-url", "update", "prune"]], decision="prompt", justification="Changes remote configuration or refs")
 prefix_rule(pattern=["npm", "install"], decision="prompt", justification="Downloads packages and may run install scripts")
@@ -116,16 +112,22 @@ prefix_rule(pattern=["chown"], decision="prompt", justification="Change ownershi
 # -----------------------------------------------------------------------------
 
 prefix_rule(pattern=["git", "push", "--force"], decision="forbidden", justification="Force push is forbidden")
+prefix_rule(pattern=["git", "push", "--for"], decision="forbidden", justification="Force push is forbidden")
 prefix_rule(pattern=["git", "push", "-f"], decision="forbidden", justification="Force push is forbidden")
 prefix_rule(pattern=["git", "push", "--force-with-lease"], decision="forbidden", justification="History-rewriting push is forbidden")
 prefix_rule(pattern=["git", "push", "--mirror"], decision="forbidden", justification="Mirroring all refs is forbidden")
+prefix_rule(pattern=["git", "push", "--mir"], decision="forbidden", justification="Mirroring all refs is forbidden")
 prefix_rule(pattern=["git", "push", "--delete"], decision="forbidden", justification="Deleting remote refs is forbidden")
+prefix_rule(pattern=["git", "push", "--del"], decision="forbidden", justification="Deleting remote refs is forbidden")
 prefix_rule(pattern=["git", "push", "-d"], decision="forbidden", justification="Deleting remote refs is forbidden")
 prefix_rule(pattern=["git", "push", "--prune"], decision="forbidden", justification="Pruning remote refs is forbidden")
+prefix_rule(pattern=["git", "push", "--pru"], decision="forbidden", justification="Pruning remote refs is forbidden")
 prefix_rule(pattern=["git", "clean", "-fdx"], decision="forbidden", justification="Deleting ignored and untracked files is forbidden")
+prefix_rule(pattern=["git", "clean", "--for"], decision="forbidden", justification="Deleting ignored and untracked files is forbidden")
 prefix_rule(pattern=["git", "gc", "--prune=now"], decision="forbidden", justification="Immediate object pruning is forbidden")
 prefix_rule(pattern=["git", "add", "-f"], decision="forbidden", justification="Force-add bypasses .gitignore; omit -f")
 prefix_rule(pattern=["git", "add", "--force"], decision="forbidden", justification="Force-add bypasses .gitignore; omit --force")
+prefix_rule(pattern=["git", "add", "--for"], decision="forbidden", justification="Force-add bypasses .gitignore; omit --force")
 prefix_rule(pattern=["gh", "auth", "token"], decision="forbidden", justification="Do not print GitHub access tokens; use authenticated gh commands directly")
 prefix_rule(pattern=["gh", "repo", "delete"], decision="forbidden", justification="Repository deletion is forbidden")
 prefix_rule(
@@ -158,6 +160,7 @@ prefix_rule(
     match=["git reset --hard", "git reset --hard HEAD"],
     not_match=["git reset HEAD --hard", "git reset --soft HEAD"],
 )
+prefix_rule(pattern=["git", "reset", "--har"], decision="forbidden", justification="Hard reset is forbidden")
 prefix_rule(
     pattern=["git", "reset", "HEAD", "--hard"],
     decision="forbidden",
@@ -171,6 +174,10 @@ prefix_rule(pattern=["terraform", "state", ["rm", "mv"]], decision="forbidden", 
 prefix_rule(pattern=["terraform", ["taint", "import", "force-unlock"]], decision="forbidden", justification="Direct Terraform state mutation is forbidden")
 prefix_rule(pattern=["terraform", "workspace", "delete"], decision="forbidden", justification="Terraform workspace deletion is forbidden")
 prefix_rule(pattern=["git", "restore", [".", ":/"]], decision="forbidden", justification="Restoring the entire working tree is forbidden")
+prefix_rule(pattern=["git", "switch", "--disc"], decision="forbidden", justification="Forced branch switching is forbidden")
+prefix_rule(pattern=["git", "switch", "--force-c"], decision="forbidden", justification="Forced branch switching is forbidden")
+prefix_rule(pattern=["git", "switch", "--or"], decision="forbidden", justification="Orphan branch switching is forbidden")
+prefix_rule(pattern=["git", "rebase", "--ex"], decision="forbidden", justification="Git rebase command execution is forbidden")
 prefix_rule(pattern=["git", "checkout", "--", [".", ":/"]], decision="forbidden", justification="Discarding the entire working tree is forbidden")
 prefix_rule(pattern=["git", "stash", ["clear", "drop"]], decision="forbidden", justification="Deleting stash entries is forbidden")
 prefix_rule(pattern=["find", ".", "-delete"], decision="forbidden", justification="Recursive deletion through find is forbidden")

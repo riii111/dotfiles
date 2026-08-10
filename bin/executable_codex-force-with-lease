@@ -1,0 +1,192 @@
+#!/usr/bin/env python3
+
+"""Safely update the current trusted branch with an explicit remote lease."""
+
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+
+PROTECTED_BRANCHES = {"main", "master"}
+GITHUB_SSH_ENDPOINTS = {("github.com", "22"), ("ssh.github.com", "443")}
+
+
+def git_environment() -> dict[str, str]:
+    environment = dict(os.environ)
+    for name in list(environment):
+        if name.startswith("GIT_"):
+            del environment[name]
+    return environment
+
+
+def run_git(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        env=git_environment(),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
+def github_host(host: str | None) -> bool:
+    if not host:
+        return False
+    try:
+        result = subprocess.run(
+            ["ssh", "-G", host],
+            env=git_environment(),
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    if result.returncode != 0:
+        return False
+    settings = dict(
+        line.split(maxsplit=1)
+        for line in result.stdout.splitlines()
+        if len(line.split(maxsplit=1)) == 2
+    )
+    return (
+        settings.get("hostname"),
+        settings.get("port", "22"),
+    ) in GITHUB_SSH_ENDPOINTS
+
+
+def github_repository(url: str) -> tuple[str, str] | None:
+    if url.startswith("git@") and ":" in url:
+        user_host, path = url[4:].split(":", 1)
+        if not github_host(user_host):
+            return None
+        parts = path.removesuffix(".git").split("/")
+        if len(parts) != 2 or not all(parts):
+            return None
+        return parts[0].lower(), parts[1].lower()
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url)
+    if parsed.scheme == "https":
+        valid_host = parsed.hostname == "github.com"
+    elif parsed.scheme == "ssh":
+        valid_host = github_host(parsed.hostname)
+    else:
+        valid_host = False
+    if not valid_host:
+        return None
+    parts = parsed.path.removeprefix("/").removesuffix(".git").split("/")
+    if len(parts) != 2 or not all(parts) or parsed.query or parsed.fragment:
+        return None
+    return parts[0].lower(), parts[1].lower()
+
+
+def repository_root(cwd: Path) -> Path | None:
+    result = run_git(cwd, "rev-parse", "--path-format=absolute", "--git-common-dir")
+    if result.returncode != 0:
+        return None
+    common_dir = Path(result.stdout.strip()).resolve()
+    if common_dir.name != ".git":
+        return None
+    root = common_dir.parent
+    trusted_root = (Path.home() / "ghq" / "github.com").resolve()
+    try:
+        relative = root.relative_to(trusted_root)
+    except ValueError:
+        return None
+    if len(relative.parts) != 2:
+        return None
+    return root
+
+
+def trusted_repository(cwd: Path, root: Path) -> bool:
+    expected = tuple(
+        root.relative_to((Path.home() / "ghq" / "github.com").resolve()).parts
+    )
+    if len(expected) != 2:
+        return False
+    for push in (False, True):
+        args = ["remote", "get-url"]
+        if push:
+            args.append("--push")
+        args.extend(["--all", "origin"])
+        result = run_git(cwd, *args)
+        if result.returncode != 0:
+            return False
+        urls = [line for line in result.stdout.splitlines() if line]
+        if not urls or any(github_repository(url) != expected for url in urls):
+            return False
+    return True
+
+
+def main() -> int:
+    if len(sys.argv) != 1:
+        print("usage: codex-force-with-lease", file=sys.stderr)
+        return 2
+    cwd = Path.cwd().resolve()
+    root = repository_root(cwd)
+    if root is None or not trusted_repository(cwd, root):
+        print("current repository is not a trusted GitHub checkout", file=sys.stderr)
+        return 1
+    branch_result = run_git(cwd, "symbolic-ref", "--quiet", "--short", "HEAD")
+    branch = branch_result.stdout.strip()
+    if branch_result.returncode != 0 or not branch or branch in PROTECTED_BRANCHES:
+        print("force-with-lease requires a non-protected branch", file=sys.stderr)
+        return 1
+    if (
+        subprocess.run(
+            ["git", "check-ref-format", "--branch", branch],
+            cwd=cwd,
+            env=git_environment(),
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        ).returncode
+        != 0
+    ):
+        print("current branch name is invalid", file=sys.stderr)
+        return 1
+
+    remote_ref = f"refs/heads/{branch}"
+    lease_result = run_git(cwd, "ls-remote", "--heads", "origin", remote_ref)
+    if lease_result.returncode != 0:
+        print("could not read the remote branch OID", file=sys.stderr)
+        return 1
+    matches = []
+    for line in lease_result.stdout.splitlines():
+        fields = line.split()
+        if (
+            len(fields) == 2
+            and re.fullmatch(r"[0-9a-fA-F]{40}", fields[0])
+            and fields[1] == remote_ref
+        ):
+            matches.append(fields[0])
+    if len(matches) != 1:
+        print("remote branch does not exist; refusing to create it", file=sys.stderr)
+        return 1
+    oid = matches[0].lower()
+    local_result = run_git(cwd, "rev-parse", "--verify", remote_ref)
+    local_oid = local_result.stdout.strip().lower()
+    if local_result.returncode != 0 or not re.fullmatch(r"[0-9a-f]{40}", local_oid):
+        print("could not resolve the local branch OID", file=sys.stderr)
+        return 1
+    push = run_git(
+        cwd,
+        "push",
+        "origin",
+        f"--force-with-lease={remote_ref}:{oid}",
+        f"{local_oid}:{remote_ref}",
+    )
+    if push.returncode != 0:
+        sys.stderr.write(push.stderr)
+        return push.returncode
+    sys.stdout.write(push.stdout)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
