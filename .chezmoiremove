@@ -1,5 +1,11 @@
 .codex/skills/task-completion-recovery
 .codex/skills/task-completion-report
+.codex/skills/completion-report
+.codex/skills/gh-pr-comments
+.codex/skills/task-orchestration/scripts
+.codex/skills/task-orchestration/tests
+.codex/skills/task-worker/scripts
+.codex/skills/task-worker/tests
 .config/nvim/lua/plugins/github-actions.lua
 .config/nvim/lua/plugins/dial.lua
 .config/nvim/lua/plugins/flash.lua
