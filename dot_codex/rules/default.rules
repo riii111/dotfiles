@@ -28,8 +28,7 @@ prefix_rule(pattern=["gh", "workflow", "view"], decision="allow", justification=
 prefix_rule(pattern=["gh", "release", "list"], decision="allow", justification="List releases")
 prefix_rule(pattern=["gh", "release", "view"], decision="allow", justification="View release")
 prefix_rule(pattern=["gh", "search"], decision="allow", justification="Search GitHub resources")
-prefix_rule(pattern=["gh-read"], decision="allow", justification="Read fixed GitHub PR and Issue data through the read-only wrapper")
-prefix_rule(pattern=["gh-pr-comments"], decision="allow", justification="Read GitHub PR comments through the compatibility wrapper")
+prefix_rule(pattern=["gh-loupe"], decision="allow", justification="Read fixed GitHub PR and Issue data through the read-only wrapper")
 
 # --- gCloud CLI (read operations) ---
 prefix_rule(pattern=["gcloud", "storage", "ls"], decision="allow", justification="List GCS buckets or objects")
