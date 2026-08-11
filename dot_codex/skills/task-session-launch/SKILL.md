@@ -17,6 +17,8 @@ description: |
    - `title`を`Impl <identifier>`にする。
    - `<identifier>`にはユーザーの入力とタスク管理元から対象を区別できる短い表記を選ぶ。
    - `title`にPR titleやtask titleを含めない。
+   - `model`を`gpt-5.6-luna`、`thinking`を`xhigh`にする。
+   - ユーザーがmodelまたはreasoning effortを明示した場合だけ、対応する値をその指定で置き換える。
    - `prompt`にタスク管理元と開始対象を含める。
    - `prompt`で`$task-worker`を使い、リポジトリ規約を読んで割り当てられたGit worktreeで実装し、全検証後にDraft PRを作るよう依頼する。
 3. `codex_app__create_thread`を一度呼ぶ。
