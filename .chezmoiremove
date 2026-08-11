@@ -1,3 +1,4 @@
+.codex/skills/gh-read
 .codex/skills/task-completion-recovery
 .codex/skills/task-completion-report
 .codex/skills/completion-report
@@ -10,3 +11,5 @@
 .config/nvim/lua/plugins/dial.lua
 .config/nvim/lua/plugins/flash.lua
 .config/nvim/lua/plugins/noice.lua
+bin/gh-pr-comments
+bin/gh-read
