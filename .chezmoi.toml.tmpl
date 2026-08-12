@@ -10,7 +10,11 @@ sourceDir = "{{ .chezmoi.homeDir }}/ghq/github.com/riii111/dotfiles"
     side_work_org = {{ promptStringOnce . "side_work_org" "GitHub org name for side work" | quote }}
     {{- $sw_vault := promptStringOnce . "side_work_1p_vault" "1Password vault name for side work (e.g. MyOrg-SideWork)" }}
     side_work_1p_vault = {{ $sw_vault | quote }}
+    {{- if hasKey . "git_signing_key_side_work" }}
+    git_signing_key_side_work = {{ .git_signing_key_side_work | quote }}
+    {{- else }}
     git_signing_key_side_work = {{ onepasswordRead (printf "op://%s/Signing Commits/public key" $sw_vault) | quote }}
+    {{- end }}
     side_work_project = {{ promptStringOnce . "side_work_project" "Project name for side work" | quote }}
 {{- else }}
     type = "work"

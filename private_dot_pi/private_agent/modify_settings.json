@@ -1,0 +1,18 @@
+#!/bin/sh
+set -eu
+
+source_settings="${CHEZMOI_SOURCE_DIR:-$(chezmoi source-path)}/config/pi/settings.json"
+target_settings="$(mktemp)"
+trap 'rm -f "$target_settings"' EXIT
+cat >"$target_settings"
+
+if [ -s "$target_settings" ]; then
+	jq --slurpfile source "$source_settings" '
+		(if .defaultProvider == "anthropic-vertex" then del(.defaultProvider) else . end)
+		| (if .defaultModel == "claude-sonnet-4-6" then del(.defaultModel) else . end)
+		| (if .enabledModels == ["anthropic-vertex/*"] then del(.enabledModels) else . end)
+		| . * $source[0]
+	' "$target_settings"
+else
+	jq . "$source_settings"
+fi
