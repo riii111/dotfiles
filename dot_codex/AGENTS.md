@@ -55,4 +55,3 @@ review Taskからworker Taskへ結果を返すときは、`codex_app__send_messa
 
 - Conventional Commits 1.0.0（英語）
 - タイトルのみ、本文なし。issue番号は入れない
-- pushしない
