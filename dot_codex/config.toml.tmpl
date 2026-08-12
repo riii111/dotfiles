@@ -53,6 +53,12 @@ max_concurrent_threads_per_session = 10
 default_subagent_model = "gpt-5.6-luna"
 default_subagent_reasoning_effort = "xhigh"
 
+# create_threadは明示指定がない場合にモデルを渡さないため、
+# オーケストレーションで生成するworker Taskの既定値をLuna xhighにする。
+[models.new_thread]
+model = "gpt-5.6-luna"
+model_reasoning_effort = "xhigh"
+
 # =============================================================================
 # Shell Environment
 # =============================================================================

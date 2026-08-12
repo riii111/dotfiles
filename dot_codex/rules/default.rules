@@ -54,6 +54,11 @@ prefix_rule(pattern=["pe"], decision="allow", justification="Run prod-errors ale
 prefix_rule(pattern=["codex-read-lines"], decision="allow", justification="Read an approved line range without sed execution features")
 prefix_rule(pattern=["codex-force-with-lease"], decision="allow", justification="Push the current trusted branch with an explicit remote lease")
 
+# --- Local search and text processing ---
+prefix_rule(pattern=["fd"], decision="allow", justification="Find local files")
+prefix_rule(pattern=["rg"], decision="allow", justification="Search local file contents")
+prefix_rule(pattern=["sed"], decision="allow", justification="Process local text")
+
 # -----------------------------------------------------------------------------
 # PROMPT: Potentially destructive commands (require confirmation)
 # -----------------------------------------------------------------------------
@@ -82,11 +87,8 @@ prefix_rule(pattern=["git", "worktree", ["remove", "prune"]], decision="prompt",
 prefix_rule(pattern=["git", "submodule", "update"], decision="prompt", justification="May checkout code and run configured helpers")
 prefix_rule(pattern=["gh", "auth", "status"], decision="prompt", justification="Token-display flags must remain visible for approval")
 prefix_rule(pattern=["env"], decision="prompt", justification="Can execute an arbitrary command with a modified environment")
-prefix_rule(pattern=["fd"], decision="prompt", justification="Can execute arbitrary commands through --exec")
 prefix_rule(pattern=["awk"], decision="prompt", justification="Can execute arbitrary commands through system()")
 prefix_rule(pattern=["xargs"], decision="prompt", justification="Executes commands assembled from input")
-prefix_rule(pattern=["sed"], decision="prompt", justification="Can modify files in place or write files from scripts")
-prefix_rule(pattern=["rg"], decision="prompt", justification="Can execute an arbitrary preprocessor through --pre")
 prefix_rule(pattern=["bat"], decision="prompt", justification="Can execute an arbitrary pager through --pager")
 prefix_rule(pattern=["printenv"], decision="prompt", justification="May expose credentials from the environment")
 prefix_rule(pattern=["ps"], decision="prompt", justification="Environment display modes may expose credentials")
