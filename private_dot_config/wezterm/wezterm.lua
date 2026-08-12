@@ -232,6 +232,7 @@ config.color_scheme = "Black Metal (Bathory) (base16)"
 config.max_fps = 165
 config.status_update_interval = 1000
 config.audible_bell = "Disabled"
+config.enable_kitty_keyboard = true
 -- csi-u disabled: breaks Ctrl keys in tmux copy-mode
 -- config.enable_csi_u_key_encoding = true
 config.adjust_window_size_when_changing_font_size = false

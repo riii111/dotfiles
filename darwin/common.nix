@@ -80,7 +80,7 @@
       "ghostty"
       "karabiner-elements"
       "meetingbar"
-      "wezterm"
+      "wezterm@nightly"
       "wireshark-app"
     ];
   };
