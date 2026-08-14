@@ -7,6 +7,10 @@ description: |
 
 # Task Review Cycle
 
+初回にreview Taskへ`codex_app__send_message_to_thread`を呼ぶときは、`model`に`gpt-5.6-sol`、`thinking`に`medium`を指定する。
+再レビューでは`model`と`thinking`を指定せず、同じreview Taskの現在設定を維持する。
+ユーザーがmodelまたはreasoning effortを明示した場合だけ、その依頼で対応する値を指定する。
+
 ## 初回手順
 
 1. worker checkoutを共有するため、worker Taskから`codex_app__fork_thread`を`same-directory`で一度呼ぶ。
