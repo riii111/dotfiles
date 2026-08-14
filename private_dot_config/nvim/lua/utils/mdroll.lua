@@ -4,6 +4,7 @@ local state = {
 	pane_id = nil,
 	path = nil,
 	busy = false,
+	backend = nil,
 }
 
 local function notify(message, level)
@@ -11,10 +12,32 @@ local function notify(message, level)
 end
 
 local function run(args, callback)
-	vim.system(args, { text = true }, callback)
+	vim.system(args, { text = true }, vim.schedule_wrap(callback))
 end
 
-local function pane_exists(pane_id, callback)
+local function current_backend()
+	return vim.env.HERDR_PANE_ID and vim.env.HERDR_PANE_ID ~= "" and "herdr" or "wezterm"
+end
+
+local function pane_exists(pane_id, backend, callback)
+	if backend == "herdr" then
+		run({ "herdr", "pane", "get", pane_id }, function(result)
+			if result.code == 0 then
+				callback(true)
+				return
+			end
+
+			local ok, response = pcall(vim.json.decode, result.stdout)
+			if ok and response.error and response.error.code == "pane_not_found" then
+				callback(false)
+				return
+			end
+
+			callback(nil)
+		end)
+		return
+	end
+
 	run({ "wezterm", "cli", "list", "--format", "json" }, function(result)
 		if result.code ~= 0 then
 			callback(nil)
@@ -38,7 +61,62 @@ local function pane_exists(pane_id, callback)
 	end)
 end
 
-local function launch(path)
+local function launch_in_herdr(path)
+	local directory = vim.fs.dirname(path)
+	state.busy = true
+	run({
+		"herdr",
+		"pane",
+		"split",
+		"--current",
+		"--direction",
+		"right",
+		"--ratio",
+		"0.45",
+		"--cwd",
+		directory,
+		"--no-focus",
+	}, function(result)
+		if result.code ~= 0 then
+			state.busy = false
+			notify(
+				vim.trim(result.stderr) ~= "" and vim.trim(result.stderr) or "failed to split a Herdr pane",
+				vim.log.levels.ERROR
+			)
+			return
+		end
+
+		local ok, response = pcall(vim.json.decode, result.stdout)
+		local pane_id = ok and response.result and response.result.pane and response.result.pane.pane_id or nil
+		if type(pane_id) ~= "string" then
+			state.busy = false
+			notify("Herdr did not return a pane id", vim.log.levels.ERROR)
+			return
+		end
+
+		local command = table.concat({
+			"exec mdroll --watch --no-remote-images --mermaid text",
+			vim.fn.shellescape(path),
+		}, " ")
+		run({ "herdr", "pane", "run", pane_id, command }, function(run_result)
+			state.busy = false
+			if run_result.code ~= 0 then
+				notify(
+					vim.trim(run_result.stderr) ~= "" and vim.trim(run_result.stderr)
+						or "failed to start mdroll in Herdr",
+					vim.log.levels.ERROR
+				)
+				return
+			end
+
+			state.pane_id = pane_id
+			state.path = path
+			state.backend = "herdr"
+		end)
+	end)
+end
+
+local function launch_in_wezterm(path)
 	local directory = vim.fs.dirname(path)
 	state.busy = true
 	run({
@@ -75,15 +153,28 @@ local function launch(path)
 
 		state.pane_id = pane_id
 		state.path = path
+		state.backend = "wezterm"
 	end)
 end
 
-local function close_then_launch(path)
+local function launch(path, backend)
+	if backend == "herdr" then
+		launch_in_herdr(path)
+	else
+		launch_in_wezterm(path)
+	end
+end
+
+local function close_then_launch(path, backend)
 	local pane_id = state.pane_id
+	local previous_backend = state.backend
 	state.pane_id = nil
 	state.path = nil
+	state.backend = nil
 
-	run({ "wezterm", "cli", "kill-pane", "--pane-id", tostring(pane_id) }, function(result)
+	local close_args = previous_backend == "herdr" and { "herdr", "pane", "close", pane_id }
+		or { "wezterm", "cli", "kill-pane", "--pane-id", tostring(pane_id) }
+	run(close_args, function(result)
 		if result.code ~= 0 then
 			notify(
 				vim.trim(result.stderr) ~= "" and vim.trim(result.stderr) or "failed to close the previous mdroll pane",
@@ -91,7 +182,7 @@ local function close_then_launch(path)
 			)
 			return
 		end
-		launch(path)
+		launch(path, backend)
 	end)
 end
 
@@ -101,7 +192,8 @@ function M.open()
 		return
 	end
 
-	if vim.env.WEZTERM_PANE == nil or vim.env.WEZTERM_PANE == "" then
+	local backend = current_backend()
+	if backend == "wezterm" and (vim.env.WEZTERM_PANE == nil or vim.env.WEZTERM_PANE == "") then
 		notify("WEZTERM_PANE is not set; open Neovim directly in WezTerm", vim.log.levels.ERROR)
 		return
 	end
@@ -111,8 +203,8 @@ function M.open()
 		return
 	end
 
-	if vim.fn.executable("wezterm") == 0 then
-		notify("wezterm is not available in PATH", vim.log.levels.ERROR)
+	if vim.fn.executable(backend) == 0 then
+		notify(backend .. " is not available in PATH", vim.log.levels.ERROR)
 		return
 	end
 
@@ -132,20 +224,21 @@ function M.open()
 	end
 
 	if not state.pane_id then
-		launch(path)
+		launch(path, backend)
 		return
 	end
 
-	pane_exists(state.pane_id, function(exists)
+	pane_exists(state.pane_id, state.backend, function(exists)
 		if exists == nil then
-			notify("could not inspect WezTerm panes", vim.log.levels.ERROR)
+			notify("could not inspect the mdroll pane", vim.log.levels.ERROR)
 			return
 		end
 
 		if not exists then
 			state.pane_id = nil
 			state.path = nil
-			launch(path)
+			state.backend = nil
+			launch(path, backend)
 			return
 		end
 
@@ -154,7 +247,7 @@ function M.open()
 			return
 		end
 
-		close_then_launch(path)
+		close_then_launch(path, backend)
 	end)
 end
 
