@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-version="0.81.1"
+version="0.84.1"
 
 if command -v pi >/dev/null 2>&1 && [ "$(pi --version)" = "$version" ]; then
 	exit 0
