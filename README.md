@@ -60,7 +60,7 @@ Homebrew stays for GUI / cask packages and is managed by nix-darwin.
 
 ### Store maintenance
 
-nix-darwin runs weekly store maintenance for every host: GC deletes profile generations older than 30 days at 03:15 on Sunday, and store optimisation hard-links duplicate files at 04:15 on Sunday.
+nix-darwin runs weekly store maintenance for every host: GC deletes profile generations older than 30 days at 03:15 on Sunday, and store optimisation hard-links duplicate files at 04:15 on Sunday. During Nix builds, free space below 30 GiB triggers GC until 50 GiB is available.
 
 ```bash
 nix-collect-garbage --delete-older-than 30d --dry-run
