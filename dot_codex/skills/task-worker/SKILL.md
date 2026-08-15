@@ -15,3 +15,13 @@ description: |
 PR templateと直近の慣例に従ってDraft PRを作る。
 作成後は同じworker Taskで直ちに`$task-review-cycle`を適用し、LGTMまでのレビュー反復を進める。
 親への通知や完了記録は扱わない。
+
+## Review基点
+
+最終reviewを始める直前にbase branchを一度だけfetchし、その時点のtipを必要に応じて取り込む。
+そのexact SHAをreview baseとして固定し、review Taskへはbranch名ではなく`<review base SHA>...<head SHA>`を渡す。
+
+review開始後にbase branchが進んだことだけを理由に、取り込み・全検証・再reviewを繰り返さない。
+Ready化・merge直前に現在のbaseとのmerge可否と意味的な競合を確認する。
+実際の競合、または変更行・挙動の重複がある場合だけbaseを取り込み、必要な検証と再reviewを行う。
+無関係なbase進行なら、固定したreview結果とheadのchecksを維持してmergeへ進む。

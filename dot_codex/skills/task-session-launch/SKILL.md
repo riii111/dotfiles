@@ -21,6 +21,7 @@ description: |
    - ユーザーがmodelまたはreasoning effortを明示した場合だけ、対応する値をその指定で置き換える。
    - `prompt`にタスク管理元と開始対象を含める。
    - `prompt`で`$task-worker`を使い、リポジトリ規約を読んで割り当てられたGit worktreeで実装し、全検証後にDraft PRを作るよう依頼する。
+   - `prompt`でbase branchへの継続追従を要求しない。最終review直前に一度だけbase tipを固定し、review後は実際の競合または意味的重複がある場合だけ取り込み・再reviewする規則を維持する。
 3. `codex_app__create_thread`を一度呼ぶ。
 
 ## 制約
