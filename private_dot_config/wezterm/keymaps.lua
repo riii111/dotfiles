@@ -109,8 +109,8 @@ local keys = {
 	-- Cmd+F for buffer search in Neovim (disable WezTerm's search)
 	{ key = "f", mods = "CMD", action = act.SendKey({ key = "f", mods = "ALT" }) },
 
-	-- Cmd+Shift combinations (for Telescope etc.)
-	{ key = "f", mods = "CMD|SHIFT", action = act.SendKey({ key = "f", mods = "CTRL|SHIFT" }) },
+	-- Keep search distinct from Ctrl+F even if the negotiated keyboard protocol state is lost.
+	{ key = "f", mods = "CMD|SHIFT", action = act.SendString("\x1b[102;6u") },
 	{ key = "p", mods = "CMD|SHIFT", action = act.SendKey({ key = "p", mods = "CTRL|SHIFT" }) },
 
 	-- Cmd+Shift+R → Alt+Shift+R (Neovim refactor menu via <M-S-r> fallback)
