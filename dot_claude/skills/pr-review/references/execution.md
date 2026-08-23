@@ -1,4 +1,4 @@
-# PR Review — Execution (Phase 1-3)
+# PR Review — Execution (Phase 1-2)
 
 Phase 0 でユーザーから受け取った回答に基づいて実行する。
 
@@ -21,7 +21,7 @@ gh pr diff "$PR_NUMBER" --name-only
 結果は Phase 2 の統合時に参照する。
 
 ```bash
-bash ~/.claude/skills/pr-review/scripts/pr-review-external.sh "$WORKTREE_DIR" "$BASE_BRANCH"
+bash ~/.claude/skills/pr-review/scripts/pr-review-external.sh "$(git rev-parse --show-toplevel)" "$BASE_BRANCH"
 # → stdout に === CODEX_RESULT === と === CR_RESULT === のセクションで結果が出力される
 ```
 
@@ -29,11 +29,11 @@ bash ~/.claude/skills/pr-review/scripts/pr-review-external.sh "$WORKTREE_DIR" "$
 
 #### Quick モード
 
-subagentは使わない。main agent 自身が `$WORKTREE_DIR` 上でレビューを行う。
+subagentは使わない。main agent 自身がレビューを行う。
 `references/review_criteria.md` のセクションA〜Eすべてを参照し、
-`templates/review_final.md.tmpl` のフォーマットに従って `${REVIEW_DIR}/REVIEW_FINAL.md` を直接書く。
+`templates/review_final.md.tmpl` のフォーマットに従って結果を返す。
 
-REVIEW_FINAL.md を書く前に各指摘に対してセルフチェックを行うこと:
+各指摘に対してセルフチェックを行うこと:
 
 - [ ] 「問題なし」と結論していないか → 「分析メモ」セクションに書く
 - [ ] アクショナブルか → 具体的な修正アクションがないなら指摘にしない
@@ -42,7 +42,7 @@ REVIEW_FINAL.md を書く前に各指摘に対してセルフチェックを行�
 
 セルフチェックに通らない項目は「指摘一覧」から除外し、必要なら「分析メモ」に移す。
 
-Quick モードは Phase 1 完了後、Phase 3（完了報告）へ進む。Phase 2 はスキップ。
+Quick モードは Phase 1 完了後に結果を返す。Phase 2 はスキップ。
 
 #### Standard / Deep モード
 
@@ -54,7 +54,7 @@ subagentを使って並列レビューを行う。
 ユーザーの「注力観点」は、最も近いセクション担当agentに追加指示として渡す。
 
 **subagent起動:**
-各subagentを **並列に** 起動する。**Agent ツール** (`run_in_background: true`) を使い、各agentのプロンプト内でworktreeの絶対パスを明示すること。
+各subagentを **並列に** 起動する。**Agent ツール** (`run_in_background: true`) を使うこと。
 
 > **注意**: `claude --print --cwd` は存在しない。Bash経由の `claude --print` もstderrが消失しやすく失敗時のデバッグが困難なため、Agent ツールを使うこと。
 
@@ -63,10 +63,9 @@ subagentを使って並列レビューを行う。
 2. 担当外セクションの一覧（「これらは他のagentが担当するため言及不要」と明示）
 3. PRのコンテキスト情報（タイトル、説明、ベースブランチ、ユーザー提供の追加コンテキスト）
 4. 出力フォーマットの指示: `templates/review_final.md.tmpl` の指摘フォーマットに従う
-5. **worktreeの絶対パス**（「すべてのファイル読み取りはこのパスを使え」と明示）
 
 subagentへの指示要点:
-- worktree上のコードを実際に読み、diffだけでなく周辺コードや既存の類似実装も確認すること
+- コードを実際に読み、diffだけでなく周辺コードや既存の類似実装も確認すること
 - 指摘には該当行の前後5行のコードブロック引用を必須とする。引用なしの指摘は不可
 - severity: Critical（本番障害直結）/ Suggestion（設計改善）/ Nit（軽微）
 - 指摘なしの場合は「担当観点において問題は検出されませんでした」と出力
@@ -75,7 +74,7 @@ subagentへの指示要点:
 
 ## Phase 2: 検証・統合・出力（Standard/Deep のみ）
 
-全subagentの出力を統合して `${REVIEW_DIR}/REVIEW_FINAL.md` を生成する。
+全subagentの出力を統合する。
 
 ### 2-1. 指摘の検証
 
@@ -97,7 +96,6 @@ main agent が各指摘の該当ファイル・行番号を Read で読み、以
 
 検証agentに渡す情報:
 1. 全subagentの指摘リスト（ファイルパス、行番号、指摘内容）
-2. worktreeのパス
 
 検証agentは各指摘に対して `valid` / `invalid` / `needs-revision` を判定する。
 main agentは `invalid` を除外し、`needs-revision` は検証コメントを踏まえて修正する。
@@ -113,26 +111,4 @@ main agentは `invalid` を除外し、`needs-revision` は検証コメントを
 5. **外部ツール結果の記載**: Phase 1で外部ツールを使用した場合、末尾の「外部ツール結果」セクションに要約と重複関係を記載。
 
 出力フォーマットは `templates/review_final.md.tmpl` に従う。
-コンテキスト要約は常にREVIEW_FINAL.mdの冒頭に記載する。
-
----
-
-## Phase 3: 完了報告
-
-`${REVIEW_DIR}/REVIEW_FINAL.md` の場所をユーザーに伝える。
-
-worktreeは削除しない。不要になったらユーザーが以下で削除できる:
-
-```bash
-git worktree remove "../${REPO_NAME}-pr-${PR_NUMBER}"
-```
-
-### Runtime生成物
-
-```
-reviews/
-└── {branch-name}/             ← ブランチ名（/ は - に置換）
-    └── REVIEW_FINAL.md        ← 最終レビュー結果（唯一の成果物）
-```
-
-`reviews/` は `.git` > exclude対象にしていることを前提とする。
+コンテキスト要約は常に冒頭に記載する。

@@ -1,8 +1,8 @@
 #!/bin/bash
 # PR Review - Phase 2: 外部ツールスキャン
-# Usage: pr-review-external.sh <WORKTREE_DIR> <BASE_BRANCH>
+# Usage: pr-review-external.sh <REPO_DIR> <BASE_BRANCH>
 #
-# Codex CLI と CodeRabbit CLI を worktree 内で並列実行し、結果を stdout に出力する。
+# Codex CLI と CodeRabbit CLI を対象ディレクトリ内で並列実行し、結果を stdout に出力する。
 # ツールが未インストールの場合はスキップする。
 #
 # 出力（stdout）:
@@ -13,12 +13,11 @@
 
 set -euo pipefail
 
-WORKTREE_DIR="${1:?Usage: pr-review-external.sh <WORKTREE_DIR> <BASE_BRANCH>}"
-BASE_BRANCH="${2:?Usage: pr-review-external.sh <WORKTREE_DIR> <BASE_BRANCH>}"
+REPO_DIR="${1:?Usage: pr-review-external.sh <REPO_DIR> <BASE_BRANCH>}"
+BASE_BRANCH="${2:?Usage: pr-review-external.sh <REPO_DIR> <BASE_BRANCH>}"
 
-# worktree の存在確認
-if [ ! -d "$WORKTREE_DIR" ]; then
-	echo "ERROR: Worktree not found: $WORKTREE_DIR" >&2
+if [ ! -d "$REPO_DIR" ]; then
+	echo "ERROR: Directory not found: $REPO_DIR" >&2
 	exit 1
 fi
 
@@ -30,7 +29,7 @@ trap 'rm -f "$CODEX_TMP" "$CR_TMP"' EXIT
 CODEX_PID=""
 if command -v codex &>/dev/null; then
 	(
-		cd "$WORKTREE_DIR" && RUST_LOG=off codex exec --sandbox read-only - 2>/dev/null <<CODEX_PROMPT >"$CODEX_TMP"
+		cd "$REPO_DIR" && RUST_LOG=off codex exec --sandbox read-only - 2>/dev/null <<CODEX_PROMPT >"$CODEX_TMP"
 You are a PR reviewer. Review the changes on this branch compared to the base branch.
 
 Instructions:
@@ -55,7 +54,7 @@ fi
 # CodeRabbit（利用可能な場合）— バックグラウンドで起動
 CR_PID=""
 if command -v cr &>/dev/null; then
-	(cd "$WORKTREE_DIR" && cr --agent -t committed --base "$BASE_BRANCH" 2>/dev/null >"$CR_TMP") &
+	(cd "$REPO_DIR" && cr --agent -t committed --base "$BASE_BRANCH" 2>/dev/null >"$CR_TMP") &
 	CR_PID=$!
 else
 	echo "cr CLI not found, skipping" >&2
