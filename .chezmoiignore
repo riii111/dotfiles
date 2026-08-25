@@ -22,6 +22,7 @@ config/pi
 {{ if ne .type "work" }}
 .gitconfig-riii111
 .claude/skills/deploy-preflight
+.codex/skills/deploy-preflight
 {{ end }}
 
 # Build artifacts (auto-built by statusline-command.sh)
