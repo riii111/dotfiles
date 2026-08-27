@@ -45,6 +45,10 @@ assert resolve_abs_or_config_path("kitty.conf") == str(
     Path.home() / ".config/kitty/kitty.conf"
 )
 
+root_definitions = [definition.definition for definition in definitions("")]
+assert "send_text all \\x7c" in root_definitions
+assert root_definitions.count("send_text all \\x5c") == 2
+
 entry = [
     definition
     for definition in definitions("")
