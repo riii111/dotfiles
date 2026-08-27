@@ -611,6 +611,12 @@ _detect_gh_target_user
 export GCP_PROJECT="{{ .gcp_project }}"
 {{ end }}
 
+if [[ "${TERM:-}" == "xterm-kitty" ]]; then
+  rg() {
+    command rg --hyperlink-format=kitty "$@"
+  }
+fi
+
 _dotfiles_place_nix_path
 
 # direnv
