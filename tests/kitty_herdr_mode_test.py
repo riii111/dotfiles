@@ -1,11 +1,15 @@
 from pathlib import Path
 
 from kitty.config import load_config
+from kitty.utils import resolve_abs_or_config_path
 
 
 repo_root = Path(__file__).resolve().parents[1]
 config_path = repo_root / "private_dot_config/kitty/kitty.conf"
 options = load_config(str(config_path))
+
+for kitty_config_path in config_path.parent.glob("*.conf"):
+    assert "/Users/" not in kitty_config_path.read_text()
 
 mode_names = {"herdr", "herdr-copy", "herdr-selection", "herdr-resize"}
 assert mode_names <= options.keyboard_modes.keys()
@@ -20,6 +24,26 @@ def definitions(mode_name):
     mode = options.keyboard_modes[mode_name]
     return [definition for mappings in mode.keymap.values() for definition in mappings]
 
+
+blur_toggle = [
+    definition.definition
+    for definition in definitions("")
+    if "load-config" in definition.definition
+]
+assert blur_toggle == ["remote_control load-config kitty.conf blur-off.conf"]
+
+blur_options = load_config(str(config_path), str(config_path.parent / "blur-off.conf"))
+blur_definitions = [
+    definition.definition
+    for mappings in blur_options.keyboard_modes[""].keymap.values()
+    for definition in mappings
+    if "load-config" in definition.definition
+]
+assert blur_options.background_blur == 0
+assert blur_definitions[-1] == "remote_control load-config kitty.conf"
+assert resolve_abs_or_config_path("kitty.conf") == str(
+    Path.home() / ".config/kitty/kitty.conf"
+)
 
 entry = [
     definition
