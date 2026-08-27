@@ -51,6 +51,7 @@ assert logo_actions[0].args[:5] == (
     "--alpha",
     "0.30",
 )
+assert logo_actions[0].args[5] == str(Path.home() / ".config/kitty/herdr-logo.png")
 assert logo_actions[1].func == "push_keyboard_mode"
 
 logo_path = config_path.parent / "herdr-logo.png"
