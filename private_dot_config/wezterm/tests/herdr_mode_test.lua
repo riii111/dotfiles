@@ -101,6 +101,8 @@ local function run_binding(table_name, key, mods)
 end
 
 local prefix_binding = keys[#keys]
+assert(prefix_binding.key == ";" and prefix_binding.mods == "CTRL")
+
 local function enable_mode()
 	reset_recording()
 	pane_process = "/opt/homebrew/bin/herdr"
