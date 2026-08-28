@@ -7,7 +7,7 @@ from kitty.utils import resolve_abs_or_config_path
 repo_root = Path(__file__).resolve().parents[1]
 config_path = repo_root / "private_dot_config/kitty/kitty.conf"
 options = load_config(str(config_path))
-assert options.window_logo_scale == 6
+assert options.window_logo_scale == 7.5
 
 for kitty_config_path in config_path.parent.glob("*.conf"):
     assert "/Users/" not in kitty_config_path.read_text()
@@ -86,6 +86,8 @@ assert logo_actions[1].func == "push_keyboard_mode"
 logo_path = config_path.parent / "herdr-logo.png"
 logo_data = logo_path.read_bytes()
 assert logo_data.startswith(b"\x89PNG\r\n\x1a\n")
+assert int.from_bytes(logo_data[16:20]) == 512
+assert int.from_bytes(logo_data[20:24]) == 640
 assert logo_data[25] == 6
 
 print("kitty herdr mode test: ok")
