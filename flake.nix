@@ -74,17 +74,6 @@
           mkVersionEntry = name: value: { inherit name value; };
           herdrPkg = herdr.packages.${system}.default;
           python3WithPyYAML = pkgs.python3.withPackages (pythonPackages: [ pythonPackages.pyyaml ]);
-          mdroll = pkgs.rustPlatform.buildRustPackage {
-            pname = "mdroll";
-            version = "0.4.2";
-            src = pkgs.fetchFromGitHub {
-              owner = "tokuhirom";
-              repo = "mdroll";
-              rev = "f2bce169dd845dc71ab20fbca5b3b882d1d418b6";
-              hash = "sha256-f3rXbLi9WFRid/BG2PcNF0JPWOE3scWhz3Smmohzy5w=";
-            };
-            cargoHash = "sha256-rgGOsyIIhtij4FTyPVb4W3XnOK0J/YigcnDus3zVZYk=";
-          };
           dailyCliPackages = with pkgs; [
             # Editor-integrated tooling that should exist in the normal shell too.
             _1password-cli
@@ -132,7 +121,7 @@
             lazygit
             lefthook
             llvm
-            mdroll
+            mdfried
             neovim
             ninja
             nix-direnv

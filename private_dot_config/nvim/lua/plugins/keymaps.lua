@@ -254,9 +254,9 @@ local function setup_keymaps()
 			},
 			["<Leader>mm"] = {
 				function()
-					require("utils.mdroll").open()
+					require("utils.mdfried").open()
 				end,
-				desc = "Markdown viewer (mdroll)",
+				desc = "Markdown viewer (mdfried)",
 			},
 
 			-- Oil.nvim file explorer
@@ -471,7 +471,7 @@ return {
 				{ "<leader>r", group = "+replace" },
 				{ "<leader>R", group = "+replace global" },
 				{ "<leader>m", group = "+markdown" },
-				{ "<leader>mm", desc = "Markdown viewer (mdroll)" },
+				{ "<leader>mm", desc = "Markdown viewer (mdfried)" },
 				{ "<C-g>", group = "+grep/search" },
 				{ "<C-p>", group = "+files" },
 				{ "<C-S-f>", group = "+search" },
