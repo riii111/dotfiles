@@ -7,6 +7,5 @@
 
   homebrew.casks = [
     "cursor"
-    "zed"
   ];
 }
