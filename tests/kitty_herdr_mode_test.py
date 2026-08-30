@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from kitty.config import load_config
+from kitty.fast_data_types import GLFW_MOD_CONTROL, GLFW_MOD_SHIFT, GLFW_MOD_SUPER
 from kitty.utils import resolve_abs_or_config_path
 
 
@@ -49,6 +50,29 @@ assert resolve_abs_or_config_path("kitty.conf") == str(
 root_definitions = [definition.definition for definition in definitions("")]
 assert "send_text all \\x7c" in root_definitions
 assert root_definitions.count("send_text all \\x5c") == 2
+
+
+def mapped_definitions(mods, key):
+    return [
+        definition.definition
+        for parsed_key, mappings in options.keyboard_modes[""].keymap.items()
+        if parsed_key.mods == mods and parsed_key.key == ord(key)
+        for definition in mappings
+    ]
+
+
+assert (
+    "combine : goto_layout splits : launch --location=vsplit --cwd=current"
+    in mapped_definitions(GLFW_MOD_SUPER, "d")
+)
+assert (
+    "combine : goto_layout splits : launch --location=hsplit --cwd=current"
+    in mapped_definitions(GLFW_MOD_SUPER | GLFW_MOD_SHIFT, "d")
+)
+assert "toggle_layout stack" in mapped_definitions(
+    GLFW_MOD_SUPER | GLFW_MOD_CONTROL, "z"
+)
+assert "toggle_layout stack" not in mapped_definitions(GLFW_MOD_SUPER, "z")
 
 entry = [
     definition
