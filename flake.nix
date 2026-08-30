@@ -74,6 +74,21 @@
           mkVersionEntry = name: value: { inherit name value; };
           herdrPkg = herdr.packages.${system}.default;
           python3WithPyYAML = pkgs.python3.withPackages (pythonPackages: [ pythonPackages.pyyaml ]);
+          mdfriedKitty = pkgs.rustPlatform.buildRustPackage {
+            inherit (pkgs.mdfried)
+              pname
+              version
+              src
+              cargoDeps
+              meta
+              ;
+            buildNoDefaultFeatures = true;
+            buildFeatures = [
+              "svg"
+              "mermaid"
+            ];
+            buildInputs = pkgs.lib.optionals pkgs.stdenv.hostPlatform.isDarwin [ pkgs.libiconv ];
+          };
           dailyCliPackages = with pkgs; [
             # Editor-integrated tooling that should exist in the normal shell too.
             _1password-cli
@@ -121,7 +136,7 @@
             lazygit
             lefthook
             llvm
-            mdfried
+            mdfriedKitty
             neovim
             ninja
             nix-direnv
