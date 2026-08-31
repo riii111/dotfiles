@@ -59,6 +59,21 @@ prefix_rule(pattern=["fd"], decision="allow", justification="Find local files")
 prefix_rule(pattern=["rg"], decision="allow", justification="Search local file contents")
 prefix_rule(pattern=["sed"], decision="allow", justification="Process local text")
 
+# --- Trusted normal Git / PR workflow ---
+prefix_rule(pattern=["git", "switch", "-c"], decision="allow", justification="Create a normal feature branch")
+prefix_rule(pattern=["git", "add"], decision="allow", justification="Stage workspace changes")
+prefix_rule(pattern=["git", "commit"], decision="allow", justification="Commit workspace changes")
+prefix_rule(pattern=["git", "fetch"], decision="allow", justification="Fetch repository refs")
+prefix_rule(pattern=["git", "merge"], decision="allow", justification="Update a feature branch from its base")
+prefix_rule(pattern=["git", "push"], decision="allow", justification="Push normal non-destructive branch updates")
+prefix_rule(pattern=["git", "branch", "-d"], decision="allow", justification="Delete a merged local branch")
+prefix_rule(pattern=["git", "worktree", "remove"], decision="allow", justification="Remove a clean task worktree")
+
+prefix_rule(pattern=["gh", "pr", "create"], decision="allow", justification="Create a task pull request")
+prefix_rule(pattern=["gh", "pr", "ready"], decision="allow", justification="Mark a reviewed pull request ready")
+prefix_rule(pattern=["gh", "pr", "merge"], decision="allow", justification="Normally merge an approved pull request")
+prefix_rule(pattern=["gh", "run", "rerun"], decision="allow", justification="Rerun failed CI jobs")
+
 # -----------------------------------------------------------------------------
 # PROMPT: Potentially destructive commands (require confirmation)
 # -----------------------------------------------------------------------------
@@ -78,12 +93,12 @@ prefix_rule(pattern=["bun"], decision="prompt", justification="Package manager c
 prefix_rule(pattern=["curl"], decision="prompt", justification="Network access requires confirmation")
 prefix_rule(pattern=["gh", "api"], decision="prompt", justification="GitHub API may perform mutations depending on method and endpoint")
 prefix_rule(pattern=["gh", "pr", "checkout"], decision="prompt", justification="May reset an existing branch")
-prefix_rule(pattern=["gh", "pr", ["comment", "review", "merge"]], decision="prompt", justification="Changes pull request state")
+prefix_rule(pattern=["gh", "pr", ["comment", "review"]], decision="prompt", justification="Posts review content")
 prefix_rule(pattern=["gh", "issue", "comment"], decision="prompt", justification="Posts an issue comment")
 prefix_rule(pattern=["gh", "workflow", "run"], decision="prompt", justification="Starts a workflow run")
 prefix_rule(pattern=["git", "config"], decision="prompt", justification="git config may update repository or user configuration")
 prefix_rule(pattern=["git", "reset"], decision="prompt", justification="May rewrite the index or working tree")
-prefix_rule(pattern=["git", "worktree", ["remove", "prune"]], decision="prompt", justification="Removes worktrees or worktree metadata")
+prefix_rule(pattern=["git", "worktree", "prune"], decision="prompt", justification="Prunes worktree metadata")
 prefix_rule(pattern=["git", "submodule", "update"], decision="prompt", justification="May checkout code and run configured helpers")
 prefix_rule(pattern=["gh", "auth", "status"], decision="prompt", justification="Token-display flags must remain visible for approval")
 prefix_rule(pattern=["env"], decision="prompt", justification="Can execute an arbitrary command with a modified environment")
