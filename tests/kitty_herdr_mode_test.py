@@ -69,10 +69,10 @@ assert (
     "combine : goto_layout splits : launch --location=hsplit --cwd=current"
     in mapped_definitions(GLFW_MOD_SUPER | GLFW_MOD_SHIFT, "d")
 )
-assert "toggle_layout stack" in mapped_definitions(
+assert "toggle_layout stack" in mapped_definitions(GLFW_MOD_SUPER, "z")
+assert "toggle_layout stack" not in mapped_definitions(
     GLFW_MOD_SUPER | GLFW_MOD_CONTROL, "z"
 )
-assert "toggle_layout stack" not in mapped_definitions(GLFW_MOD_SUPER, "z")
 
 entry = [
     definition
