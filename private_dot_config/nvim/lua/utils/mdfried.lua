@@ -13,14 +13,34 @@ local function executable(name)
 	return path
 end
 
+local function focused_kitty_socket(kitten)
+	if vim.env.HERDR_ENV ~= "1" then
+		return nil
+	end
+
+	for name, kind in vim.fs.dir("/tmp") do
+		if kind == "socket" and name:match("^kitty%-%d+$") then
+			local address = "unix:/tmp/" .. name
+			local result = vim.system({ kitten, "@", "--to", address, "ls" }, { text = true }):wait()
+			if result.code == 0 then
+				local ok, os_windows = pcall(vim.json.decode, result.stdout)
+				if ok then
+					for _, os_window in ipairs(os_windows) do
+						if os_window.is_focused then
+							return address
+						end
+					end
+				end
+			end
+		end
+	end
+
+	return nil
+end
+
 function M.open()
 	if vim.bo.filetype ~= "markdown" then
 		notify("mdfried is available for Markdown buffers only", vim.log.levels.WARN)
-		return
-	end
-
-	if not vim.env.KITTY_LISTEN_ON or vim.env.KITTY_LISTEN_ON == "" then
-		notify("Kitty remote control is not available; restart Kitty and Neovim", vim.log.levels.ERROR)
 		return
 	end
 
@@ -41,18 +61,30 @@ function M.open()
 		return
 	end
 
+	local in_herdr = vim.env.HERDR_ENV == "1"
+	local kitty_socket = in_herdr and nil or vim.env.KITTY_LISTEN_ON
+	if in_herdr then
+		kitty_socket = focused_kitty_socket(kitten)
+	end
+	if not kitty_socket or kitty_socket == "" then
+		notify("no focused Kitty window with remote control is available", vim.log.levels.ERROR)
+		return
+	end
+
+	local command = { kitten, "@", "--to", kitty_socket, "launch" }
+	if not in_herdr then
+		table.insert(command, "--self")
+	end
+	vim.list_extend(command, {
+		"--no-response",
+		"--type=overlay",
+		"--cwd=" .. vim.fs.dirname(path),
+		mdfried,
+		path,
+	})
+
 	vim.system(
-		{
-			kitten,
-			"@",
-			"launch",
-			"--self",
-			"--no-response",
-			"--type=overlay",
-			"--cwd=" .. vim.fs.dirname(path),
-			mdfried,
-			path,
-		},
+		command,
 		{ text = true },
 		vim.schedule_wrap(function(result)
 			if result.code ~= 0 then
