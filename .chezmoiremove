@@ -7,6 +7,13 @@
 .codex/skills/task-orchestration/tests
 .codex/skills/task-worker/scripts
 .codex/skills/task-worker/tests
+.claude/skills/codex-2nd
+.claude/skills/plan-cove
+.claude/skills/plan-cove-exec
+.claude/skills/pr-review-tmux
+.claude/skills/reviewing-adrs
+.claude/skills/rust-review
+.claude/agents/codex-2nd-opinion.md
 .config/nvim/lua/plugins/github-actions.lua
 .config/nvim/lua/plugins/dial.lua
 .config/nvim/lua/plugins/flash.lua

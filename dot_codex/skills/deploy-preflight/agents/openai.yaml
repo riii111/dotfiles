@@ -1,0 +1,7 @@
+interface:
+  display_name: "Deploy Preflight"
+  short_description: "Run an explicitly requested STG preflight"
+  default_prompt: "Use $deploy-preflight to check this branch before an STG deployment."
+
+policy:
+  allow_implicit_invocation: false
