@@ -9,6 +9,7 @@ from bin.lib.codex_explore import (
     RunOptions,
     RouterSession,
 )
+from bin.lib.codex_explore_benchmark import render_benchmark_report
 
 
 class FakeClient:
@@ -96,6 +97,7 @@ class ExploreRouterStateTest(unittest.TestCase):
                 )
                 if "model" in case:
                     session.state.effective_model = case["model"]
+                    session.state.configured_start_model = case["model"]
                 if "parent" in case:
                     session.state.parent_thread_id = case["parent"]
                 session.observe_threshold(2)
@@ -279,3 +281,70 @@ class ExploreRouterStateTest(unittest.TestCase):
             self.assertIsNone(session.state.effective_model)
             self.assertEqual(session.state.effective_model_source, "ambiguous_usage")
             logger.__exit__()
+
+    def test_threshold_remains_observable_after_usage_poll(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session, logger = make_session(tmpdir)
+            session.observe_account_usage_models(
+                {"threadUsage": {"groups": [{"model": DEFAULT_SOL_MODEL}]}}
+            )
+            session.observe_threshold(2)
+            self.assertTrue(session.state.condition_met)
+            logger.__exit__()
+
+    def test_parallel_waits_are_counted_as_an_interval_union(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session, logger = make_session(tmpdir)
+            session.state.wait_intervals = [(0, 10), (5, 15)]
+            self.assertEqual(session.active_elapsed(20), 5)
+            logger.__exit__()
+
+    def test_child_usage_is_aggregated_only_when_all_threads_are_measured(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session, logger = make_session(tmpdir)
+            session.state.child_thread_ids = ["child-thread"]
+            session.record_usage("thread-1", "turn-1", {"total": {"totalTokens": 10}})
+            session.record_account_usage(
+                {
+                    "threadUsage": {
+                        "threadId": "thread-1",
+                        "estimatedUsageCreditsMicros": 100,
+                    }
+                },
+                "thread-1",
+            )
+            self.assertIsNone(session.run_token_usage())
+            self.assertIsNone(session.estimated_credits())
+            session.record_usage(
+                "child-thread", "child-turn", {"total": {"totalTokens": 7}}
+            )
+            session.record_account_usage(
+                {
+                    "threadUsage": {
+                        "threadId": "child-thread",
+                        "estimatedUsageCreditsMicros": 50,
+                    }
+                },
+                "child-thread",
+            )
+            self.assertEqual(session.run_token_usage()["totalTokens"], 17)
+            self.assertAlmostEqual(session.estimated_credits(), 0.00015)
+            logger.__exit__()
+
+    def test_report_keeps_missing_token_usage_as_unknown(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            task_file = Path(tmpdir) / "task.md"
+            report_path = Path(tmpdir) / "report.md"
+            task_file.write_text("task", encoding="utf-8")
+            result = {
+                "status": "completed",
+                "duration_seconds": 1.0,
+                "estimated_usage_credits": 0.1,
+                "measurement_completeness": "complete",
+                "token_usage": {"run_total": None},
+                "models": {"astra_execution_confirmed": False, "effective": "Sol"},
+                "switch": {"state": "disabled"},
+            }
+            records = [{"condition": key, "result": result} for key in ("A", "B", "C")]
+            render_benchmark_report(report_path, records, task_file, 10, 1)
+            self.assertIn("tokens中央値", report_path.read_text(encoding="utf-8"))

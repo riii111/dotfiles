@@ -79,6 +79,14 @@ def median_or_none(values: list[float]) -> float | None:
     return statistics.median(values) if values else None
 
 
+def token_total(record: dict[str, Any]) -> float | None:
+    run_total = record.get("result", {}).get("token_usage", {}).get("run_total")
+    if not isinstance(run_total, dict):
+        return None
+    total_tokens = run_total.get("totalTokens")
+    return float(total_tokens) if isinstance(total_tokens, (int, float)) else None
+
+
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -151,8 +159,8 @@ def benchmark_manifest(
             "max_total_credits": namespace.max_total_credits,
         },
         "fast_mode": "disabled",
-        "memories": "inherited",
-        "thread_config": {"fast_mode": False},
+        "memories": "disabled",
+        "thread_config": {"fast_mode": False, "memories": False},
     }
     (output_dir / "manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
@@ -189,30 +197,27 @@ def render_benchmark_report(
             for record in selected
             if record.get("result", {}).get("status") == "completed"
         ]
+        measured = [
+            record
+            for record in successful
+            if record.get("result", {}).get("measurement_completeness") == "complete"
+        ]
         durations = [
             float(record["result"]["duration_seconds"])
-            for record in successful
+            for record in measured
             if isinstance(
                 record.get("result", {}).get("duration_seconds"), (int, float)
             )
         ]
         credits = [
             float(record["result"]["estimated_usage_credits"])
-            for record in successful
+            for record in measured
             if isinstance(
                 record.get("result", {}).get("estimated_usage_credits"), (int, float)
             )
         ]
         tokens = [
-            float(record["result"]["token_usage"]["run_total"]["totalTokens"])
-            for record in successful
-            if isinstance(
-                record.get("result", {})
-                .get("token_usage", {})
-                .get("run_total", {})
-                .get("totalTokens"),
-                (int, float),
-            )
+            value for record in measured if (value := token_total(record)) is not None
         ]
         confirmed = sum(
             record.get("result", {}).get("models", {}).get("astra_execution_confirmed")
@@ -367,7 +372,7 @@ def benchmark_main(argv: list[str] | None = None) -> int:
                 codex_command=namespace.codex_command,
                 log_path=events_path,
                 answer_path=output_dir / "answers" / f"{run_id}.txt",
-                benchmark_config={"fast_mode": False},
+                benchmark_config={"fast_mode": False, "memories": False},
                 run_id=run_id,
             )
             if condition.key == "C":

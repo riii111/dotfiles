@@ -234,13 +234,15 @@ class RunState:
     execution_models: list[str] = field(default_factory=list)
     model_transitions: list[dict[str, str]] = field(default_factory=list)
     usage_by_thread: dict[str, dict[str, Any]] = field(default_factory=dict)
+    account_usage_by_thread: dict[str, dict[str, Any]] = field(default_factory=dict)
     child_thread_ids: list[str] = field(default_factory=list)
     usage_scope: str = "parent_thread"
     known_thread_ids: set[str] = field(default_factory=set)
     completed_turn_ids: set[str] = field(default_factory=set)
     known_turn_ids: set[str] = field(default_factory=set)
     waiting_item_started: dict[str, float] = field(default_factory=dict)
-    known_wait_seconds: float = 0.0
+    wait_intervals: list[tuple[float, float]] = field(default_factory=list)
+    active_seconds_total: float = 0.0
     user_cancelled: bool = False
     timed_out: bool = False
     natural_completion: bool = False
@@ -264,10 +266,12 @@ class RouterSession:
         self.state = RunState(options.run_id, options.mode)
         self.client = AppServerClient(options.codex_command, options.cwd)
         self.pending: dict[int, str] = {}
+        self.pending_usage_threads: dict[int, str | None] = {}
         self.deadline: float | None = None
         self.interrupt_deadline: float | None = None
         self.execution_deadline: float | None = None
         self.last_usage_poll: float | None = None
+        self.usage_poll_index = 0
         self.usage_poll_pending = False
 
     def log(self, event: str, **fields: Any) -> None:
@@ -287,8 +291,9 @@ class RouterSession:
         has_credits = self.estimated_credits() is not None
         has_model = bool(self.state.models_observed)
         present = sum((has_tokens, has_credits, has_model))
-        if self.state.child_thread_ids and present == 3:
-            return "partial"
+        if self.state.child_thread_ids:
+            if self.run_token_usage() is None or self.estimated_credits() is None:
+                return "partial" if present else "unknown"
         if present == 3:
             return "complete"
         if present:
@@ -296,14 +301,27 @@ class RouterSession:
         return "unknown"
 
     def estimated_credits(self) -> float | None:
-        usage = self.state.account_usage or {}
-        thread_usage = usage.get("threadUsage")
-        if not isinstance(thread_usage, dict):
+        thread_ids = [self.state.thread_id] + self.state.child_thread_ids
+        usages = [
+            self.state.account_usage
+            if thread_id == self.state.thread_id
+            else self.state.account_usage_by_thread.get(thread_id or "")
+            for thread_id in thread_ids
+        ]
+        if any(not isinstance(usage, dict) for usage in usages):
             return None
-        micros = thread_usage.get("estimatedUsageCreditsMicros")
-        if not isinstance(micros, int):
-            return None
-        return micros / 1_000_000
+        credits: list[float] = []
+        for usage in usages:
+            thread_usage = usage.get("threadUsage") if isinstance(usage, dict) else None
+            micros = (
+                thread_usage.get("estimatedUsageCreditsMicros")
+                if isinstance(thread_usage, dict)
+                else None
+            )
+            if not isinstance(micros, int):
+                return None
+            credits.append(micros / 1_000_000)
+        return sum(credits)
 
     def parent_notification(self, params: dict[str, Any]) -> bool:
         return params.get("threadId") == self.state.thread_id
@@ -325,10 +343,24 @@ class RouterSession:
     def active_elapsed(self, now: float) -> float:
         if self.state.turn_started_monotonic is None:
             return 0.0
-        waiting = self.state.known_wait_seconds + sum(
-            max(0.0, now - started)
-            for started in self.state.waiting_item_started.values()
+        intervals = list(self.state.wait_intervals)
+        intervals.extend(
+            (started, now) for started in self.state.waiting_item_started.values()
         )
+        intervals.sort()
+        waiting = 0.0
+        merged_end: float | None = None
+        merged_start: float | None = None
+        for start, end in intervals:
+            if merged_end is None:
+                merged_start, merged_end = start, end
+            elif start <= merged_end:
+                merged_end = max(merged_end, end)
+            else:
+                waiting += merged_end - merged_start
+                merged_start, merged_end = start, end
+        if merged_start is not None and merged_end is not None:
+            waiting += merged_end - merged_start
         return max(0.0, now - self.state.turn_started_monotonic - waiting)
 
     def record_usage(self, thread_id: str, turn_id: str, usage: dict[str, Any]) -> None:
@@ -345,12 +377,40 @@ class RouterSession:
                 self.state.child_thread_ids.append(thread_id)
             self.state.usage_scope = "parent_and_child_threads"
 
+    def record_account_usage(
+        self, usage: Any, requested_thread_id: str | None = None
+    ) -> None:
+        if not isinstance(usage, dict):
+            return
+        thread_usage = usage.get("threadUsage")
+        reported_thread_id = (
+            thread_usage.get("threadId") if isinstance(thread_usage, dict) else None
+        )
+        thread_id = reported_thread_id or requested_thread_id or self.state.thread_id
+        if thread_id == self.state.thread_id:
+            self.state.account_usage = usage
+        elif isinstance(thread_id, str) and thread_id in self.state.child_thread_ids:
+            self.state.account_usage_by_thread[thread_id] = usage
+
     def run_token_usage(self) -> dict[str, Any] | None:
-        usage = self.state.usage_by_thread.get(self.state.thread_id or "")
-        if usage is None and self.state.usage_by_thread:
-            usage = next(iter(self.state.usage_by_thread.values()))
-        total = usage.get("total") if isinstance(usage, dict) else None
-        return total if isinstance(total, dict) else None
+        thread_ids = [self.state.thread_id] + self.state.child_thread_ids
+        totals: list[dict[str, Any]] = []
+        for thread_id in thread_ids:
+            usage = self.state.usage_by_thread.get(thread_id or "")
+            total = usage.get("total") if isinstance(usage, dict) else None
+            if not isinstance(total, dict):
+                return None
+            totals.append(total)
+        if not totals:
+            return None
+        if len(totals) == 1:
+            return totals[0]
+        aggregate: dict[str, Any] = {}
+        for total in totals:
+            for key, value in total.items():
+                if isinstance(value, (int, float)):
+                    aggregate[key] = aggregate.get(key, 0) + value
+        return aggregate or None
 
     def request_sync(
         self,
@@ -376,6 +436,8 @@ class RouterSession:
     def request_async(self, method: str, params: dict[str, Any]) -> int:
         request_id = self.client.send(method, params)
         self.pending[request_id] = method
+        if method == "account/usage/read":
+            self.pending_usage_threads[request_id] = params.get("threadId")
         return request_id
 
     def dispatch(self, message: dict[str, Any]) -> None:
@@ -383,14 +445,20 @@ class RouterSession:
             request_id = message["id"]
             method = self.pending.pop(request_id, None)
             if method is not None:
-                self.handle_response(method, message)
+                requested_thread_id = self.pending_usage_threads.pop(request_id, None)
+                self.handle_response(method, message, requested_thread_id)
             return
         method = message.get("method")
         params = message.get("params")
         if isinstance(method, str) and isinstance(params, dict):
             self.handle_notification(method, params)
 
-    def handle_response(self, method: str, message: dict[str, Any]) -> None:
+    def handle_response(
+        self,
+        method: str,
+        message: dict[str, Any],
+        requested_thread_id: str | None = None,
+    ) -> None:
         if "error" in message:
             message_text = error_text(message["error"])
             self.state.errors.append(f"{method}: {message_text}")
@@ -430,8 +498,8 @@ class RouterSession:
             self.apply_turn_start(result, fallback=True)
         elif method == "account/usage/read":
             self.usage_poll_pending = False
-            self.state.account_usage = result if isinstance(result, dict) else None
-            self.observe_account_usage_models(self.state.account_usage)
+            self.record_account_usage(result, requested_thread_id)
+            self.observe_account_usage_models(result)
             self.log("account_usage", usage=result)
 
     def handle_notification(self, method: str, params: dict[str, Any]) -> None:
@@ -458,8 +526,8 @@ class RouterSession:
                     self.state.active_turn_id = turn_id
                     self.state.known_turn_ids.add(turn_id)
                     self.state.turn_started_monotonic = time.monotonic()
-                    self.state.known_wait_seconds = 0.0
                     self.state.waiting_item_started.clear()
+                    self.state.wait_intervals.clear()
                     self.log("turn_started_notification", status=turn.get("status"))
             return
         if method == "turn/completed":
@@ -582,12 +650,7 @@ class RouterSession:
             self.state.important_items.pop(item_id, None)
             started_at = self.state.waiting_item_started.pop(item_id, None)
             if started_at is not None:
-                duration = item.get("durationMs")
-                self.state.known_wait_seconds += (
-                    float(duration) / 1000
-                    if isinstance(duration, (int, float))
-                    else max(0.0, time.monotonic() - started_at)
-                )
+                self.state.wait_intervals.append((started_at, time.monotonic()))
             self.log(
                 "item_completed",
                 item_type=item_type,
@@ -652,8 +715,8 @@ class RouterSession:
         self.state.active_turn_id = turn["id"]
         self.state.known_turn_ids.add(turn["id"])
         self.state.turn_started_monotonic = time.monotonic()
-        self.state.known_wait_seconds = 0.0
         self.state.waiting_item_started.clear()
+        self.state.wait_intervals.clear()
         if fallback:
             self.state.fallback_turn_started = True
             self.state.switch_state = "fallback_turn_started"
@@ -683,6 +746,7 @@ class RouterSession:
             }
         )
         self.state.important_items.clear()
+        self.state.active_seconds_total += self.active_elapsed(time.monotonic())
         self.log(
             "turn_completed",
             status=turn.get("status"),
@@ -701,6 +765,7 @@ class RouterSession:
         self.interrupt_deadline = None
         self.execution_deadline = None
         self.state.waiting_item_started.clear()
+        self.state.wait_intervals.clear()
         status = turn.get("status")
         if (
             status == "interrupted"
@@ -774,8 +839,11 @@ class RouterSession:
             and self.state.active_turn_id is not None
             and self.state.parent_thread_id is None
             and self.state.switch_count == 0
-            and self.state.effective_model == self.options.sol_model
-            and self.state.effective_model_source == "thread/start"
+            and self.state.configured_start_model == self.options.sol_model
+            and (
+                not self.state.execution_models
+                or self.state.execution_models == [self.options.sol_model]
+            )
         )
 
     def observe_threshold(self, now: float) -> None:
@@ -869,7 +937,10 @@ class RouterSession:
             return
         self.last_usage_poll = now
         self.usage_poll_pending = True
-        self.request_async("account/usage/read", {"threadId": self.state.thread_id})
+        thread_ids = [self.state.thread_id] + self.state.child_thread_ids
+        thread_id = thread_ids[self.usage_poll_index % len(thread_ids)]
+        self.usage_poll_index += 1
+        self.request_async("account/usage/read", {"threadId": thread_id})
 
     def maybe_stop_for_credit_budget(self) -> None:
         limit = self.options.max_estimated_credits
@@ -1036,9 +1107,22 @@ class RouterSession:
                     "account/usage/read", {"threadId": self.state.thread_id}, timeout=10
                 )
                 if "error" not in usage_response:
-                    self.state.account_usage = usage_response.get("result")
+                    usage = usage_response.get("result")
+                    self.record_account_usage(usage, self.state.thread_id)
                     self.observe_account_usage_models(self.state.account_usage)
-                    self.log("account_usage", usage=usage_response.get("result"))
+                    self.log("account_usage", usage=usage)
+                    for child_id in self.state.child_thread_ids:
+                        child_usage_response = self.request_sync(
+                            "account/usage/read", {"threadId": child_id}, timeout=5
+                        )
+                        if "error" not in child_usage_response:
+                            child_usage = child_usage_response.get("result")
+                            self.record_account_usage(child_usage, child_id)
+                            self.observe_account_usage_models(child_usage)
+                        else:
+                            self.state.errors.append(
+                                error_text(child_usage_response["error"])
+                            )
                 else:
                     self.state.errors.append(error_text(usage_response["error"]))
                     self.log("account_usage_error", error=usage_response["error"])
@@ -1177,9 +1261,7 @@ class RouterSession:
                 "fallback_turn_started": self.state.fallback_turn_started,
             },
             "duration_seconds": round(elapsed, 3) if elapsed is not None else None,
-            "estimated_active_seconds": round(
-                max(0.0, (elapsed or 0.0) - self.state.known_wait_seconds), 3
-            )
+            "estimated_active_seconds": round(self.state.active_seconds_total, 3)
             if elapsed is not None
             else None,
             "turns": self.state.completed_turns,
@@ -1191,6 +1273,7 @@ class RouterSession:
             },
             "estimated_usage_credits": credits,
             "account_usage": self.state.account_usage,
+            "account_usage_by_thread": self.state.account_usage_by_thread,
             "measurement_completeness": self.measurement_completeness(),
             "item_counts": self.state.item_counts,
             "errors": self.state.errors,
@@ -1223,6 +1306,12 @@ class RouterSession:
 def run_router(options: RunOptions) -> dict[str, Any]:
     if options.mode not in {"off", "observe", "auto"}:
         raise ValueError("mode must be off, observe, or auto")
+    if options.max_run_seconds <= 0:
+        raise ValueError("max_run_seconds must be positive")
+    if options.threshold_seconds < 0 or options.switch_grace_seconds < 0:
+        raise ValueError("threshold and switch grace must not be negative")
+    if options.max_estimated_credits is not None and options.max_estimated_credits <= 0:
+        raise ValueError("max_estimated_credits must be positive")
     if options.explore and not options.skill_path.is_file():
         raise FileNotFoundError(f"explore skill not found: {options.skill_path}")
     with JsonlLogger(options.log_path, options.run_id) as logger:
