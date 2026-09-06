@@ -3,13 +3,8 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-    zigpkgs.url = "github:NixOS/nixpkgs/d233902339c02a9c334e7e593de68855ad26c4cb";
     nix-darwin = {
       url = "github:nix-darwin/nix-darwin/master";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    herdr = {
-      url = "github:ogulcancelik/herdr/v0.8.0";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
@@ -17,9 +12,7 @@
   outputs =
     {
       nixpkgs,
-      zigpkgs,
       nix-darwin,
-      herdr,
       ...
     }:
     let
@@ -32,7 +25,6 @@
       mkCli =
         system:
         let
-          zigTools = import zigpkgs { inherit system; };
           pkgs = import nixpkgs {
             inherit system;
             config.allowUnfreePredicate =
@@ -42,22 +34,6 @@
                 "terraform"
                 "zsh-abbr"
               ];
-            overlays = [
-              (final: prev: {
-                zig = zigTools.zig;
-                zls = zigTools.zls;
-                tbls = prev.tbls.overrideAttrs (old: rec {
-                  version = "1.92.3";
-                  src = prev.fetchFromGitHub {
-                    owner = "k1LoW";
-                    repo = "tbls";
-                    rev = "v${version}";
-                    hash = "sha256-/1yulnT+HDZGO8S8xk59sKXxoFaw5Hoa1XXAwp5z7eM=";
-                  };
-                  vendorHash = "sha256-DnXftqcjk2fKWytmqdg9eWjsofaOTsHOpxTeIbXqMlw=";
-                });
-              })
-            ];
           };
           selectedGoTools = pkgs.runCommand "selected-go-tools" { } ''
             mkdir -p "$out/bin"
@@ -72,7 +48,6 @@
             done
           '';
           mkVersionEntry = name: value: { inherit name value; };
-          herdrPkg = herdr.packages.${system}.default;
           python3WithPyYAML = pkgs.python3.withPackages (pythonPackages: [ pythonPackages.pyyaml ]);
           mdfriedKitty = pkgs.rustPlatform.buildRustPackage {
             inherit (pkgs.mdfried)
@@ -167,7 +142,7 @@
             ruff
             tbls
             uv
-            herdrPkg
+            herdr
           ];
           devShellOnlyPackages = with pkgs; [
             alejandra
