@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -54,6 +55,36 @@ class ExploreRouterStateTest(unittest.TestCase):
             self.assertFalse(
                 any(method == "turn/start" for _, method, _ in session.client.sent)
             )
+            logger.__exit__()
+
+    def test_final_answer_completion_waits_for_turn_completion(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session, logger = make_session(tmpdir)
+            session.handle_notification(
+                "item/agentMessage/delta",
+                {
+                    "threadId": "thread-1",
+                    "turnId": "turn-1",
+                    "itemId": "answer",
+                    "delta": "final",
+                },
+            )
+            session.handle_notification(
+                "item/completed",
+                {
+                    "threadId": "thread-1",
+                    "turnId": "turn-1",
+                    "item": {
+                        "id": "answer",
+                        "type": "agentMessage",
+                        "phase": "final_answer",
+                    },
+                },
+            )
+            self.assertEqual(session.client.sent, [])
+            session.handle_turn_completed({"id": "turn-1", "status": "completed"})
+            self.assertEqual(session.state.final_status, "completed")
+            self.assertTrue(session.state.natural_completion)
             logger.__exit__()
 
     def test_user_cancellation_does_not_restart(self):
@@ -253,6 +284,42 @@ class ExploreRouterStateTest(unittest.TestCase):
             )
             self.assertIsNone(session.estimated_credits())
             self.assertEqual(session.measurement_completeness(), "partial")
+            logger.__exit__()
+
+    def test_child_token_gap_is_partial_and_completion_log_keeps_measurements(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session, logger = make_session(tmpdir)
+            session.state.completed_monotonic = session.state.started_monotonic + 1
+            session.state.final_status = "completed"
+            session.state.usage_by_thread = {
+                "thread-1": {
+                    "token_usage": {"total": {"totalTokens": 20}},
+                    "account_usage": {
+                        "threadUsage": {"estimatedUsageCreditsMicros": 100}
+                    },
+                },
+                "child-thread": {
+                    "account_usage": {
+                        "threadUsage": {"estimatedUsageCreditsMicros": 50}
+                    }
+                },
+            }
+            self.assertEqual(session.measurement_completeness(), "partial")
+            self.assertAlmostEqual(session.estimated_credits(), 0.00015)
+            session.state.usage_by_thread["child-thread"]["token_usage"] = {
+                "total": {"totalTokens": 7}
+            }
+            result = session.result()
+            self.assertAlmostEqual(result["estimated_usage_credits"], 0.00015)
+            records = [
+                json.loads(line)
+                for line in (Path(tmpdir) / "events.jsonl").read_text().splitlines()
+            ]
+            completed = next(
+                record for record in records if record["event"] == "run_completed"
+            )
+            self.assertEqual(completed["token_usage"]["total"]["totalTokens"], 20)
+            self.assertAlmostEqual(completed["estimated_usage_credits"], 0.00015)
             logger.__exit__()
 
 

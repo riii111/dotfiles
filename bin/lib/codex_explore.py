@@ -447,6 +447,12 @@ class RouterSession:
             or not self.eligible_for_switch()
         ):
             return
+        if any(
+            message.get("turn_id") == self.state.active_turn_id
+            and message.get("phase") == "final_answer"
+            for message in self.state.agent_messages.values()
+        ):
+            return
         started = self.state.turn_started_monotonic
         if started is None:
             return
@@ -491,6 +497,7 @@ class RouterSession:
         self.log("turn_completed", status=status)
         self.state.active_turn_id = None
         if status == "completed":
+            self.state.completed_monotonic = time.monotonic()
             self.state.natural_completion = not self.state.astra_started
             self.state.final_status = "completed"
             self.state.switch_state = "completed"
@@ -504,6 +511,7 @@ class RouterSession:
         ):
             self.start_astra_turn()
             return
+        self.state.completed_monotonic = time.monotonic()
         self.state.final_status = "interrupted" if status == "interrupted" else "failed"
 
     def start_astra_turn(self) -> None:
@@ -726,8 +734,10 @@ class RouterSession:
         return credits / 1_000_000
 
     def measurement_completeness(self) -> str:
-        parent = self.state.usage_by_thread.get(self.state.thread_id or "", {})
-        has_tokens = isinstance(parent.get("token_usage"), dict)
+        has_tokens = bool(self.state.usage_by_thread) and all(
+            isinstance(usage.get("token_usage"), dict)
+            for usage in self.state.usage_by_thread.values()
+        )
         has_credits = self.estimated_credits() is not None
         if has_tokens and has_credits:
             return "complete"
@@ -794,6 +804,8 @@ class RouterSession:
             "run_completed",
             status=result["status"],
             duration_seconds=result["duration_seconds"],
+            token_usage=result["token_usage"]["parent"],
+            estimated_usage_credits=result["estimated_usage_credits"],
             measurement_completeness=result["measurement_completeness"],
         )
         return result
