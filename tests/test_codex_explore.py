@@ -331,6 +331,26 @@ class ExploreRouterStateTest(unittest.TestCase):
             self.assertAlmostEqual(session.estimated_credits(), 0.00015)
             logger.__exit__()
 
+    def test_child_account_usage_does_not_confirm_parent_astra_execution(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session, logger = make_session(tmpdir)
+            session.state.child_thread_ids = ["child-thread"]
+            session.handle_response(
+                "account/usage/read",
+                {
+                    "result": {
+                        "threadUsage": {
+                            "threadId": "child-thread",
+                            "groups": [{"model": DEFAULT_ASTRA_MODEL}],
+                        }
+                    }
+                },
+                "child-thread",
+            )
+            self.assertFalse(session.state.astra_execution_confirmed is True)
+            self.assertEqual(session.state.execution_models, [])
+            logger.__exit__()
+
     def test_report_keeps_missing_token_usage_as_unknown(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             task_file = Path(tmpdir) / "task.md"

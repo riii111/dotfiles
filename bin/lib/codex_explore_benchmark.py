@@ -160,7 +160,11 @@ def benchmark_manifest(
         },
         "fast_mode": "disabled",
         "memories": "disabled",
-        "thread_config": {"fast_mode": False, "memories": False},
+        "thread_config": {
+            "features": {"fast_mode": False, "memories": False},
+            "memories": {"use_memories": False},
+            "service_tier": "default",
+        },
     }
     (output_dir / "manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
@@ -372,7 +376,11 @@ def benchmark_main(argv: list[str] | None = None) -> int:
                 codex_command=namespace.codex_command,
                 log_path=events_path,
                 answer_path=output_dir / "answers" / f"{run_id}.txt",
-                benchmark_config={"fast_mode": False, "memories": False},
+                benchmark_config={
+                    "features": {"fast_mode": False, "memories": False},
+                    "memories": {"use_memories": False},
+                    "service_tier": "default",
+                },
                 run_id=run_id,
             )
             if condition.key == "C":

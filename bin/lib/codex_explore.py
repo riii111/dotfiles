@@ -256,6 +256,7 @@ class RunState:
     fallback_turn_started: bool = False
     fallback_turn_pending: bool = False
     budget_exceeded: bool = False
+    benchmark_config_check: dict[str, Any] | None = None
     parent_thread_id: str | None = None
 
 
@@ -294,6 +295,12 @@ class RouterSession:
         if self.state.child_thread_ids:
             if self.run_token_usage() is None or self.estimated_credits() is None:
                 return "partial" if present else "unknown"
+        config_incomplete = self.options.benchmark_config is not None and (
+            self.state.benchmark_config_check is None
+            or not self.state.benchmark_config_check.get("service_tier_verified")
+        )
+        if config_incomplete:
+            return "partial" if present else "unknown"
         if present == 3:
             return "complete"
         if present:
@@ -499,7 +506,8 @@ class RouterSession:
         elif method == "account/usage/read":
             self.usage_poll_pending = False
             self.record_account_usage(result, requested_thread_id)
-            self.observe_account_usage_models(result)
+            if requested_thread_id in (None, self.state.thread_id):
+                self.observe_account_usage_models(result)
             self.log("account_usage", usage=result)
 
     def handle_notification(self, method: str, params: dict[str, Any]) -> None:
@@ -1049,6 +1057,7 @@ class RouterSession:
             }
             if self.options.benchmark_config is not None:
                 thread_params["config"] = self.options.benchmark_config
+                thread_params["serviceTier"] = "default"
             thread_response = self.request_sync("thread/start", thread_params)
             if "error" in thread_response:
                 raise RuntimeError(error_text(thread_response["error"]))
@@ -1063,6 +1072,13 @@ class RouterSession:
             self.state.effective_model = thread_result.get("model")
             self.state.effective_model_source = "thread/start"
             self.state.known_thread_ids = {thread["id"]}
+            if self.options.benchmark_config is not None:
+                service_tier = thread_result.get("serviceTier")
+                self.state.benchmark_config_check = {
+                    "requested": self.options.benchmark_config,
+                    "service_tier": service_tier,
+                    "service_tier_verified": service_tier == "default",
+                }
             parent_id = thread.get("parentThreadId")
             self.state.parent_thread_id = parent_id
             if isinstance(self.state.effective_model, str):
@@ -1118,7 +1134,6 @@ class RouterSession:
                         if "error" not in child_usage_response:
                             child_usage = child_usage_response.get("result")
                             self.record_account_usage(child_usage, child_id)
-                            self.observe_account_usage_models(child_usage)
                         else:
                             self.state.errors.append(
                                 error_text(child_usage_response["error"])
@@ -1282,6 +1297,7 @@ class RouterSession:
             "natural_completion": self.state.natural_completion,
             "budget_exceeded": self.state.budget_exceeded,
             "child_thread_ids": self.state.child_thread_ids,
+            "benchmark_config_check": self.state.benchmark_config_check,
             "stderr_tail": self.client.stderr_lines,
         }
         reserved = {
