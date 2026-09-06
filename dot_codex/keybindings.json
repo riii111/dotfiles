@@ -1,0 +1,62 @@
+[
+  {
+    "command": "navigateBack",
+    "key": "Command+Left"
+  },
+  {
+    "command": "navigateBack",
+    "key": "MouseBack"
+  },
+  {
+    "command": "navigateBrowserBack",
+    "key": "Command+["
+  },
+  {
+    "command": "navigateBrowserForward",
+    "key": "Command+]"
+  },
+  {
+    "command": "navigateForward",
+    "key": "Command+Right"
+  },
+  {
+    "command": "openAvatarOverlay",
+    "key": null
+  },
+  {
+    "command": "openSideChat",
+    "key": "Ctrl+Shift+S"
+  },
+  {
+    "command": "searchChats",
+    "key": "Shift+Tab"
+  },
+  {
+    "command": "searchFiles",
+    "key": null
+  },
+  {
+    "command": "switchToMode1",
+    "key": "Ctrl+Command+Alt+Shift+J"
+  },
+  {
+    "command": "switchToMode2",
+    "key": null
+  },
+  {
+    "command": "switchToMode3",
+    "key": "Ctrl+Command+Alt+Shift+K"
+  },
+  {
+    "command": "toggleBottomPanel",
+    "key": "Command+Shift+J"
+  },
+  {
+    "command": "toggleMaximizeSidePanel",
+    "key": "Ctrl+Alt+B"
+  },
+  {
+    "command": "toggleTerminal",
+    "key": "Command+J"
+  }
+]
