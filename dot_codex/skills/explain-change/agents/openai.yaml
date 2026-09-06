@@ -1,6 +1,6 @@
 interface:
   display_name: "explain-change"
-  short_description: "明示指定時だけ、変更の挙動と設計理由を根拠につなげて短く解説する"
+  short_description: "初めて読む変更の挙動と設計理由を、根拠につなげて短く解説する"
   default_prompt: "$explain-change を使って、この変更の挙動と設計理由を、根拠をたどれる形で短く説明してください。"
 
 policy:
