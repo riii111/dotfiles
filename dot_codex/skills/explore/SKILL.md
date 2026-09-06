@@ -24,6 +24,15 @@ Remain read-only. Do not edit files, create commits, change branches, or mutate 
 - Before launching a Sol-or-higher subagent, state the model and why the broader or harder assignment justifies it. This is a visibility requirement, not an approval gate.
 - Synthesize results and resolve gaps between subagent scopes in the parent task.
 
+## 外部制御による収束・引き継ぎ
+
+外部制御から収束または引き継ぎを要求された場合だけ適用する。通常のExplore実行には影響しない。
+
+- 調査を最初からやり直さず、ユーザーの目的・制約、確認済みの根拠、有力な選択肢、未解決点を引き継ぐ。根拠には必要なファイル・行の参照を付ける。
+- 追加調査は、正確性や結論を実質的に変える不足情報に限定する。情報不足を隠して結論を強制しない。
+- 引き継ぎ用の整理では調査経緯を長く再説明せず、事実・推測・未確認事項を区別して簡潔にまとめる。内部の詳細な思考過程ではなく、判断に必要な情報を残す。
+- 進行中の子エージェントがあれば、識別子・担当・状態を示し、同じ調査を重複して依頼しない。
+
 ## Reporting
 
 Lead with the answer, then cite the smallest useful set of files and lines. Use logical component names before paths. Separate direct observations from inference, state material uncertainty, and mention unresolved gaps only when they affect the answer. Recommend a next step only when it follows from the findings.

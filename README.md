@@ -119,6 +119,34 @@ sub: Claude Code
 
 `~/.codex/config.toml` is rewritten by the Codex desktop app, so it is `.chezmoiignore`d and not applied. `dot_codex/config.toml.tmpl` is kept only as a hand-maintained reference for base settings; edit the live file directly.
 
+### Codex Explore router
+
+`bin/executable_codex-explore-router` is a small Python 3.11+ standard-library CLI for Explore tasks. It starts its own `codex app-server --stdio` process and an ephemeral thread; it does not attach to or interrupt Codex Desktop, the normal Codex CLI, or an existing thread.
+
+The implementation was exercised with `codex-cli 0.153.4`. Other versions are unverified. The router checks `model/list` before starting and uses the app-server methods `thread/start`, `turn/start`, `turn/settings/update`, `turn/steer`, `turn/interrupt`, and `account/usage/read` when available.
+
+After applying the dotfiles, run an Explore task with the managed skill explicitly:
+
+```sh
+codex-explore-router --explore --prompt-file task.md --mode observe
+codex-explore-router --explore --prompt-file task.md --mode auto \
+  --threshold-seconds 60 --switch-grace-seconds 15
+```
+
+Modes are `off`, `observe` (the default), and `auto`. `auto` applies only to an explicit Explore skill on a parent thread that starts with the configured Sol model, and at most once per run. It first requests `gpt-6-astra` with `low`; request acceptance and actual Astra execution are recorded separately. Natural completion never adds an Astra turn, and a user cancellation never resumes automatically. Use `--mode off` or set `mode = "off"` in `~/.config/codex/explore-router.toml` to disable intervention while retaining optional run logging.
+
+The optional configuration file uses a `[router]` table. Supported keys mirror the CLI options, including `sol_model`, `sol_effort`, `astra_model`, `astra_effort`, `threshold_seconds`, `switch_grace_seconds`, `max_run_seconds`, `log_path`, and `skill_path`. JSONL logs default to `~/.local/state/codex-explore-router/runs.jsonl`; prompts are not written there, while an explicit `--answer-file` can save the final answer.
+
+Compare the three conditions with a deliberately bounded live experiment. The default is one independent run for each condition: A Sol fixed, B Sol→Astra automatic switching, and C Astra fixed.
+
+```sh
+codex-explore-benchmark --task-file task.md --cwd ~/ghq/github.com/riii111/sabiql \
+  --output-dir /tmp/codex-explore-benchmark --allow-live \
+  --max-total-seconds 900 --max-total-credits 1000
+```
+
+The output directory contains `report.md`, `results.jsonl`, `events.jsonl`, and the saved answers. A benchmark stops before another run when the observed limits are reached; billing limits are not guaranteed because usage and interruption events can arrive late. If credits or token usage are unavailable, the report says `unknown` or `partial` rather than treating the missing value as zero. Use `--allow-unmetered` only when continuing despite missing usage is intentional.
+
 ### Codex command policy
 
 `dot_codex/rules/default.rules` controls commands that need to run outside the sandbox. Keep `sandbox_workspace_write.network_access = false` in the live `~/.codex/config.toml`; otherwise network commands can run inside the sandbox without consulting these rules.
