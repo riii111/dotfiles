@@ -4,6 +4,71 @@
             "complex_modifications": {
                 "rules": [
                     {
+                        "description": "Codex: Option+Tab toggles Chat and Codex",
+                        "manipulators": [
+                            {
+                                "conditions": [
+                                    {
+                                        "bundle_identifiers": ["^com\\.openai\\.codex$"],
+                                        "type": "frontmost_application_if"
+                                    },
+                                    {
+                                        "name": "codex_view",
+                                        "type": "variable_if",
+                                        "value": 0
+                                    }
+                                ],
+                                "from": {
+                                    "key_code": "tab",
+                                    "modifiers": { "mandatory": ["option"] }
+                                },
+                                "to": [
+                                    {
+                                        "key_code": "k",
+                                        "modifiers": ["command", "control", "option", "shift"]
+                                    },
+                                    {
+                                        "set_variable": {
+                                            "name": "codex_view",
+                                            "value": 1
+                                        }
+                                    }
+                                ],
+                                "type": "basic"
+                            },
+                            {
+                                "conditions": [
+                                    {
+                                        "bundle_identifiers": ["^com\\.openai\\.codex$"],
+                                        "type": "frontmost_application_if"
+                                    },
+                                    {
+                                        "name": "codex_view",
+                                        "type": "variable_if",
+                                        "value": 1
+                                    }
+                                ],
+                                "from": {
+                                    "key_code": "tab",
+                                    "modifiers": { "mandatory": ["option"] }
+                                },
+                                "to": [
+                                    {
+                                        "key_code": "j",
+                                        "modifiers": ["command", "control", "option", "shift"]
+                                    },
+                                    {
+                                        "set_variable": {
+                                            "name": "codex_view",
+                                            "value": 0
+                                        }
+                                    }
+                                ],
+                                "type": "basic"
+                            }
+                        ]
+                    },
+                    {
                         "description": "Claude: Enter newline, Cmd+Enter send",
                         "manipulators": [
                             {
