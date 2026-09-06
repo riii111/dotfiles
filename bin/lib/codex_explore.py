@@ -255,6 +255,7 @@ class RunState:
     fallback_interrupt_attempted: bool = False
     fallback_turn_started: bool = False
     fallback_turn_pending: bool = False
+    fallback_interrupt_deferred: bool = False
     budget_exceeded: bool = False
     benchmark_config_check: dict[str, Any] | None = None
     parent_thread_id: str | None = None
@@ -712,6 +713,7 @@ class RouterSession:
             self.state.effective_model_source = "ambiguous_usage"
         if model == self.options.astra_model:
             self.state.astra_execution_confirmed = True
+            self.execution_deadline = None
             if self.state.request_accepted:
                 self.state.switch_state = "execution_confirmed"
 
@@ -780,6 +782,7 @@ class RouterSession:
             and self.state.fallback_interrupt_attempted
             and not self.state.fallback_turn_started
             and not self.state.user_cancelled
+            and not self.state.budget_exceeded
         ):
             self.start_fallback_turn()
             return
@@ -894,15 +897,28 @@ class RouterSession:
         self.deadline = now + self.options.switch_grace_seconds
 
     def maybe_interrupt_fallback(self, now: float) -> None:
+        deadline_due = (
+            self.interrupt_deadline is not None and now >= self.interrupt_deadline
+        )
+        if deadline_due:
+            self.interrupt_deadline = None
+            if self.state.fallback_interrupt_attempted:
+                self.state.fallback_interrupt_deferred = False
+                return
+            if self.state.important_items:
+                self.state.fallback_interrupt_deferred = True
+                return
+            self.state.fallback_interrupt_deferred = False
+        elif not self.state.fallback_interrupt_deferred:
+            return
         if (
-            self.interrupt_deadline is None
-            or now < self.interrupt_deadline
-            or self.state.active_turn_id is None
+            self.state.active_turn_id is None
             or self.state.fallback_interrupt_attempted
             or self.state.user_cancelled
             or self.state.important_items
         ):
             return
+        self.state.fallback_interrupt_deferred = False
         self.state.switch_state = "fallback_interrupt_requested"
         self.state.fallback_interrupt_attempted = True
         self.log("fallback_interrupt_requested")
@@ -925,14 +941,14 @@ class RouterSession:
             self.start_fallback("settings_update_timeout")
 
     def maybe_fallback_after_acceptance(self, now: float) -> None:
+        if self.execution_deadline is None or now < self.execution_deadline:
+            return
+        self.execution_deadline = None
         if (
-            self.execution_deadline is not None
-            and now >= self.execution_deadline
-            and self.state.request_accepted
+            self.state.request_accepted
             and not self.state.astra_execution_confirmed
             and not self.state.fallback_steer_sent
         ):
-            self.execution_deadline = None
             self.start_fallback("astra_execution_unconfirmed")
 
     def maybe_poll_usage(self, now: float) -> None:
@@ -976,7 +992,7 @@ class RouterSession:
             self.execution_deadline,
             self.interrupt_deadline,
         ):
-            if deadline is not None:
+            if deadline is not None and deadline > now:
                 deadlines.append(deadline)
         return max(0.0, min(deadlines) - now)
 

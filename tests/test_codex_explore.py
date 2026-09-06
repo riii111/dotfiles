@@ -222,6 +222,44 @@ class ExploreRouterStateTest(unittest.TestCase):
             self.assertEqual(session.state.active_turn_id, "turn-2")
             logger.__exit__()
 
+    def test_budget_exceeded_does_not_restart_after_fallback_interrupt(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session, logger = make_session(tmpdir)
+            session.state.fallback_interrupt_attempted = True
+            session.state.budget_exceeded = True
+            session.handle_turn_completed({"id": "turn-1", "status": "interrupted"})
+            self.assertFalse(session.state.fallback_turn_pending)
+            self.assertFalse(
+                any(method == "turn/start" for _, method, _ in session.client.sent)
+            )
+            logger.__exit__()
+
+    def test_confirmed_astra_clears_execution_deadline(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session, logger = make_session(tmpdir)
+            session.state.request_accepted = True
+            session.execution_deadline = 0
+            session.observe_execution_model(DEFAULT_ASTRA_MODEL, "usage")
+            self.assertIsNone(session.execution_deadline)
+            session.maybe_fallback_after_acceptance(1)
+            self.assertFalse(session.state.fallback_steer_sent)
+            self.assertGreater(session.next_timeout(1), 0)
+            logger.__exit__()
+
+    def test_expired_interrupt_deadline_is_deferred_without_busy_polling(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session, logger = make_session(tmpdir)
+            session.interrupt_deadline = 0
+            session.state.important_items["command-1"] = "commandExecution"
+            session.maybe_interrupt_fallback(1)
+            self.assertIsNone(session.interrupt_deadline)
+            self.assertTrue(session.state.fallback_interrupt_deferred)
+            self.assertGreater(session.next_timeout(1), 0)
+            session.state.important_items.clear()
+            session.maybe_interrupt_fallback(2)
+            self.assertTrue(session.state.fallback_interrupt_attempted)
+            logger.__exit__()
+
     def test_final_answer_excludes_progress_and_previous_turn(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             session, logger = make_session(tmpdir)
