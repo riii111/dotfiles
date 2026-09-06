@@ -41,6 +41,7 @@ def make_session(tmpdir, mode="auto", explore=True):
     session.state.active_turn_id = "turn-1"
     session.state.effective_model = DEFAULT_SOL_MODEL
     session.state.effective_model_source = "thread/start"
+    session.state.configured_start_model = DEFAULT_SOL_MODEL
     session.state.turn_started_monotonic = 0
     return session, logger
 
@@ -168,4 +169,113 @@ class ExploreRouterStateTest(unittest.TestCase):
             self.assertEqual(
                 session.state.models_observed, [DEFAULT_SOL_MODEL, DEFAULT_ASTRA_MODEL]
             )
+            logger.__exit__()
+
+    def test_notifications_from_other_thread_or_turn_are_ignored(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session, logger = make_session(tmpdir)
+            session.handle_notification(
+                "item/agentMessage/delta",
+                {
+                    "threadId": "child-thread",
+                    "turnId": "turn-1",
+                    "itemId": "child-item",
+                    "delta": "child",
+                },
+            )
+            session.handle_notification(
+                "item/agentMessage/delta",
+                {
+                    "threadId": "thread-1",
+                    "turnId": "old-turn",
+                    "itemId": "old-item",
+                    "delta": "old",
+                },
+            )
+            session.handle_notification(
+                "thread/tokenUsage/updated",
+                {
+                    "threadId": "thread-1",
+                    "turnId": "old-turn",
+                    "tokenUsage": {"total": {"totalTokens": 9}},
+                },
+            )
+            self.assertEqual(session.state.agent_messages, {})
+            self.assertEqual(session.state.usage_snapshots, [])
+            logger.__exit__()
+
+    def test_fallback_turn_is_monitored_after_interrupted_turn(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session, logger = make_session(tmpdir)
+            session.state.fallback_interrupt_attempted = True
+            session.handle_turn_completed({"id": "turn-1", "status": "interrupted"})
+            self.assertTrue(session.state.fallback_turn_pending)
+            self.assertIsNone(session.state.active_turn_id)
+            session.handle_response(
+                "turn/start",
+                {"result": {"turn": {"id": "turn-2", "status": "inProgress"}}},
+            )
+            self.assertFalse(session.state.fallback_turn_pending)
+            self.assertTrue(session.state.fallback_turn_started)
+            self.assertEqual(session.state.active_turn_id, "turn-2")
+            logger.__exit__()
+
+    def test_final_answer_excludes_progress_and_previous_turn(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session, logger = make_session(tmpdir)
+            session.handle_notification(
+                "item/agentMessage/delta",
+                {
+                    "threadId": "thread-1",
+                    "turnId": "turn-1",
+                    "itemId": "progress",
+                    "delta": "progress",
+                },
+            )
+            session.handle_notification(
+                "item/completed",
+                {
+                    "threadId": "thread-1",
+                    "turnId": "turn-1",
+                    "item": {
+                        "id": "progress",
+                        "type": "agentMessage",
+                        "text": "progress",
+                        "phase": "commentary",
+                    },
+                },
+            )
+            session.handle_notification(
+                "item/completed",
+                {
+                    "threadId": "thread-1",
+                    "turnId": "turn-1",
+                    "item": {
+                        "id": "answer",
+                        "type": "agentMessage",
+                        "text": "final",
+                        "phase": "final_answer",
+                    },
+                },
+            )
+            session.handle_turn_completed({"id": "turn-1", "status": "completed"})
+            self.assertEqual(session.result()["final_answer"], "final")
+            logger.__exit__()
+
+    def test_usage_model_groups_do_not_claim_last_group_as_effective(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session, logger = make_session(tmpdir)
+            session.state.request_accepted = True
+            session.observe_account_usage_models(
+                {
+                    "threadUsage": {
+                        "groups": [
+                            {"model": DEFAULT_SOL_MODEL},
+                            {"model": DEFAULT_ASTRA_MODEL},
+                        ]
+                    }
+                }
+            )
+            self.assertIsNone(session.state.effective_model)
+            self.assertEqual(session.state.effective_model_source, "ambiguous_usage")
             logger.__exit__()

@@ -4,7 +4,6 @@ import argparse
 import json
 import os
 import selectors
-import statistics
 import subprocess
 import sys
 import threading
@@ -41,6 +40,9 @@ IMPORTANT_ITEM_TYPES = frozenset(
         "mcpToolCall",
         "subAgentActivity",
     }
+)
+PAUSING_ITEM_TYPES = frozenset(
+    {"commandExecution", "dynamicToolCall", "fileChange", "mcpToolCall"}
 )
 
 
@@ -199,6 +201,7 @@ class RunOptions:
     codex_command: str = "codex"
     log_path: Path = DEFAULT_LOG_PATH
     answer_path: Path | None = None
+    benchmark_config: dict[str, Any] | None = None
     run_id: str = field(default_factory=lambda: uuid.uuid4().hex)
 
 
@@ -213,6 +216,7 @@ class RunState:
     astra_execution_confirmed: bool | None = None
     effective_model: str | None = None
     effective_model_source: str | None = None
+    configured_start_model: str | None = None
     requested_model: str | None = None
     thread_id: str | None = None
     active_turn_id: str | None = None
@@ -224,7 +228,19 @@ class RunState:
     item_counts: dict[str, int] = field(default_factory=dict)
     agent_messages: dict[str, str] = field(default_factory=dict)
     agent_message_order: list[str] = field(default_factory=list)
+    agent_message_metadata: dict[str, dict[str, Any]] = field(default_factory=dict)
+    final_answer_ids: set[str] = field(default_factory=set)
     models_observed: list[str] = field(default_factory=list)
+    execution_models: list[str] = field(default_factory=list)
+    model_transitions: list[dict[str, str]] = field(default_factory=list)
+    usage_by_thread: dict[str, dict[str, Any]] = field(default_factory=dict)
+    child_thread_ids: list[str] = field(default_factory=list)
+    usage_scope: str = "parent_thread"
+    known_thread_ids: set[str] = field(default_factory=set)
+    completed_turn_ids: set[str] = field(default_factory=set)
+    known_turn_ids: set[str] = field(default_factory=set)
+    waiting_item_started: dict[str, float] = field(default_factory=dict)
+    known_wait_seconds: float = 0.0
     user_cancelled: bool = False
     timed_out: bool = False
     natural_completion: bool = False
@@ -236,6 +252,8 @@ class RunState:
     fallback_interrupt_sent: bool = False
     fallback_interrupt_attempted: bool = False
     fallback_turn_started: bool = False
+    fallback_turn_pending: bool = False
+    budget_exceeded: bool = False
     parent_thread_id: str | None = None
 
 
@@ -248,6 +266,9 @@ class RouterSession:
         self.pending: dict[int, str] = {}
         self.deadline: float | None = None
         self.interrupt_deadline: float | None = None
+        self.execution_deadline: float | None = None
+        self.last_usage_poll: float | None = None
+        self.usage_poll_pending = False
 
     def log(self, event: str, **fields: Any) -> None:
         self.logger.write(
@@ -266,6 +287,8 @@ class RouterSession:
         has_credits = self.estimated_credits() is not None
         has_model = bool(self.state.models_observed)
         present = sum((has_tokens, has_credits, has_model))
+        if self.state.child_thread_ids and present == 3:
+            return "partial"
         if present == 3:
             return "complete"
         if present:
@@ -281,6 +304,53 @@ class RouterSession:
         if not isinstance(micros, int):
             return None
         return micros / 1_000_000
+
+    def parent_notification(self, params: dict[str, Any]) -> bool:
+        return params.get("threadId") == self.state.thread_id
+
+    def current_turn_notification(
+        self, params: dict[str, Any], *, allow_new: bool = False
+    ) -> bool:
+        if not self.parent_notification(params):
+            return False
+        turn_id = params.get("turnId")
+        if not isinstance(turn_id, str):
+            return False
+        if turn_id == self.state.active_turn_id:
+            return True
+        if turn_id in self.state.completed_turn_ids:
+            return False
+        return allow_new and self.state.active_turn_id is None
+
+    def active_elapsed(self, now: float) -> float:
+        if self.state.turn_started_monotonic is None:
+            return 0.0
+        waiting = self.state.known_wait_seconds + sum(
+            max(0.0, now - started)
+            for started in self.state.waiting_item_started.values()
+        )
+        return max(0.0, now - self.state.turn_started_monotonic - waiting)
+
+    def record_usage(self, thread_id: str, turn_id: str, usage: dict[str, Any]) -> None:
+        self.state.usage_snapshots.append(
+            {
+                "thread_id": thread_id,
+                "turn_id": turn_id,
+                "token_usage": usage,
+            }
+        )
+        self.state.usage_by_thread[thread_id] = usage
+        if thread_id != self.state.thread_id:
+            if thread_id not in self.state.child_thread_ids:
+                self.state.child_thread_ids.append(thread_id)
+            self.state.usage_scope = "parent_and_child_threads"
+
+    def run_token_usage(self) -> dict[str, Any] | None:
+        usage = self.state.usage_by_thread.get(self.state.thread_id or "")
+        if usage is None and self.state.usage_by_thread:
+            usage = next(iter(self.state.usage_by_thread.values()))
+        total = usage.get("total") if isinstance(usage, dict) else None
+        return total if isinstance(total, dict) else None
 
     def request_sync(
         self,
@@ -327,6 +397,12 @@ class RouterSession:
             self.log("rpc_error", method=method, error=message["error"])
             if method == "turn/settings/update":
                 self.start_fallback("settings_update_failed")
+            elif method == "account/usage/read":
+                self.usage_poll_pending = False
+            elif method == "turn/start" and self.state.fallback_turn_pending:
+                self.state.fallback_turn_pending = False
+                self.state.switch_state = "fallback_turn_failed"
+                self.state.final_status = "failed"
             return
         result = message.get("result")
         if method == "turn/settings/update":
@@ -335,6 +411,10 @@ class RouterSession:
             if status == "applied":
                 self.state.request_accepted = True
                 self.state.switch_state = "request_accepted"
+                self.deadline = None
+                self.execution_deadline = (
+                    time.monotonic() + self.options.switch_grace_seconds
+                )
             else:
                 self.start_fallback("settings_update_unavailable")
         elif method == "turn/steer":
@@ -346,14 +426,18 @@ class RouterSession:
             self.log("fallback_interrupt_accepted", method=method, result=result)
             self.state.fallback_interrupt_sent = True
         elif method == "turn/start":
+            self.state.fallback_turn_pending = False
             self.apply_turn_start(result, fallback=True)
         elif method == "account/usage/read":
+            self.usage_poll_pending = False
             self.state.account_usage = result if isinstance(result, dict) else None
             self.observe_account_usage_models(self.state.account_usage)
             self.log("account_usage", usage=result)
 
     def handle_notification(self, method: str, params: dict[str, Any]) -> None:
         if method == "thread/started":
+            if not self.parent_notification(params):
+                return
             thread = params.get("thread")
             if isinstance(thread, dict) and isinstance(thread.get("id"), str):
                 self.log(
@@ -361,71 +445,149 @@ class RouterSession:
                 )
             return
         if method == "turn/started":
+            if not self.parent_notification(params):
+                return
             turn = params.get("turn")
             if isinstance(turn, dict):
                 turn_id = turn.get("id")
-                if isinstance(turn_id, str):
+                if isinstance(turn_id, str) and (
+                    self.state.active_turn_id is None
+                    or turn_id == self.state.active_turn_id
+                    or self.state.fallback_turn_pending
+                ):
                     self.state.active_turn_id = turn_id
+                    self.state.known_turn_ids.add(turn_id)
                     self.state.turn_started_monotonic = time.monotonic()
+                    self.state.known_wait_seconds = 0.0
+                    self.state.waiting_item_started.clear()
                     self.log("turn_started_notification", status=turn.get("status"))
             return
         if method == "turn/completed":
+            if not self.parent_notification(params):
+                return
             turn = params.get("turn")
-            if isinstance(turn, dict):
+            if isinstance(turn, dict) and turn.get("id") == self.state.active_turn_id:
                 self.handle_turn_completed(turn)
             return
         if method == "thread/tokenUsage/updated":
             usage = params.get("tokenUsage")
-            if isinstance(usage, dict):
-                self.state.usage_snapshots.append(
-                    {
-                        "thread_id": params.get("threadId"),
-                        "turn_id": params.get("turnId"),
-                        "token_usage": usage,
-                    }
+            thread_id = params.get("threadId")
+            turn_id = params.get("turnId")
+            if (
+                isinstance(usage, dict)
+                and isinstance(thread_id, str)
+                and isinstance(turn_id, str)
+                and (
+                    self.current_turn_notification(params)
+                    or (
+                        thread_id == self.state.thread_id
+                        and turn_id in self.state.completed_turn_ids
+                    )
+                    or thread_id in self.state.child_thread_ids
                 )
+            ):
+                self.record_usage(thread_id, turn_id, usage)
                 self.log("token_usage_updated", token_usage=usage)
             return
         if method == "item/agentMessage/delta":
+            if not self.current_turn_notification(params):
+                return
             item_id = params.get("itemId")
             delta = params.get("delta")
             if isinstance(item_id, str) and isinstance(delta, str):
                 if item_id not in self.state.agent_messages:
                     self.state.agent_messages[item_id] = ""
                     self.state.agent_message_order.append(item_id)
+                self.state.agent_message_metadata[item_id] = {
+                    "thread_id": self.state.thread_id,
+                    "turn_id": params.get("turnId"),
+                    "phase": self.state.agent_message_metadata.get(item_id, {}).get(
+                        "phase"
+                    ),
+                }
                 self.state.agent_messages[item_id] += delta
             return
         if method == "item/started":
+            if not self.current_turn_notification(params):
+                return
             item = params.get("item")
-            self.handle_item(item, started=True)
+            self.handle_item(
+                item,
+                started=True,
+                turn_id=params.get("turnId"),
+                started_at_ms=params.get("startedAtMs"),
+            )
             return
         if method == "item/completed":
+            if not self.current_turn_notification(params):
+                return
             item = params.get("item")
-            self.handle_item(item, started=False)
+            self.handle_item(item, started=False, turn_id=params.get("turnId"))
             return
         if method == "error":
             self.state.errors.append(error_text(params))
             self.log("server_error", error=params)
             return
         if method == "thread/status/changed":
+            if not self.parent_notification(params):
+                return
             self.log("thread_status_changed", status=params.get("status"))
+            return
+        if "rerout" in method.lower():
+            if not self.parent_notification(params):
+                return
+            for key in ("model", "effectiveModel", "toModel"):
+                model = params.get(key)
+                if isinstance(model, str) and model:
+                    self.observe_execution_model(model, "reroute")
+                    break
 
-    def handle_item(self, item: Any, started: bool) -> None:
+    def handle_item(
+        self,
+        item: Any,
+        started: bool,
+        turn_id: Any = None,
+        started_at_ms: Any = None,
+    ) -> None:
         if not isinstance(item, dict):
             return
         item_id = item.get("id")
         item_type = item.get("type")
         if not isinstance(item_id, str) or not isinstance(item_type, str):
             return
+        if item_type == "collabAgentToolCall":
+            receiver_ids = item.get("receiverThreadIds")
+            if isinstance(receiver_ids, list):
+                for child_id in receiver_ids:
+                    if isinstance(child_id, str) and child_id != self.state.thread_id:
+                        if child_id not in self.state.child_thread_ids:
+                            self.state.child_thread_ids.append(child_id)
+                        self.state.usage_scope = "parent_and_child_threads"
+        if item_type == "subAgentActivity":
+            child_id = item.get("agentThreadId")
+            if isinstance(child_id, str) and child_id != self.state.thread_id:
+                if child_id not in self.state.child_thread_ids:
+                    self.state.child_thread_ids.append(child_id)
+                self.state.usage_scope = "parent_and_child_threads"
         if started:
             self.state.item_counts[item_type] = (
                 self.state.item_counts.get(item_type, 0) + 1
             )
             if item_type in IMPORTANT_ITEM_TYPES:
                 self.state.important_items[item_id] = item_type
+            if item_type in PAUSING_ITEM_TYPES:
+                self.state.waiting_item_started[item_id] = time.monotonic()
             self.log("item_started", item_type=item_type, item_id=item_id)
         else:
             self.state.important_items.pop(item_id, None)
+            started_at = self.state.waiting_item_started.pop(item_id, None)
+            if started_at is not None:
+                duration = item.get("durationMs")
+                self.state.known_wait_seconds += (
+                    float(duration) / 1000
+                    if isinstance(duration, (int, float))
+                    else max(0.0, time.monotonic() - started_at)
+                )
             self.log(
                 "item_completed",
                 item_type=item_type,
@@ -436,6 +598,14 @@ class RouterSession:
                 if item_id not in self.state.agent_messages:
                     self.state.agent_message_order.append(item_id)
                 self.state.agent_messages[item_id] = item["text"]
+                phase = item.get("phase")
+                self.state.agent_message_metadata[item_id] = {
+                    "thread_id": self.state.thread_id,
+                    "turn_id": turn_id,
+                    "phase": phase,
+                }
+                if phase == "final_answer":
+                    self.state.final_answer_ids.add(item_id)
 
     def observe_account_usage_models(self, usage: dict[str, Any] | None) -> None:
         thread_usage = usage.get("threadUsage") if isinstance(usage, dict) else None
@@ -450,12 +620,29 @@ class RouterSession:
                 continue
             if model not in self.state.models_observed:
                 self.state.models_observed.append(model)
+            self.observe_execution_model(model, "usage")
+
+    def observe_execution_model(self, model: str, source: str) -> None:
+        if model not in self.state.models_observed:
+            self.state.models_observed.append(model)
+        if model not in self.state.execution_models:
+            self.state.execution_models.append(model)
+        if source == "reroute":
+            previous = self.state.effective_model
+            if previous and previous != model:
+                self.state.model_transitions.append({"from": previous, "to": model})
             self.state.effective_model = model
-            self.state.effective_model_source = "usage"
-            if model == self.options.astra_model:
-                self.state.astra_execution_confirmed = True
-                if self.state.request_accepted:
-                    self.state.switch_state = "execution_confirmed"
+            self.state.effective_model_source = source
+        elif len(self.state.execution_models) == 1:
+            self.state.effective_model = model
+            self.state.effective_model_source = source
+        else:
+            self.state.effective_model = None
+            self.state.effective_model_source = "ambiguous_usage"
+        if model == self.options.astra_model:
+            self.state.astra_execution_confirmed = True
+            if self.state.request_accepted:
+                self.state.switch_state = "execution_confirmed"
 
     def apply_turn_start(self, result: Any, fallback: bool = False) -> None:
         turn = result.get("turn") if isinstance(result, dict) else None
@@ -463,7 +650,10 @@ class RouterSession:
             self.state.errors.append("turn/start returned no turn")
             return
         self.state.active_turn_id = turn["id"]
+        self.state.known_turn_ids.add(turn["id"])
         self.state.turn_started_monotonic = time.monotonic()
+        self.state.known_wait_seconds = 0.0
+        self.state.waiting_item_started.clear()
         if fallback:
             self.state.fallback_turn_started = True
             self.state.switch_state = "fallback_turn_started"
@@ -477,6 +667,11 @@ class RouterSession:
         turn_id = turn.get("id")
         if not isinstance(turn_id, str):
             return
+        if turn_id in self.state.completed_turn_ids:
+            return
+        if turn_id != self.state.active_turn_id:
+            return
+        self.state.completed_turn_ids.add(turn_id)
         self.state.completed_turns.append(
             {
                 "id": turn_id,
@@ -484,15 +679,28 @@ class RouterSession:
                 "started_at": turn.get("startedAt"),
                 "completed_at": turn.get("completedAt"),
                 "duration_ms": turn.get("durationMs"),
-                "error": turn.get("error"),
+                "error": error_text(turn.get("error")) if turn.get("error") else None,
             }
         )
         self.state.important_items.clear()
-        self.log("turn_completed", status=turn.get("status"), turn=turn)
+        self.log(
+            "turn_completed",
+            status=turn.get("status"),
+            completed_turn={
+                "id": turn_id,
+                "status": turn.get("status"),
+                "started_at": turn.get("startedAt"),
+                "completed_at": turn.get("completedAt"),
+                "duration_ms": turn.get("durationMs"),
+                "error": error_text(turn.get("error")) if turn.get("error") else None,
+            },
+        )
         self.state.active_turn_id = None
         self.state.turn_started_monotonic = None
         self.deadline = None
         self.interrupt_deadline = None
+        self.execution_deadline = None
+        self.state.waiting_item_started.clear()
         status = turn.get("status")
         if (
             status == "interrupted"
@@ -511,6 +719,8 @@ class RouterSession:
             return
         if self.state.fallback_steer_sent:
             return
+        self.deadline = None
+        self.execution_deadline = None
         self.state.switch_state = "fallback_requested"
         self.state.fallback_steer_sent = True
         self.log("fallback_steer_requested", reason=reason)
@@ -525,9 +735,14 @@ class RouterSession:
         self.interrupt_deadline = time.monotonic() + self.options.switch_grace_seconds
 
     def start_fallback_turn(self) -> None:
-        if self.state.user_cancelled or self.state.fallback_turn_started:
+        if (
+            self.state.user_cancelled
+            or self.state.fallback_turn_started
+            or self.state.fallback_turn_pending
+        ):
             return
         self.state.switch_state = "fallback_turn_requested"
+        self.state.fallback_turn_pending = True
         self.log("fallback_turn_requested")
         self.request_async(
             "turn/start",
@@ -548,8 +763,7 @@ class RouterSession:
             and self.state.parent_thread_id is None
             and self.state.switch_count == 0
             and not self.state.user_cancelled
-            and self.state.effective_model == self.options.sol_model
-            and self.state.effective_model_source == "thread/start"
+            and self.state.configured_start_model == self.options.sol_model
         )
 
     def condition_observable(self) -> bool:
@@ -569,7 +783,7 @@ class RouterSession:
             return
         if not self.condition_observable():
             return
-        elapsed = now - self.state.turn_started_monotonic
+        elapsed = self.active_elapsed(now)
         if elapsed < self.options.threshold_seconds or self.state.condition_met:
             return
         self.state.condition_met = True
@@ -631,11 +845,58 @@ class RouterSession:
             and not self.state.request_accepted
             and not self.state.fallback_steer_sent
         ):
+            self.deadline = None
             self.start_fallback("settings_update_timeout")
+
+    def maybe_fallback_after_acceptance(self, now: float) -> None:
+        if (
+            self.execution_deadline is not None
+            and now >= self.execution_deadline
+            and self.state.request_accepted
+            and not self.state.astra_execution_confirmed
+            and not self.state.fallback_steer_sent
+        ):
+            self.execution_deadline = None
+            self.start_fallback("astra_execution_unconfirmed")
+
+    def maybe_poll_usage(self, now: float) -> None:
+        if (
+            self.state.thread_id is None
+            or self.usage_poll_pending
+            or self.state.final_status != "in_progress"
+            or (self.last_usage_poll is not None and now - self.last_usage_poll < 5)
+        ):
+            return
+        self.last_usage_poll = now
+        self.usage_poll_pending = True
+        self.request_async("account/usage/read", {"threadId": self.state.thread_id})
+
+    def maybe_stop_for_credit_budget(self) -> None:
+        limit = self.options.max_estimated_credits
+        credits = self.estimated_credits()
+        if (
+            limit is None
+            or credits is None
+            or credits < limit
+            or self.state.active_turn_id is None
+            or self.state.budget_exceeded
+        ):
+            return
+        self.state.budget_exceeded = True
+        self.state.switch_state = "budget_exceeded"
+        self.log("credit_budget_exceeded", credits=credits, limit=limit)
+        self.request_async(
+            "turn/interrupt",
+            {"threadId": self.state.thread_id, "turnId": self.state.active_turn_id},
+        )
 
     def next_timeout(self, now: float) -> float:
         deadlines = [now + 0.5, self.started_deadline()]
-        for deadline in (self.deadline, self.interrupt_deadline):
+        for deadline in (
+            self.deadline,
+            self.execution_deadline,
+            self.interrupt_deadline,
+        ):
             if deadline is not None:
                 deadlines.append(deadline)
         return max(0.0, min(deadlines) - now)
@@ -644,7 +905,11 @@ class RouterSession:
         return self.state.started_monotonic + self.options.max_run_seconds
 
     def monitor(self) -> None:
-        while self.state.active_turn_id is not None:
+        while (
+            self.state.active_turn_id is not None
+            or self.state.fallback_turn_pending
+            or self.pending
+        ):
             now = time.monotonic()
             if now >= self.started_deadline():
                 self.state.timed_out = True
@@ -661,7 +926,10 @@ class RouterSession:
                 break
             self.maybe_switch(now)
             self.maybe_fallback_after_timeout(now)
+            self.maybe_fallback_after_acceptance(now)
             self.maybe_interrupt_fallback(now)
+            self.maybe_poll_usage(now)
+            self.maybe_stop_for_credit_budget()
             try:
                 message = self.client.read(self.next_timeout(now))
             except EOFError as error:
@@ -688,7 +956,8 @@ class RouterSession:
                     "clientInfo": {
                         "name": "codex-explore-router",
                         "version": ROUTER_VERSION,
-                    }
+                    },
+                    "capabilities": {"experimentalApi": True},
                 },
             )
             if "error" in initialize:
@@ -700,27 +969,29 @@ class RouterSession:
             if "error" in models_response:
                 raise RuntimeError(error_text(models_response["error"]))
             self.validate_models(models_response.get("result"))
-            thread_response = self.request_sync(
-                "thread/start",
-                {
-                    "model": self.options.sol_model,
-                    "cwd": str(self.options.cwd),
-                    "sandbox": "read-only",
-                    "approvalPolicy": "never",
-                    "ephemeral": True,
-                },
-            )
+            thread_params = {
+                "model": self.options.sol_model,
+                "cwd": str(self.options.cwd),
+                "sandbox": "read-only",
+                "approvalPolicy": "never",
+                "ephemeral": True,
+            }
+            if self.options.benchmark_config is not None:
+                thread_params["config"] = self.options.benchmark_config
+            thread_response = self.request_sync("thread/start", thread_params)
             if "error" in thread_response:
                 raise RuntimeError(error_text(thread_response["error"]))
             thread_result = thread_response.get("result")
-            thread = (
-                thread_result.get("thread") if isinstance(thread_result, dict) else None
-            )
+            if not isinstance(thread_result, dict):
+                raise RuntimeError("thread/start returned no result")
+            thread = thread_result.get("thread")
             if not isinstance(thread, dict) or not isinstance(thread.get("id"), str):
                 raise RuntimeError("thread/start returned no thread")
             self.state.thread_id = thread["id"]
+            self.state.configured_start_model = thread_result.get("model")
             self.state.effective_model = thread_result.get("model")
             self.state.effective_model_source = "thread/start"
+            self.state.known_thread_ids = {thread["id"]}
             parent_id = thread.get("parentThreadId")
             self.state.parent_thread_id = parent_id
             if isinstance(self.state.effective_model, str):
@@ -745,6 +1016,8 @@ class RouterSession:
             if "error" in turn_response:
                 raise RuntimeError(error_text(turn_response["error"]))
             self.apply_turn_start(turn_response.get("result"))
+            if self.state.active_turn_id is None:
+                raise RuntimeError("turn/start returned no active turn")
             self.state.final_status = "in_progress"
             if self.options.mode == "off":
                 self.state.switch_state = "disabled"
@@ -753,7 +1026,12 @@ class RouterSession:
             elif not self.switch_eligible():
                 self.state.switch_state = "not_eligible"
             self.monitor()
-            if self.state.final_status in {"completed", "interrupted", "failed"}:
+            if self.state.final_status in {
+                "completed",
+                "interrupted",
+                "failed",
+                "budget_exceeded",
+            }:
                 usage_response = self.request_sync(
                     "account/usage/read", {"threadId": self.state.thread_id}, timeout=10
                 )
@@ -825,9 +1103,32 @@ class RouterSession:
             and self.state.final_status in {"completed", "interrupted"}
         ):
             self.state.final_status = "budget_exceeded"
+        if self.state.budget_exceeded:
+            self.state.final_status = "budget_exceeded"
+        final_turn_id = (
+            self.state.completed_turns[-1]["id"]
+            if self.state.completed_turns
+            else self.state.active_turn_id
+        )
+        answer_ids = [
+            item_id
+            for item_id in self.state.agent_message_order
+            if self.state.agent_message_metadata.get(item_id, {}).get("turn_id")
+            == final_turn_id
+            and item_id in self.state.final_answer_ids
+        ]
+        if not answer_ids:
+            answer_ids = [
+                item_id
+                for item_id in self.state.agent_message_order
+                if self.state.agent_message_metadata.get(item_id, {}).get("turn_id")
+                == final_turn_id
+                and self.state.agent_message_metadata.get(item_id, {}).get("phase")
+                is None
+            ]
         final_answer = "\n\n".join(
             self.state.agent_messages[item_id]
-            for item_id in self.state.agent_message_order
+            for item_id in answer_ids
             if self.state.agent_messages.get(item_id)
         )
         account_groups = None
@@ -844,11 +1145,10 @@ class RouterSession:
         elapsed = None
         if self.state.completed_monotonic is not None:
             elapsed = self.state.completed_monotonic - self.state.started_monotonic
-        latest_usage = (
-            self.state.usage_snapshots[-1]["token_usage"]
-            if self.state.usage_snapshots
-            else None
-        )
+        latest_usage = self.state.usage_by_thread.get(self.state.thread_id or "")
+        if latest_usage is None and self.state.usage_snapshots:
+            latest_usage = self.state.usage_snapshots[-1]["token_usage"]
+        run_total = self.run_token_usage()
         result = {
             "run_id": self.state.run_id,
             "status": self.state.final_status,
@@ -860,8 +1160,10 @@ class RouterSession:
                 "requested_start": self.options.sol_model,
                 "requested_astra": self.options.astra_model,
                 "observed": self.state.models_observed,
+                "execution": self.state.execution_models,
                 "effective": self.state.effective_model,
                 "effective_source": self.state.effective_model_source,
+                "transitions": self.state.model_transitions,
                 "astra_execution_confirmed": self.state.astra_execution_confirmed,
             },
             "switch": {
@@ -875,13 +1177,17 @@ class RouterSession:
                 "fallback_turn_started": self.state.fallback_turn_started,
             },
             "duration_seconds": round(elapsed, 3) if elapsed is not None else None,
-            "estimated_active_seconds": round(elapsed, 3)
+            "estimated_active_seconds": round(
+                max(0.0, (elapsed or 0.0) - self.state.known_wait_seconds), 3
+            )
             if elapsed is not None
             else None,
             "turns": self.state.completed_turns,
             "token_usage": {
                 "latest": latest_usage,
+                "run_total": run_total,
                 "snapshots": self.state.usage_snapshots,
+                "aggregation_scope": self.state.usage_scope,
             },
             "estimated_usage_credits": credits,
             "account_usage": self.state.account_usage,
@@ -891,6 +1197,8 @@ class RouterSession:
             "user_cancelled": self.state.user_cancelled,
             "timed_out": self.state.timed_out,
             "natural_completion": self.state.natural_completion,
+            "budget_exceeded": self.state.budget_exceeded,
+            "child_thread_ids": self.state.child_thread_ids,
             "stderr_tail": self.client.stderr_lines,
         }
         reserved = {
@@ -1025,279 +1333,14 @@ def router_main(argv: list[str] | None = None) -> int:
     return 0
 
 
-@dataclass(frozen=True)
-class BenchmarkCondition:
-    key: str
-    label: str
-    model: str
-    effort: str
-    mode: str
-
-
-BENCHMARK_CONDITIONS = {
-    "A": BenchmarkCondition("A", "Sol固定", DEFAULT_SOL_MODEL, "medium", "off"),
-    "B": BenchmarkCondition(
-        "B", "Sol→Astra自動切替", DEFAULT_SOL_MODEL, "medium", "auto"
-    ),
-    "C": BenchmarkCondition("C", "Astra固定", DEFAULT_ASTRA_MODEL, "low", "off"),
-}
-
-
-def benchmark_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="Compare Sol, auto-switch, and Astra runs."
-    )
-    parser.add_argument("--task-file", type=Path, required=True)
-    parser.add_argument("--output-dir", type=Path, required=True)
-    parser.add_argument("--cwd", type=Path, default=Path.cwd())
-    parser.add_argument("--skill-path", type=Path, default=DEFAULT_SKILL_PATH)
-    parser.add_argument("--sol-effort", default="medium")
-    parser.add_argument("--astra-effort", default="low")
-    parser.add_argument("--threshold-seconds", type=float, default=60.0)
-    parser.add_argument("--switch-grace-seconds", type=float, default=15.0)
-    parser.add_argument("--max-run-seconds", type=float, default=1800.0)
-    parser.add_argument("--repetitions", type=int, default=1)
-    parser.add_argument("--order", default="A,B,C")
-    parser.add_argument("--max-total-seconds", type=float, required=True)
-    parser.add_argument("--max-total-credits", type=float, required=True)
-    parser.add_argument("--allow-live", action="store_true")
-    parser.add_argument("--allow-unmetered", action="store_true")
-    parser.add_argument("--codex-command", default="codex")
-    return parser
-
-
-def parse_order(value: str) -> list[BenchmarkCondition]:
-    keys = [part.strip().upper() for part in value.split(",") if part.strip()]
-    if sorted(keys) != ["A", "B", "C"]:
-        raise ValueError("--order must contain A,B,C exactly once")
-    return [BENCHMARK_CONDITIONS[key] for key in keys]
-
-
-def append_jsonl(path: Path, record: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
-
-
-def median_or_none(values: list[float]) -> float | None:
-    return statistics.median(values) if values else None
-
-
-def render_benchmark_report(
-    path: Path,
-    records: list[dict[str, Any]],
-    task_file: Path,
-    max_total_seconds: float,
-    max_total_credits: float,
-) -> None:
-    lines = [
-        "# Codex Explore model benchmark",
-        "",
-        f"- 課題: `{task_file}`",
-        "- 実行単位: 独立した新規app-server/thread",
-        f"- 実験上限: {max_total_seconds:g}秒 / {max_total_credits:g} credits",
-        "- creditsはApp Serverが返す推定値で、欠損は0としていない。",
-        "",
-        "## 結果",
-        "",
-        "| 条件 | 実行数 | 成功数 | 完了時間中央値(秒) | credits中央値 | 切替実行確認 | 計測完全性 |",
-        "| --- | ---: | ---: | ---: | ---: | ---: | --- |",
-    ]
-    summaries: dict[str, tuple[float | None, float | None]] = {}
-    for key, condition in BENCHMARK_CONDITIONS.items():
-        selected = [record for record in records if record.get("condition") == key]
-        durations = [
-            float(record["result"]["duration_seconds"])
-            for record in selected
-            if isinstance(
-                record.get("result", {}).get("duration_seconds"), (int, float)
-            )
-        ]
-        credits = [
-            float(record["result"]["estimated_usage_credits"])
-            for record in selected
-            if isinstance(
-                record.get("result", {}).get("estimated_usage_credits"), (int, float)
-            )
-        ]
-        confirmed = sum(
-            record.get("result", {}).get("models", {}).get("astra_execution_confirmed")
-            is True
-            for record in selected
-        )
-        completeness = sorted(
-            {
-                record.get("result", {}).get("measurement_completeness", "unknown")
-                for record in selected
-            }
-        )
-        summaries[key] = (median_or_none(durations), median_or_none(credits))
-        lines.append(
-            f"| {key}: {condition.label} | {len(selected)} | "
-            f"{sum(record.get('result', {}).get('status') in {'completed', 'interrupted'} for record in selected)} | "
-            f"{format_metric(median_or_none(durations))} | {format_metric(median_or_none(credits))} | "
-            f"{confirmed}/{len(selected)} | {', '.join(completeness) or 'unknown'} |"
-        )
-    base_duration, base_credits = summaries["A"]
-    lines.extend(
-        [
-            "",
-            "## A基準の削減率",
-            "",
-            "時間短縮率 = (Aの完了時間 - 比較条件の完了時間) / Aの完了時間。",
-            "credits削減率 = (Aのcredits - 比較条件のcredits) / Aのcredits。",
-            "",
-            "| 条件 | 時間短縮率 | credits削減率 |",
-            "| --- | ---: | ---: |",
-        ]
-    )
-    for key in ("B", "C"):
-        duration, credits = summaries[key]
-        time_reduction = (
-            (base_duration - duration) / base_duration
-            if base_duration and duration is not None
-            else None
-        )
-        credit_reduction = (
-            (base_credits - credits) / base_credits
-            if base_credits and credits is not None
-            else None
-        )
-        lines.append(
-            f"| {key} | {format_percent(time_reduction)} | {format_percent(credit_reduction)} |"
-        )
-    lines.extend(
-        [
-            "",
-            "## 各run",
-            "",
-            "| run | 条件 | 状態 | 秒 | credits | 実効モデル | 切替状態 |",
-            "| --- | --- | --- | ---: | ---: | --- | --- |",
-        ]
-    )
-    for record in records:
-        result = record.get("result", {})
-        lines.append(
-            f"| `{result.get('run_id', '-')}` | {record.get('condition', '-')} | {result.get('status', '-')} | "
-            f"{format_metric(result.get('duration_seconds'))} | {format_metric(result.get('estimated_usage_credits'))} | "
-            f"{result.get('models', {}).get('effective', '-')} | {result.get('switch', {}).get('state', '-')} |"
-        )
-    lines.extend(
-        [
-            "",
-            "## 解釈",
-            "",
-            "この実験の1回実行だけでは常用判断を確定しない。回答品質は別途、課題ごとの評価基準で確認する。",
-            "完了時間はrouter開始から最終turn完了までの経過時間で、純粋な推論時間ではない。",
-            "イベントログの再生は制御ロジックのテストであり、Astraの実消費や回答比較には使えない。",
-        ]
-    )
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-
-
-def format_metric(value: Any) -> str:
-    if not isinstance(value, (int, float)):
-        return "unknown"
-    return f"{value:.3f}" if isinstance(value, float) else str(value)
-
-
-def format_percent(value: float | None) -> str:
-    return f"{value:.1%}" if value is not None else "unknown"
-
-
-def benchmark_main(argv: list[str] | None = None) -> int:
-    parser = benchmark_parser()
-    namespace = parser.parse_args(argv)
-    if not namespace.allow_live:
-        parser.error("実モデル実行には --allow-live が必要です")
-    if namespace.repetitions < 1:
-        parser.error("--repetitions must be positive")
-    if namespace.max_total_seconds <= 0 or namespace.max_total_credits <= 0:
-        parser.error("experiment budgets must be positive")
-    try:
-        conditions = parse_order(namespace.order)
-        task_file = namespace.task_file.expanduser().resolve()
-        cwd = namespace.cwd.expanduser().resolve()
-        skill_path = namespace.skill_path.expanduser().resolve()
-        output_dir = namespace.output_dir.expanduser().resolve()
-        if output_dir == cwd or cwd in output_dir.parents:
-            parser.error("--output-dir must be outside --cwd")
-        prompt = task_file.read_text(encoding="utf-8")
-        if not skill_path.is_file():
-            parser.error(f"explore skill not found: {skill_path}")
-        output_dir.mkdir(parents=True, exist_ok=True)
-    except (OSError, ValueError) as error:
-        parser.error(str(error))
-    records: list[dict[str, Any]] = []
-    started = time.monotonic()
-    total_credits = 0.0
-    events_path = output_dir / "events.jsonl"
-    results_path = output_dir / "results.jsonl"
-    for repetition in range(1, namespace.repetitions + 1):
-        for condition in conditions:
-            if time.monotonic() - started >= namespace.max_total_seconds:
-                break
-            if total_credits >= namespace.max_total_credits:
-                break
-            run_id = f"{condition.key}-{repetition}-{uuid.uuid4().hex[:8]}"
-            options = RunOptions(
-                prompt=prompt,
-                cwd=cwd,
-                mode=condition.mode,
-                explore=True,
-                skill_path=skill_path,
-                sol_effort=namespace.sol_effort,
-                astra_effort=namespace.astra_effort,
-                threshold_seconds=namespace.threshold_seconds,
-                switch_grace_seconds=namespace.switch_grace_seconds,
-                max_run_seconds=namespace.max_run_seconds,
-                codex_command=namespace.codex_command,
-                log_path=events_path,
-                answer_path=output_dir / "answers" / f"{run_id}.txt",
-                run_id=run_id,
-            )
-            if condition.key == "C":
-                options.sol_model = DEFAULT_ASTRA_MODEL
-                options.sol_effort = namespace.astra_effort
-            result = run_router(options)
-            record = {
-                "condition": condition.key,
-                "condition_label": condition.label,
-                "repetition": repetition,
-                "result": result,
-            }
-            records.append(record)
-            append_jsonl(results_path, record)
-            credits = result.get("estimated_usage_credits")
-            if isinstance(credits, (int, float)):
-                total_credits += credits
-            elif not namespace.allow_unmetered:
-                break
-        else:
-            continue
-        break
-    render_benchmark_report(
-        output_dir / "report.md",
-        records,
-        task_file,
-        namespace.max_total_seconds,
-        namespace.max_total_credits,
-    )
-    print(output_dir / "report.md")
-    return 0
-
-
 __all__ = [
     "AppServerClient",
-    "BENCHMARK_CONDITIONS",
     "HANDOFF_PROMPT",
     "JsonlLogger",
     "RunOptions",
     "RunState",
     "RouterSession",
-    "benchmark_main",
     "load_config",
-    "parse_order",
     "run_router",
     "router_main",
 ]
