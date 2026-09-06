@@ -198,51 +198,68 @@ class RunOptions:
 
 
 @dataclass
-class RunState:
-    run_id: str
-    mode: str
-    thread_id: str | None = None
-    parent_thread_id: str | None = None
-    active_turn_id: str | None = None
-    current_model: str | None = None
-    start_model: str | None = None
-    switch_requested: bool = False
-    interrupt_requested: bool = False
-    astra_turn_start_requested: bool = False
-    astra_started: bool = False
-    switch_count: int = 0
-    condition_met: bool = False
-    switch_state: str = "not_started"
+class TurnExecution:
+    model: str
+    allow_switch: bool
+    turn_id: str | None = None
+    started_monotonic: float | None = None
+    outcome: str | None = None
+    interrupt_sent: bool = False
+    threshold_observed: bool = False
     important_items: dict[str, str] = field(default_factory=dict)
     agent_messages: dict[str, dict[str, Any]] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class TurnResult:
+    turn_id: str | None
+    model: str
+    status: str
+    switch: bool
+    agent_messages: dict[str, dict[str, Any]]
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.turn_id,
+            "model": self.model,
+            "status": self.status,
+            "switch": self.switch,
+        }
+
+
+@dataclass
+class RunRecord:
+    run_id: str
+    thread_id: str | None = None
+    parent_thread_id: str | None = None
+    start_model: str | None = None
+    turns: list[TurnResult] = field(default_factory=list)
     usage_by_thread: dict[str, dict[str, Any]] = field(default_factory=dict)
-    completed_turns: list[dict[str, Any]] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     final_status: str = "not_started"
-    natural_completion: bool = False
     user_cancelled: bool = False
     timed_out: bool = False
     started_monotonic: float = 0.0
     completed_monotonic: float | None = None
-    turn_started_monotonic: float | None = None
-    last_completed_turn_id: str | None = None
 
 
 class RouterSession:
     def __init__(self, options: RunOptions, logger: JsonlLogger):
         self.options = options
         self.logger = logger
-        self.state = RunState(options.run_id, options.mode)
+        self.record = RunRecord(options.run_id)
         self.client = AppServerClient(options.codex_command, options.cwd)
+        self.active_turn: TurnExecution | None = None
         self.pending: dict[int, str] = {}
 
     def log(self, event: str, **fields: Any) -> None:
+        turn = self.active_turn
         self.logger.write(
             event,
-            mode=self.state.mode,
-            thread_id=self.state.thread_id,
-            turn_id=self.state.active_turn_id,
-            model=self.state.current_model,
+            mode=self.options.mode,
+            thread_id=self.record.thread_id,
+            turn_id=turn.turn_id if turn else None,
+            model=turn.model if turn else None,
             **fields,
         )
 
@@ -286,70 +303,65 @@ class RouterSession:
     def handle_response(self, method: str, message: dict[str, Any]) -> None:
         if "error" in message:
             message_text = error_text(message["error"])
-            self.state.errors.append(f"{method}: {message_text}")
+            self.record.errors.append(f"{method}: {message_text}")
             self.log("rpc_error", method=method, error=message["error"])
-            if method == "turn/start" and self.state.astra_turn_start_requested:
-                self.state.final_status = "failed"
             return
-
-        result = message.get("result")
         if method == "turn/interrupt":
-            self.log("interrupt_response", result=result)
-            return
-        if method == "turn/start" and self.state.astra_turn_start_requested:
-            self.activate_turn(result, self.options.astra_model)
-            self.state.astra_started = self.state.active_turn_id is not None
-            if self.state.astra_started:
-                self.state.final_status = "in_progress"
-                self.state.current_model = self.options.astra_model
-                self.state.switch_state = "astra_running"
-                self.log("astra_turn_started", effort=self.options.astra_effort)
+            self.log("interrupt_response", result=message.get("result"))
 
     def parent_notification(self, params: dict[str, Any]) -> bool:
-        return params.get("threadId") == self.state.thread_id
+        return params.get("threadId") == self.record.thread_id
 
     def current_turn_notification(self, params: dict[str, Any]) -> bool:
-        return self.parent_notification(params) and params.get("turnId") == (
-            self.state.active_turn_id
+        turn = self.active_turn
+        return (
+            turn is not None
+            and self.parent_notification(params)
+            and params.get("turnId") == turn.turn_id
         )
 
-    def activate_turn(self, result: Any, model: str) -> None:
+    def activate_turn(self, result: Any) -> None:
         turn = result.get("turn") if isinstance(result, dict) else None
         if not isinstance(turn, dict) or not isinstance(turn.get("id"), str):
             raise RuntimeError("turn/start returned no turn")
+        active = self.active_turn
+        if active is None:
+            raise RuntimeError("turn/start returned without an active run")
         turn_id = turn["id"]
-        if self.state.active_turn_id == turn_id:
-            return
-        self.state.active_turn_id = turn_id
-        self.state.current_model = model
-        self.state.turn_started_monotonic = time.monotonic()
-        self.log("turn_started", status=turn.get("status"))
+        if active.turn_id is None:
+            active.turn_id = turn_id
+        elif active.turn_id != turn_id:
+            raise RuntimeError("turn/start returned an unexpected turn")
+        if active.outcome is None and active.started_monotonic is None:
+            active.started_monotonic = time.monotonic()
+            self.log("turn_started", status=turn.get("status"))
 
     def handle_notification(self, method: str, params: dict[str, Any]) -> None:
         if method == "turn/started":
-            if not self.parent_notification(params):
+            if not self.parent_notification(params) or self.active_turn is None:
                 return
             turn = params.get("turn")
-            if isinstance(turn, dict) and isinstance(turn.get("id"), str):
-                if self.state.active_turn_id is None:
-                    model = (
-                        self.options.astra_model
-                        if self.state.astra_turn_start_requested
-                        else self.options.sol_model
-                    )
-                    self.activate_turn({"turn": turn}, model)
+            if not isinstance(turn, dict) or not isinstance(turn.get("id"), str):
+                return
+            if self.active_turn.turn_id not in (None, turn["id"]):
+                return
+            self.active_turn.turn_id = turn["id"]
+            if self.active_turn.started_monotonic is None:
+                self.active_turn.started_monotonic = time.monotonic()
+                self.log("turn_started", status=turn.get("status"))
             return
 
         if method == "turn/completed":
-            if not self.parent_notification(params):
+            if not self.parent_notification(params) or self.active_turn is None:
                 return
             turn = params.get("turn")
             if (
                 isinstance(turn, dict)
-                and turn.get("id") == self.state.active_turn_id
-                and turn.get("id") != self.state.last_completed_turn_id
+                and turn.get("id") == self.active_turn.turn_id
+                and isinstance(turn.get("status"), str)
             ):
-                self.handle_turn_completed(turn)
+                self.active_turn.outcome = turn["status"]
+                self.log("turn_completed", status=turn["status"])
             return
 
         if method == "thread/tokenUsage/updated":
@@ -366,7 +378,7 @@ class RouterSession:
             item_id = params.get("itemId")
             delta = params.get("delta")
             if isinstance(item_id, str) and isinstance(delta, str):
-                message = self.state.agent_messages.setdefault(
+                message = self.active_turn.agent_messages.setdefault(
                     item_id,
                     {"text": "", "turn_id": params["turnId"], "phase": None},
                 )
@@ -380,11 +392,11 @@ class RouterSession:
             return
 
         if method == "error":
-            self.state.errors.append(error_text(params))
+            self.record.errors.append(error_text(params))
             self.log("server_error", error=params)
 
     def usage_by_thread(self, thread_id: str) -> dict[str, Any]:
-        return self.state.usage_by_thread.setdefault(thread_id, {})
+        return self.record.usage_by_thread.setdefault(thread_id, {})
 
     def handle_item(self, item: Any, *, started: bool) -> None:
         if not isinstance(item, dict):
@@ -397,161 +409,114 @@ class RouterSession:
             if not isinstance(item_type, str):
                 return
             if item_type in IMPORTANT_ITEM_TYPES:
-                self.state.important_items[item_id] = item_type
+                self.active_turn.important_items[item_id] = item_type
             if item_type == "collabAgentToolCall":
                 child_ids = item.get("receiverThreadIds")
                 if isinstance(child_ids, list):
                     for child_id in child_ids:
                         if (
                             isinstance(child_id, str)
-                            and child_id != self.state.thread_id
+                            and child_id != self.record.thread_id
                         ):
                             self.usage_by_thread(child_id)
             if item_type == "subAgentActivity":
                 child_id = item.get("agentThreadId")
-                if isinstance(child_id, str) and child_id != self.state.thread_id:
+                if isinstance(child_id, str) and child_id != self.record.thread_id:
                     self.usage_by_thread(child_id)
             self.log("item_started", item_id=item_id, item_type=item_type)
             return
 
-        self.state.important_items.pop(item_id, None)
+        self.active_turn.important_items.pop(item_id, None)
         if item_type == "agentMessage":
-            message = self.state.agent_messages.setdefault(
+            message = self.active_turn.agent_messages.setdefault(
                 item_id,
-                {"text": "", "turn_id": self.state.active_turn_id, "phase": None},
+                {"text": "", "turn_id": self.active_turn.turn_id, "phase": None},
             )
             if isinstance(item.get("text"), str):
                 message["text"] = item["text"]
             if isinstance(item.get("phase"), str):
                 message["phase"] = item["phase"]
         self.log("item_completed", item_id=item_id, item_type=item_type)
-        if not self.state.important_items:
-            self.maybe_request_switch(time.monotonic())
 
-    def eligible_for_switch(self) -> bool:
+    def switch_eligible(self) -> bool:
         return (
             self.options.mode != "off"
             and self.options.explore
-            and self.state.parent_thread_id is None
-            and self.state.start_model == self.options.sol_model
-            and self.state.current_model == self.options.sol_model
+            and self.record.parent_thread_id is None
+            and self.record.start_model == self.options.sol_model
         )
 
-    def maybe_request_switch(self, now: float | None = None) -> None:
+    def maybe_request_switch(self, turn: TurnExecution, now: float) -> bool:
         if (
-            self.state.switch_requested
-            or self.state.astra_turn_start_requested
-            or self.state.astra_started
-            or self.state.user_cancelled
-            or self.state.active_turn_id is None
-            or not self.eligible_for_switch()
-        ):
-            return
-        if any(
-            message.get("turn_id") == self.state.active_turn_id
-            and message.get("phase") == "final_answer"
-            for message in self.state.agent_messages.values()
-        ):
-            return
-        started = self.state.turn_started_monotonic
-        if started is None:
-            return
-        now = time.monotonic() if now is None else now
-        if now - started < self.options.threshold_seconds:
-            return
-        if self.state.condition_met and self.options.mode != "auto":
-            return
-        self.state.condition_met = True
-        if self.options.mode != "auto":
-            self.state.switch_state = "condition_observed"
-            self.log("switch_condition_observed")
-            return
-        if self.state.important_items:
-            if self.state.switch_state == "waiting_for_items":
-                return
-            self.state.switch_state = "waiting_for_items"
-            self.log(
-                "switch_deferred",
-                important_item_ids=list(self.state.important_items),
+            turn.interrupt_sent
+            or not turn.allow_switch
+            or self.record.user_cancelled
+            or not self.switch_eligible()
+            or turn.model != self.options.sol_model
+            or turn.turn_id is None
+            or turn.started_monotonic is None
+            or now - turn.started_monotonic < self.options.threshold_seconds
+            or turn.important_items
+            or any(
+                message.get("phase") == "final_answer"
+                for message in turn.agent_messages.values()
             )
-            return
-        self.state.switch_requested = True
-        self.state.interrupt_requested = True
-        self.state.switch_count = 1
-        self.state.switch_state = "interrupt_requested"
+        ):
+            return False
+        if self.options.mode == "observe":
+            if not turn.threshold_observed:
+                turn.threshold_observed = True
+                self.log("switch_condition_observed")
+            return False
+        if self.options.mode != "auto":
+            return False
         self.request_async(
             "turn/interrupt",
-            {"threadId": self.state.thread_id, "turnId": self.state.active_turn_id},
+            {"threadId": self.record.thread_id, "turnId": turn.turn_id},
         )
+        turn.interrupt_sent = True
         self.log("interrupt_requested")
+        return True
 
-    def handle_turn_completed(self, turn: dict[str, Any]) -> None:
-        turn_id = turn.get("id")
-        status = turn.get("status")
-        if not isinstance(turn_id, str):
-            return
-        self.state.last_completed_turn_id = turn_id
-        self.state.completed_turns.append(
-            {"id": turn_id, "status": status, "model": self.state.current_model}
+    def finish_turn(self, turn: TurnExecution) -> TurnResult:
+        status = turn.outcome or "failed"
+        result = TurnResult(
+            turn_id=turn.turn_id,
+            model=turn.model,
+            status=status,
+            switch=turn.interrupt_sent
+            and status == "interrupted"
+            and turn.allow_switch,
+            agent_messages=dict(turn.agent_messages),
         )
-        self.log("turn_completed", status=status)
-        self.state.active_turn_id = None
-        if status == "completed":
-            self.state.completed_monotonic = time.monotonic()
-            self.state.natural_completion = not self.state.astra_started
-            self.state.final_status = "completed"
-            self.state.switch_state = "completed"
-            return
-        if (
-            status == "interrupted"
-            and self.state.switch_requested
-            and not self.state.user_cancelled
-            and not self.state.astra_turn_start_requested
-            and not self.state.astra_started
-        ):
-            self.start_astra_turn()
-            return
-        self.state.completed_monotonic = time.monotonic()
-        self.state.final_status = "interrupted" if status == "interrupted" else "failed"
+        self.record.turns.append(result)
+        self.active_turn = None
+        return result
 
-    def start_astra_turn(self) -> None:
-        if self.state.astra_turn_start_requested or self.state.astra_started:
-            return
-        self.state.astra_turn_start_requested = True
-        self.state.switch_state = "astra_start_requested"
-        self.run_turn(
-            self.options.astra_model,
-            self.options.astra_effort,
-            [{"type": "text", "text": HANDOFF_PROMPT}],
-            wait_for_response=False,
-        )
-        self.log("astra_turn_requested", effort=self.options.astra_effort)
-
-    def monitor(self) -> None:
-        while self.state.active_turn_id is not None or (
-            self.pending and self.state.final_status == "in_progress"
-        ):
+    def monitor_turn(self, turn: TurnExecution) -> TurnResult:
+        while turn.outcome is None:
             now = time.monotonic()
-            if now - self.state.started_monotonic >= self.options.max_run_seconds:
-                self.state.timed_out = True
-                self.state.final_status = "timeout"
+            if now - self.record.started_monotonic >= self.options.max_run_seconds:
+                self.record.timed_out = True
+                turn.outcome = "timeout"
                 self.log("run_timeout")
                 break
-            self.maybe_request_switch(now)
+            self.maybe_request_switch(turn, now)
             try:
                 message = self.client.read(0.25)
             except EOFError as error:
-                self.state.errors.append(str(error))
-                self.state.final_status = "server_closed"
+                self.record.errors.append(str(error))
+                turn.outcome = "server_closed"
                 self.log("server_closed", stderr=self.client.stderr_lines)
                 break
             except (OSError, RuntimeError) as error:
-                self.state.errors.append(str(error))
-                self.state.final_status = "protocol_error"
+                self.record.errors.append(str(error))
+                turn.outcome = "protocol_error"
                 self.log("protocol_error", error=str(error))
                 break
             if message is not None:
                 self.dispatch(message)
+        return self.finish_turn(turn)
 
     def run_turn(
         self,
@@ -559,21 +524,25 @@ class RouterSession:
         effort: str,
         input_items: list[dict[str, Any]],
         *,
-        wait_for_response: bool = True,
-    ) -> None:
-        params = {
-            "threadId": self.state.thread_id,
-            "model": model,
-            "effort": effort,
-            "input": input_items,
-        }
-        if not wait_for_response:
-            self.request_async("turn/start", params)
-            return
-        response = self.request_sync("turn/start", params)
+        allow_switch: bool,
+    ) -> TurnResult:
+        turn = TurnExecution(model=model, allow_switch=allow_switch)
+        self.active_turn = turn
+        response = self.request_sync(
+            "turn/start",
+            {
+                "threadId": self.record.thread_id,
+                "model": model,
+                "effort": effort,
+                "input": input_items,
+            },
+        )
         if "error" in response:
             raise RuntimeError(error_text(response["error"]))
-        self.activate_turn(response.get("result"), model)
+        self.activate_turn(response.get("result"))
+        if turn.outcome is None:
+            return self.monitor_turn(turn)
+        return self.finish_turn(turn)
 
     def start_thread(self) -> None:
         response = self.request_sync(
@@ -594,28 +563,27 @@ class RouterSession:
         thread = result.get("thread")
         if not isinstance(thread, dict) or not isinstance(thread.get("id"), str):
             raise RuntimeError("thread/start returned no thread")
-        self.state.thread_id = thread["id"]
-        self.state.parent_thread_id = thread.get("parentThreadId")
-        self.state.start_model = result.get("model") or self.options.sol_model
-        self.state.current_model = self.state.start_model
+        self.record.thread_id = thread["id"]
+        self.record.parent_thread_id = thread.get("parentThreadId")
+        self.record.start_model = result.get("model") or self.options.sol_model
         self.usage_by_thread(thread["id"])
         self.log(
             "thread_started",
-            parent_thread_id=self.state.parent_thread_id,
-            configured_model=self.state.start_model,
+            parent_thread_id=self.record.parent_thread_id,
+            configured_model=self.record.start_model,
         )
 
     def read_account_usage(self) -> None:
-        for thread_id in list(self.state.usage_by_thread):
+        for thread_id in list(self.record.usage_by_thread):
             try:
                 response = self.request_sync(
                     "account/usage/read", {"threadId": thread_id}, timeout=10
                 )
             except (OSError, RuntimeError, TimeoutError) as error:
-                self.state.errors.append(f"account/usage/read: {error}")
+                self.record.errors.append(f"account/usage/read: {error}")
                 continue
             if "error" in response:
-                self.state.errors.append(error_text(response["error"]))
+                self.record.errors.append(error_text(response["error"]))
                 continue
             usage = response.get("result")
             if isinstance(usage, dict):
@@ -626,7 +594,7 @@ class RouterSession:
                 self.usage_by_thread(reported_id or thread_id)["account_usage"] = usage
 
     def run(self) -> dict[str, Any]:
-        self.state.started_monotonic = time.monotonic()
+        self.record.started_monotonic = time.monotonic()
         self.log("run_started", requested_model=self.options.sol_model)
         try:
             self.client.start()
@@ -650,33 +618,37 @@ class RouterSession:
                 raise RuntimeError(error_text(models["error"]))
             self.validate_models(models.get("result"))
             self.start_thread()
-            self.run_turn(
-                self.options.sol_model, self.options.sol_effort, self.input_items()
+            sol_result = self.run_turn(
+                self.options.sol_model,
+                self.options.sol_effort,
+                self.input_items(),
+                allow_switch=self.switch_eligible(),
             )
-            self.state.final_status = "in_progress"
-            if self.options.mode == "off":
-                self.state.switch_state = "disabled"
-            elif not self.options.explore:
-                self.state.switch_state = "not_explore"
-            elif not self.eligible_for_switch():
-                self.state.switch_state = "not_eligible"
+            if sol_result.switch:
+                self.record.final_status = "in_progress"
+                final_result = self.run_turn(
+                    self.options.astra_model,
+                    self.options.astra_effort,
+                    [{"type": "text", "text": HANDOFF_PROMPT}],
+                    allow_switch=False,
+                )
             else:
-                self.state.switch_state = "eligible"
-            self.monitor()
-            if self.state.final_status in {"completed", "interrupted", "failed"}:
+                final_result = sol_result
+            self.record.final_status = final_result.status
+            self.record.completed_monotonic = time.monotonic()
+            if final_result.status in {"completed", "interrupted", "failed"}:
                 self.read_account_usage()
         except KeyboardInterrupt:
-            self.state.user_cancelled = True
-            self.state.final_status = "user_cancelled"
-            self.state.switch_state = "cancelled"
+            self.record.user_cancelled = True
+            self.record.final_status = "user_cancelled"
             self.log("user_cancelled")
         except (OSError, RuntimeError, TimeoutError) as error:
-            self.state.errors.append(str(error))
-            self.state.final_status = "failed"
+            self.record.errors.append(str(error))
+            self.record.final_status = "failed"
             self.log("run_failed", error=str(error), stderr=self.client.stderr_lines)
         finally:
-            if self.state.completed_monotonic is None:
-                self.state.completed_monotonic = time.monotonic()
+            if self.record.completed_monotonic is None:
+                self.record.completed_monotonic = time.monotonic()
             self.client.close()
         return self.result()
 
@@ -715,10 +687,10 @@ class RouterSession:
         ]
 
     def estimated_credits(self) -> float | None:
-        if not self.state.usage_by_thread:
+        if not self.record.usage_by_thread:
             return None
         credits = 0
-        for usage in self.state.usage_by_thread.values():
+        for usage in self.record.usage_by_thread.values():
             account = usage.get("account_usage")
             thread_usage = (
                 account.get("threadUsage") if isinstance(account, dict) else None
@@ -734,9 +706,9 @@ class RouterSession:
         return credits / 1_000_000
 
     def measurement_completeness(self) -> str:
-        has_tokens = bool(self.state.usage_by_thread) and all(
+        has_tokens = bool(self.record.usage_by_thread) and all(
             isinstance(usage.get("token_usage"), dict)
-            for usage in self.state.usage_by_thread.values()
+            for usage in self.record.usage_by_thread.values()
         )
         has_credits = self.estimated_credits() is not None
         if has_tokens and has_credits:
@@ -746,58 +718,89 @@ class RouterSession:
         return "unknown"
 
     def final_answer(self) -> str:
-        if not self.state.completed_turns:
-            turn_id = self.state.active_turn_id
+        if self.active_turn is not None:
+            messages = self.active_turn.agent_messages
+        elif self.record.turns:
+            messages = self.record.turns[-1].agent_messages
         else:
-            turn_id = self.state.completed_turns[-1]["id"]
-        messages = [
-            message
-            for message in self.state.agent_messages.values()
-            if message.get("turn_id") == turn_id and message.get("text")
-        ]
+            messages = {}
+        values = [message for message in messages.values() if message.get("text")]
         final = [
-            message for message in messages if message.get("phase") == "final_answer"
+            message for message in values if message.get("phase") == "final_answer"
         ]
-        return "\n\n".join(message["text"] for message in (final or messages))
+        return "\n\n".join(message["text"] for message in (final or values))
+
+    def switch_details(self) -> dict[str, Any]:
+        astra_started = any(
+            turn.model == self.options.astra_model for turn in self.record.turns
+        ) or (
+            self.active_turn is not None
+            and self.active_turn.model == self.options.astra_model
+        )
+        switch_requested = any(turn.switch for turn in self.record.turns)
+        if astra_started:
+            state = "switched"
+        elif switch_requested:
+            state = "interrupted"
+        elif self.options.mode == "off":
+            state = "disabled"
+        elif not self.options.explore:
+            state = "not_explore"
+        elif (
+            self.record.parent_thread_id is not None
+            or self.record.start_model != self.options.sol_model
+        ):
+            state = "not_eligible"
+        else:
+            state = "not_switched"
+        return {
+            "state": state,
+            "interrupt_requested": switch_requested,
+            "count": int(astra_started),
+        }
 
     def result(self) -> dict[str, Any]:
         elapsed = None
-        if self.state.completed_monotonic is not None:
-            elapsed = self.state.completed_monotonic - self.state.started_monotonic
-        parent_usage = self.state.usage_by_thread.get(self.state.thread_id or "", {})
+        if self.record.completed_monotonic is not None:
+            elapsed = self.record.completed_monotonic - self.record.started_monotonic
+        parent_usage = self.record.usage_by_thread.get(self.record.thread_id or "", {})
+        execution_models = [turn.model for turn in self.record.turns]
+        if self.active_turn is not None:
+            execution_models.append(self.active_turn.model)
+        switch = self.switch_details()
+        astra_started = switch["count"] == 1
         result = {
-            "run_id": self.state.run_id,
-            "status": self.state.final_status,
+            "run_id": self.record.run_id,
+            "status": self.record.final_status,
             "final_answer": self.final_answer(),
-            "thread_id": self.state.thread_id,
+            "thread_id": self.record.thread_id,
             "mode": self.options.mode,
             "explore": self.options.explore,
             "models": {
                 "requested_start": self.options.sol_model,
                 "requested_astra": self.options.astra_model,
-                "started": self.state.start_model,
-                "astra_started": self.state.astra_started,
+                "started": self.record.start_model,
+                "execution": execution_models,
+                "astra_started": astra_started,
             },
-            "switch": {
-                "state": self.state.switch_state,
-                "condition_met": self.state.condition_met,
-                "interrupt_requested": self.state.interrupt_requested,
-                "astra_turn_start_requested": self.state.astra_turn_start_requested,
-                "count": self.state.switch_count,
-            },
+            "switch": switch,
             "duration_seconds": round(elapsed, 3) if elapsed is not None else None,
             "token_usage": {
                 "parent": parent_usage.get("token_usage"),
-                "by_thread": self.state.usage_by_thread,
+                "by_thread": self.record.usage_by_thread,
             },
             "estimated_usage_credits": self.estimated_credits(),
             "measurement_completeness": self.measurement_completeness(),
-            "important_items": self.state.important_items,
-            "turns": self.state.completed_turns,
-            "errors": self.state.errors,
-            "user_cancelled": self.state.user_cancelled,
-            "timed_out": self.state.timed_out,
-            "natural_completion": self.state.natural_completion,
+            "important_items": (
+                self.active_turn.important_items if self.active_turn is not None else {}
+            ),
+            "turns": [turn.as_dict() for turn in self.record.turns],
+            "errors": self.record.errors,
+            "user_cancelled": self.record.user_cancelled,
+            "timed_out": self.record.timed_out,
+            "natural_completion": (
+                self.record.final_status == "completed" and not astra_started
+            ),
             "stderr_tail": self.client.stderr_lines,
         }
         self.log(
@@ -902,8 +905,10 @@ __all__ = [
     "HANDOFF_PROMPT",
     "JsonlLogger",
     "RunOptions",
-    "RunState",
+    "RunRecord",
     "RouterSession",
+    "TurnExecution",
+    "TurnResult",
     "run_router",
     "router_main",
 ]

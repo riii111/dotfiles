@@ -121,21 +121,18 @@ sub: Claude Code
 
 ### Codex Explore router
 
-`bin/executable_codex-explore-router` is a small Python 3.11+ standard-library CLI for Explore tasks. It starts its own `codex app-server --stdio` process and an ephemeral thread; it does not attach to or interrupt Codex Desktop, the normal Codex CLI, or an existing thread.
+`codex-explore-router` runs an Explore task in its own temporary Codex session. It does not change an open Desktop or CLI conversation.
 
-The router checks `model/list` before starting and uses `thread/start`, `turn/start`, `turn/interrupt`, and `account/usage/read`. Its automatic path is one-way: after a Sol turn passes the threshold and has no pending important tool or child-agent item, it requests one interrupt, waits for that turn's completion event, and starts one Astra turn with `low` effort in the same thread. An interrupt response by itself never starts Astra.
-
-After applying the dotfiles, run an Explore task with the managed skill explicitly:
+After applying the dotfiles, run:
 
 ```sh
-codex-explore-router --explore --prompt-file task.md --mode observe
 codex-explore-router --explore --prompt-file task.md --mode auto \
   --threshold-seconds 60
 ```
 
-Modes are `off`, `observe` (the default), and `auto`. `auto` applies only to an explicit Explore skill on a root thread that starts with the configured Sol model, and at most once per run. Natural completion never adds an Astra turn, and a user cancellation never resumes automatically. Use `--mode off` to disable intervention while retaining run logging.
+Modes are `off` (no switching), `observe` (the default; never switches), and `auto` (switches a long-running Sol task to Astra once). Use `--help` for all options.
 
-All router settings are CLI arguments; there is no TOML or environment-variable configuration hierarchy. JSONL logs default to `~/.local/state/codex-explore-router/runs.jsonl`; prompts are not written there, while an explicit `--answer-file` can save the final answer. Duration, token usage, and estimated credits are exposed per run for later local measurement; missing usage remains unknown.
+Run logs default to `~/.local/state/codex-explore-router/runs.jsonl`. Pass `--answer-file` to save the answer separately.
 
 ### Codex command policy
 

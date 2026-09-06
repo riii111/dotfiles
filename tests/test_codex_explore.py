@@ -1,5 +1,6 @@
 import json
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -9,6 +10,8 @@ from bin.lib.codex_explore import (
     JsonlLogger,
     RunOptions,
     RouterSession,
+    TurnExecution,
+    TurnResult,
 )
 
 
@@ -17,12 +20,16 @@ class FakeClient:
         self.sent = []
         self.next_id = 1
         self.stderr_lines = []
+        self.read_queue = []
 
     def send(self, method, params=None):
         request_id = self.next_id
         self.next_id += 1
         self.sent.append((request_id, method, params))
         return request_id
+
+    def read(self, _timeout):
+        return self.read_queue.pop(0) if self.read_queue else None
 
 
 def make_session(tmpdir, mode="auto", explore=True):
@@ -38,11 +45,15 @@ def make_session(tmpdir, mode="auto", explore=True):
     )
     session = RouterSession(options, logger)
     session.client = FakeClient()
-    session.state.thread_id = "thread-1"
-    session.state.active_turn_id = "turn-1"
-    session.state.current_model = DEFAULT_SOL_MODEL
-    session.state.start_model = DEFAULT_SOL_MODEL
-    session.state.turn_started_monotonic = 0
+    session.record.thread_id = "thread-1"
+    session.record.start_model = DEFAULT_SOL_MODEL
+    session.usage_by_thread("thread-1")
+    session.active_turn = TurnExecution(
+        model=DEFAULT_SOL_MODEL,
+        allow_switch=True,
+        turn_id="turn-1",
+        started_monotonic=0,
+    )
     return session, logger
 
 
@@ -50,8 +61,16 @@ class ExploreRouterStateTest(unittest.TestCase):
     def test_natural_completion_does_not_start_astra(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             session, logger = make_session(tmpdir)
-            session.handle_turn_completed({"id": "turn-1", "status": "completed"})
-            self.assertEqual(session.state.final_status, "completed")
+            session.handle_notification(
+                "turn/completed",
+                {
+                    "threadId": "thread-1",
+                    "turn": {"id": "turn-1", "status": "completed"},
+                },
+            )
+            result = session.finish_turn(session.active_turn)
+            self.assertEqual(result.status, "completed")
+            self.assertFalse(result.switch)
             self.assertFalse(
                 any(method == "turn/start" for _, method, _ in session.client.sent)
             )
@@ -82,36 +101,42 @@ class ExploreRouterStateTest(unittest.TestCase):
                 },
             )
             self.assertEqual(session.client.sent, [])
-            session.handle_turn_completed({"id": "turn-1", "status": "completed"})
-            self.assertEqual(session.state.final_status, "completed")
-            self.assertTrue(session.state.natural_completion)
+            session.handle_notification(
+                "turn/completed",
+                {
+                    "threadId": "thread-1",
+                    "turn": {"id": "turn-1", "status": "completed"},
+                },
+            )
+            self.assertEqual(
+                session.finish_turn(session.active_turn).status, "completed"
+            )
             logger.__exit__()
 
     def test_user_cancellation_does_not_restart(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             session, logger = make_session(tmpdir)
-            session.state.user_cancelled = True
-            session.maybe_request_switch(2)
+            session.record.user_cancelled = True
+            self.assertFalse(session.maybe_request_switch(session.active_turn, 2))
             self.assertEqual(session.client.sent, [])
             logger.__exit__()
 
-    def test_interrupt_is_requested_once(self):
+    def test_interrupt_is_requested_once_for_one_turn(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             session, logger = make_session(tmpdir)
-            session.maybe_request_switch(2)
-            session.maybe_request_switch(3)
+            first = session.maybe_request_switch(session.active_turn, 2)
+            second = session.maybe_request_switch(session.active_turn, 3)
+            self.assertTrue(first)
+            self.assertFalse(second)
             self.assertEqual(
                 [method for _, method, _ in session.client.sent], ["turn/interrupt"]
             )
-            self.assertEqual(session.state.switch_count, 1)
             logger.__exit__()
 
-    def test_observe_records_threshold_without_interrupting(self):
+    def test_observe_records_no_interruption(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             session, logger = make_session(tmpdir, mode="observe")
-            session.maybe_request_switch(2)
-            self.assertTrue(session.state.condition_met)
-            self.assertEqual(session.state.switch_state, "condition_observed")
+            self.assertFalse(session.maybe_request_switch(session.active_turn, 2))
             self.assertEqual(session.client.sent, [])
             logger.__exit__()
 
@@ -119,16 +144,20 @@ class ExploreRouterStateTest(unittest.TestCase):
         cases = (
             {"explore": False},
             {"parent_thread_id": "parent-thread"},
-            {"start_model": DEFAULT_ASTRA_MODEL, "current_model": DEFAULT_ASTRA_MODEL},
+            {"start_model": DEFAULT_ASTRA_MODEL},
+            {"active_model": DEFAULT_ASTRA_MODEL},
         )
         for case in cases:
             with self.subTest(case=case), tempfile.TemporaryDirectory() as tmpdir:
                 session, logger = make_session(
                     tmpdir, explore=case.get("explore", True)
                 )
+                if "active_model" in case:
+                    session.active_turn.model = case["active_model"]
                 for name, value in case.items():
-                    setattr(session.state, name, value)
-                session.maybe_request_switch(2)
+                    if name != "active_model":
+                        setattr(session.record, name, value)
+                self.assertFalse(session.maybe_request_switch(session.active_turn, 2))
                 self.assertEqual(session.client.sent, [])
                 logger.__exit__()
 
@@ -143,8 +172,7 @@ class ExploreRouterStateTest(unittest.TestCase):
                     "item": {"id": "command-1", "type": "commandExecution"},
                 },
             )
-            session.maybe_request_switch(2)
-            self.assertEqual(session.client.sent, [])
+            self.assertFalse(session.maybe_request_switch(session.active_turn, 2))
             session.handle_notification(
                 "item/completed",
                 {
@@ -153,45 +181,126 @@ class ExploreRouterStateTest(unittest.TestCase):
                     "item": {"id": "command-1", "type": "commandExecution"},
                 },
             )
+            self.assertTrue(session.maybe_request_switch(session.active_turn, 2))
             self.assertEqual(
                 [method for _, method, _ in session.client.sent], ["turn/interrupt"]
             )
             logger.__exit__()
 
-    def test_interrupt_response_does_not_start_astra_until_completion(self):
+    def test_interrupt_response_does_not_start_astra(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             session, logger = make_session(tmpdir)
-            session.maybe_request_switch(2)
+            self.assertTrue(session.maybe_request_switch(session.active_turn, 2))
             session.handle_response("turn/interrupt", {"result": {}})
+            session.handle_notification(
+                "turn/completed",
+                {
+                    "threadId": "thread-1",
+                    "turn": {"id": "turn-1", "status": "interrupted"},
+                },
+            )
             self.assertFalse(
                 any(method == "turn/start" for _, method, _ in session.client.sent)
             )
-            session.handle_turn_completed({"id": "turn-1", "status": "interrupted"})
-            starts = [
-                params
-                for _, method, params in session.client.sent
-                if method == "turn/start"
-            ]
-            self.assertEqual(len(starts), 1)
-            self.assertEqual(starts[0]["model"], DEFAULT_ASTRA_MODEL)
-            self.assertEqual(starts[0]["effort"], "low")
             logger.__exit__()
 
-    def test_astra_turn_starts_only_once_after_completion_event(self):
+    def test_run_turns_are_serial_and_astra_cannot_switch(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             session, logger = make_session(tmpdir)
-            session.maybe_request_switch(2)
-            session.handle_turn_completed({"id": "turn-1", "status": "interrupted"})
-            session.handle_turn_completed({"id": "turn-1", "status": "interrupted"})
+            session.active_turn = None
+            session.record.started_monotonic = time.monotonic()
+            session.options.threshold_seconds = 0
+            session.client.read_queue = [
+                {
+                    "method": "turn/completed",
+                    "params": {
+                        "threadId": "thread-1",
+                        "turn": {"id": "turn-1", "status": "interrupted"},
+                    },
+                },
+                {
+                    "method": "turn/completed",
+                    "params": {
+                        "threadId": "thread-1",
+                        "turn": {"id": "turn-2", "status": "completed"},
+                    },
+                },
+            ]
+            calls = []
+            responses = iter(("turn-1", "turn-2"))
+
+            def request_sync(method, params=None, timeout=30):
+                calls.append((method, params))
+                turn_id = next(responses)
+                return {"result": {"turn": {"id": turn_id, "status": "inProgress"}}}
+
+            session.request_sync = request_sync
+            sol = session.run_turn(
+                DEFAULT_SOL_MODEL,
+                "medium",
+                [{"type": "text", "text": "task"}],
+                allow_switch=True,
+            )
+            astra = session.run_turn(
+                DEFAULT_ASTRA_MODEL,
+                "low",
+                [{"type": "text", "text": "handoff"}],
+                allow_switch=False,
+            )
+            self.assertTrue(sol.switch)
+            self.assertEqual(astra.status, "completed")
             self.assertEqual(
-                sum(method == "turn/start" for _, method, _ in session.client.sent), 1
+                [params["model"] for method, params in calls if method == "turn/start"],
+                [DEFAULT_SOL_MODEL, DEFAULT_ASTRA_MODEL],
             )
-            session.handle_response(
-                "turn/start",
-                {"result": {"turn": {"id": "turn-2", "status": "inProgress"}}},
+            self.assertEqual(
+                sum(method == "turn/interrupt" for _, method, _ in session.client.sent),
+                1,
             )
-            self.assertTrue(session.state.astra_started)
-            self.assertEqual(session.state.active_turn_id, "turn-2")
+            logger.__exit__()
+
+    def test_turn_start_response_cannot_reactivate_completed_turn(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session, logger = make_session(tmpdir)
+            session.active_turn = None
+            turn_ids = iter(("turn-1", "turn-2"))
+
+            def request_sync(_method, _params=None, _timeout=30):
+                turn_id = next(turn_ids)
+                session.handle_notification(
+                    "turn/started",
+                    {
+                        "threadId": "thread-1",
+                        "turn": {"id": turn_id, "status": "inProgress"},
+                    },
+                )
+                session.handle_notification(
+                    "turn/completed",
+                    {
+                        "threadId": "thread-1",
+                        "turn": {"id": turn_id, "status": "completed"},
+                    },
+                )
+                return {"result": {"turn": {"id": turn_id, "status": "inProgress"}}}
+
+            session.request_sync = request_sync
+            first = session.run_turn(
+                DEFAULT_SOL_MODEL,
+                "medium",
+                [{"type": "text", "text": "task"}],
+                allow_switch=False,
+            )
+            second = session.run_turn(
+                DEFAULT_ASTRA_MODEL,
+                "low",
+                [{"type": "text", "text": "handoff"}],
+                allow_switch=False,
+            )
+            self.assertEqual((first.status, second.status), ("completed", "completed"))
+            self.assertIsNone(session.active_turn)
+            self.assertEqual(
+                [turn.turn_id for turn in session.record.turns], ["turn-1", "turn-2"]
+            )
             logger.__exit__()
 
     def test_other_thread_and_turn_events_are_ignored(self):
@@ -215,7 +324,28 @@ class ExploreRouterStateTest(unittest.TestCase):
                     "delta": "old",
                 },
             )
-            self.assertEqual(session.state.agent_messages, {})
+            self.assertEqual(session.active_turn.agent_messages, {})
+            logger.__exit__()
+
+    def test_astra_partial_answer_is_not_replaced_by_sol(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session, logger = make_session(tmpdir)
+            session.record.turns.append(
+                TurnResult(
+                    "turn-1",
+                    DEFAULT_SOL_MODEL,
+                    "interrupted",
+                    True,
+                    {"sol": {"text": "sol partial", "phase": None}},
+                )
+            )
+            session.active_turn = TurnExecution(
+                model=DEFAULT_ASTRA_MODEL,
+                allow_switch=False,
+                turn_id="turn-2",
+                agent_messages={"astra": {"text": "astra partial", "phase": None}},
+            )
+            self.assertEqual(session.final_answer(), "astra partial")
             logger.__exit__()
 
     def test_messages_keep_insertion_order_and_final_phase(self):
@@ -255,18 +385,30 @@ class ExploreRouterStateTest(unittest.TestCase):
                     },
                 },
             )
-            session.handle_turn_completed({"id": "turn-1", "status": "completed"})
-            self.assertEqual(list(session.state.agent_messages), ["progress", "answer"])
+            self.assertEqual(
+                list(session.active_turn.agent_messages), ["progress", "answer"]
+            )
+            session.handle_notification(
+                "turn/completed",
+                {
+                    "threadId": "thread-1",
+                    "turn": {"id": "turn-1", "status": "completed"},
+                },
+            )
+            session.finish_turn(session.active_turn)
             self.assertEqual(session.final_answer(), "final")
             logger.__exit__()
 
-    def test_missing_usage_is_unknown_and_snapshots_are_not_summed(self):
+    def test_missing_usage_is_unknown_and_latest_only(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             session, logger = make_session(tmpdir)
-            usage = {"total": {"totalTokens": 10}}
             session.handle_notification(
                 "thread/tokenUsage/updated",
-                {"threadId": "thread-1", "turnId": "turn-1", "tokenUsage": usage},
+                {
+                    "threadId": "thread-1",
+                    "turnId": "turn-1",
+                    "tokenUsage": {"total": {"totalTokens": 10}},
+                },
             )
             session.handle_notification(
                 "thread/tokenUsage/updated",
@@ -277,7 +419,7 @@ class ExploreRouterStateTest(unittest.TestCase):
                 },
             )
             self.assertEqual(
-                session.state.usage_by_thread["thread-1"]["token_usage"]["total"][
+                session.record.usage_by_thread["thread-1"]["token_usage"]["total"][
                     "totalTokens"
                 ],
                 20,
@@ -289,9 +431,9 @@ class ExploreRouterStateTest(unittest.TestCase):
     def test_child_token_gap_is_partial_and_completion_log_keeps_measurements(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             session, logger = make_session(tmpdir)
-            session.state.completed_monotonic = session.state.started_monotonic + 1
-            session.state.final_status = "completed"
-            session.state.usage_by_thread = {
+            session.record.completed_monotonic = session.record.started_monotonic + 1
+            session.record.final_status = "completed"
+            session.record.usage_by_thread = {
                 "thread-1": {
                     "token_usage": {"total": {"totalTokens": 20}},
                     "account_usage": {
@@ -306,7 +448,7 @@ class ExploreRouterStateTest(unittest.TestCase):
             }
             self.assertEqual(session.measurement_completeness(), "partial")
             self.assertAlmostEqual(session.estimated_credits(), 0.00015)
-            session.state.usage_by_thread["child-thread"]["token_usage"] = {
+            session.record.usage_by_thread["child-thread"]["token_usage"] = {
                 "total": {"totalTokens": 7}
             }
             result = session.result()
