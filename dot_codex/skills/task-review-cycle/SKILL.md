@@ -13,16 +13,16 @@ description: |
 
 ## 初回手順
 
-1. worker checkoutを共有するため、worker Taskから`codex_app__fork_thread`を`same-directory`で一度呼ぶ。
+1. 親orchestration Task IDが依頼文にある場合は、worker Taskから`codex_app__fork_thread`を`threadId`にそのID、`environment`に`{ type: "same-directory" }`を指定して一度呼ぶ。親IDがない直接実行では、従来どおりworker Task自身をfork元にする。`same-directory`はfork元のcwdを引き継ぐだけで、worker checkoutを共有しない。
 2. 返された`threadId`へ`codex_app__set_thread_title`で`Review <identifier>`を設定する。
    - worker Taskと同じ`<identifier>`を使う。
    - `title`にPR titleやtask titleを含めない。
-3. 同じ`threadId`へ`codex_app__send_message_to_thread`で、worker Task IDと現在のPR URL、固定したreview base SHA、head SHAを入れた`## 依頼文`を送る。
+3. 同じ`threadId`へ`codex_app__send_message_to_thread`で、worker Task ID、worker checkoutの絶対パス、現在のPR URL、固定したreview base SHA、head SHAを入れた`## 依頼文`を送る。
 4. worker Taskはreview依頼を送った時点でturnを終了する。
 
 ## 再レビュー手順
 
-1. 同じreview Taskへ`codex_app__send_message_to_thread`で、worker Task IDと最新のPR URL、固定したreview base SHA、head SHAを入れた`## 依頼文`を送る。
+1. 同じreview Taskへ`codex_app__send_message_to_thread`で、worker Task ID、worker checkoutの絶対パス、最新のPR URL、固定したreview base SHA、head SHAを入れた`## 依頼文`を送る。
 2. 前回の指摘は依頼文へ書かない。
 3. worker Taskはreview依頼を送った時点でturnを終了する。
 
@@ -31,10 +31,12 @@ description: |
 ```text
 $code-review
 worker Task ID: <worker Task ID>
+worker checkout: <worker checkoutの絶対パス>
 PR: <PR URL>
 比較範囲: <review base SHA>...<head SHA>
 
 現在の比較範囲全体をレビューしてください。
+Gitの読み取り、コード読取、必要な検証はworker checkoutを作業ディレクトリにして行ってください。親Taskのbranchやcwdは変更しないでください。
 再レビューでも前回の指摘だけに限定せず、新しい問題がないか確認してください。
 review開始後にbase branchが進んでも、それだけを理由にLGTMを保留しないでください。
 PRへの投稿、修正、Ready化、mergeは行わないでください。
