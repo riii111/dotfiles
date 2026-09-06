@@ -732,16 +732,18 @@ class RouterSession:
 
     def switch_details(self) -> dict[str, Any]:
         astra_started = any(
-            turn.model == self.options.astra_model for turn in self.record.turns
+            turn.model == self.options.astra_model and turn.turn_id is not None
+            for turn in self.record.turns
         ) or (
             self.active_turn is not None
             and self.active_turn.model == self.options.astra_model
+            and self.active_turn.turn_id is not None
         )
         switch_requested = any(turn.switch for turn in self.record.turns)
         if astra_started:
             state = "switched"
         elif switch_requested:
-            state = "interrupted"
+            state = "switch_incomplete"
         elif self.options.mode == "off":
             state = "disabled"
         elif not self.options.explore:
@@ -764,8 +766,10 @@ class RouterSession:
         if self.record.completed_monotonic is not None:
             elapsed = self.record.completed_monotonic - self.record.started_monotonic
         parent_usage = self.record.usage_by_thread.get(self.record.thread_id or "", {})
-        execution_models = [turn.model for turn in self.record.turns]
-        if self.active_turn is not None:
+        execution_models = [
+            turn.model for turn in self.record.turns if turn.turn_id is not None
+        ]
+        if self.active_turn is not None and self.active_turn.turn_id is not None:
             execution_models.append(self.active_turn.model)
         switch = self.switch_details()
         astra_started = switch["count"] == 1

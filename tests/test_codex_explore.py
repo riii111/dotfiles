@@ -348,6 +348,40 @@ class ExploreRouterStateTest(unittest.TestCase):
             self.assertEqual(session.final_answer(), "astra partial")
             logger.__exit__()
 
+    def test_failed_astra_start_is_not_reported_as_started(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session, logger = make_session(tmpdir)
+            session.active_turn = None
+            session.record.turns.append(
+                TurnResult(
+                    "turn-1",
+                    DEFAULT_SOL_MODEL,
+                    "interrupted",
+                    True,
+                    {"sol": {"text": "sol partial", "phase": None}},
+                )
+            )
+
+            def rejected_start(_method, _params=None, _timeout=30):
+                return {"error": {"message": "Astra rejected"}}
+
+            session.request_sync = rejected_start
+            with self.assertRaises(RuntimeError):
+                session.run_turn(
+                    DEFAULT_ASTRA_MODEL,
+                    "low",
+                    [{"type": "text", "text": "handoff"}],
+                    allow_switch=False,
+                )
+            session.record.final_status = "failed"
+            result = session.result()
+            self.assertEqual(result["status"], "failed")
+            self.assertEqual(result["switch"]["state"], "switch_incomplete")
+            self.assertEqual(result["switch"]["count"], 0)
+            self.assertEqual(result["models"]["execution"], [DEFAULT_SOL_MODEL])
+            self.assertEqual(result["final_answer"], "")
+            logger.__exit__()
+
     def test_messages_keep_insertion_order_and_final_phase(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             session, logger = make_session(tmpdir)
