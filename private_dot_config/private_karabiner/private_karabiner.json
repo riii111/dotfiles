@@ -231,7 +231,7 @@
                 },
                 {
                     "identifiers": { "is_keyboard": true },
-                    "ignore": true
+                    "ignore": false
                 },
                 {
                     "identifiers": {
