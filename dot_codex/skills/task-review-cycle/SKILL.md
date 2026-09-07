@@ -7,18 +7,16 @@ description: |
 
 # Task Review Cycle
 
-初回にreview Taskへ`codex_app__send_message_to_thread`を呼ぶときは、`model`に`gpt-5.6-sol`、`thinking`に`medium`を指定する。
+初回にreview Taskを作成するときは、`model`に`gpt-5.6-sol`、`thinking`に`medium`を指定する。
 再レビューでは`model`と`thinking`を指定せず、同じreview Taskの現在設定を維持する。
 ユーザーがmodelまたはreasoning effortを明示した場合だけ、その依頼で対応する値を指定する。
 
 ## 初回手順
 
-1. 親orchestration Task IDが依頼文にある場合は、worker Taskから`codex_app__fork_thread`を`threadId`にそのID、`environment`に`{ type: "same-directory" }`を指定して一度呼ぶ。親IDがない直接実行では、従来どおりworker Task自身をfork元にする。`same-directory`はfork元のcwdを引き継ぐだけで、worker checkoutを共有しない。
-2. 返された`threadId`へ`codex_app__set_thread_title`で`Review <identifier>`を設定する。
-   - worker Taskと同じ`<identifier>`を使う。
-   - `title`にPR titleやtask titleを含めない。
-3. 同じ`threadId`へ`codex_app__send_message_to_thread`で、worker Task ID、worker checkoutの絶対パス、現在のPR URL、固定したreview base SHA、head SHAを入れた`## 依頼文`を送る。
-4. worker Taskはreview依頼を送った時点でturnを終了する。
+1. worker Taskから`codex_app__create_thread`を`target: { type: "projectless" }`で一度呼ぶ。親・worker Taskはforkせず、過去の会話を引き継がない。
+   - `title`はworkerと同じ識別子で`Review <identifier>`とし、PR titleやtask titleを含めない。
+   - `prompt`は下記の`## 依頼文`とし、課題・期待する挙動・制約・対象外と、その根拠となる管理元の該当節だけを事前コンテキストに含める。実装者の思考履歴、過去サイクル、前回のレビュー結果は含めない。
+2. 返された`threadId`を再レビュー用に保持し、worker Taskはturnを終了する。初回依頼を別messageで重複送信しない。
 
 ## 再レビュー手順
 
@@ -34,9 +32,11 @@ worker Task ID: <worker Task ID>
 worker checkout: <worker checkoutの絶対パス>
 PR: <PR URL>
 比較範囲: <review base SHA>...<head SHA>
+事前コンテキスト: <課題・期待する挙動・制約・対象外、および管理元の該当節への参照>
 
+事前コンテキストとworker checkoutの適用規約を読んでからレビューを開始してください。
 現在の比較範囲全体をレビューしてください。
-Gitの読み取り、コード読取、必要な検証はworker checkoutを作業ディレクトリにして行ってください。親Taskのbranchやcwdは変更しないでください。
+Gitの読み取り、コード読取、必要な検証はworker checkoutを作業ディレクトリにして行ってください。branchやcheckoutは変更しないでください。
 再レビューでも前回の指摘だけに限定せず、新しい問題がないか確認してください。
 review開始後にbase branchが進んでも、それだけを理由にLGTMを保留しないでください。
 PRへの投稿、修正、Ready化、mergeは行わないでください。
