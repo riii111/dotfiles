@@ -1,0 +1,7 @@
+interface:
+  display_name: "explain-change"
+  short_description: "初めて読む変更の挙動と設計理由を、根拠につなげて短く解説する"
+  default_prompt: "$explain-change を使って、この変更の挙動と設計理由を、根拠をたどれる形で短く説明してください。"
+
+policy:
+  allow_implicit_invocation: false
