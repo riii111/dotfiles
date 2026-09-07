@@ -119,6 +119,21 @@ sub: Claude Code
 
 `~/.codex/config.toml` is rewritten by the Codex desktop app, so it is `.chezmoiignore`d and not applied. `dot_codex/config.toml.tmpl` is kept only as a hand-maintained reference for base settings; edit the live file directly.
 
+### Codex Explore router
+
+`codex-explore-router` runs an Explore task in its own temporary Codex session. It does not change an open Desktop or CLI conversation.
+
+After applying the dotfiles, run:
+
+```sh
+codex-explore-router --explore --prompt-file task.md --mode auto \
+  --threshold-seconds 60
+```
+
+Modes are `off` (no switching), `observe` (the default; never switches), and `auto` (switches a long-running Sol task to Astra once). Use `--help` for all options.
+
+Run logs default to `~/.local/state/codex-explore-router/runs.jsonl`. Pass `--answer-file` to save the answer separately.
+
 ### Codex command policy
 
 `dot_codex/rules/default.rules` controls commands that need to run outside the sandbox. Keep `sandbox_workspace_write.network_access = false` in the live `~/.codex/config.toml`; otherwise network commands can run inside the sandbox without consulting these rules.
