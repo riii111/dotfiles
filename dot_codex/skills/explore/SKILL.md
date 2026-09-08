@@ -1,29 +1,36 @@
 ---
 name: explore
-description: Explore a repository without implementing changes. Use for repository investigation, impact analysis, and pattern discovery.
+description: リポジトリの構造、既存実装、依存関係、変更影響をコードの証拠に基づいて調査する。設計・レビュー・実装前の事実確認にも使う。このスキル内では実装や編集を行わない。
 ---
 
-# Explore
+# リポジトリ調査
 
-Answer the user's repository question with evidence while keeping the working tree unchanged.
+親エージェントが問いの分解、横断的な推論、証拠の検証、最終判断を担当する。
+まとまった検索・読み込みは `gpt-5.6-luna`（`xhigh`）へ委譲する。親子とも読み取り専用とする。
 
-## Investigation
+## 調査と委譲
 
-- Read the applicable `AGENTS.md` and repository guidance.
-- Search for the named behavior, symbols, and related concepts. Inspect neighboring code before treating a local pattern as a convention.
-- Trace callers, data flow, dependencies, and configuration far enough to distinguish direct effects from secondary effects.
-- Compare with the nearest relevant implementations when the question concerns conventions or reuse.
-- Stop when the evidence answers the question. Do not expand the task into an exhaustive repository inventory.
+- 親の初期探索は分担に必要な範囲に留める。構造が不明ならLunaに入口や関連領域の特定を任せる。
+- 調査を独立して検証できる問いに分ける。共通の文脈を一緒に追う必要がある問いはまとめる。
+- 独立した問いはそれぞれLunaに割り当て、着手可能なものを並列に開始する。人数は問いの数と範囲に応じて決め、実行環境の同時起動上限を超える分は順次開始する。
+- 結果を受けて分担と人数を見直す。新たな独立した論点や、さらに分割できる広い担当が見つかったらLunaを追加し、解決済み・重複した調査は終了する。
+- 委譲された子は担当範囲の調査に専念し、追加調査の必要性を親へ返す。
+- 既にある証拠と少数の限定的な確認で答えられる問いは、親が直接処理してよい。
+- 極力、別のモデルは使わないが、万が一必要だと判断した場合は、必ずユーザーに許可をとる。
 
-Remain read-only. Do not edit files, create commits, change branches, or mutate external state as part of this workflow.
+## 子への依頼
 
-## Subagents
+担当の問い・範囲・必要な背景と制約を渡し、探索ログではなく次を返させる。
 
-- When delegation helps, use `gpt-5.6-luna` with `xhigh` reasoning by default. Give each Luna agent a narrow, independently verifiable, non-overlapping responsibility such as one module, dependency edge, or hypothesis; using several focused agents is acceptable.
-- Use `gpt-5.6-sol` or a more capable model sparingly, when a broader cross-cutting question benefits from one agent holding more context and synthesizing it coherently. Its responsibility may be correspondingly broader.
-- Before launching a Sol-or-higher subagent, state the model and why the broader or harder assignment justifies it. This is a visibility requirement, not an approval gate.
-- Synthesize results and resolve gaps between subagent scopes in the parent task.
+- 回答と根拠：ファイル・行番号、判断に必要な短いコード断片や設定値。
+- 成立条件・例外・反例、他領域との接続点や仮定。
+- 確認範囲と未確認点。「見つからない」場合は検索範囲と方法。
 
-## Reporting
+## 親による統合と検証
 
-Lead with the answer, then cite the smallest useful set of files and lines. Use logical component names before paths. Separate direct observations from inference, state material uncertainty, and mention unresolved gaps only when they affect the answer. Recommend a next step only when it follows from the findings.
+- 領域間の因果関係、報告の矛盾、分担の抜けを検証する。親の読み込みは、横断推論と結論を左右する証拠の直接確認に集中させる。
+- 要約では重要な関係が失われる問題は親が直接追い、切り離せる証拠収集はLunaへ任せる。
+- 結論に影響する未解決点には、追加のLuna調査や独立した反証探索を割り当てる。必要な証拠が揃ったら終了する。
+
+結論から答え、論理的なコンポーネント名で説明してから、必要なファイルと行番号を根拠として添える。
+事実と推測を区別し、残る不確実性が結論に与える影響を示す。
