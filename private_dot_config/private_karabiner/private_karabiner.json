@@ -231,7 +231,13 @@
                 },
                 {
                     "identifiers": { "is_keyboard": true },
-                    "ignore": false
+                    "ignore": false,
+                    "simple_modifications": [
+                        {
+                            "from": { "key_code": "caps_lock" },
+                            "to": [{ "key_code": "left_control" }]
+                        }
+                    ]
                 },
                 {
                     "identifiers": {
