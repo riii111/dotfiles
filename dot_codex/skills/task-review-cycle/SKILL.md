@@ -13,7 +13,7 @@ description: |
 
 ## 初回手順
 
-1. worker Taskから`codex_app__create_thread`を`target: { type: "projectless" }`で一度呼ぶ。親・worker Taskはforkせず、過去の会話を引き継がない。
+1. worker checkoutのrepositoryに対応するprojectと`isGitRepository`を`codex_app__list_projects`で解決する。Git repositoryなら`target: { type: "project", projectId: <resolved projectId>, environment: { type: "worktree" } }`、非Gitなら同じ`type`と`projectId`に`environment: { type: "local" }`を指定して、`codex_app__create_thread`を一度呼ぶ。親・worker Taskはforkせず、freshなproject Taskとして過去の会話を引き継がない。
    - `title`はworkerと同じ識別子で`Review <identifier>`とし、PR titleやtask titleを含めない。
    - `prompt`は下記の`## 依頼文`とし、課題・期待する挙動・制約・対象外と、その根拠となる管理元の該当節だけを事前コンテキストに含める。実装者の思考履歴、過去サイクル、前回のレビュー結果は含めない。
 2. 返された`threadId`を再レビュー用に保持し、worker Taskはturnを終了する。初回依頼を別messageで重複送信しない。
