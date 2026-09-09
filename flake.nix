@@ -49,6 +49,16 @@
           '';
           mkVersionEntry = name: value: { inherit name value; };
           python3WithPyYAML = pkgs.python3.withPackages (pythonPackages: [ pythonPackages.pyyaml ]);
+          visidata = pkgs.visidata.overrideAttrs (old: {
+            # Upstream tests need a writable home and must not share files across Nix builders.
+            preCheck = (old.preCheck or "") + ''
+              export HOME="$TMPDIR/visidata-home"
+              mkdir -p "$HOME/Library/Application Support"
+              cp -R tests/xdg/data/visidata "$HOME/Library/Application Support/visidata"
+              substituteInPlace tests/test-vdx.sh \
+                --replace-fail '/tmp/vd-nosave-output.txt' "$TMPDIR/vd-nosave-output.txt"
+            '';
+          });
           mdfriedKitty = pkgs.rustPlatform.buildRustPackage {
             inherit (pkgs.mdfried)
               pname
