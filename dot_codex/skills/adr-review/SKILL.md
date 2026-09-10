@@ -1,24 +1,24 @@
 ---
 name: adr-review
 description: |
-  Review an ADR with claim-first evidence gathering and pragmatic critique.
-  Optimize for repeatable investigation, calibrated severity, and postable comments.
+  主張を起点に証拠を集め、実用的にADRをレビューする。
+  再現可能な調査、重要度の適切な調整、投稿可能なコメントを重視する。
 ---
 
 # adr-review
 
-Review an ADR pragmatically.
+ADRを実用的な観点でレビューする。
 
-## Args
-- solo: single-agent review
+## 引数
+- solo: 単独レビュー
 - pair: context-reader + architect-reviewer
 - team: context-reader + architect-reviewer + pragmatic-reviewer
 
-If args are omitted, Triage determines the tier and modifiers automatically.
+引数を省略した場合は、Triageが層と追加役割を自動的に判定する。
 
-## Input
+## 入力
 
-Provide the ADR and any supporting context together when invoking the skill:
+このスキルを呼び出すときは、ADRと補足の文脈をまとめて渡す。
 
 ```
 adr-review
@@ -32,229 +32,229 @@ adr-review
 - Prior decisions: <related ADRs, Slack threads, etc.>
 ```
 
-Context helps reviewers distinguish "intentional decision" from "oversight". If omitted, reviewers will note gaps as **unverified**.
+文脈があると、「意図的な決定」と「見落とし」を区別しやすくなる。省略された場合は、不足を**未確認**として記録する。
 
-## Triage (run first)
+## Triage（最初に実行）
 
-Before assembling the team:
+チームを組む前に、次の順序で判定する。
 
-1. If the user specified a tier and modifiers explicitly, use them as-is.
-2. Otherwise, infer from the ADR content, provided context, and repo:
-   - Does the ADR reference an Epic, user story, or acceptance criteria? → requirement-driven
-   - Is the ADR about refactoring, performance, or tech debt? → technical improvement
-   - Does the ADR touch auth/authz, data exposure, tenancy, secrets, or trust boundaries? → add security-reviewer
-   - If the investigation scope is genuinely ambiguous after reading the ADR, ask the user whether to inspect infra, live signals, or split work with subagents.
-3. Select tier and modifiers based on inference:
+1. ユーザーが層と追加役割を明示している場合は、その指定をそのまま使う。
+2. それ以外の場合は、ADRの内容、渡された文脈、リポジトリから次を推測する。
+   - Epic、ユーザーストーリー、受け入れ条件を参照しているか？ → 要件駆動
+   - リファクタリング、性能改善、技術的負債に関するADRか？ → 技術改善
+   - 認証・認可、データ公開、テナント分離、秘密情報、信頼境界に触れているか？ → security-reviewerを追加
+   - ADRを読んだ後も調査範囲が本当に曖昧か？ → インフラ、稼働中の信号を調べるか、サブエージェントで分担するかをユーザーに確認する。
+3. 推測に応じて層と追加役割を選ぶ。
 
-| ADR type | Scope | Tier | req | sec |
+| ADRの種類 | 範囲 | 層 | req | sec |
 |---|---|---|---|---|
-| requirement-driven | single module | solo | on | auto |
-| requirement-driven | cross-cutting+ | pair–team | on | auto |
-| technical improvement | single module | solo | off | auto |
-| technical improvement | cross-cutting+ | pair | off | auto |
+| 要件駆動 | 単一モジュール | solo | on | auto |
+| 要件駆動 | 複数領域にまたがる | pair–team | on | auto |
+| 技術改善 | 単一モジュール | solo | off | auto |
+| 技術改善 | 複数領域にまたがる | pair | off | auto |
 
-`auto` = include security-reviewer if the ADR touches auth/authz/data/secrets/trust boundaries.
+`auto` = ADRが認証・認可・データ・秘密情報・信頼境界に触れる場合にsecurity-reviewerを含める。
 
-### Heavy vs light review
+### 重いレビューと軽いレビュー
 
-Light flow:
-- always make a `claim table`
-- check `repo`
-- skip the full evidence matrix unless a claim stays ambiguous or high impact
+軽い流れ:
+- 常に`claim table`を作る。
+- `repo`を確認する。
+- 主張が曖昧なまま、または影響が大きい場合を除き、完全な証拠マトリクスは省略する。
 
-Heavy flow:
-- add the full evidence matrix
-- track dropped / weakened items
-- return comment drafts explicitly
+重い流れ:
+- 完全な証拠マトリクスを追加する。
+- 取り下げた項目・弱めた項目を追跡する。
+- コメント案を明示的に返す。
 
-Signals for heavy flow:
-- performance, cost, migration, monitoring, rollback, or availability claims
-- claims about current pain such as "frequent", "high load", "alert-heavy", "costly", "slow", or "many incidents"
-- cross-repo dependencies or trust-boundary changes
+次の兆候があれば重い流れにする。
+- 性能、費用、移行、監視、ロールバック、可用性に関する主張
+- 「頻繁に」「高負荷」「多数」「高コスト」「遅い」「多くのインシデント」のような現在の問題に関する主張
+- 複数リポジトリの依存関係、または信頼境界の変更
 
-## Claim table (required)
+## 主張表（必須）
 
-Break the ADR into **decision-relevant claims**, not sentences.
-- Split one sentence into multiple claims when it makes multiple assertions.
-- Merge multiple sentences when they support one decision claim.
+ADRの文ではなく、意思決定に関係する主張へ分解する。
+- 一文に複数の主張がある場合は分割する。
+- 複数の文が一つの意思決定上の主張を支えている場合はまとめる。
 
-Use fixed tags first, then add others only if needed.
-- default tags: `performance`, `cost`, `migration`, `permission`, `monitoring`, `rollback`, `scope`, `integration`
-- optional tags: `operations`, `availability`, `security`, `data-integrity`, `other`
+まず固定のタグを使い、必要な場合だけ追加する。
+- 既定のタグ: `performance`、`cost`、`migration`、`permission`、`monitoring`、`rollback`、`scope`、`integration`
+- 追加可能なタグ: `operations`、`availability`、`security`、`data-integrity`、`other`
 
-Each claim should capture:
-- claim id
-- claim text
-- tag
-- why it matters to the decision
+各主張には次を記録する。
+- 主張ID
+- 主張の本文
+- タグ
+- その意思決定に重要な理由
 
-Example:
-- `C1`: "AlloyDB will materially reduce current alert noise" (`monitoring`)
-- `C2`: "Most daytime issues are CPU or memory driven, not replica lag" (`performance`)
+例:
+- `C1`: 「AlloyDBにより現在のアラートノイズを大幅に減らせる」 (`monitoring`)
+- `C2`: 「日中の問題の大半はレプリカ遅延ではなくCPUまたはメモリが原因である」 (`performance`)
 
-## Evidence collection
+## 証拠の収集
 
-Choose sources per claim:
-- `repo`: almost always required
-- `infra`: required when the ADR touches operations, monitoring, permissions, rollout, external integrations, or environment shape
-- `docs`: required when the ADR relies on vendor behavior, product limits, or external contracts
-- `live`: required only when the ADR makes claims about current reality using words like "frequent", "high", "many", "expensive", or "degraded"
+各主張について情報源を選ぶ。
+- `repo`: ほぼ常に必須
+- `infra`: ADRが運用、監視、権限、展開、外部連携、環境構成に触れる場合に必須
+- `docs`: ベンダーの挙動、製品上限、外部契約に依存する場合に必須
+- `live`: 「頻繁に」「高負荷」「多数」「高コスト」「劣化」のような、現在の実態に関する主張を含む場合に限り必須
 
-If the right source is still unclear after reading the ADR, ask the user a narrow question instead of guessing.
+ADRを読んでも適切な情報源が不明な場合は、推測せずユーザーに絞った質問をする。
 
-Use a matrix when the ADR is heavy or cross-cutting. For each claim, record:
-- source checked: `repo / infra / docs / live`
-- result: `supported / contradicted / unverified`
-- short evidence note
+重いADRまたは複数領域にまたがるADRではマトリクスを使う。各主張について次を記録する。
+- 確認した情報源: `repo / infra / docs / live`
+- 結果: `supported / contradicted / unverified`
+- 短い証拠メモ
 
-Prefer the smallest sufficient investigation. Do not inspect `infra`, `docs`, or `live` just because they exist.
+情報源が存在するからという理由だけで`infra`、`docs`、`live`を調べない。必要最小限の調査を優先する。
 
-## Reviewer roles
+## レビュアーの役割
 
 ### context-reader
-**Runs first.** Output is passed to all subsequent reviewers as shared context.
+**最初に実行する。**出力は共有コンテキストとして後続のレビュアー全員に渡す。
 
-Gather:
-- current architecture relevant to the ADR
-- existing patterns / helpers / prior art
-- affected modules / layers / boundaries
+次を集める。
+- ADRに関係する現在のアーキテクチャ
+- 既存のパターン、ヘルパー、先行事例
+- 影響を受けるモジュール、層、境界
 
-For each claim, classify the current support level as:
-- **supported**: evidence backs the claim
-- **contradicted**: evidence conflicts with the claim
-- **unverified**: needed evidence is missing or outside the available context
+各主張について、現在の裏付けの強さを次で分類する。
+- **supported**: 証拠が主張を裏付ける
+- **contradicted**: 証拠が主張と食い違う
+- **unverified**: 必要な証拠が不足している、または利用可能な文脈の外にある
 
-Then hand later reviewers the relevant architecture and assumptions.
+その後のレビュアーへ、関係するアーキテクチャと前提を引き渡す。
 
 ### architect-reviewer
-Review:
-- responsibility boundaries and placement of logic
-- abstraction level
-- alternatives considered / missing
-- long-term consistency with the codebase
-- whether the ADR actually solves the problem it states
+次をレビューする。
+- 責務の境界とロジックの配置
+- 抽象化の水準
+- 検討された代替案、または不足している代替案
+- コードベースとの長期的な一貫性
+- ADRが掲げる問題を実際に解決しているか
 
 ### requirements-reviewer
-Auto-assigned by triage when the ADR is requirement-driven. Skipped for purely technical ADRs.
+要件駆動とTriageされた場合に自動割り当てする。純粋な技術ADRでは省略する。
 
-Review:
-- does the proposal satisfy the stated requirements / acceptance criteria?
-- are requirements missing, ambiguous, or silently narrowed?
-- are there requirements that the proposal over-solves or gold-plates?
+次をレビューする。
+- 提案が明示された要件・受け入れ条件を満たしているか
+- 要件が不足または曖昧になっていないか、意図せず狭められていないか
+- 提案が必要以上に解決しようとしている要件、または過剰対応している要件がないか
 
 ### pragmatic-reviewer
-Review:
-- implementation realism
-- migration / rollout difficulty
-- operational burden
-- whether the proposal is too idealized for the actual need
-- whether a smaller step would get most of the value now
+次をレビューする。
+- 実装が現実的か
+- 移行・展開が難しくないか
+- 運用負荷
+- 実際の必要性に対して理想化されすぎていないか
+- より小さい段階で、今すぐ価値の大半を得られないか
 
 ### security-reviewer
-Auto-assigned by triage when relevant. No user action needed.
+関係する場合にTriageが自動割り当てする。ユーザーの操作は不要。
 
-Review:
-- auth/authz boundaries
-- data exposure / tenancy / secrets / config
-- unsafe assumptions around trust boundaries
+次をレビューする。
+- 認証・認可の境界
+- データ公開、テナント分離、秘密情報、設定
+- 信頼境界に関する危険な前提
 
-## Comment distillation (required)
+## コメントの絞り込み（必須）
 
-For each concern, walk this sequence:
-1. Identify the claim it targets.
-2. Classify the concern type:
+各懸念について、次の順序で進める。
+1. 対象となる主張を特定する。
+2. 懸念の種類を分類する。
    - `factual-error`
    - `insufficient-evidence`
    - `scope-gap`
    - `overstatement`
    - `missing-precondition`
-3. Reduce it to the smallest proposition that the evidence actually supports.
-4. Decide whether to keep it, weaken it, or drop it.
-5. Only then assign severity and draft the comment.
+3. 証拠が実際に裏付ける最小の命題まで縮める。
+4. 残すか、弱めるか、取り下げるかを決める。
+5. その後で重要度を付け、コメントを書く。
 
-Typical pruning rules:
-- abstract alarm with no concrete failure mode -> split or drop
-- stronger-than-evidence assertion -> weaken
-- high-impact but weakly supported concern -> move to **unverified assumptions** instead of escalating
+通常の削除・整理のルール:
+- 具体的な失敗モードのない抽象的な懸念は、分割するか取り下げる。
+- 証拠より強い主張は弱める。
+- 影響は大きいが裏付けの弱い懸念は、重要度を上げずに**未確認の前提**へ移す。
 
-Track dropped or weakened items for heavy ADRs so the user can see what was intentionally not posted.
+重いADRでは、取り下げた項目や弱めた項目を追跡し、意図的に投稿しなかったことが分かるようにする。
 
-## Severity calibration
+## 重要度の調整
 
-Calibrate severity using **impact x evidence strength**.
+重要度は「影響 × 証拠の強さ」で調整する。
 
-| Impact x evidence | Severity |
+| 影響 × 証拠 | 重要度 |
 |---|---|
-| high impact + strong evidence | **MUST** |
-| medium impact + strong evidence | **SHOULD** |
-| high impact + medium evidence | **SHOULD** |
-| low impact + strong evidence | **NITS** |
-| medium impact + weak evidence | **NITS** or **Q** |
-| high impact + weak evidence | move to **unverified assumptions** |
+| 大きな影響 + 強い証拠 | **MUST** |
+| 中程度の影響 + 強い証拠 | **SHOULD** |
+| 大きな影響 + 中程度の証拠 | **SHOULD** |
+| 小さな影響 + 強い証拠 | **NITS** |
+| 中程度の影響 + 弱い証拠 | **NITS** または **Q** |
+| 大きな影響 + 弱い証拠 | **未確認の前提**へ移す |
 
-## Review rules
-- do not ask for perfect architecture
-- distinguish "incorrect or risky now" from "could be improved later"
-- prefer concrete critique tied to current repo context
-- when context is missing, report it as **unverified** — never fill gaps with plausible-sounding guesses
-- suggest the smallest viable correction when possible
+## レビューの規則
+- 完璧なアーキテクチャを求めない。
+- 「今すぐ不正確または危険」なことと、「将来改善できる」ことを区別する。
+- 現在のリポジトリの文脈に結び付いた具体的な批評を優先する。
+- 文脈が不足している場合は**未確認**として報告し、もっともらしい推測で埋めない。
+- 可能なら、実行可能な最小の修正を提案する。
 
-## Output format
+## 出力形式
 
-Each review item uses a severity prefix:
+各レビュー項目には重要度の接頭辞を付ける。
 
-| Prefix | Meaning |
+| 接頭辞 | 意味 |
 |---|---|
-| **MUST** | Blocking — must be resolved before approval |
-| **SHOULD** | Strong recommendation — risky to ignore |
-| **IMO** | Reviewer's opinion — take or leave |
-| **NITS** | Minor style / naming / wording |
-| **Q** | Question — needs clarification from the author |
+| **MUST** | ブロッキング — 承認前に解決が必要 |
+| **SHOULD** | 強い推奨 — 放置するのは危険 |
+| **IMO** | レビュアーの意見 — 採用は任意 |
+| **NITS** | 軽微なスタイル・命名・表現 |
+| **Q** | 質問 — 作成者の説明が必要 |
 
-Return:
-- Summary judgment
-- Claim table
-- Evidence matrix when the ADR is heavy
-- Review item candidates
-- Review items (each prefixed with severity)
-- Comment drafts that are ready to post
-- Unverified assumptions
-- Alternatives or narrower options
-- Dropped / weakened items when useful
+次を返す。
+- 要約の判定
+- 主張表
+- ADRが重い場合の証拠マトリクス
+- レビュー項目の候補
+- レビュー項目（それぞれ重要度を付ける）
+- そのまま投稿できるコメント案
+- 未確認の前提
+- 代替案またはより狭い選択肢
+- 必要な場合は、取り下げた項目・弱めた項目
 
-### Example
+### 例
 
 ```
-## Summary
-The proposal is sound for the stated scope but relies on two unverified assumptions about the billing API contract.
+## 要約
+提案は示された範囲では妥当だが、請求APIの契約について二つの未確認の前提に依存している。
 
-## Claim table
-- C1: Billing API supports idempotent PUT for plan updates. (`integration`)
-- C2: The migration can be rolled out safely without a feature flag. (`migration`)
+## 主張表
+- C1: 請求APIはプラン更新に対する冪等なPUTをサポートする。 (`integration`)
+- C2: この移行は機能フラグなしで安全に展開できる。 (`migration`)
 
-## Evidence matrix
-- C1 / repo: unverified — no contract test or client guarantee found.
-- C2 / repo: contradicted — current retry path assumes retries may re-enter write logic.
+## 証拠マトリクス
+- C1 / repo: unverified — 契約テストもクライアント側の保証も見つからない。
+- C2 / repo: contradicted — 現在の再試行経路は、再試行によって書き込み処理へ再入する可能性を前提としている。
 
-## Review item candidates
+## レビュー項目の候補
 - C1: insufficient-evidence -> likely SHOULD
 - C2: missing-precondition -> MUST
 
-## Review items
-- **MUST**: ADR assumes idempotent PUT on /billing/plans, but no contract or test confirms this. If not idempotent, the retry logic in §3 will cause duplicate charges.
-- **SHOULD**: Migration script lacks a rollback step — add one before merging.
+## レビュー項目
+- **MUST**: ADRは`/billing/plans`へのPUTが冪等であると仮定しているが、それを確認する契約もテストもない。冪等でなければ、§3の再試行ロジックによって二重請求が発生する。
+- **SHOULD**: 移行スクリプトにロールバック手順がない。マージ前に追加してほしい。
 
-## Comment drafts
-- Global comment: "The proposal direction looks reasonable, but two decision-critical assumptions remain unverified: billing API idempotency and rollback safety. Please either add evidence or narrow the claim."
+## コメント案
+- 全体コメント: 「提案の方向性は妥当に見えるが、意思決定に重要な二つの前提が未確認のままだ。請求APIの冪等性とロールバックの安全性について、証拠を追加するか、主張の範囲を狭めてほしい。」
 
-## Unverified assumptions
-- Billing API idempotency (no contract found in repo)
-- Upstream rate limits (referenced but not documented)
+## 未確認の前提
+- 請求APIの冪等性（リポジトリに契約が見つからない）
+- 上流のレート制限（参照されているが文書化されていない）
 
-## Alternatives
-- Narrower option: implement only the read path first, defer write path to next iteration.
+## 代替案
+- より狭い選択肢: まず読み取り経路だけを実装し、書き込み経路は次の反復へ延期する。
 
-## Dropped / weakened items
-- Dropped: "billing service design feels risky" — too abstract without a concrete failure mode.
-- Weakened: "retry path is broken" -> "retry safety is unverified until idempotency is confirmed".
+## 取り下げた項目・弱めた項目
+- 取り下げ: 「請求サービスの設計は危険に感じる」 — 具体的な失敗モードがなく抽象的すぎる。
+- 弱めた: 「再試行経路は壊れている」 -> 「冪等性が確認されるまで、再試行の安全性は未確認である」。
 ```
