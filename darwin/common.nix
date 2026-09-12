@@ -19,12 +19,11 @@
     automatic = true;
     interval = [
       {
-        Weekday = 7;
         Hour = 3;
         Minute = 15;
       }
     ];
-    options = "--delete-older-than 30d";
+    options = "--delete-older-than 7d";
   };
 
   nix.optimise = {
