@@ -305,6 +305,8 @@ export FZF_CTRL_R_OPTS="--preview 'echo {}' --preview-window=down:3:wrap"
 
 # fzf keybindings: Ctrl-R (history)
 if [[ -o zle ]]; then
+  # EDITOR=nvim would otherwise select viins; keep readline-style editing.
+  bindkey -e
   if [[ -f "${NIX_DOTFILES_SHARE}/fzf/key-bindings.zsh" ]]; then
     source "${NIX_DOTFILES_SHARE}/fzf/key-bindings.zsh"
   elif [[ -f /opt/homebrew/opt/fzf/shell/key-bindings.zsh ]]; then
