@@ -1,6 +1,6 @@
 #!/bin/sh
 # Cursor reads this target (local state lives here).
-# Permissions source of truth: dot_cursor/cli-config.json
+# Approval mode and permissions source of truth: dot_cursor/cli-config.json
 set -eu
 
 src="${CHEZMOI_SOURCE_DIR:-$(chezmoi source-path)}/dot_cursor/cli-config.json"
@@ -9,7 +9,7 @@ trap 'rm -f "$tmp"' EXIT
 cat >"$tmp"
 
 if [ -s "$tmp" ]; then
-	jq --slurpfile src "$src" '.permissions = $src[0].permissions' "$tmp"
+	jq --slurpfile src "$src" '.approvalMode = $src[0].approvalMode | .permissions = $src[0].permissions' "$tmp"
 else
-	jq '{permissions: .permissions}' "$src"
+	jq '{approvalMode, permissions}' "$src"
 fi

@@ -1,4 +1,5 @@
 {
+  "approvalMode": "auto-review",
   "permissions": {
     "allow": [
       "Mcp(linear:get_*)",
