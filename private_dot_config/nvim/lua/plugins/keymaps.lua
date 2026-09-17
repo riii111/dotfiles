@@ -124,19 +124,13 @@ local function setup_keymaps()
 				end,
 				desc = "Find in current buffer (tmux)",
 			},
-			["<M-p>"] = {
-				function()
-					require("telescope.builtin").find_files()
-				end,
-				desc = "Find files (tmux)",
-			},
 
 			-- Reliable keymaps that work in both tmux and non-tmux environments
-			["<C-p>"] = {
+			["<F6>"] = {
 				function()
 					require("telescope.builtin").find_files()
 				end,
-				desc = "Find files (universal)",
+				desc = "Find files (Kitty Cmd+P)",
 			},
 			["<C-S-f>"] = {
 				function()
@@ -473,7 +467,7 @@ return {
 				{ "<leader>m", group = "+markdown" },
 				{ "<leader>mm", desc = "Markdown viewer (mdfried)" },
 				{ "<C-g>", group = "+grep/search" },
-				{ "<C-p>", group = "+files" },
+				{ "<F6>", group = "+files" },
 				{ "<C-S-f>", group = "+search" },
 				{ "<C-S-b>", group = "+buffer search" },
 				{ "<D-f>", group = "+find" },
@@ -485,7 +479,6 @@ return {
 				{ "<D-M-Left>", group = "+buffer navigation" },
 				{ "<M-f>", group = "+find" },
 				{ "<M-F>", group = "+grep" },
-				{ "<M-p>", group = "+files" },
 				{ "<M-e>", group = "+oil file explorer" },
 				{ "<M-c>", group = "+clipboard" },
 				{ "<M-/>", group = "+comment" },
