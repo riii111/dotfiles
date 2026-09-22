@@ -7,7 +7,7 @@ description: |
 
 # Task Review Cycle
 
-初回にreview Taskを作成するときは、`model`に`gpt-5.6-sol`、`thinking`に`medium`を指定する。
+初回にreview Taskを作成するときは、`model`に`gpt-6`、`thinking`に`medium`を指定する。
 再レビューでは`model`と`thinking`を指定せず、同じreview Taskの現在設定を維持する。
 ユーザーがmodelまたはreasoning effortを明示した場合だけ、その依頼で対応する値を指定する。
 
