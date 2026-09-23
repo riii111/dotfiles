@@ -1,0 +1,26 @@
+#!/bin/bash
+
+herdr_bin="${NIX_DOTFILES_BIN:-$HOME/.nix-profile/bin}/herdr"
+
+case "${1:-}" in
+"" | --no-session | --session | --remote) ;;
+session)
+	[[ "${2:-}" == attach ]] || exec "$herdr_bin" "$@"
+	;;
+*) exec "$herdr_bin" "$@" ;;
+esac
+
+if [[ "${TERM:-}" != xterm-kitty || -n "${HERDR_ENV:-}" || -z "${KITTY_LISTEN_ON:-}" || -z "${KITTY_WINDOW_ID:-}" || ! -t 0 || ! -t 1 ]]; then
+	exec "$herdr_bin" "$@"
+fi
+
+if ! kitten @ --to "$KITTY_LISTEN_ON" set-user-vars --match "id:$KITTY_WINDOW_ID" HERDR_ACTIVE=1 >/dev/null 2>&1; then
+	exec "$herdr_bin" "$@"
+fi
+
+cleanup() {
+	kitten @ --to "$KITTY_LISTEN_ON" set-user-vars --match "id:$KITTY_WINDOW_ID" HERDR_ACTIVE >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+
+"$herdr_bin" "$@"
