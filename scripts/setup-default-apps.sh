@@ -11,7 +11,7 @@ set -euo pipefail
 # PDF is intentionally left alone (macOS Preview.app stays the default).
 
 command -v duti >/dev/null || {
-	echo "ERROR: duti not installed (dotctl sync-nix-profile)"
+	echo "ERROR: duti not found. Run this script with: nix shell nixpkgs#duti --command bash scripts/setup-default-apps.sh"
 	exit 1
 }
 
@@ -84,4 +84,4 @@ done
 # .pdf is intentionally not touched. Preview.app remains the default.
 
 echo
-echo "Done. Verify with: duti -x md   (should print OpenInNvim bundle info)"
+echo "Done. Verify with: nix shell nixpkgs#duti --command duti -x md   (should print OpenInNvim bundle info)"

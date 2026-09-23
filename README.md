@@ -42,7 +42,7 @@ Route Finder double-clicks to WezTerm + Neovim / VisiData.
 
 ```bash
 bash ~/ghq/github.com/riii111/dotfiles/scripts/build-open-apps.sh
-bash ~/ghq/github.com/riii111/dotfiles/scripts/setup-default-apps.sh
+nix shell nixpkgs#duti --command bash ~/ghq/github.com/riii111/dotfiles/scripts/setup-default-apps.sh
 ```
 
 Routing: text / code → Neovim, csv / tsv → csvlens, parquet / sqlite / jsonl → VisiData, images / pdf → Preview (untouched). Re-run both scripts after a macOS update if associations break.

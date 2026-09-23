@@ -48,7 +48,6 @@
             done
           '';
           mkVersionEntry = name: value: { inherit name value; };
-          python3WithPyYAML = pkgs.python3.withPackages (pythonPackages: [ pythonPackages.pyyaml ]);
           visidata = pkgs.visidata.overrideAttrs (old: {
             # Upstream tests need a writable home and must not share files across Nix builders.
             preCheck = (old.preCheck or "") + ''
@@ -78,14 +77,12 @@
             # Editor-integrated tooling that should exist in the normal shell too.
             _1password-cli
             bashInteractive
-            nil
             nixd
             nixfmt
-            python3WithPyYAML
+            python3
             shellcheck
             shfmt
             stylua
-            taplo
             zig
             zls
 
@@ -93,14 +90,11 @@
             asdf-vm
             bat
             chezmoi
-            cmake
             csvlens
             delta
-            deno
             direnv
             colima
             docker
-            duti
             eza
             fd
             fzf
@@ -108,54 +102,39 @@
             ghq
             google-cloud-sdk
             git
-            gnupg
             go
-            delve
             golangci-lint
             gopls
             graphviz
             selectedGoTools
-            inetutils # Provides telnet.
             jq
-            k6
             lazygit
             lefthook
-            llvm
             mdfriedKitty
             neovim
-            ninja
             nix-direnv
             nodejs
-            opencode
-            openjdk
             pgcli
-            pinentry_mac
             pngpaste
-            pnpm
             postgresql_18
             pspg
-            qemu
             ripgrep
             rust-analyzer
             selectedRustupTools
-            sccache
             sqlfluff
             sqruff
             terraform
             tmux
-            tree
             visidata
             wezterm.terminfo
             yq-go # Go implementation behind the `yq` command.
             zsh-abbr
             zsh-autosuggestions
             ruff
-            tbls
             uv
             herdr
           ];
           devShellOnlyPackages = with pkgs; [
-            alejandra
             lua5_4
           ];
           directToolVersions = nixpkgs.lib.concatMap (
