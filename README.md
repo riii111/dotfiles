@@ -38,7 +38,7 @@ herdr plugin link ~/ghq/github.com/riii111/wezterm-git-status-bridge/contrib/her
 
 ### Finder integration (optional)
 
-Route Finder double-clicks to WezTerm + Neovim / VisiData.
+Route Finder double-clicks to Kitty + Neovim / CsvLens / VisiData.
 
 ```bash
 bash ~/ghq/github.com/riii111/dotfiles/scripts/build-open-apps.sh

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Build .app wrappers that forward Finder "Open" events to WezTerm running
+# Build .app wrappers that forward Finder "Open" events to Kitty running
 # nvim / vd / csvlens. Installs under ~/Library/Application Support/ so the
 # wrappers stay out of Launchpad, and re-registers with LaunchServices so duti
 # can target them by bundle ID.
@@ -11,8 +11,8 @@ set -euo pipefail
 readonly DEST="$HOME/Library/Application Support/open-routing"
 readonly LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister"
 
-WEZTERM="$(command -v wezterm || true)"
-readonly WEZTERM
+KITTY="$(command -v kitty || true)"
+readonly KITTY
 NVIM="$(command -v nvim || true)"
 readonly NVIM
 VD="$(command -v vd || true)"
@@ -20,8 +20,8 @@ readonly VD
 CSVLENS="$(command -v csvlens || true)"
 readonly CSVLENS
 
-[[ -n "$WEZTERM" ]] || {
-	echo "ERROR: wezterm not found in PATH"
+[[ -n "$KITTY" ]] || {
+	echo "ERROR: kitty not found in PATH"
 	exit 1
 }
 [[ -n "$NVIM" ]] || {
@@ -77,20 +77,17 @@ build_app() {
 	local staged="$WORK/${name}.app"
 	local dst="$DEST/${name}.app"
 
-	# Prefer `wezterm cli spawn --new-window` so the file opens as a new window
-	# inside the running WezTerm (no Dock duplication). Fall back to `wezterm start`
-	# when no existing WezTerm instance is available (cold start).
 	cat >"$src" <<APPLESCRIPT
 on open theFiles
 	set fileList to ""
 	repeat with f in theFiles
 		set fileList to fileList & space & quoted form of POSIX path of (f as alias)
 	end repeat
-	do shell script "{ ${WEZTERM} cli spawn --new-window -- ${cmd}" & fileList & " 2>/dev/null || ${WEZTERM} start -- ${cmd}" & fileList & " 2>/dev/null || echo '${name} failed:'" & fileList & " >> ~/Library/Logs/open-routing.log; } &"
+	do shell script "{ ${KITTY} --single-instance -- ${cmd}" & fileList & " 2>/dev/null || echo '${name} failed:'" & fileList & " >> ~/Library/Logs/open-routing.log; } &"
 end open
 
 on run
-	do shell script "{ ${WEZTERM} cli spawn --new-window -- ${cmd} 2>/dev/null || ${WEZTERM} start -- ${cmd} 2>/dev/null || echo '${name} failed' >> ~/Library/Logs/open-routing.log; } &"
+	do shell script "{ ${KITTY} --single-instance -- ${cmd} 2>/dev/null || echo '${name} failed' >> ~/Library/Logs/open-routing.log; } &"
 end run
 APPLESCRIPT
 

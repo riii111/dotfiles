@@ -21,7 +21,7 @@ let
     command:
     ''launchctl asuser "$(id -u -- ${user})" sudo --user=${user} --set-home -- env PATH=${escapeShellArg path} ${command}'';
 
-  checkDependencies = runAsUser "sh -c ${escapeShellArg "for cmd in duti osacompile wezterm nvim csvlens vd; do if ! command -v \"$cmd\" >/dev/null; then echo \"skip default apps: $cmd is missing\" >&2; exit 1; fi; done"}";
+  checkDependencies = runAsUser "sh -c ${escapeShellArg "for cmd in duti osacompile kitty nvim csvlens vd; do if ! command -v \"$cmd\" >/dev/null; then echo \"skip default apps: $cmd is missing\" >&2; exit 1; fi; done"}";
 in
 {
   system.requiresPrimaryUser = [ "system.activationScripts.postActivation" ];
