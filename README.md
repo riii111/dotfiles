@@ -46,6 +46,7 @@ nix shell nixpkgs#duti --command bash ~/ghq/github.com/riii111/dotfiles/scripts/
 ```
 
 Routing: text / code → Neovim, csv / tsv → csvlens, parquet / sqlite / jsonl → VisiData, images / pdf → Preview (untouched). Re-run both scripts after a macOS update if associations break.
+macOS may ask for confirmation when replacing an existing default application.
 
 ## Nix
 

@@ -4,9 +4,7 @@ set -euo pipefail
 # Route Finder double-clicks to OpenInNvim.app / OpenInVisiData.app.
 # Requires scripts/build-open-apps.sh to have run first.
 #
-# Registers both UTI and extension forms: UTIs cover cases where an app
-# claims the content type, extensions cover types without a registered UTI
-# (e.g., .parquet, .kt).
+# Registers known UTIs and the document types declared by OpenIn*.app.
 #
 # PDF is intentionally left alone (macOS Preview.app stays the default).
 
@@ -45,18 +43,19 @@ for uti in \
 	public.source-code \
 	public.script \
 	public.shell-script \
+	public.bash-script \
+	public.zsh-script \
 	public.python-script \
 	public.json \
 	public.yaml \
 	org.tomlunity.toml \
 	public.rust-source \
+	public.xml \
+	com.apple.log \
 	com.apple.property-list; do
 	assign_uti "$NVIM_ID" "$uti"
 done
-
-for ext in md mdx txt json yaml yml toml sh bash zsh rs go kt kts py lua tf hcl sql conf ini env log xml graphql proto; do
-	assign_ext "$NVIM_ID" "$ext"
-done
+duti -s "$NVIM_ID" "$NVIM_ID.document" all
 
 # Images are intentionally left with Preview.app (snacks.image float inside a terminal
 # wrapper ends up awkward; render-markdown / img-clip still handle images inside
@@ -66,15 +65,12 @@ echo "Assigning csv / tsv -> OpenInCsvLens (delimiter auto-detected)"
 for uti in public.comma-separated-values-text public.tab-separated-values-text; do
 	assign_uti "$CSV_ID" "$uti"
 done
-for ext in csv tsv; do
-	assign_ext "$CSV_ID" "$ext"
-done
+duti -s "$CSV_ID" "$CSV_ID.document" all
 
 echo "Assigning parquet / sqlite / ndjson / jsonl -> OpenInVisiData (csvlens scope)"
 # VisiData handles what csvlens can't: columnar, multi-table SQLite, row-per-line JSON.
-for ext in parquet sqlite sqlite3 db ndjson jsonl; do
-	assign_ext "$VD_ID" "$ext"
-done
+duti -s "$VD_ID" "$VD_ID.document" all
+assign_uti "$VD_ID" public.ndjson
 
 # xlsx is opt-in: overriding it hijacks Numbers / Excel for work spreadsheets.
 # Uncomment to route .xlsx to VisiData as well.
@@ -84,4 +80,5 @@ done
 # .pdf is intentionally not touched. Preview.app remains the default.
 
 echo
+echo "macOS may ask you to confirm changes to existing file associations."
 echo "Done. Verify with: nix shell nixpkgs#duti --command duti -x md   (should print OpenInNvim bundle info)"

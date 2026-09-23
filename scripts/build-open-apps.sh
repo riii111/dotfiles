@@ -46,8 +46,33 @@ mkdir -p "$DEST"
 WORK="$(mktemp -d -t open-apps.XXXXXX)"
 trap 'rm -rf "$WORK"' EXIT
 
+register_extensions() {
+	local plist="$1" type_id="$2" conforms_to="$3"
+	shift 3
+	local pb=/usr/libexec/PlistBuddy
+	local index=0
+
+	"$pb" -c 'Add :UTImportedTypeDeclarations array' "$plist"
+	"$pb" -c 'Add :UTImportedTypeDeclarations:0 dict' "$plist"
+	"$pb" -c "Add :UTImportedTypeDeclarations:0:UTTypeIdentifier string $type_id" "$plist"
+	"$pb" -c 'Add :UTImportedTypeDeclarations:0:UTTypeConformsTo array' "$plist"
+	"$pb" -c "Add :UTImportedTypeDeclarations:0:UTTypeConformsTo:0 string $conforms_to" "$plist"
+	"$pb" -c 'Add :UTImportedTypeDeclarations:0:UTTypeTagSpecification dict' "$plist"
+	"$pb" -c 'Add :UTImportedTypeDeclarations:0:UTTypeTagSpecification:public.filename-extension array' "$plist"
+	for ext in "$@"; do
+		"$pb" -c "Add :UTImportedTypeDeclarations:0:UTTypeTagSpecification:public.filename-extension:$index string $ext" "$plist"
+		index=$((index + 1))
+	done
+
+	"$pb" -c 'Add :CFBundleDocumentTypes:1 dict' "$plist"
+	"$pb" -c 'Add :CFBundleDocumentTypes:1:CFBundleTypeRole string Viewer' "$plist"
+	"$pb" -c 'Add :CFBundleDocumentTypes:1:LSItemContentTypes array' "$plist"
+	"$pb" -c "Add :CFBundleDocumentTypes:1:LSItemContentTypes:0 string $type_id" "$plist"
+}
+
 build_app() {
-	local name="$1" bundle_id="$2" cmd="$3"
+	local name="$1" bundle_id="$2" cmd="$3" conforms_to="$4"
+	shift 4
 	local src="$WORK/${name}.applescript"
 	local staged="$WORK/${name}.app"
 	local dst="$DEST/${name}.app"
@@ -78,6 +103,8 @@ APPLESCRIPT
 	/usr/libexec/PlistBuddy -c "Add :LSUIElement bool true" "$plist" 2>/dev/null ||
 		/usr/libexec/PlistBuddy -c "Set :LSUIElement true" "$plist"
 	/usr/libexec/PlistBuddy -c "Add :NSHighResolutionCapable bool true" "$plist" 2>/dev/null || true
+	# Register unknown extensions before duti assigns their default handlers.
+	register_extensions "$plist" "$bundle_id.document" "$conforms_to" "$@"
 
 	if [[ -d "$dst" ]]; then
 		rm -rf "$dst"
@@ -88,9 +115,12 @@ APPLESCRIPT
 	echo "Built: $dst ($bundle_id)"
 }
 
-build_app "OpenInNvim" "com.riii111.openinnvim" "$NVIM"
-build_app "OpenInCsvLens" "com.riii111.openincsvlens" "$CSVLENS -d auto"
-build_app "OpenInVisiData" "com.riii111.openinvisidata" "$VD"
+build_app "OpenInNvim" "com.riii111.openinnvim" "$NVIM" public.plain-text \
+	md mdx txt json yaml yml toml sh bash zsh rs go kt kts py lua tf hcl sql conf ini env log xml graphql proto
+build_app "OpenInCsvLens" "com.riii111.openincsvlens" "$CSVLENS -d auto" public.plain-text \
+	csv tsv
+build_app "OpenInVisiData" "com.riii111.openinvisidata" "$VD" public.data \
+	parquet sqlite sqlite3 db ndjson jsonl
 
 cat <<EOF
 
