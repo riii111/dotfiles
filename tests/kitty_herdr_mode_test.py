@@ -77,7 +77,7 @@ assert "toggle_layout stack" not in mapped_definitions(
 entry = [
     definition
     for definition in definitions("")
-    if definition.options.when_focus_on == "title:^herdr"
+    if definition.options.when_focus_on == "var:HERDR_ACTIVE=1"
     and definition.definition == "combine : herdr_logo_on : push_keyboard_mode herdr"
 ]
 assert len(entry) == 1

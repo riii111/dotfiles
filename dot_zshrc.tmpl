@@ -619,6 +619,39 @@ if [[ "${TERM:-}" == "xterm-kitty" ]]; then
   }
 fi
 
+herdr() {
+  case "${1:-}" in
+    ""|--no-session|--session|--remote) ;;
+    session)
+      if [[ "${2:-}" != attach ]]; then
+        command herdr "$@"
+        return $?
+      fi
+      ;;
+    *)
+      command herdr "$@"
+      return $?
+      ;;
+  esac
+
+  if [[ "${TERM:-}" != xterm-kitty || -n "${HERDR_ENV:-}" || -z "${KITTY_LISTEN_ON:-}" || -z "${KITTY_WINDOW_ID:-}" || ! -t 0 || ! -t 1 ]]; then
+    command herdr "$@"
+    return $?
+  fi
+
+  local kitty_socket="$KITTY_LISTEN_ON" kitty_window_id="$KITTY_WINDOW_ID"
+  if ! command kitten @ --to "$kitty_socket" set-user-vars --match "id:$kitty_window_id" HERDR_ACTIVE=1 >/dev/null 2>&1; then
+    command herdr "$@"
+    return $?
+  fi
+
+  {
+    command herdr "$@"
+  } always {
+    command kitten @ --to "$kitty_socket" set-user-vars --match "id:$kitty_window_id" HERDR_ACTIVE >/dev/null 2>&1 || true
+  }
+}
+
 _dotfiles_place_nix_path
 
 # direnv
