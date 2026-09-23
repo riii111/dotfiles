@@ -30,11 +30,6 @@ assign_uti() {
 	duti -s "$bundle" "$uti" all 2>/dev/null || echo "  skip UTI $uti (not registered on this system)"
 }
 
-assign_ext() {
-	local bundle="$1" ext="$2"
-	duti -s "$bundle" ".$ext" all
-}
-
 echo "Assigning text / config / code -> OpenInNvim"
 for uti in \
 	net.daringfireball.markdown \
@@ -75,7 +70,6 @@ assign_uti "$VD_ID" public.ndjson
 # xlsx is opt-in: overriding it hijacks Numbers / Excel for work spreadsheets.
 # Uncomment to route .xlsx to VisiData as well.
 # assign_uti "$VD_ID" org.openxmlformats.spreadsheetml.sheet
-# assign_ext "$VD_ID" xlsx
 
 # .pdf is intentionally not touched. Preview.app remains the default.
 
