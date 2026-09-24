@@ -21,21 +21,12 @@ description: |
    - ユーザーがmodelまたはreasoning effortを明示した場合だけ、対応する値をその指定で置き換える。
    - `prompt`にタスク管理元、開始対象、親orchestration Task ID（指定されている場合）を含める。
    - `prompt`で`$task-worker`を使い、リポジトリ規約を読んで割り当てられたGit worktreeで実装するよう依頼する。
-   - `prompt`には次の作業順を番号付きで示す。
-     1. 編集中は影響箇所のテスト・検査を行う。
-     2. 最初の独立レビュー前にbase branchを一度だけfetchする。
-        そのtip SHAを全レビューのreview baseに固定する。
-        必要ならtipを取り込んでから候補をcommitし、独立レビューを依頼する。
-        依頼にはworker checkout、`<review base SHA>...<head SHA>`、候補のpush状態、PR URL（未作成なら明記）を含める。
-     3. 指摘をまとめて修正し、影響検証後に新headをcommitして同じreview Taskへ再レビューを依頼する。
-        LGTMまで繰り返し、各回に全検証やpushを要求しない。
-     4. LGTM後、最終headで所定の全検証を行う。
-        コードを修正した場合は新headを影響検証・独立レビューし、LGTM後に全検証をやり直す。
-     5. 検証を通過したreview済みheadを通常のpushで公開し、Draft PRを作成または更新する。
-        PR headがreview済みheadと一致することを確認してからCI成功まで確認する。
-        CIでコードを修正した場合は、手順3から繰り返す。
-   - review開始後にbase branchが進んでも、それだけでは変更を取り込まない。
-     現在のbaseとの実際の競合または意味的重複がある場合だけ取り込み、必要な検証と再レビューを行う。
+   - `prompt`には作業順の要点を含め、詳細は`$task-worker`に従わせる。
+     - 編集・指摘修正中は影響箇所を検証する。
+       初回レビュー前にbase branchを一度fetchしてreview baseを固定し、commit済みheadをローカル固定SHA差分で独立レビューする。
+     - LGTM後に所定の全検証を行い、review済みheadを通常のpushで公開してDraft PRを作成または更新する。
+       PR headとの一致を確認してからCI成功まで確認する。
+     - 最終検証またはCIでコードを直した場合は、新headを再レビューし、全検証・push・PR head確認・CIをやり直す。
 3. `codex_app__create_thread`を一度呼ぶ。
 
 ## 制約

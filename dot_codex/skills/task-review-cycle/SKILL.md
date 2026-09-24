@@ -60,8 +60,6 @@ PRがあり候補がpush済みなら、PR headも指定head SHAと一致する�
 候補が未pushなら指定されたローカル差分をレビューしてください。
 既存PRのheadやCIは今回候補の根拠として扱わないでください。
 PRが未作成なら同じくローカル差分をレビューしてください。
-変更対象にSKILLファイルがある場合は、各ファイル全体を読んで文体・用語・手順のつながりを確認してください。
-重複や不要な記述、節の分け方も見直してください。
 再レビューでも前回の指摘だけに限定せず、新しい問題がないか確認してください。
 review開始後にbase branchが進んでも、それだけを理由にLGTMを保留しないでください。
 PRへの投稿、修正、Ready化、mergeは行わないでください。
@@ -83,12 +81,6 @@ reviewerは`$code-review`でレビューします。
 
 ## 制約
 
-workerは指摘を現在のコードと規約で確かめ、妥当なものをまとめて修正する。
-影響する検証後に新headをcommitし、同じreview Taskへ再レビューを依頼する。
-LGTM後の全検証・通常のpush・Draft PR・CI確認は`$task-worker`の手順に従う。
-検証またはCIでコードを修正した場合は、新headに影響検証と再レビューを行う。
-LGTM後に所定の全検証を完了してからpushする。
-push後はPR headがLGTM済みheadと一致することを確認してCI成功まで進める。
 reviewerから`$task-review-cycle`で始まるmessageが届くことでworker Taskの新しいturnが始まり、workerは同じSkillを適用して指摘確認、修正、再レビューを行う。
 
 reviewerは固定された比較範囲の実装を判定する。
