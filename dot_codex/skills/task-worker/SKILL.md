@@ -34,7 +34,7 @@ PR headとの一致を確認してCIを再実行する。
 
 最初の独立レビューを始める直前にbase branchを一度だけfetchし、その時点のtipを必要に応じて取り込む。
 そのexact SHAを全レビューのreview baseとして固定する。
-各review Taskへbranch名ではなく`<review base SHA>...<head SHA>`を渡す。
+各review Taskへ`<review base SHA>...<head SHA>`を渡す。
 レビュー候補のpush状態とPR URL（未作成ならその旨）も伝える。
 
 review開始後にbase branchが進んだことだけを理由に、取り込み・全検証・再reviewを繰り返さない。
