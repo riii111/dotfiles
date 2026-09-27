@@ -76,6 +76,7 @@ jobs:
             if type == "object" and length > 0 and
                all(to_entries[];
                    (.key | test("\\A[A-Za-z0-9_.-]+\\z")) and
+                   (.value | keys == ["branch", "commit"]) and
                    (.value.branch | test("\\A[A-Za-z0-9_./-]+\\z")) and
                    (.value.commit | test("\\A[0-9a-f]{40}\\z")))
             then $contents else error("Invalid lockfile") end

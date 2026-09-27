@@ -24,7 +24,9 @@ def validate_lock(lock):
         if not matches(NAME, name):
             raise ValueError("Invalid plugin name")
         if not isinstance(entry, dict) or not (
-            matches(BRANCH, entry.get("branch")) and matches(SHA, entry.get("commit"))
+            set(entry) == {"branch", "commit"}
+            and matches(BRANCH, entry.get("branch"))
+            and matches(SHA, entry.get("commit"))
         ):
             raise ValueError("Invalid lockfile entry")
 

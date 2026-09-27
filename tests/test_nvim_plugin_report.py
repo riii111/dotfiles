@@ -115,6 +115,7 @@ class PluginReportTest(unittest.TestCase):
             {"plugin": {"branch": "main\nINJECT", "commit": OLD}},
             {"plugin": {"branch": "main", "commit": "short"}},
             {"plugin": {"branch": None, "commit": OLD}},
+            {"plugin": {"branch": "main", "commit": OLD, "message": "INJECT"}},
         ):
             with self.subTest(lock=lock), self.assertRaises(ValueError):
                 validate_lock(lock)
