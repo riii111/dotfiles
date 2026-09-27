@@ -120,7 +120,32 @@ jobs:
             });
             const existing = issues.find(issue => !issue.pull_request && issue.title === title);
             if (existing) {
-              await github.rest.issues.update({ ...context.repo, issue_number: existing.number, body, state: 'open' });
+              if (existing.state === 'closed') {
+                await github.rest.issues.update({ ...context.repo, issue_number: existing.number, state: 'open' });
+              }
+              await github.rest.issues.createComment({ ...context.repo, issue_number: existing.number, body });
             } else {
               await github.rest.issues.create({ ...context.repo, title, body });
+            }
+
+  resolve-failure:
+    needs: pull-request
+    if: needs.pull-request.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        with:
+          script: |
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              ...context.repo, state: 'open', creator: 'github-actions[bot]', per_page: 100
+            });
+            const url = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            for (const issue of issues.filter(issue => !issue.pull_request && issue.title === 'Neovim plugin update failed')) {
+              await github.rest.issues.createComment({
+                ...context.repo, issue_number: issue.number,
+                body: `Neovimプラグインの更新処理が成功し、失敗が解消しました。\n\n[実行ログ](${url})`
+              });
+              await github.rest.issues.update({ ...context.repo, issue_number: issue.number, state: 'closed' });
             }

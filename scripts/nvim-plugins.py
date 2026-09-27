@@ -9,7 +9,7 @@ import shutil
 import subprocess
 import tempfile
 
-from nvim_plugin_report import collect_report
+from nvim_plugin_report import collect_report, read_constraints
 
 
 def main():
@@ -51,6 +51,14 @@ def main():
                 "SSL_CERT_FILE",
                 "NIX_SSL_CERT_FILE",
                 "NIX_PROFILES",
+                "HTTPS_PROXY",
+                "HTTP_PROXY",
+                "NO_PROXY",
+                "ALL_PROXY",
+                "https_proxy",
+                "http_proxy",
+                "no_proxy",
+                "all_proxy",
             )
             if name in os.environ
         }
@@ -104,6 +112,8 @@ def main():
         env["DOTFILES_NVIM_FIXTURE"] = str(fixture)
 
         def nvim(mode):
+            if mode == "check":
+                (root / "constraints.json").unlink(missing_ok=True)
             env["DOTFILES_NVIM_MODE"] = mode
             run(
                 [
@@ -135,7 +145,7 @@ def main():
                     json.loads(original),
                     json.loads((config / "lazy-lock.json").read_bytes()),
                     lazy.parent,
-                    json.loads((root / "constraints.json").read_text()),
+                    read_constraints(root / "constraints.json"),
                     env,
                 )
                 args.report.write_text(json.dumps(report, ensure_ascii=True))

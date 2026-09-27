@@ -1,7 +1,7 @@
 local git = require("lazy.manage.git")
 local semver = require("lazy.manage.semver")
 local config = require("lazy.core.config")
-local report = {}
+local report = vim.empty_dict()
 
 for name, plugin in pairs(config.plugins) do
 	local constraint = plugin.version
@@ -12,7 +12,7 @@ for name, plugin in pairs(config.plugins) do
 		local versions = {}
 		for _, tag in ipairs(git.get_tags(plugin.dir)) do
 			local version = semver.version(tag)
-			if version then
+			if version and not version.prerelease then
 				version.tag = tag
 				table.insert(versions, version)
 			end
@@ -29,4 +29,4 @@ for name, plugin in pairs(config.plugins) do
 	end
 end
 
-vim.fn.writefile({ vim.json.encode(report) }, vim.env.DOTFILES_NVIM_CONSTRAINTS)
+return report

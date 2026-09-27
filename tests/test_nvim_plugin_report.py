@@ -1,11 +1,18 @@
 import copy
 import os
+import json
 from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 
-from scripts.nvim_plugin_report import collect_report, render_report, validate_lock
+from scripts.nvim_plugin_report import (
+    collect_report,
+    read_constraints,
+    render_report,
+    validate_lock,
+)
 
 
 OLD = "a" * 40
@@ -124,6 +131,48 @@ class PluginReportTest(unittest.TestCase):
         for report in ([], {"bad/name": {}}, {"valid\n": {}}):
             with self.subTest(report=report), self.assertRaises(ValueError):
                 render_report(self.before, self.after, report)
+
+    def test_missing_constraints_are_reported_without_untrusted_errors(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "constraints.json"
+            self.assertIsNone(read_constraints(path))
+            for contents in (
+                "broken",
+                "[]",
+                '{"complete": false, "error": "INJECT"}',
+                '{"complete": true, "plugins": []}',
+            ):
+                path.write_text(contents)
+                self.assertIsNone(read_constraints(path))
+            path.write_text(json.dumps({"complete": True, "plugins": {}}))
+            self.assertEqual(read_constraints(path), {})
+        with patch(
+            "scripts.nvim_plugin_report.subprocess.run",
+            side_effect=subprocess.TimeoutExpired("git", 30),
+        ):
+            report = collect_report(self.before, self.after, Path("/unused"), None, {})
+        body = render_report(self.before, self.after, report)
+        self.assertIn("制約外の新版情報を取得できなかった", body)
+        self.assertIn("履歴の前後関係を確認できない", body)
+        self.assertNotIn("INJECT", body)
+        self.assertNotIn("[compare]", body)
+
+    def test_timeout_does_not_discard_other_metadata(self):
+        def git(command, **kwargs):
+            if "describe" in command:
+                raise subprocess.TimeoutExpired(command, 30)
+            output = (
+                "https://github.com/owner/plugin.nvim.git"
+                if "remote" in command
+                else "2"
+            )
+            return subprocess.CompletedProcess(command, 0, stdout=output)
+
+        with patch("scripts.nvim_plugin_report.subprocess.run", side_effect=git):
+            report = collect_report(self.before, self.after, Path("/unused"), {}, {})
+        body = render_report(self.before, self.after, report)
+        self.assertIn("`aaaaaaa → bbbbbbb` | 2 | [compare]", body)
+        self.assertNotIn("Needs attention", body)
 
     def test_git_metadata_includes_real_tags_counts_and_history(self):
         with tempfile.TemporaryDirectory() as tmp:

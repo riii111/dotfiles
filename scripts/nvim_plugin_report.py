@@ -83,6 +83,8 @@ def render_report(before, after, report):
                         else "履歴の前後関係を確認できない更新"
                     )
                     attention.append(f"- `{name}`: {reason}")
+        if new and info.get("constraints_unavailable") is True:
+            attention.append(f"- `{name}`: 制約外の新版情報を取得できなかった")
         outside_sha = info.get("outside_commit")
         if new and matches(SHA, outside_sha):
             tag = info.get("outside_version")
@@ -104,11 +106,22 @@ def render_report(before, after, report):
         body += ["", "## Needs attention", "", *attention]
     body += [
         "",
-        "バージョン等の情報はプラグインを実行したランナーで収集した参考情報。正とするのはlockfileの差分とcompareリンク。",
+        "バージョン等の情報はプラグインを実行したランナーで収集した参考情報。正とするのはlockfileの差分とコミットSHA。compareリンクのリポジトリ名も参考情報。",
         "",
-        "Ready for reviewにするとCIが起動する。適用・切り戻し手順はREADMEを参照。",
+        "Ready for reviewにするとCIが起動する。適用・切り戻し手順はAGENTS.mdを参照。",
     ]
     return "\n".join(body) + "\n"
+
+
+def read_constraints(path):
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict) or data.get("complete") is not True:
+        return None
+    plugins = data.get("plugins")
+    return plugins if isinstance(plugins, dict) else None
 
 
 def collect_report(before, after, lazy_root, constraints, env):
@@ -116,13 +129,13 @@ def collect_report(before, after, lazy_root, constraints, env):
     validate_lock(after)
 
     def git(directory, *args):
-        return subprocess.run(
-            ["git", "-C", str(directory), *args],
-            env=env,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
+        command = ["git", "-C", str(directory), *args]
+        try:
+            return subprocess.run(
+                command, env=env, capture_output=True, text=True, timeout=30
+            )
+        except subprocess.TimeoutExpired:
+            return subprocess.CompletedProcess(command, 124, stdout="", stderr="")
 
     report = {}
     for name in sorted(before.keys() | after.keys()):
@@ -149,7 +162,9 @@ def collect_report(before, after, lazy_root, constraints, env):
             result = git(directory, "merge-base", "--is-ancestor", old, new)
             if result.returncode in (0, 1):
                 info["fast_forward"] = result.returncode == 0
-        if name in constraints:
+        if constraints is None:
+            info["constraints_unavailable"] = True
+        elif isinstance(constraints.get(name), dict):
             info.update(constraints[name])
         report[name] = info
     return report
