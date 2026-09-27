@@ -12,6 +12,7 @@ on:
       - .github/workflows/nvim-verify.yml
       - .github/workflows/update-nvim-plugins.yml
       - flake.lock
+      - flake.nix
   workflow_dispatch:
     inputs:
       update:
