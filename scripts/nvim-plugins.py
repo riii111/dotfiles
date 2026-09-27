@@ -9,10 +9,15 @@ import shutil
 import subprocess
 import tempfile
 
+from nvim_plugin_report import collect_report
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("mode", choices=("check", "update"))
+    parser.add_argument(
+        "--report", type=Path, help="Write advisory update metadata as JSON"
+    )
     args = parser.parse_args()
     repo = Path(__file__).resolve().parents[1]
     source = repo / "private_dot_config/nvim"
@@ -34,15 +39,31 @@ def main():
 
     with tempfile.TemporaryDirectory(prefix="dotfiles-nvim-") as directory:
         root = Path(directory)
-        env = os.environ.copy()
+        env = {
+            name: os.environ[name]
+            for name in (
+                "PATH",
+                "HOME",
+                "TMPDIR",
+                "LANG",
+                "LC_ALL",
+                "RUNNER_TEMP",
+                "SSL_CERT_FILE",
+                "NIX_SSL_CERT_FILE",
+                "NIX_PROFILES",
+            )
+            if name in os.environ
+        }
         for name in ("CONFIG", "DATA", "STATE", "CACHE"):
             env[f"XDG_{name}_HOME"] = str(root / name.lower())
         env["XDG_CONFIG_DIRS"] = str(root / "config-dirs")
         env["XDG_DATA_DIRS"] = str(root / "data-dirs")
         env["NVIM_APPNAME"] = "nvim"
-        env.pop("VIMINIT", None)
-        env.pop("EXINIT", None)
         env["DOTFILES_NVIM_TESTS"] = str(repo / "tests/nvim")
+        env["DOTFILES_NVIM_CONSTRAINTS_SCRIPT"] = str(
+            repo / "scripts/nvim-plugin-constraints.lua"
+        )
+        env["DOTFILES_NVIM_CONSTRAINTS"] = str(root / "constraints.json")
         config = root / "config/nvim"
         shutil.copytree(source, config)
         lazy = root / "data/nvim/lazy/lazy.nvim"
@@ -109,6 +130,15 @@ def main():
         if args.mode == "update":
             nvim("update")
             nvim("check")
+            if args.report:
+                report = collect_report(
+                    json.loads(original),
+                    json.loads((config / "lazy-lock.json").read_bytes()),
+                    lazy.parent,
+                    json.loads((root / "constraints.json").read_text()),
+                    env,
+                )
+                args.report.write_text(json.dumps(report, ensure_ascii=True))
             if lockfile.read_bytes() != original:
                 raise RuntimeError(
                     "Source lockfile changed during verification; refusing to overwrite it"

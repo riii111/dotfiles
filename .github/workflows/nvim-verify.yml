@@ -6,11 +6,18 @@ on:
     paths:
       - private_dot_config/nvim/**
       - scripts/nvim-plugins.py
+      - scripts/nvim_plugin_report.py
+      - scripts/nvim-plugin-constraints.lua
       - tests/nvim/**
       - .github/workflows/nvim-verify.yml
       - .github/workflows/update-nvim-plugins.yml
       - flake.lock
   workflow_dispatch:
+    inputs:
+      update:
+        description: Verify a plugin update without creating a pull request
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -26,9 +33,11 @@ jobs:
 
       - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
 
-      - name: Verify locked plugins in isolation
+      - name: Verify plugins with temporary XDG directories
+        env:
+          MODE: ${{ inputs.update && 'update' || 'check' }}
         run: >-
           nix shell --inputs-from .
           nixpkgs#neovim nixpkgs#tree-sitter nixpkgs#lua-language-server
           nixpkgs#go nixpkgs#ripgrep
-          --command python3 scripts/nvim-plugins.py check
+          --command python3 scripts/nvim-plugins.py "$MODE" --report "$RUNNER_TEMP/nvim-report.json"

@@ -59,6 +59,8 @@ exec zsh
 
 Homebrew stays for GUI / cask packages and is managed by nix-darwin.
 
+The weekly `Update flake.lock` workflow creates or refreshes a Draft PR. Review the tool changes, then mark it **Ready for review** to start `Main Verify` and `Neovim Verify`, including checks against the updated Neovim version. Automated refreshes return the PR to Draft. Merge and local activation remain manual.
+
 ### Store maintenance
 
 nix-darwin runs store maintenance for every host: GC deletes profile generations older than 7 days daily at 03:15, and store optimisation hard-links duplicate files at 04:15 on Sunday. During Nix builds, free space below 30 GiB triggers GC until 50 GiB is available.
@@ -99,11 +101,13 @@ nix develop -c ./bin/executable_dotctl test
 
 #### Plugin updates
 
-`Update Neovim plugins` runs on the first day of each month at 09:00 JST and can also be run from Actions. It creates or refreshes a Draft PR only after isolated checks pass before and after the update. Updates follow each plugin's configured branch/version constraints.
+`Update Neovim plugins` runs on the first day of each month at 09:00 JST and can also be run from Actions. It creates or refreshes a Draft PR only after checks pass before and after the update using temporary XDG directories. Updates follow each plugin's configured branch/version constraints; newer releases outside those constraints are reported without changing the constraints.
 
 The checks cover installation/build errors, configuration errors, Lua LSP attachment and hover, completion capabilities, Lua parsing, Telescope file search, and Oil directory navigation. They use the Neovim version from `flake.lock` and temporary XDG directories; the installed configuration and plugins are left untouched. Interactive completion, diagnostics, and other language servers still need manual verification.
 
-Review the lockfile diff and mark the generated PR **Ready for review** to start `Main Verify` and `Neovim Verify`. PRs created with `GITHUB_TOKEN` do not trigger `pull_request` workflows automatically. A later automated update returns the PR to Draft so the new changes can be checked again. If verification fails, inspect the Actions log; no update is proposed. If the base branch changes during verification, rerun the workflow.
+Review the lockfile diff and compare links, then mark the generated PR **Ready for review** to start `Main Verify` and `Neovim Verify`. PRs created with `GITHUB_TOKEN` do not trigger `pull_request` workflows automatically. A later automated update returns the PR to Draft so the new changes can be checked again. Version labels and history metadata are advisory because they come from a runner that executed plugin code. The write-enabled job validates the data and builds the Markdown using the script on the default branch.
+
+If verification or PR creation fails, the workflow opens or updates a single failure Issue with the run URL. No partial plugin update is proposed. Unrelated changes on the base branch are allowed; changes to Neovim update inputs require a rerun.
 
 Run the same verification locally from this repository:
 
@@ -111,6 +115,15 @@ Run the same verification locally from this repository:
 nix shell --inputs-from . nixpkgs#neovim nixpkgs#tree-sitter nixpkgs#lua-language-server nixpkgs#go nixpkgs#ripgrep --command python3 scripts/nvim-plugins.py check
 # Replace check with update to write a verified update to the repository lockfile.
 ```
+
+Local execution, especially `update`, runs upstream plugin code with your user permissions. Only selected environment variables are inherited, but temporary XDG directories are not a security sandbox: plugins can still access files under your home directory. To test an update on a hosted runner without creating a PR, run `Neovim Verify` with its `update` input enabled.
+
+Supply-chain review must also account for inputs outside `lazy-lock.json`:
+
+- `blink.cmp` can download prebuilt binaries from release assets.
+- `telescope-fzf-native` executes `make`.
+- Mason-managed tool versions are not pinned by this lockfile. The automated Lua LSP check uses the flake-pinned server instead of installing Mason tools.
+- The SHA-pinned Nix installer action downloads its installer at runtime; the installer version is not pinned here, as in the existing flake update workflow.
 
 After merging, pull the change, apply the lockfile, and restore plugins to its recorded commits:
 

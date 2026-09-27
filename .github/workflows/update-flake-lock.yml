@@ -110,6 +110,7 @@ jobs:
           commit-message: "chore: update flake.lock"
           title: "chore: update flake.lock"
           branch: update-flake-lock
+          draft: always-true
           delete-branch: true
           labels: dependencies
           body-path: ${{ steps.pr-body.outputs.path }}

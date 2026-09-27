@@ -64,6 +64,7 @@ vim.schedule(function()
 			healthy()
 		else
 			smoke()
+			dofile(vim.env.DOTFILES_NVIM_CONSTRAINTS_SCRIPT)
 		end
 	end, debug.traceback)
 	if not ok then
