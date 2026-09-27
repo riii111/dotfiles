@@ -157,6 +157,26 @@ class PluginReportTest(unittest.TestCase):
         self.assertNotIn("INJECT", body)
         self.assertNotIn("[compare]", body)
 
+    def test_constraint_failure_warning_is_global_and_requires_boolean(self):
+        self.after["other.nvim"] = {"branch": "main", "commit": NEW}
+        self.before["other.nvim"] = {"branch": "main", "commit": OLD}
+        warning = "- 制約外の新版情報を取得できなかった（詳細は実行ログ）"
+        with patch(
+            "scripts.nvim_plugin_report.subprocess.run",
+            side_effect=subprocess.TimeoutExpired("git", 30),
+        ):
+            report = collect_report(self.before, self.after, Path("/unused"), None, {})
+        body = render_report(self.before, self.after, report)
+        self.assertEqual(body.splitlines().count(warning), 1)
+        self.assertEqual(body.count("制約外の新版情報を取得できなかった"), 1)
+        for value in (False, "true", 1, None, {}, []):
+            with self.subTest(value=value):
+                for info in report.values():
+                    info["constraints_unavailable"] = value
+                self.assertNotIn(
+                    warning, render_report(self.before, self.after, report)
+                )
+
     def test_timeout_does_not_discard_other_metadata(self):
         def git(command, **kwargs):
             if "describe" in command:

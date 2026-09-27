@@ -38,6 +38,12 @@ def render_report(before, after, report):
         raise ValueError("Invalid report plugin name")
     rows = []
     attention = []
+    if any(
+        isinstance(report.get(name), dict)
+        and report[name].get("constraints_unavailable") is True
+        for name in after
+    ):
+        attention.append("- 制約外の新版情報を取得できなかった（詳細は実行ログ）")
     for name in sorted(before.keys() | after.keys()):
         old, new = before.get(name), after.get(name)
         info = report.get(name)
@@ -83,8 +89,6 @@ def render_report(before, after, report):
                         else "履歴の前後関係を確認できない更新"
                     )
                     attention.append(f"- `{name}`: {reason}")
-        if new and info.get("constraints_unavailable") is True:
-            attention.append(f"- `{name}`: 制約外の新版情報を取得できなかった")
         outside_sha = info.get("outside_commit")
         if new and matches(SHA, outside_sha):
             tag = info.get("outside_version")

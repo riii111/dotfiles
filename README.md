@@ -99,7 +99,7 @@ nix develop -c ./bin/executable_dotctl test
 - One-key Quick Fix / Refactor menu
 - Per-language modules (Rust, Go, TypeScript, Python, C++, Kotlin, Terraform, SQL, Lua)
 
-Plugin updates arrive as monthly Draft PRs; review the lockfile diff and compare links, mark **Ready for review** to run CI, then merge manually.
+Plugin updates arrive as monthly Draft PRs; review the lockfile diff and commit SHAs, mark **Ready for review** to run CI, then merge manually.
 
 ### DB tools: [sabiql](https://github.com/riii111/sabiql)
 
