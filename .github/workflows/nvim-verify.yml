@@ -1,0 +1,42 @@
+name: Neovim Verify
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - private_dot_config/nvim/**
+      - scripts/nvim-plugins.py
+      - tests/nvim/**
+      - .github/workflows/nvim-verify.yml
+      - .github/workflows/update-nvim-plugins.yml
+      - flake.lock
+      - flake.nix
+  workflow_dispatch:
+    inputs:
+      update:
+        description: Verify a plugin update without creating a pull request
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: macos-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+
+      - name: Verify plugins with temporary XDG directories
+        env:
+          MODE: ${{ inputs.update && 'update' || 'check' }}
+        run: >-
+          nix shell --inputs-from .
+          nixpkgs#neovim nixpkgs#tree-sitter nixpkgs#lua-language-server
+          nixpkgs#go nixpkgs#ripgrep
+          --command python3 scripts/nvim-plugins.py "$MODE"

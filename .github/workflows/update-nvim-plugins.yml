@@ -1,0 +1,158 @@
+name: Update Neovim plugins
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 1 * *"
+
+concurrency:
+  group: update-nvim-plugins
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  update:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    outputs:
+      base-sha: ${{ steps.result.outputs.base-sha }}
+      lockfile: ${{ steps.result.outputs.lockfile }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+
+      - name: Update and verify with temporary XDG directories
+        run: >-
+          nix shell --inputs-from .
+          nixpkgs#neovim nixpkgs#tree-sitter nixpkgs#lua-language-server
+          nixpkgs#go nixpkgs#ripgrep
+          --command python3 scripts/nvim-plugins.py update
+
+      - name: Export verified lockfile
+        id: result
+        run: |
+          {
+            echo "base-sha=$(git rev-parse HEAD)"
+            echo "lockfile=$(jq -Rs . private_dot_config/nvim/lazy-lock.json)"
+          } >> "$GITHUB_OUTPUT"
+
+  pull-request:
+    needs: update
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Import verified lockfile
+        env:
+          VERIFIED_BASE: ${{ needs.update.outputs.base-sha }}
+          VERIFIED_LOCKFILE: ${{ needs.update.outputs.lockfile }}
+        run: |
+          [[ "$VERIFIED_BASE" =~ ^[0-9a-f]{40}$ ]]
+          if ! git diff --quiet "$VERIFIED_BASE" HEAD -- \
+            private_dot_config/nvim flake.nix flake.lock 'scripts/nvim*' tests/nvim \
+            .github/workflows/update-nvim-plugins.yml; then
+            echo 'Neovim update inputs changed during verification. Re-run this workflow.' >&2
+            exit 1
+          fi
+          cp private_dot_config/nvim/lazy-lock.json "$RUNNER_TEMP/nvim-lock-before.json"
+          printf '%s\n' "$VERIFIED_LOCKFILE" | jq -je '
+            . as $contents | fromjson |
+            if type == "object" and length > 0 and
+               all(to_entries[];
+                   (.key | test("\\A[A-Za-z0-9_.-]+\\z")) and
+                   (.value | keys == ["branch", "commit"]) and
+                   (.value.branch | test("\\A[A-Za-z0-9_./-]+\\z")) and
+                   (.value.commit | test("\\A[0-9a-f]{40}\\z")))
+            then $contents else error("Invalid lockfile") end
+          ' > private_dot_config/nvim/lazy-lock.json
+
+      - name: Build pull request body from lockfile changes
+        run: |
+          {
+            printf 'Neovimプラグインを更新する。\n\n'
+            jq -rn --slurpfile old "$RUNNER_TEMP/nvim-lock-before.json" \
+                   --slurpfile new private_dot_config/nvim/lazy-lock.json '
+              $old[0] as $o | $new[0] as $n
+              | [($o + $n) | keys[] | select($o[.] != $n[.]) | . as $k
+                 | "| `\($k)` | `\($o[$k].commit[0:7] // "—") → \($n[$k].commit[0:7] // "—")` | \(
+                     if $o[$k] == null then "追加"
+                     elif $n[$k] == null then "削除"
+                     elif $o[$k].branch != $n[$k].branch then "ブランチ `\($o[$k].branch) → \($n[$k].branch)`"
+                     else "" end) |"]
+              | if length == 0 then "No plugin changes."
+                else (["| プラグイン | 旧 → 新 | 備考 |", "| --- | --- | --- |"] + . | join("\n")) end'
+            printf '\nReady for review で CI が起動する。適用・切り戻し手順は AGENTS.md を参照。\n'
+          } > "$RUNNER_TEMP/nvim-pr-body.md"
+
+      - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          base: ${{ github.event.repository.default_branch }}
+          branch: update-nvim-plugins
+          add-paths: private_dot_config/nvim/lazy-lock.json
+          commit-message: "chore(nvim): update plugins"
+          title: "chore(nvim): update plugins"
+          draft: always-true
+          delete-branch: true
+          labels: dependencies
+          body-path: ${{ runner.temp }}/nvim-pr-body.md
+
+  notify-failure:
+    needs: [update, pull-request]
+    if: failure()
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        with:
+          script: |
+            const title = 'Neovim plugin update failed';
+            const url = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = `Neovimプラグインの更新処理が失敗しました。\n\n[実行ログ](${url})を確認し、修正後にworkflowを再実行してください。`;
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              ...context.repo, state: 'all', creator: 'github-actions[bot]', per_page: 100
+            });
+            const existing = issues.find(issue => !issue.pull_request && issue.title === title);
+            if (existing) {
+              if (existing.state === 'closed') {
+                await github.rest.issues.update({ ...context.repo, issue_number: existing.number, state: 'open' });
+              }
+              await github.rest.issues.createComment({ ...context.repo, issue_number: existing.number, body });
+            } else {
+              await github.rest.issues.create({ ...context.repo, title, body });
+            }
+
+  resolve-failure:
+    needs: pull-request
+    if: needs.pull-request.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        with:
+          script: |
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              ...context.repo, state: 'open', creator: 'github-actions[bot]', per_page: 100
+            });
+            const url = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            for (const issue of issues.filter(issue => !issue.pull_request && issue.title === 'Neovim plugin update failed')) {
+              await github.rest.issues.createComment({
+                ...context.repo, issue_number: issue.number,
+                body: `Neovimプラグインの更新処理が成功し、失敗が解消しました。\n\n[実行ログ](${url})`
+              });
+              await github.rest.issues.update({ ...context.repo, issue_number: issue.number, state: 'closed' });
+            }

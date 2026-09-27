@@ -1,6 +1,7 @@
 # Repo files that shouldn't be in $HOME
 Brewfile
 README.md
+AGENTS.md
 LICENSE
 .gitignore
 flake.nix

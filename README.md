@@ -59,6 +59,8 @@ exec zsh
 
 Homebrew stays for GUI / cask packages and is managed by nix-darwin.
 
+Nix updates arrive as weekly Draft PRs; mark them **Ready for review** to run CI, then merge manually.
+
 ### Store maintenance
 
 nix-darwin runs store maintenance for every host: GC deletes profile generations older than 7 days daily at 03:15, and store optimisation hard-links duplicate files at 04:15 on Sunday. During Nix builds, free space below 30 GiB triggers GC until 50 GiB is available.
@@ -96,6 +98,8 @@ nix develop -c ./bin/executable_dotctl test
 - Inline reference count (symbol-usage)
 - One-key Quick Fix / Refactor menu
 - Per-language modules (Rust, Go, TypeScript, Python, C++, Kotlin, Terraform, SQL, Lua)
+
+Plugin updates arrive as monthly Draft PRs; review the lockfile diff and commit SHAs, mark **Ready for review** to run CI, then merge manually.
 
 ### DB tools: [sabiql](https://github.com/riii111/sabiql)
 
