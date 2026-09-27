@@ -9,15 +9,10 @@ import shutil
 import subprocess
 import tempfile
 
-from nvim_plugin_report import collect_report, read_constraints
-
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("mode", choices=("check", "update"))
-    parser.add_argument(
-        "--report", type=Path, help="Write advisory update metadata as JSON"
-    )
     args = parser.parse_args()
     repo = Path(__file__).resolve().parents[1]
     source = repo / "private_dot_config/nvim"
@@ -68,10 +63,6 @@ def main():
         env["XDG_DATA_DIRS"] = str(root / "data-dirs")
         env["NVIM_APPNAME"] = "nvim"
         env["DOTFILES_NVIM_TESTS"] = str(repo / "tests/nvim")
-        env["DOTFILES_NVIM_CONSTRAINTS_SCRIPT"] = str(
-            repo / "scripts/nvim-plugin-constraints.lua"
-        )
-        env["DOTFILES_NVIM_CONSTRAINTS"] = str(root / "constraints.json")
         config = root / "config/nvim"
         shutil.copytree(source, config)
         lazy = root / "data/nvim/lazy/lazy.nvim"
@@ -112,8 +103,6 @@ def main():
         env["DOTFILES_NVIM_FIXTURE"] = str(fixture)
 
         def nvim(mode):
-            if mode == "check":
-                (root / "constraints.json").unlink(missing_ok=True)
             env["DOTFILES_NVIM_MODE"] = mode
             run(
                 [
@@ -140,15 +129,6 @@ def main():
         if args.mode == "update":
             nvim("update")
             nvim("check")
-            if args.report:
-                report = collect_report(
-                    json.loads(original),
-                    json.loads((config / "lazy-lock.json").read_bytes()),
-                    lazy.parent,
-                    read_constraints(root / "constraints.json"),
-                    env,
-                )
-                args.report.write_text(json.dumps(report, ensure_ascii=True))
             if lockfile.read_bytes() != original:
                 raise RuntimeError(
                     "Source lockfile changed during verification; refusing to overwrite it"

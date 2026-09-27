@@ -19,7 +19,6 @@ jobs:
     outputs:
       base-sha: ${{ steps.result.outputs.base-sha }}
       lockfile: ${{ steps.result.outputs.lockfile }}
-      report: ${{ steps.result.outputs.report }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -33,7 +32,7 @@ jobs:
           nix shell --inputs-from .
           nixpkgs#neovim nixpkgs#tree-sitter nixpkgs#lua-language-server
           nixpkgs#go nixpkgs#ripgrep
-          --command python3 scripts/nvim-plugins.py update --report "$RUNNER_TEMP/nvim-report.json"
+          --command python3 scripts/nvim-plugins.py update
 
       - name: Export verified lockfile
         id: result
@@ -41,7 +40,6 @@ jobs:
           {
             echo "base-sha=$(git rev-parse HEAD)"
             echo "lockfile=$(jq -Rs . private_dot_config/nvim/lazy-lock.json)"
-            echo "report=$(jq -c . "$RUNNER_TEMP/nvim-report.json")"
           } >> "$GITHUB_OUTPUT"
 
   pull-request:
@@ -61,7 +59,6 @@ jobs:
         env:
           VERIFIED_BASE: ${{ needs.update.outputs.base-sha }}
           VERIFIED_LOCKFILE: ${{ needs.update.outputs.lockfile }}
-          PLUGIN_REPORT: ${{ needs.update.outputs.report }}
         run: |
           [[ "$VERIFIED_BASE" =~ ^[0-9a-f]{40}$ ]]
           if ! git diff --quiet "$VERIFIED_BASE" HEAD -- \
@@ -81,14 +78,24 @@ jobs:
                    (.value.commit | test("\\A[0-9a-f]{40}\\z")))
             then $contents else error("Invalid lockfile") end
           ' > private_dot_config/nvim/lazy-lock.json
-          printf '%s\n' "$PLUGIN_REPORT" > "$RUNNER_TEMP/nvim-report.json"
 
-      - name: Build pull request body from validated data
+      - name: Build pull request body from lockfile changes
         run: |
-          python3 scripts/nvim_plugin_report.py \
-            "$RUNNER_TEMP/nvim-lock-before.json" private_dot_config/nvim/lazy-lock.json \
-            "$RUNNER_TEMP/nvim-report.json" "$RUNNER_TEMP/nvim-pr-body.md"
-          cat "$RUNNER_TEMP/nvim-pr-body.md" >> "$GITHUB_STEP_SUMMARY"
+          {
+            printf 'Neovimプラグインを更新する。\n\n'
+            jq -rn --slurpfile old "$RUNNER_TEMP/nvim-lock-before.json" \
+                   --slurpfile new private_dot_config/nvim/lazy-lock.json '
+              $old[0] as $o | $new[0] as $n
+              | [($o + $n) | keys[] | select($o[.] != $n[.]) | . as $k
+                 | "| `\($k)` | `\($o[$k].commit[0:7] // "—") → \($n[$k].commit[0:7] // "—")` | \(
+                     if $o[$k] == null then "追加"
+                     elif $n[$k] == null then "削除"
+                     elif $o[$k].branch != $n[$k].branch then "ブランチ `\($o[$k].branch) → \($n[$k].branch)`"
+                     else "" end) |"]
+              | if length == 0 then "No plugin changes."
+                else (["| プラグイン | 旧 → 新 | 備考 |", "| --- | --- | --- |"] + . | join("\n")) end'
+            printf '\nReady for review で CI が起動する。適用・切り戻し手順は AGENTS.md を参照。\n'
+          } > "$RUNNER_TEMP/nvim-pr-body.md"
 
       - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:

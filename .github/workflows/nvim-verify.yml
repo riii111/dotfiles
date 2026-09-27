@@ -6,8 +6,6 @@ on:
     paths:
       - private_dot_config/nvim/**
       - scripts/nvim-plugins.py
-      - scripts/nvim_plugin_report.py
-      - scripts/nvim-plugin-constraints.lua
       - tests/nvim/**
       - .github/workflows/nvim-verify.yml
       - .github/workflows/update-nvim-plugins.yml
@@ -41,4 +39,4 @@ jobs:
           nix shell --inputs-from .
           nixpkgs#neovim nixpkgs#tree-sitter nixpkgs#lua-language-server
           nixpkgs#go nixpkgs#ripgrep
-          --command python3 scripts/nvim-plugins.py "$MODE" --report "$RUNNER_TEMP/nvim-report.json"
+          --command python3 scripts/nvim-plugins.py "$MODE"

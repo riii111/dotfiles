@@ -70,22 +70,6 @@ vim.schedule(function()
 		io.stderr:write(err .. "\n")
 		vim.cmd("cquit 1")
 	else
-		if vim.env.DOTFILES_NVIM_MODE == "check" then
-			local collected, report = pcall(dofile, vim.env.DOTFILES_NVIM_CONSTRAINTS_SCRIPT)
-			local saved, save_error = pcall(function()
-				vim.fn.writefile({
-					vim.json.encode({
-						complete = collected,
-						plugins = collected and report or vim.empty_dict(),
-					}),
-				}, vim.env.DOTFILES_NVIM_CONSTRAINTS)
-			end)
-			if not collected or not saved then
-				io.stderr:write(
-					"Constraint metadata unavailable: " .. tostring(collected and save_error or report) .. "\n"
-				)
-			end
-		end
 		print("Neovim " .. vim.env.DOTFILES_NVIM_MODE .. ": OK")
 		vim.cmd("qa!")
 	end
