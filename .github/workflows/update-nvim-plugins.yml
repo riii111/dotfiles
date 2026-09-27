@@ -1,0 +1,89 @@
+name: Update Neovim plugins
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 1 * *"
+
+concurrency:
+  group: update-nvim-plugins
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  update:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    outputs:
+      base-sha: ${{ steps.result.outputs.base-sha }}
+      lockfile: ${{ steps.result.outputs.lockfile }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+
+      - name: Update and verify in isolation
+        run: >-
+          nix shell --inputs-from .
+          nixpkgs#neovim nixpkgs#tree-sitter nixpkgs#lua-language-server
+          nixpkgs#go nixpkgs#ripgrep
+          --command python3 scripts/nvim-plugins.py update
+
+      - name: Export verified lockfile
+        id: result
+        run: |
+          echo "base-sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "lockfile=$(jq -Rs . private_dot_config/nvim/lazy-lock.json)" >> "$GITHUB_OUTPUT"
+
+  pull-request:
+    needs: update
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Import verified lockfile
+        env:
+          VERIFIED_BASE: ${{ needs.update.outputs.base-sha }}
+          VERIFIED_LOCKFILE: ${{ needs.update.outputs.lockfile }}
+        run: |
+          if [ "$(git rev-parse HEAD)" != "$VERIFIED_BASE" ]; then
+            echo 'The base branch changed during verification. Re-run this workflow.' >&2
+            exit 1
+          fi
+          printf '%s\n' "$VERIFIED_LOCKFILE" | jq -je '
+            . as $contents | fromjson |
+            if type == "object" and length > 0 and
+               all(.[]; (.branch | type == "string") and
+                   (.commit | test("^[0-9a-f]{40}$")))
+            then $contents else error("Invalid lockfile") end
+          ' > private_dot_config/nvim/lazy-lock.json
+
+      - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          base: ${{ github.event.repository.default_branch }}
+          branch: update-nvim-plugins
+          add-paths: private_dot_config/nvim/lazy-lock.json
+          commit-message: "chore(nvim): update plugins"
+          title: "chore(nvim): update plugins"
+          draft: always-true
+          delete-branch: true
+          labels: dependencies
+          body: |
+            Isolated verification passed before and after updating the plugins:
+            - Plugin installation/build and configuration
+            - Lua LSP attachment and hover, completion capabilities, Lua parsing
+            - Telescope file search and Oil directory navigation
+
+            Review the lockfile changes, then mark this PR ready to run PR checks.
+            Confirm interactive completion, diagnostics, and navigation before merging.
+            Apply and rollback commands are documented in the README's Neovim section.

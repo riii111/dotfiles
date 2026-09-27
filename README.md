@@ -97,6 +97,30 @@ nix develop -c ./bin/executable_dotctl test
 - One-key Quick Fix / Refactor menu
 - Per-language modules (Rust, Go, TypeScript, Python, C++, Kotlin, Terraform, SQL, Lua)
 
+#### Plugin updates
+
+`Update Neovim plugins` runs on the first day of each month at 09:00 JST and can also be run from Actions. It creates or refreshes a Draft PR only after isolated checks pass before and after the update. Updates follow each plugin's configured branch/version constraints.
+
+The checks cover installation/build errors, configuration errors, Lua LSP attachment and hover, completion capabilities, Lua parsing, Telescope file search, and Oil directory navigation. They use the Neovim version from `flake.lock` and temporary XDG directories; the installed configuration and plugins are left untouched. Interactive completion, diagnostics, and other language servers still need manual verification.
+
+Review the lockfile diff and mark the generated PR **Ready for review** to start `Main Verify` and `Neovim Verify`. PRs created with `GITHUB_TOKEN` do not trigger `pull_request` workflows automatically. A later automated update returns the PR to Draft so the new changes can be checked again. If verification fails, inspect the Actions log; no update is proposed. If the base branch changes during verification, rerun the workflow.
+
+Run the same verification locally from this repository:
+
+```bash
+nix shell --inputs-from . nixpkgs#neovim nixpkgs#tree-sitter nixpkgs#lua-language-server nixpkgs#go nixpkgs#ripgrep --command python3 scripts/nvim-plugins.py check
+# Replace check with update to write a verified update to the repository lockfile.
+```
+
+After merging, pull the change, apply the lockfile, and restore plugins to its recorded commits:
+
+```bash
+chezmoi apply ~/.config/nvim/lazy-lock.json
+nvim --headless '+Lazy! restore' +qa
+```
+
+To roll back, revert the plugin update commit with `git revert <update-commit>`, then run the same apply/restore commands. Restore the old lockfile before running `:Lazy restore`; `:Lazy update` would replace it with newer versions.
+
 ### DB tools: [sabiql](https://github.com/riii111/sabiql)
 
 ![sabiql(db tool)](https://github.com/user-attachments/assets/745ab18f-915c-4017-81a6-465c5c5ee11c)
