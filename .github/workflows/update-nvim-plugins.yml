@@ -82,7 +82,7 @@ jobs:
       - name: Build pull request body from lockfile changes
         run: |
           {
-            printf 'Neovimプラグインを更新する。\n\n'
+            printf 'Update Neovim plugins.\n\n'
             jq -rn --slurpfile old "$RUNNER_TEMP/nvim-lock-before.json" \
                    --slurpfile new private_dot_config/nvim/lazy-lock.json '
               $old[0] as $o | $new[0] as $n
@@ -94,7 +94,7 @@ jobs:
                      else "" end) |"]
               | if length == 0 then "No plugin changes."
                 else (["| プラグイン | 旧 → 新 | 備考 |", "| --- | --- | --- |"] + . | join("\n")) end'
-            printf '\nReady for review で CI が起動する。適用・切り戻し手順は AGENTS.md を参照。\n'
+            printf '\nSee AGENTS.md for apply and rollback instructions.\n'
           } > "$RUNNER_TEMP/nvim-pr-body.md"
 
       - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
