@@ -39,6 +39,8 @@
 
 JSON形式で出力する: `gh pr view --json title,body`
 
+PR のレビューコメントには、明示的に頼まれない限り返信を投稿しない。
+
 ## Gitコミット
 
 1. 最初に状態・差分・履歴を確認する: `git status && git diff && git log`
