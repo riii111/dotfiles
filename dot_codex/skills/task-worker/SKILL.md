@@ -12,13 +12,13 @@ description: |
 再開時に必要なら同じタスク管理元を読み直す。
 割り当てられたGit worktreeで目的を表すConventionalな英語branchを作り、実装する。
 実装後は候補をcommitし、`$task-review-cycle`でローカル固定SHA差分の独立レビューを受ける。
-指摘が解消されLGTMになるまで同じreview Taskで続ける。
+Blocking が解消されLGTMになるまで同じreview Taskで続ける。Non-blocking は任意とし、未対応だけで再レビューを繰り返さない。
 親への通知や完了記録は扱わない。
 
 ## 検証
 
 編集中とレビュー指摘の修正時は、影響箇所のテスト・検査を行う。
-指摘は可能な範囲でまとめて修正し、新しい候補をcommitして同じreview Taskへ再レビューを依頼する。
+Blocking と採用する任意改善は可能な範囲でまとめて修正し、新しい候補をcommitして同じreview Taskへ再レビューを依頼する。
 修正のたびに全検証は繰り返さない。
 
 独立LGTM後、最終候補で所定のformat・lint・test・buildを行う。
