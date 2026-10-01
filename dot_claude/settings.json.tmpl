@@ -49,6 +49,18 @@
       "Bash(git mv:*)",
       "Bash(git merge-tree:*)",
       "Bash(git merge:*)",
+      "Bash(git push:*)",
+      "Bash(git grep:*)",
+      "Bash(git ls-files:*)",
+      "Bash(git ls-remote:*)",
+      "Bash(git merge-base:*)",
+      "Bash(git blame:*)",
+      "Bash(git reflog:*)",
+      "Bash(git rev-list:*)",
+      "Bash(git describe:*)",
+      "Bash(git shortlog:*)",
+      "Bash(git for-each-ref:*)",
+      "Bash(git check-ignore:*)",
       "Bash(gh auth status:*)",
       "Bash(gh pr view*)",
       "Bash(gh pr list*)",
@@ -59,6 +71,8 @@
       "Bash(gh pr status:*)",
       "Bash(gh pr ready:*)",
       "Bash(gh pr merge:*)",
+      "Bash(gh pr edit:*)",
+      "Bash(gh pr update-branch:*)",
       "Bash(gh search:*)",
       "Bash(gh-loupe:*)",
       "Bash(gh api *)",
@@ -211,6 +225,14 @@
       "NotebookEdit"
     ],
     "ask": [
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git push * --force*)",
+      "Bash(git push * -f*)",
+      "Bash(git push * main*)",
+      "Bash(git push * master*)",
+      "Bash(git push *:main*)",
+      "Bash(git push *:master*)",
       "Bash(gcloud storage cat*)",
       "Bash(gcloud secrets list*)",
       "Bash(gcloud secrets versions access*)",
@@ -255,6 +277,10 @@
           {
             "type": "command",
             "command": "read input; if echo \"$input\" | grep -q '\"command\":\"find'; then echo '{\"decision\": \"block\", \"reason\": \"Use fd instead of find! Example: fd --hidden --exclude .git --exclude node_modules --color=never --print0 <pattern>\"}'; elif echo \"$input\" | grep -q '\"command\":\"grep'; then echo '{\"decision\": \"block\", \"reason\": \"Use rg instead of grep! Example: rg --no-heading --color=never --json --trim --max-columns=120 <pattern>\"}'; elif echo \"$input\" | grep -q '\"command\":\"cat'; then echo '{\"decision\": \"block\", \"reason\": \"Use bat instead of cat! Example: bat --plain --paging=never --color=never <file>\"}';{{ if eq .type "work" }} elif echo \"$input\" | grep -q 'gh pr create' && ! echo \"$input\" | grep -q '\\-\\-draft'; then echo '{\"decision\": \"block\", \"reason\": \"gh pr create without --draft is not allowed. Always use --draft flag.\"}';{{ end }} elif echo \"$input\" | grep -qE 'git add.*(--force|-f)'; then echo '{\"decision\": \"block\", \"reason\": \"git add --force/-f is blocked to prevent committing git-excluded files. Remove the -f/--force flag.\"}'; elif echo \"$input\" | grep -q 'terraform apply'; then echo '{\"decision\": \"block\", \"reason\": \"terraform apply is not allowed directly. Separate it from other commands and let the user approve.\"}'; elif echo \"$input\" | grep -q 'terraform destroy'; then echo '{\"decision\": \"block\", \"reason\": \"terraform destroy is not allowed directly. Separate it from other commands and let the user approve.\"}'; elif echo \"$input\" | grep -q 'npm publish'; then echo '{\"decision\": \"block\", \"reason\": \"npm publish is not allowed directly. Separate it from other commands and let the user approve.\"}'; elif echo \"$input\" | grep -q 'cargo publish'; then echo '{\"decision\": \"block\", \"reason\": \"cargo publish is not allowed directly. Separate it from other commands and let the user approve.\"}'; fi"
+          },
+          {
+            "type": "command",
+            "command": "{{ .chezmoi.homeDir }}/.claude/hooks/ask-push-on-protected-branch.sh"
           }
         ]
       }
