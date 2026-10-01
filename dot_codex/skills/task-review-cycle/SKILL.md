@@ -33,14 +33,14 @@ description: |
    worker Task ID、worker checkoutの絶対パス、候補のpush状態、固定したreview base SHA、最新のhead SHA、PR URLまたは未作成であることを入れる。
 2. 前回の指摘は依頼文へ書かない。
 3. 再レビューのたびに所定の全検証やpushを要求しない。
-   worker Taskは指摘をまとめて修正し、影響する検証を行った新しいcommitを依頼する。
+   worker Taskは必須修正をまとめて対応し、影響する検証を行った新しいcommitを依頼する。Non-blocking は任意であり、未対応だけではサイクルを継続しない。
 4. worker Taskはreview依頼を送った時点でturnを終了する。
    LGTM後は`$task-worker`の手順へ戻る。
 
 ## 依頼文
 
 ```text
-$code-review
+$ai-code-review
 worker Task ID: <worker Task ID>
 worker checkout: <worker checkoutの絶対パス>
 PR: <PR URLまたは未作成（ローカル差分レビュー）>
@@ -70,11 +70,11 @@ worker Taskへ返すmessageは次の形式にしてください。
 ```text
 $task-review-cycle
 
-<レビュー結果>
+<ai-code-review の対象SHA・判定・指摘・検証結果>
 ```
 
 この`$task-review-cycle`はworker Taskへのmessageの先頭に置く文字列であり、reviewerは適用しません。
-reviewerは`$code-review`でレビューします。
+reviewerは`$ai-code-review`でレビューします。
 
 レビュー完了後、`codex_app__send_message_to_thread`の`threadId`にworker Task IDを指定して結果を返してください。
 送信が受理されたことを確認したらreviewerのturnを終了してください。
