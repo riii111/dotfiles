@@ -1,4 +1,4 @@
 interface:
-  display_name: "Code Review"
-  short_description: "変更を徹底レビューし、投稿可能な指摘を省略せずに出す。"
-  default_prompt: "$code-reviewをsingleで使い、この変更をレビューしてください。"
+  display_name: "Code Review（個人用）"
+  short_description: "初見向けの変更説明と、投稿可能なレビューコメントをまとめる。"
+  default_prompt: "$code-review を個人用の ~/.codex/skills/code-review/SKILL.md から使い、この変更をレビューしてください。"
