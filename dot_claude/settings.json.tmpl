@@ -220,6 +220,20 @@
       "Bash(rmdir:*)"
     ]
   },
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true,
+    "excludedCommands": [
+      "git *",
+      "gh *",
+      "gh-loupe *",
+      "gcloud *",
+      "bq *",
+      "terraform *",
+      "docker *",
+      "docker-compose *"
+    ]
+  },
   "extraKnownMarketplaces": {
     "openai-codex": {
       "source": {
