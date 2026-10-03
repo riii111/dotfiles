@@ -83,6 +83,33 @@ permission_request 'git reset HEAD~1 --hard' | jq -e '.hookSpecificOutput.decisi
 test -z "$(permission_request 'gh auth status --hostname github.com')"
 test -z "$(permission_request 'git push')"
 test -z "$(permission_request 'git push origin feat/test')"
+
+for command in \
+	'git status && git diff | head -5' \
+	'git log --oneline 2>&1 | tail -2; git status -sb' \
+	"cd $tmpdir && git fetch origin" \
+	'gh pr view 1 --json state | jq .state' \
+	'git push origin HEAD 2>&1 | tail -1'; do
+	permission_request "$command" | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
+done
+# shellcheck disable=SC2016 # Literal expansions are hook inputs, not test-shell operations.
+for command in \
+	'git status && touch outside' \
+	'git status | xargs touch' \
+	'git status > out.txt' \
+	'git status; echo $(touch outside)' \
+	'git status && echo `touch outside`' \
+	'git status &' \
+	'cd ~ && git status' \
+	'git status | sort -ro out.txt' \
+	'git status | rg --pre touch x' \
+	'gh pr view 1 --web' \
+	'gh api repos/riii111/test | jq .' \
+	$'git status\ntouch outside' \
+	'git status && FOO=1 git diff' \
+	'echo done | wc -l'; do
+	test -z "$(permission_request "$command")"
+done
 for command in \
 	$'git push\norigin HEAD' \
 	$'gh auth\nstatus' \
