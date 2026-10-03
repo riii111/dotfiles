@@ -104,7 +104,9 @@ for command in \
 	'git diff --stat | sort -rn | cut -d" " -f2 | head -3' \
 	'git status >/dev/null && git log -1 2>/dev/null' \
 	'git status ;' \
-	'git log -1 3>/dev/null'; do
+	'git log -1 3>/dev/null' \
+	'git log --oneline | grep push' \
+	'git status | rg --no-config -c foo'; do
 	permission_request "$command" | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
 done
 # Inputs from the review of the first compound-command design; none may be approved.
@@ -152,6 +154,7 @@ for command in \
 	'GIT_PAGER=cat git switch master && git push origin HEAD' \
 	'GIT_EDITOR=true git switch -c master && git push origin HEAD' \
 	'git rebase origin/main main && git push origin HEAD' \
+	'git status | rg /tmp/outside.txt' \
 	$'git status >\n/dev/null' \
 	'git status | head -٢'; do
 	test -z "$(permission_request "$command")"

@@ -1091,6 +1091,9 @@ def is_stdin_filter(tokens: list[str]) -> bool:
     spec = STDIN_FILTERS.get(tokens[0])
     if spec is None:
         return False
+    # A ripgrep config file can prepend patterns and paths to the arguments.
+    if tokens[0] == "rg" and "--no-config" not in option_arguments(tokens[1:]):
+        return False
     flags, valued, long_options, (minimum, maximum) = spec
     operands = 0
     args = iter(tokens[1:])
@@ -1222,21 +1225,18 @@ def push_needs_approval(command: str, cwd: str) -> bool:
     if planned is None:
         return mentions_push(command)
     current, pipelines = planned
-    branch_unknown = False
+    # Inherited GIT_DIR and the like make git act on a repository the checks
+    # below never look at.
+    branch_unknown = has_unsafe_ambient_git_environment()
     for pipeline in pipelines:
         for tokens in pipeline:
             words = without_assignments(tokens)
+            if words and words[0] != "git" and is_known_harmless(words):
+                continue
             if not words or words[0] != "git":
                 if mentions_push(" ".join(tokens)):
                     return True
-                branch_unknown = branch_unknown or not (
-                    words
-                    and (
-                        words[0] in QUIET_COMMANDS
-                        or is_stdin_filter(words)
-                        or is_safe_gh_read(shlex.join(words))
-                    )
-                )
+                branch_unknown = True
                 continue
             target = git_target(tokens, current)
             subcommand = git_command(words[1:])[0]
@@ -1247,11 +1247,20 @@ def push_needs_approval(command: str, cwd: str) -> bool:
             if subcommand == "push" and (
                 branch_unknown
                 or target is None
-                or current_branch(target) in PROTECTED_BRANCHES
+                or current_branch(target) in PROTECTED_BRANCHES | {None}
             ):
                 return True
             branch_unknown = branch_unknown or subcommand not in BRANCH_KEEPING_GIT
     return False
+
+
+def is_known_harmless(words: list[str]) -> bool:
+    """Display, filter and GitHub read commands, whose arguments are only text."""
+    return (
+        words[0] in QUIET_COMMANDS
+        or is_stdin_filter(words)
+        or is_safe_gh_read(shlex.join(words))
+    )
 
 
 def mentions_push(text: str) -> bool:

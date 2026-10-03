@@ -45,7 +45,10 @@ for command in \
 	'gh pr checks 1 | tail -3' \
 	'git push -u origin HEAD 2>&1 | tail -1' \
 	'git status ;' \
-	'git log -1 3>/dev/null'; do
+	'git log -1 3>/dev/null' \
+	'git log --oneline | grep push' \
+	"git status && echo 'push complete'" \
+	'git status | rg --no-config -c foo'; do
 	output="$(pre_tool_use "$command")"
 	decision_is allow <<<"$output"
 	jq -e --arg command "$command" \
@@ -141,8 +144,18 @@ for command in \
 	'git pf'; do
 	pre_tool_use "$command" | decision_is ask
 done
+# Inputs from the second review of the narrowed design.
+GIT_DIR="$main_repo/.git" pre_tool_use 'git push origin HEAD' | decision_is ask
+detached="$test_home/ghq/github.com/riii111/detached"
+mkdir -p "$detached"
+git -C "$detached" init -q
+git -C "$detached" -c user.name=test -c user.email=test@example.com commit -q --allow-empty -m init
+git -C "$detached" switch -q --detach
+git -C "$detached" remote add origin https://github.com/riii111/detached.git
+hook_cwd="$detached" pre_tool_use 'git push origin HEAD:refs/heads/review-probe' | decision_is ask
 for command in \
 	'git st' \
+	'git status | rg /tmp/outside.txt' \
 	$'git status >\n/dev/null' \
 	'git status | head -٢'; do
 	output="$(pre_tool_use "$command")"
