@@ -14,7 +14,11 @@ from urllib.parse import urlparse
 
 
 PROTECTED_BRANCHES = {"main", "master"}
-SAFE_GIT_ENVIRONMENT = {"GIT_PAGER"}
+SAFE_GIT_ENVIRONMENT = {
+    "GIT_EDITOR": "true",
+    "GIT_OPTIONAL_LOCKS": "0",
+    "GIT_PAGER": "cat",
+}
 GITHUB_SSH_ENDPOINTS = {("github.com", "22"), ("ssh.github.com", "443")}
 
 
@@ -28,8 +32,7 @@ def git_environment() -> dict[str, str]:
 
 def has_unsafe_ambient_git_environment() -> bool:
     return any(
-        name.startswith("GIT_")
-        and not (name in SAFE_GIT_ENVIRONMENT and os.environ[name] == "cat")
+        name.startswith("GIT_") and SAFE_GIT_ENVIRONMENT.get(name) != os.environ[name]
         for name in os.environ
     )
 
@@ -303,7 +306,7 @@ def has_unsafe_environment_override(command: str) -> bool:
             break
         name = token.split("=", 1)[0]
         value = token.split("=", 1)[1]
-        if name not in SAFE_GIT_ENVIRONMENT or value != "cat":
+        if SAFE_GIT_ENVIRONMENT.get(name) != value:
             return True
     return False
 
@@ -771,3 +774,202 @@ def is_safe_push(command: str, cwd: str) -> bool:
         ("git", "push", "-u", "origin", "HEAD"),
         ("git", "push", "--set-upstream", "origin", "HEAD"),
     }
+
+
+OUTSIDE_SANDBOX = "outside_sandbox"
+INSIDE_SANDBOX = "inside_sandbox"
+SEGMENT_SEPARATORS = {"&&", "||", ";", "|"}
+# Output dropped or merged into the pipe changes nothing outside the command.
+DISCARDED_REDIRECTION = re.compile(
+    r"(?<![^\s;&|])(?:[12]?>&[12]|(?:&>|[12]?>{1,2})\s*/dev/null)(?![^\s;&|])"
+)
+GH_READ_COMMANDS = {
+    ("pr", "view"),
+    ("pr", "list"),
+    ("pr", "checks"),
+    ("pr", "diff"),
+    ("pr", "status"),
+    ("issue", "view"),
+    ("issue", "list"),
+    ("issue", "status"),
+    ("repo", "view"),
+    ("run", "list"),
+    ("run", "view"),
+    ("run", "watch"),
+    ("workflow", "list"),
+    ("workflow", "view"),
+    ("release", "list"),
+    ("release", "view"),
+}
+# Each filter only reads its input or named files and writes to the pipe.
+FILTER_COMMANDS = {
+    "cat",
+    "cut",
+    "echo",
+    "grep",
+    "head",
+    "jq",
+    "printf",
+    "rg",
+    "sleep",
+    "sort",
+    "tail",
+    "tr",
+    "true",
+    "uniq",
+    "wc",
+}
+
+
+def compound_placement(command: str, cwd: str) -> str | None:
+    """Where a command may run without asking, or None when any part is unknown.
+
+    A part that leaves the sandbox must pass the checks that approve a single
+    command, and every other part must be a filter that is harmless anywhere.
+    """
+    segments = command_segments(command)
+    if segments is None:
+        return None
+    current = Path(cwd)
+    leaves_sandbox = False
+    for tokens in segments:
+        if tokens[0] == "cd":
+            if len(tokens) != 2 or tokens[1].startswith("-"):
+                return None
+            current = (current / tokens[1]).resolve()
+            if not current.is_dir():
+                return None
+            continue
+        if is_filter(tokens):
+            continue
+        if not runs_safely_outside(shlex.join(tokens), str(current)):
+            return None
+        leaves_sandbox = True
+    return OUTSIDE_SANDBOX if leaves_sandbox else INSIDE_SANDBOX
+
+
+def command_segments(command: str) -> list[list[str]] | None:
+    if has_unmodeled_shell_syntax(command):
+        return None
+    try:
+        lexer = shlex.shlex(
+            DISCARDED_REDIRECTION.sub(" ", command),
+            posix=True,
+            punctuation_chars="();&|<>",
+        )
+        lexer.whitespace_split = True
+        lexer.commenters = ""
+        tokens = list(lexer)
+    except ValueError:
+        return None
+    segments: list[list[str]] = [[]]
+    for token in tokens:
+        if token in SEGMENT_SEPARATORS:
+            segments.append([])
+        elif token and set(token) <= set("();&|<>"):
+            return None
+        else:
+            segments[-1].append(token)
+    if any(not segment for segment in segments):
+        return None
+    return segments
+
+
+def has_unmodeled_shell_syntax(command: str) -> bool:
+    """Expansions, subshells and line breaks change what the parts mean."""
+    quote = None
+    word_start = True
+    for char in command:
+        if quote == "'":
+            if char == "'":
+                quote = None
+            continue
+        if char in {"`", "$", "\\"}:
+            return True
+        if quote == '"':
+            if char == '"':
+                quote = None
+            continue
+        if char in {"'", '"'}:
+            quote = char
+        elif char in {"\n", "\r", "(", ")", "{", "}"}:
+            return True
+        elif char == "~" and word_start:
+            return True
+        word_start = char.isspace() or char in {";", "&", "|"}
+    return quote is not None
+
+
+def is_filter(tokens: list[str]) -> bool:
+    name, args = tokens[0], tokens[1:]
+    if name not in FILTER_COMMANDS:
+        return False
+    if name == "sort":
+        return not (
+            has_short_flag(args, "o")
+            or has_option(args, "--output")
+            or has_option(args, "--compress-program")
+        )
+    if name == "uniq":
+        return len([arg for arg in args if not arg.startswith("-")]) <= 1
+    if name == "rg":
+        return not has_option(args, "--pre")
+    return True
+
+
+def runs_safely_outside(command: str, cwd: str) -> bool:
+    return (
+        is_safe_auth_status(command)
+        or is_safe_gh_read(command)
+        or is_safe_git_permission_request(command, cwd)
+        or is_safe_push(command, cwd)
+    )
+
+
+def is_safe_gh_read(command: str) -> bool:
+    executable, args = direct_command(command)
+    if executable != "gh" or has_unsafe_environment_override(command):
+        return False
+    return tuple(args[:2]) in GH_READ_COMMANDS and not (
+        has_option(args, "--web") or has_short_flag(args, "w")
+    )
+
+
+def segment_denial_reason(command: str, cwd: str) -> str | None:
+    """The first part of a compound command that the policy forbids on its own."""
+    segments = command_segments(command)
+    if segments is None:
+        return None
+    current = Path(cwd)
+    for tokens in segments:
+        if tokens[0] == "cd" and len(tokens) == 2:
+            current = (current / tokens[1]).resolve()
+            continue
+        reason = denial_reason(shlex.join(tokens), str(current))
+        if reason is not None:
+            return reason
+    return None
+
+
+def pushes_from_protected_branch(command: str, cwd: str) -> bool:
+    segments = command_segments(command)
+    if segments is None:
+        return re.search(r"\bgit\b.*\bpush\b", command) is not None and (
+            current_branch(cwd) in PROTECTED_BRANCHES
+        )
+    current = Path(cwd)
+    for tokens in segments:
+        if tokens[0] == "cd" and len(tokens) == 2:
+            current = (current / tokens[1]).resolve()
+            continue
+        if tokens[0] != "git":
+            continue
+        invocation = safe_git_invocation(tokens[1:], str(current))
+        if invocation is None:
+            subcommand, _ = git_command(tokens[1:])
+            target = str(current)
+        else:
+            target, subcommand, _ = invocation
+        if subcommand == "push" and current_branch(target) in PROTECTED_BRANCHES:
+            return True
+    return False

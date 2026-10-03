@@ -283,7 +283,8 @@
           },
           {
             "type": "command",
-            "command": "{{ .chezmoi.homeDir }}/.claude/hooks/ask-push-on-protected-branch.sh"
+            "command": "python3 {{ .chezmoi.homeDir }}/.local/share/agent-policy/claude_pre_tool_use.py",
+            "timeout": 5
           }
         ]
       }
