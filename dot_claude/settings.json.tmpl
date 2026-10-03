@@ -95,6 +95,9 @@
       "Bash(cargo clippy:*)",
       "Bash(cargo fmt:*)",
       "Bash(cargo audit:*)",
+      "Bash(cargo nextest:*)",
+      "Bash(cargo test:*)",
+      "Bash(cargo insta:*)",
       "Bash(make test-unit)",
       "Bash(go build:*)",
       "Bash(go mod:*)",
@@ -246,9 +249,16 @@
     "enabled": true,
     "autoAllowBashIfSandboxed": true,
     "network": {
-      "allowedDomains": ["github.com"]
+      "allowedDomains": ["github.com"],
+      "allowUnixSockets": ["/nix/var/nix/daemon-socket/socket"]
+    },
+    "filesystem": {
+      "allowWrite": ["~/.cache/nix"]
     },
     "excludedCommands": [
+      "cargo nextest *",
+      "cargo test *",
+      "cargo insta *",
       "git *",
       "gh *",
       "gh-loupe *",
@@ -315,7 +325,6 @@
     "command": "{{ .chezmoi.homeDir }}/.claude/statusline-command.sh"
   },
   "alwaysThinkingEnabled": true,
-  "model": "claude-opus-5[1m]",
   "effortLevel": "medium",
   "skipDangerousModePermissionPrompt": {{ if eq .type "personal" }}true{{ else }}false{{ end }}
 }
