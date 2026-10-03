@@ -1,0 +1,2 @@
+ai-code-reviewの対象SHA・判定・指摘・検証結果を、このreview Taskの最終回答として返してください。
+workerがwait_threads/read_threadで受け取るため、workerへのmessage送信は行わないでください。

@@ -1,17 +1,14 @@
 #!/usr/bin/env python3
 
-"""Run an independent Codex review through the current harnexus bridge."""
+"""Prepare independent review requests for existing Codex/Claude tools."""
 
 import argparse
 import fcntl
 import json
 import os
 import re
-import socket
-import stat
 import subprocess
 import sys
-import uuid
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -33,13 +30,23 @@ def candidate(path):
     data = json.loads(path.read_text())
     if not isinstance(data, dict):
         raise ReviewError("request must be a JSON object")
-    for key in ("identifier", "checkout", "base", "head", "context", "projectId"):
+    for key in (
+        "identifier",
+        "checkout",
+        "base",
+        "head",
+        "context",
+        "projectId",
+        "workerId",
+    ):
         if not isinstance(data.get(key), str) or not data[key].strip():
             raise ReviewError(f"request requires a nonempty {key}")
     if not isinstance(data.get("pushed"), bool):
         raise ReviewError("request requires pushed: true or false")
     if data.get("pr") is not None and not isinstance(data["pr"], str):
         raise ReviewError("pr must be a string or null")
+    if data.get("worker") not in ("Claude", "Codex"):
+        raise ReviewError("worker must be Claude or Codex")
     checkout = Path(data["checkout"])
     if not checkout.is_absolute() or not checkout.is_dir():
         raise ReviewError("checkout must be an existing absolute directory")
@@ -55,14 +62,17 @@ def candidate(path):
     return data
 
 
-def review_prompt(data, caller, skills):
+def review_prompt(data, skills):
     skill = skills / "ai-code-review" / "SKILL.md"
-    template = skills / "task-review-cycle" / "references" / "reviewer.md"
-    if not skill.is_file() or not template.is_file():
-        raise ReviewError("ai-code-review or reviewer template is not installed")
-    return template.read_text().format(
+    references = skills / "task-review-cycle" / "references"
+    template = references / "reviewer.md"
+    reply = references / ("reply-" + data["worker"].lower() + ".md")
+    if not all(path.is_file() for path in (skill, template, reply)):
+        raise ReviewError("ai-code-review or reviewer templates are not installed")
+    return (template.read_text() + "\n" + reply.read_text()).format(
         skill_path=str(skill.resolve()),
-        worker_thread_id=caller,
+        worker=data["worker"],
+        worker_thread_id=data["workerId"],
         checkout=data["checkout"],
         pr=data.get("pr") or "未作成（ローカル差分レビュー）",
         push_state="push済み" if data["pushed"] else "未push",
@@ -94,166 +104,27 @@ def save_state(path, data):
 
 
 def load_state(path):
-    if not path.is_file():
-        raise ReviewError("no review state; run start first")
+    if not path.exists():
+        return None
     state = json.loads(path.read_text())
-    if not isinstance(state, dict) or not isinstance(state.get("candidate"), dict):
-        raise ReviewError("invalid review state")
-    for key in ("caller", "socket"):
-        if not isinstance(state.get(key), str) or not state[key]:
-            raise ReviewError("invalid review state")
-    for key in ("base", "head"):
-        if not isinstance(state["candidate"].get(key), str):
-            raise ReviewError("invalid review candidate state")
+    if (
+        not isinstance(state, dict)
+        or state.get("version") != 2
+        or not isinstance(state.get("reviewer"), str)
+        or not state["reviewer"]
+        or not isinstance(state.get("candidate"), dict)
+    ):
+        raise ReviewError(
+            "unsupported review state; inspect it before choosing --state"
+        )
     return state
 
 
-def read_state(path):
-    state = load_state(path)
-    if state.get("pending"):
-        raise ReviewError(
-            "a previous write has an unknown outcome; inspect the App before any new write"
-        )
-    if not isinstance(state.get("reviewer"), str) or not state["reviewer"]:
-        raise ReviewError("no confirmed reviewer; inspect the App before recovery")
-    return state
-
-
-class CallError(ReviewError):
-    def __init__(self, message, unknown=False):
-        super().__init__(message)
-        self.unknown = unknown
-
-
-def caller_identity(explicit=None):
-    caller = (
-        explicit
-        or os.environ.get("HARNEXUS_THREAD_ID")
-        or os.environ.get("CODEX_THREAD_ID")
-    )
-    if not caller:
-        raise ReviewError("set --caller-thread-id or run inside a Codex/Claude worker")
-    token = (
-        os.environ.get("HARNEXUS_LINK_TOKEN")
-        if caller == os.environ.get("HARNEXUS_THREAD_ID")
-        else None
-    )
-    return caller, token
-
-
-def select_socket(explicit=None):
-    chosen = explicit or os.environ.get("HARNEXUS_LINK_SOCKET")
-    if chosen:
-        path = Path(chosen)
-        if not path.is_absolute():
-            raise ReviewError("socket path must be absolute")
-        return path
-    state = Path(
-        os.environ.get(
-            "HARNEXUS_STATE_PATH", Path.home() / ".local/state/harnexus/threads.json"
-        )
-    )
-    available = []
-    for path in sorted((state.parent / "link").glob("*.sock")):
-        if not stat.S_ISSOCK(path.stat().st_mode):
-            continue
-        with socket.socket(socket.AF_UNIX) as connection:
-            connection.settimeout(1)
-            try:
-                connection.connect(str(path))
-            except OSError:
-                continue
-            available.append(path)
-    if len(available) != 1:
-        raise ReviewError(
-            "choose --socket: "
-            + (", ".join(map(str, available)) or "no running harnexus bridge")
-        )
-    return available[0]
-
-
-def rpc(path, caller, token, tool, arguments, timeout=180):
-    request_id = str(uuid.uuid4())
-    request = {
-        "id": request_id,
-        "callerThreadId": caller,
-        "tool": tool,
-        "arguments": arguments,
-    }
-    if token:
-        request["token"] = token
-    wire = (json.dumps(request, ensure_ascii=False) + "\n").encode()
-    if len(wire) > 1024 * 1024:
-        raise CallError("request exceeds the harnexus 1 MiB limit")
-    sent = False
-    try:
-        with socket.socket(socket.AF_UNIX) as connection:
-            connection.settimeout(timeout)
-            connection.connect(str(path))
-            sent = True
-            connection.sendall(wire)
-            with connection.makefile("rb") as stream:
-                line = stream.readline(16 * 1024 * 1024 + 1)
-            if len(line) > 16 * 1024 * 1024 or not line.endswith(b"\n"):
-                raise ValueError("missing or oversized response")
-            response = json.loads(line)
-    except (OSError, ValueError) as error:
-        raise CallError(f"harnexus call failed: {error}", unknown=sent) from error
-    if not isinstance(response, dict) or response.get("id") != request_id:
-        raise CallError("invalid harnexus response id", unknown=True)
-    if "error" in response:
-        error = response["error"]
-        if not isinstance(error, dict):
-            raise CallError("invalid harnexus error", unknown=True)
-        raise CallError(
-            str(error.get("message", "harnexus rejected the call")),
-            unknown=error.get("code")
-            not in {
-                "invalid_request",
-                "invalid_arguments",
-                "caller_rejected",
-                "refused",
-                "not_sent",
-                "bridge_closing",
-                "failed",
-            },
-        )
-    result = response.get("result")
-    if not isinstance(result, dict):
-        raise CallError("invalid harnexus result", unknown=True)
-    if result.get("isError"):
-        raise CallError("App rejected the call: " + str(result.get("content", [])))
-    return result
-
-
-def payload(result):
-    if isinstance(result.get("structuredContent"), dict):
-        return result["structuredContent"]
-    for content in result.get("content", []):
-        if content.get("type") == "text":
-            try:
-                value = json.loads(content["text"])
-            except (KeyError, ValueError):
-                continue
-            if isinstance(value, dict):
-                return value
-    raise ReviewError("App returned no structured JSON payload")
-
-
-def write_call(path, state, call):
-    previous = json.loads(path.read_text()) if path.exists() else None
-    state["pending"] = True
-    save_state(path, state)
-    try:
-        result = call()
-    except CallError as error:
-        if not error.unknown:
-            if previous is None:
-                path.unlink()
-            else:
-                save_state(path, previous)
-        raise
-    return result
+def check_session(state, data):
+    if state:
+        for key in ("worker", "workerId", "projectId", "checkout", "base"):
+            if state["candidate"].get(key) != data[key]:
+                raise ReviewError(f"review session must keep the original {key}")
 
 
 def state_path(explicit):
@@ -273,15 +144,7 @@ def state_path(explicit):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--socket",
-        help="harnexus link socket; defaults to HARNEXUS_LINK_SOCKET or discovery",
-    )
-    parser.add_argument(
-        "--caller-thread-id",
-        help="worker thread ID; defaults to HARNEXUS_THREAD_ID or CODEX_THREAD_ID",
-    )
-    parser.add_argument(
-        "--state", help="state file; defaults to the current worktree Git directory"
+        "--state", help="state file; defaults to this worktree Git directory"
     )
     parser.add_argument(
         "--skills-root",
@@ -289,204 +152,64 @@ def main(argv=None):
         default=Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")) / "skills",
     )
     commands = parser.add_subparsers(dest="command", required=True)
-    commands.add_parser(
-        "doctor", help="check the existing App connection without creating a thread"
+    prepare = commands.add_parser(
+        "prepare", help="print tool name and arguments; never send"
     )
-    commands.add_parser("projects", help="list App projects")
-    for name in ("start", "rerun"):
-        command = commands.add_parser(name)
-        command.add_argument(
-            "--request",
-            type=Path,
-            required=True,
-            help="candidate JSON described in task-review-cycle/references/request.md",
-        )
-        command.add_argument("--model")
-        command.add_argument("--thinking")
-    commands.add_parser(
-        "wait", help="wait for up to 60 seconds and read the review result"
+    prepare.add_argument("--request", type=Path, required=True)
+    prepare.add_argument("--model")
+    prepare.add_argument("--thinking")
+    record = commands.add_parser(
+        "record", help="save a confirmed reviewer and submitted candidate"
     )
-    recover = commands.add_parser(
-        "recover", help="after checking the App, explicitly adopt a confirmed reviewer"
-    )
-    recover.add_argument("--reviewer-thread-id", required=True)
+    record.add_argument("--request", type=Path, required=True)
+    record.add_argument("--reviewer-thread-id", required=True)
+    commands.add_parser("state", help="show the last recorded reviewer and candidate")
     args = parser.parse_args(argv)
     try:
-        caller, token = caller_identity(args.caller_thread_id)
-        endpoint = select_socket(args.socket)
-
-        def call(tool, arguments, timeout=180):
-            return rpc(endpoint, caller, token, tool, arguments, timeout)
-
-        if args.command in ("doctor", "projects"):
-            result = payload(call("list_projects", {}))
-            print(
-                json.dumps(
-                    result
-                    if args.command == "projects"
-                    else {"connected": True, "socket": str(endpoint)},
-                    ensure_ascii=False,
-                )
-            )
-            return 0
         path = state_path(args.state)
         with locked_state(path):
-            if args.command == "start":
-                if path.exists():
-                    raise ReviewError(
-                        "review state already exists; use rerun or explicitly choose a different --state"
-                    )
+            state = load_state(path)
+            if args.command == "state":
+                if state is None:
+                    raise ReviewError("no confirmed reviewer has been recorded")
+                output = state
+            else:
                 data = candidate(args.request)
-                prompt = review_prompt(data, caller, args.skills_root)
-                state = {"caller": caller, "candidate": data, "socket": str(endpoint)}
-                result = write_call(
-                    path,
-                    state,
-                    lambda: call(
-                        "create_thread",
-                        {
-                            "target": {
+                check_session(state, data)
+                if args.command == "record":
+                    reviewer = args.reviewer_thread_id
+                    if not reviewer.strip() or reviewer.startswith(
+                        "client-new-thread:"
+                    ):
+                        raise ReviewError("record requires a confirmed threadId")
+                    if reviewer == data["workerId"]:
+                        raise ReviewError("a worker cannot review itself")
+                    if state and state["reviewer"] != reviewer:
+                        raise ReviewError("review session must keep the same reviewer")
+                    output = {"version": 2, "reviewer": reviewer, "candidate": data}
+                    save_state(path, output)
+                else:
+                    arguments = {"prompt": review_prompt(data, args.skills_root)}
+                    if state:
+                        tool = "send_message_to_thread"
+                        arguments["threadId"] = state["reviewer"]
+                    else:
+                        tool = "create_thread"
+                        arguments.update(
+                            target={
                                 "type": "project",
                                 "projectId": data["projectId"],
                                 "environment": {"type": "worktree"},
                             },
-                            "title": "Review " + data["identifier"],
-                            "prompt": prompt,
-                            "model": args.model or "gpt-6.1-sol",
-                            "thinking": args.thinking or "medium",
-                        },
-                        900,
-                    ),
-                )
-                reviewer = payload(result).get("threadId")
-                if (
-                    not isinstance(reviewer, str)
-                    or not reviewer
-                    or reviewer.startswith("client-new-thread:")
-                ):
-                    raise ReviewError(
-                        "created reviewer ID is unknown; inspect the App before recovery"
-                    )
-                state.update(reviewer=reviewer, pending=False)
-                save_state(path, state)
-                print(json.dumps({"reviewer": reviewer, "state": str(path)}))
-                return 0
-            state = load_state(path) if args.command == "recover" else read_state(path)
-            if state.get("caller") != caller:
-                raise ReviewError("state belongs to a different worker")
-            if state.get("socket") != str(endpoint) and args.command != "recover":
-                raise ReviewError(
-                    "state belongs to a different bridge; inspect it before recovery"
-                )
-            if args.command == "recover":
-                if args.reviewer_thread_id == caller:
-                    raise ReviewError("a worker cannot review itself")
-                call(
-                    "read_thread", {"threadId": args.reviewer_thread_id, "turnLimit": 1}
-                )
-                state.update(
-                    reviewer=args.reviewer_thread_id,
-                    pending=False,
-                    socket=str(endpoint),
-                )
-                state.pop("cursor", None)
-                save_state(path, state)
-                print(json.dumps({"reviewer": state["reviewer"], "recovered": True}))
-                return 0
-            if args.command == "rerun":
-                data = candidate(args.request)
-                for key in ("projectId", "checkout", "base"):
-                    if data[key] != state["candidate"][key]:
-                        raise ReviewError(f"rerun must keep the original {key}")
-                prompt = review_prompt(data, caller, args.skills_root)
-                arguments = {"threadId": state["reviewer"], "prompt": prompt}
-                for key in ("model", "thinking"):
-                    if getattr(args, key) is not None:
-                        arguments[key] = getattr(args, key)
-                previous_turns = payload(
-                    call("read_thread", {"threadId": state["reviewer"], "turnLimit": 1})
-                ).get("turns", [])
-                state["baselineTurnId"] = (
-                    previous_turns[0]["id"] if previous_turns else None
-                )
-                state["candidate"] = data
-                state.pop("review", None)
-                write_call(
-                    path, state, lambda: call("send_message_to_thread", arguments)
-                )
-                state["pending"] = False
-                save_state(path, state)
-                print(json.dumps({"reviewer": state["reviewer"], "head": data["head"]}))
-                return 0
-            if state.get("review"):
-                print(
-                    json.dumps(
-                        {
-                            "status": "review_available",
-                            "base": state["candidate"]["base"],
-                            "head": state["candidate"]["head"],
-                            "review": state["review"],
-                        },
-                        ensure_ascii=False,
-                    )
-                )
-                return 0
-            target = {"threadId": state["reviewer"]}
-            if state.get("cursor"):
-                target["afterCursor"] = state["cursor"]
-            snapshot = payload(
-                call("wait_threads", {"targets": [target], "timeoutMs": 60000}, 120)
-            )
-            polls = snapshot.get("polls", [])
-            for poll in polls:
-                if poll.get("thread", {}).get("id") == state["reviewer"] and poll.get(
-                    "cursor"
-                ):
-                    state["cursor"] = poll["cursor"]
-            wake = snapshot.get("wake") or {}
-            output = {
-                "status": "pending",
-                "base": state["candidate"]["base"],
-                "head": state["candidate"]["head"],
-            }
-            errors = [
-                error
-                for error in snapshot.get("errors", [])
-                if error.get("threadId") == state["reviewer"]
-            ]
-            if errors:
-                output.update(status="needs_attention", errors=errors)
-            elif wake.get("reason") or any(
-                poll.get("latestTurn", {}).get("status") == "completed"
-                for poll in polls
-            ):
-                answer = payload(
-                    call("read_thread", {"threadId": state["reviewer"], "turnLimit": 1})
-                )
-                turns = answer.get("turns", [])
-                if turns:
-                    turn = turns[0]
-                    finals = [
-                        item["text"]
-                        for item in turn.get("items", [])
-                        if item.get("type") == "agentMessage"
-                        and item.get("phase") in ("final", "final_answer")
-                        and item.get("text")
-                    ]
-                    if (
-                        turn.get("id") != state.get("baselineTurnId")
-                        and turn.get("status") == "completed"
-                        and finals
-                    ):
-                        state["review"] = finals[-1]
-                        output.update(status="review_available", review=state["review"])
-                    elif turn.get("status") in ("failed", "interrupted"):
-                        output.update(
-                            status="needs_attention",
-                            turnStatus=turn["status"],
-                            error=turn.get("error"),
+                            title="Review " + data["identifier"],
+                            model=args.model or "gpt-6.1-sol",
+                            thinking=args.thinking or "medium",
                         )
-            save_state(path, state)
+                    if state:
+                        for key in ("model", "thinking"):
+                            if getattr(args, key) is not None:
+                                arguments[key] = getattr(args, key)
+                    output = {"tool": tool, "arguments": arguments}
             print(json.dumps(output, ensure_ascii=False))
             return 0
     except (ReviewError, OSError, ValueError) as error:

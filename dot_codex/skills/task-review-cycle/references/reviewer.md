@@ -1,4 +1,5 @@
 [$ai-code-review]({skill_path})
+worker実行主体: {worker}
 worker Task ID: {worker_thread_id}
 worker checkout: {checkout}
 PR: {pr}
@@ -15,5 +16,3 @@ checkoutのHEADが指定head SHAと一致しない場合は判定保留にして
 未pushまたはPR未作成の場合はローカル固定SHA差分を根拠にし、既存PRのheadやCIを根拠にしないでください。
 再レビューも比較範囲全体を確認してください。base branchが進んだことだけを理由にLGTMを保留しないでください。
 PRへの投稿、修正、Ready化、mergeは行わないでください。
-ai-code-reviewの対象SHA・判定・指摘・検証結果をこのreview Taskの最終回答として返してください。
-workerはCLIで回答を取得するため、workerへのmessage送信は行わないでください。

@@ -126,9 +126,9 @@ sub: Claude Code
 
 ### タスクの独立レビュー
 
-`reviewctl`はharnexus経由で既存のCodex Appに接続し、reviewerの作成・再レビュー・回答取得を行う。harnexusのlink socket対応版を導入してAppを開き、`reviewctl doctor`で接続を確認する。
+`reviewctl`で固定SHAを検証してレビュー依頼文を生成し、確定したreviewer IDを保存する。送信・待機・回答取得には既存のCodex App/harnexusのツールを使う。
 
-使い方と依頼JSONは[task-review-cycle](dot_codex/skills/task-review-cycle/SKILL.md)を参照する。接続機能が未導入の環境では、SKILLに記載された既存ツールの手順を使う。
+使い方と依頼JSONは[task-review-cycle](dot_codex/skills/task-review-cycle/SKILL.md)を参照する。
 
 ### Codex command policy
 

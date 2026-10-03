@@ -1,10 +1,12 @@
 # reviewctlの依頼JSON
 
-`start`と`rerun`には次のJSONファイルを渡す。checkoutは実装worktreeの絶対パス、base/headは完全なcommit SHAとする。
+`prepare`と`record`には同じJSONファイルを渡す。checkoutは実装worktreeの絶対パス、base/headは完全なcommit SHAとする。
 
 ```json
 {
   "identifier": "task-id",
+  "worker": "Codex",
+  "workerId": "worker自身の確定Task ID",
   "projectId": "repositoryのprojectId",
   "checkout": "/absolute/path/to/worker-checkout",
   "base": "固定したreview base SHA",
@@ -15,14 +17,14 @@
 }
 ```
 
-projectIdは`reviewctl projects`の結果からrepositoryに対応するものを選ぶ。PRがある場合はprにURLを入れる。未push候補は、PRがあってもpushedをfalseにする。
-`reviewctl`はcheckoutのHEADと指定headの一致を送信前に確認する。再レビューではprojectId・checkout・baseを維持し、候補headとpush/PR状態を更新する。
+workerは`Codex`または`Claude`。projectIdは既存のlist_projectsでGit repositoryに対応するものを選ぶ。PRがある場合はprにURLを入れ、未push候補はPRがあってもpushedをfalseにする。
+再レビューではheadとpush/PR状態を更新し、worker・workerId・projectId・checkout・baseを維持する。
 
-CLIは通常`HARNEXUS_THREAD_ID`または`CODEX_THREAD_ID`からworkerを識別する。実行環境から取得できない場合は`--caller-thread-id`でworker自身のIDを指定する。
+- `reviewctl prepare --request request.json`: HEADと指定headの一致、tracked変更がないことを確認し、既存ツールへ渡すJSONを標準出力する。送信・状態更新は行わない。
+- `reviewctl record --request request.json --reviewer-thread-id <確定ID>`: ツールの送信受理を確認した後で、reviewerと候補を保存する。初回・再レビューとも送信に使ったJSONを渡す。
+- `reviewctl state`: 最後に記録したreviewerと候補を読む。回答やLGTMの記録ではない。
 
-接続先は`HARNEXUS_LINK_SOCKET`を使い、未設定ならharnexusのlinkディレクトリから稼働中のsocketを探す。複数ある場合は`--socket`を指定する。Claudeのsession tokenは環境変数から読み、状態ファイルには保存しない。
+状態は実行中のworktreeのGitディレクトリに保存する。同じworktreeでコマンドを実行する。別の状態を使う場合は`--state <絶対パス>`をサブコマンドより前に置き、全コマンドで同じ値を使う。
+SKILLの場所を明示する場合は`--skills-root <skillsディレクトリ>`をサブコマンドより前に置く。既定は`$CODEX_HOME/skills`または`~/.codex/skills`。
 
-CLIの状態は現在のworktreeのGitディレクトリに保存する。別の状態を使う場合は`--state <絶対パス>`を全コマンドで指定する。`--socket`・`--state`・`--caller-thread-id`はサブコマンドより前に置く。
-`wait`のstatusは`pending`（再度待つ）、`review_available`（最終回答を判断する）、`needs_attention`（失敗・中断を確認する）。最終回答のSHAと判定を読んで判断し、CLIの成功終了だけをLGTMと扱わない。
-
-書込結果が不明な場合はAppを確認し、ユーザーが既存reviewerの採用を明示した場合だけ`reviewctl recover --reviewer-thread-id <確定ID>`を使う。harnexus側で以前の書込が未確定の間は、復旧後も追加の書込みが拒否されることがある。
+prepareはAPIを実行しないため、送信成否やreviewer IDの実在はworkerがツール結果で確認する。結果不明の送信はAppで確認するまで再送しない。モデル・thinkingの変更はユーザーが指定した場合だけprepareに渡す。
