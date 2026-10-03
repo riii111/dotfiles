@@ -71,6 +71,9 @@ done
 
 output="$(pre_tool_use 'cd missing-dir && git status')"
 test -z "$output"
+pre_tool_use 'cd missing-dir && git push' | decision_is ask
+output="$(pre_tool_use $'git status\v')"
+test -z "$output"
 
 # Inputs from the review of the first compound-command design; none may be approved.
 # shellcheck disable=SC2016 # Literal expansions are hook inputs, not test-shell operations.

@@ -1006,8 +1006,11 @@ def shell_items(command: str) -> list[tuple[str, str]] | None:
             continue
         if char in UNMODELED_CHARACTERS or (char in {"~", "#"} and not in_word):
             return None
-        if char.isspace():
+        # Bash separates words only on spaces and tabs.
+        if char in {" ", "\t"}:
             end_word()
+        elif char.isspace():
+            return None
         elif char in {"'", '"'}:
             quote, in_word, quoted = char, True, True
         else:
@@ -1096,10 +1099,11 @@ def pushes_from_protected_branch(command: str, cwd: str) -> bool:
     """Whether a push may run on a protected branch, assuming so when unsure."""
     planned = plan_command(command, cwd)
     if planned is None:
-        if re.search(r"\bgit\b.*\bpush\b", command) is None:
+        unquoted = re.sub(r"'[^']*'|\"[^\"]*\"", " ", command)
+        if re.search(r"\bgit\b.*\bpush\b", unquoted) is None:
             return False
         return (
-            re.search(r"\b(?:cd|switch|checkout)\b|\s-C", command) is not None
+            re.search(r"\b(?:cd|switch|checkout)\b|\bgit\s+-C\b", unquoted) is not None
             or not Path(cwd).is_dir()
             or current_branch(cwd) in PROTECTED_BRANCHES
         )
