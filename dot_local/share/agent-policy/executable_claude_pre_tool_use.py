@@ -25,6 +25,8 @@ def main() -> int:
     cwd = event.get("cwd")
     if not isinstance(command, str) or not isinstance(cwd, str):
         return 0
+    if not Path(cwd).is_dir():
+        return 0
     # Claude Code asks where Codex refuses, so a person can still approve the command.
     reason = denial_reason(command, cwd) or segment_denial_reason(command, cwd)
     if reason is None and pushes_from_protected_branch(command, cwd):

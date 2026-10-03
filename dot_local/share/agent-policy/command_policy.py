@@ -819,6 +819,7 @@ FILTER_COMMANDS = {
     "uniq",
     "wc",
 }
+READING_FILTERS = FILTER_COMMANDS - {"echo", "printf", "sleep", "true"}
 
 
 def compound_placement(command: str, cwd: str) -> str | None:
@@ -827,28 +828,37 @@ def compound_placement(command: str, cwd: str) -> str | None:
     A part that leaves the sandbox must pass the checks that approve a single
     command, and every other part must be a filter that is harmless anywhere.
     """
-    segments = command_segments(command)
-    if segments is None:
+    located = located_segments(command, cwd)
+    if located is None:
         return None
     base = Path(cwd).resolve()
-    current = base
     leaves_sandbox = False
-    for tokens in segments:
-        if tokens[0] == "cd":
-            if len(tokens) != 2 or tokens[1].startswith("-"):
-                return None
-            current = (current / tokens[1]).resolve()
-            if not current.is_dir():
-                return None
-            continue
-        if is_filter(tokens) and all(
-            stays_within(arg, current, base) for arg in tokens[1:]
-        ):
+    for tokens, current in located:
+        if is_filter(tokens, current, base):
             continue
         if not runs_safely_outside(shlex.join(tokens), str(current)):
             return None
         leaves_sandbox = True
     return OUTSIDE_SANDBOX if leaves_sandbox else INSIDE_SANDBOX
+
+
+def located_segments(command: str, cwd: str) -> list[tuple[list[str], Path]] | None:
+    """Each part of a command with the directory it runs in, following `cd`."""
+    segments = command_segments(command)
+    current = Path(cwd).resolve()
+    if segments is None or not current.is_dir():
+        return None
+    located = []
+    for tokens in segments:
+        if tokens[0] != "cd":
+            located.append((tokens, current))
+            continue
+        if len(tokens) != 2 or tokens[1].startswith("-"):
+            return None
+        current = (current / tokens[1]).resolve()
+        if not current.is_dir():
+            return None
+    return located
 
 
 def command_segments(command: str) -> list[list[str]] | None:
@@ -903,15 +913,19 @@ def has_unmodeled_shell_syntax(command: str) -> bool:
     return quote is not None
 
 
-def is_filter(tokens: list[str]) -> bool:
+def is_filter(tokens: list[str], current: Path, base: Path) -> bool:
     name, args = tokens[0], tokens[1:]
     if name not in FILTER_COMMANDS:
         return False
+    if name in READING_FILTERS and not all(
+        stays_within(arg, current, base) for arg in args
+    ):
+        return False
     if name == "sort":
+        # GNU sort accepts any unambiguous prefix of --output and --compress-program.
         return not (
             has_short_flag(args, "o")
-            or has_option(args, "--output")
-            or has_option(args, "--compress-program")
+            or any(arg.startswith(("--o", "--co")) for arg in option_arguments(args))
         )
     if name == "uniq":
         return len([arg for arg in args if not arg.startswith("-")]) <= 1
@@ -965,14 +979,7 @@ def is_safe_gh_read(command: str) -> bool:
 
 def segment_denial_reason(command: str, cwd: str) -> str | None:
     """The first part of a compound command that the policy forbids on its own."""
-    segments = command_segments(command)
-    if segments is None:
-        return None
-    current = Path(cwd)
-    for tokens in segments:
-        if tokens[0] == "cd" and len(tokens) == 2:
-            current = (current / tokens[1]).resolve()
-            continue
+    for tokens, current in located_segments(command, cwd) or []:
         reason = denial_reason(shlex.join(tokens), str(current))
         if reason is not None:
             return reason
@@ -980,16 +987,14 @@ def segment_denial_reason(command: str, cwd: str) -> str | None:
 
 
 def pushes_from_protected_branch(command: str, cwd: str) -> bool:
-    segments = command_segments(command)
-    if segments is None:
-        return re.search(r"\bgit\b.*\bpush\b", command) is not None and (
-            current_branch(cwd) in PROTECTED_BRANCHES
+    located = located_segments(command, cwd)
+    if located is None:
+        return (
+            re.search(r"\bgit\b.*\bpush\b", command) is not None
+            and Path(cwd).is_dir()
+            and current_branch(cwd) in PROTECTED_BRANCHES
         )
-    current = Path(cwd)
-    for tokens in segments:
-        if tokens[0] == "cd" and len(tokens) == 2:
-            current = (current / tokens[1]).resolve()
-            continue
+    for tokens, current in located:
         if tokens[0] != "git":
             continue
         invocation = safe_git_invocation(tokens[1:], str(current))

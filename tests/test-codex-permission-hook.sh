@@ -90,7 +90,8 @@ for command in \
 	"cd $tmpdir && git fetch origin" \
 	'gh pr view 1 --json state | jq .state' \
 	'git push origin HEAD 2>&1 | tail -1' \
-	'git status && cat notes.txt | grep -c todo'; do
+	'git status && cat notes.txt | grep -c todo' \
+	'git status && echo /tmp/done'; do
 	permission_request "$command" | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
 done
 # shellcheck disable=SC2016 # Literal expansions are hook inputs, not test-shell operations.
@@ -107,7 +108,6 @@ for command in \
 	'gh pr view 1 --web' \
 	'gh api repos/riii111/test | jq .' \
 	$'git status\ntouch outside' \
-	'git status && FOO=1 git diff' \
 	'git status && cat /etc/hosts' \
 	'git status && cat ../outside.txt' \
 	'git status | grep --file=/etc/hosts' \
@@ -117,9 +117,16 @@ for command in \
 	'git status | rg -L secret' \
 	'git status |& tail -1' \
 	'git status <<< input' \
+	'git status | sort --compress=sh -S 1' \
+	'git status | sort --out=sorted.txt' \
 	'echo done | wc -l'; do
 	test -z "$(permission_request "$command")"
 done
+pre_tool_use 'echo x && gh auth token' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
+permission_request 'git status && FOO=1 git diff' | jq -e '.hookSpecificOutput.decision.behavior == "deny"' >/dev/null
+permission_request 'GIT_EDITOR=true git commit -m message' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
+permission_request_with_env GIT_OPTIONAL_LOCKS 0 'git status' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
+test -z "$(permission_request_with_env GIT_EDITOR vim 'git status')"
 for command in \
 	$'git push\norigin HEAD' \
 	$'gh auth\nstatus' \

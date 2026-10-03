@@ -64,6 +64,9 @@ for command in \
 	test -z "$(pre_tool_use "$command")"
 done
 
+output="$(pre_tool_use 'cd missing-dir && git push')"
+test -z "$output"
+
 git -C "$tmpdir" switch -q -c main
 for command in \
 	'git push' \

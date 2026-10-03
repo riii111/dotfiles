@@ -25,6 +25,7 @@ from command_policy import (  # noqa: E402
     is_safe_auth_status,
     is_safe_git_permission_request,
     is_safe_push,
+    segment_denial_reason,
 )
 
 
@@ -35,7 +36,7 @@ def main() -> int:
     event_name = event.get("hook_event_name")
     if not isinstance(command, str) or not isinstance(cwd, str):
         return 0
-    reason = denial_reason(command, cwd)
+    reason = denial_reason(command, cwd) or segment_denial_reason(command, cwd)
     if reason is not None:
         if event_name == "PreToolUse":
             json.dump(
