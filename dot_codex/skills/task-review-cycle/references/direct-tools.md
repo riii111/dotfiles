@@ -56,59 +56,15 @@ Claude workerは自身が`create_thread`で作成したreview Taskへ再レビ�
 
 ## 依頼文
 
-```text
-[$ai-code-review](/Users/a81803/.codex/skills/ai-code-review/SKILL.md)
-worker実行主体: <Claude / Codex>
-worker Task ID: <worker Task ID>
-worker checkout: <worker checkoutの絶対パス>
-PR: <PR URLまたは未作成（ローカル差分レビュー）>
-候補状態: <未push / push済み>
-review base SHA: <review base SHA>
-head SHA: <head SHA>
-比較範囲: <review base SHA>...<head SHA>
-事前コンテキスト: <課題・期待する挙動・制約・対象外、および管理元の該当節への参照>
+[共通テンプレート](reviewer.md)を読み、すべてのplaceholderを今回の依頼情報で埋める。`skill_path`は実在を確認したai-code-review/SKILL.mdの絶対パス、`worker`は`Codex`または`Claude`、`worker_thread_id`はworker自身の確定Task IDとする。
+`checkout`はworker checkoutの絶対パス、`base`・`head`は固定した完全SHA、`push_state`は候補のpush状態、`pr`はPR URLまたは未作成であること、`context`は課題・期待する挙動・制約・対象外と管理元の該当節を入れる。
 
-事前コンテキストとworker checkoutの適用規約を読んでからレビューを開始してください。
-現在の比較範囲全体をレビューしてください。
-Gitの読み取り、コード読取、必要な検証はworker checkoutを作業ディレクトリにして行ってください。
-branchやcheckoutは変更しないでください。
-worker checkoutのHEADが指定head SHAと一致することを確認してください。
-候補がpush済みでPRがある場合は、PR headが指定head SHAと一致することを確認してください。
-不一致ならLGTMを出さずworkerへ伝えてください。
-一致した場合は、そのheadに対するCI状態も確認してください。
-それ以外（候補が未push、またはPR未作成）は、指定範囲のローカル差分をレビューしてください。
-既存PRがあっても、今回候補が未pushならPR headやCIをレビューの根拠にしないでください。
-再レビューでも前回の指摘だけに限定せず、新しい問題がないか確認してください。
-review開始後にbase branchが進んでも、それだけを理由にLGTMを保留しないでください。
-PRへの投稿、修正、Ready化、mergeは行わないでください。
-```
+workerの実行主体に応じて、次の返却指示を共通テンプレートの末尾へ追加する。CLI経路も同じファイルを使う。
 
-共通の依頼文に、workerの実行主体に応じた次の返却指示を追加する。
+- Claude: [最終回答の返却指示](reply-claude.md)
+- Codex: [workerへの返信指示](reply-codex.md)
 
-### Claude workerへの返却指示
-
-```text
-ai-code-reviewの対象SHA・判定・指摘・検証結果を、このreview Taskの最終回答として返してください。
-workerがwait_threads/read_threadで受け取るため、workerへのmessage送信は行わないでください。
-```
-
-### Codex workerへの返却指示
-
-worker Taskへ返すmessageは次の形式にするよう依頼する。
-
-```text
-$task-review-cycle
-
-<ai-code-review の対象SHA・判定・指摘・検証結果>
-```
-
-この`$task-review-cycle`はCodex worker Taskへのmessageの先頭に置く文字列であり、reviewerは適用しない。
-reviewerはリンクで渡したai-code-reviewでレビューする。
-
-```text
-レビュー完了後、`codex_app__send_message_to_thread`の`threadId`にworker Task IDを指定して結果を返してください。
-送信が受理されたことを確認したらreviewerのturnを終了してください。
-```
+reply-codex.mdの`$task-review-cycle`はworkerへ返すmessageの先頭に置く文字列であり、reviewerは適用しない。reviewerはリンクで渡したai-code-reviewを使う。
 
 ## 制約
 
