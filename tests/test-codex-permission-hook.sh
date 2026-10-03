@@ -19,11 +19,16 @@ mkdir -p "$tmpdir"
 git -C "$tmpdir" init -q
 git -C "$tmpdir" switch -q -c feat/test
 git -C "$tmpdir" remote add origin https://github.com/riii111/test.git
+main_repo="$test_home/ghq/github.com/riii111/main-repo"
+mkdir -p "$main_repo"
+git -C "$main_repo" init -q
+git -C "$main_repo" switch -q -c main
+git -C "$main_repo" remote add origin https://github.com/riii111/main-repo.git
 
 run_hook() {
 	local event_name="$1"
 	local command="$2"
-	HOME="$test_home" jq -n --arg cwd "$tmpdir" --arg event_name "$event_name" --arg command "$command" \
+	HOME="$test_home" jq -n --arg cwd "${hook_cwd:-$tmpdir}" --arg event_name "$event_name" --arg command "$command" \
 		'{cwd:$cwd,hook_event_name:$event_name,tool_input:{command:$command}}' |
 		HOME="$test_home" python3 "$runner" "$hook" "$test_home"
 }
@@ -88,12 +93,43 @@ for command in \
 	'git status && git diff | head -5' \
 	'git log --oneline 2>&1 | tail -2; git status -sb' \
 	"cd $tmpdir && git fetch origin" \
-	'gh pr view 1 --json state | jq .state' \
+	'gh pr view 1 --json state | grep -c OPEN' \
 	'git push origin HEAD 2>&1 | tail -1' \
-	'git status && cat notes.txt | grep -c todo' \
-	'git status && echo /tmp/done'; do
+	'git status | grep -c todo' \
+	'git status && echo /tmp/done' \
+	'sleep 1; gh pr checks 1 | tail -n 3' \
+	'git add file && git commit -m message && git push -u origin HEAD' \
+	'git diff --stat | sort -rn | cut -d" " -f2 | head -3' \
+	'git status >/dev/null && git log -1 2>/dev/null'; do
 	permission_request "$command" | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
 done
+# Inputs from the review of the first compound-command design; none may be approved.
+# shellcheck disable=SC2016 # Literal expansions are hook inputs, not test-shell operations.
+for command in \
+	'printf -v PATH /tmp/probe-bin; git status' \
+	'git status && cat -- -secret' \
+	'git status | uniq -- - -output=ignored' \
+	'git switch main && git push origin HEAD' \
+	'git status && cat *.txt' \
+	"git status && cat 'secret 2>&1 notes'" \
+	$'git status && jq -n -L . \'import "probe" as $s; $s::s\'' \
+	'git status && grep -RS pattern inside-dir' \
+	'git status | grep -R pattern' \
+	'git status | cat' \
+	'git status | sort -T . -n' \
+	'git status | rg --files' \
+	'git status | head -n' \
+	'git status # && touch outside'; do
+	test -z "$(permission_request "$command")"
+done
+for command in \
+	"echo '&&' cd ../test; git push origin HEAD" \
+	'cd ../test | git push origin HEAD' \
+	'git status || cd ../test; git push origin HEAD' \
+	'cd ../test; git push origin HEAD'; do
+	test -z "$(hook_cwd="$main_repo" permission_request "$command")"
+done
+hook_cwd="$main_repo" permission_request 'cd ../test && git push origin HEAD' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
 # shellcheck disable=SC2016 # Literal expansions are hook inputs, not test-shell operations.
 for command in \
 	'git status && touch outside' \

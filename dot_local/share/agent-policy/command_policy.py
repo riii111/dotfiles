@@ -776,13 +776,6 @@ def is_safe_push(command: str, cwd: str) -> bool:
     }
 
 
-OUTSIDE_SANDBOX = "outside_sandbox"
-INSIDE_SANDBOX = "inside_sandbox"
-SEGMENT_SEPARATORS = {"&&", "||", ";", "|"}
-# Output dropped or merged into the pipe changes nothing outside the command.
-DISCARDED_REDIRECTION = re.compile(
-    r"(?<![^\s;&|])(?:[12]?>&[12]|(?:&>|[12]?>{1,2})\s*/dev/null)(?![^\s;&|])"
-)
 GH_READ_COMMANDS = {
     ("pr", "view"),
     ("pr", "list"),
@@ -801,162 +794,269 @@ GH_READ_COMMANDS = {
     ("release", "list"),
     ("release", "view"),
 }
-# Each filter only reads its input or named files and writes to the pipe.
-FILTER_COMMANDS = {
-    "cat",
-    "cut",
-    "echo",
-    "grep",
-    "head",
-    "jq",
-    "printf",
-    "rg",
-    "sleep",
-    "sort",
-    "tail",
-    "tr",
-    "true",
-    "uniq",
-    "wc",
+QUIET_COMMANDS = {"echo", "sleep", "true"}
+BRANCH_CHANGING_GIT = {"switch", "checkout"}
+# Options a filter may take when it reads only the pipe: short flags, short
+# options followed by a value, long options (a trailing "=" carries the value),
+# and how many operands it accepts.
+STDIN_FILTERS = {
+    "head": ("", "nc", {"--lines=", "--bytes="}, (0, 0)),
+    "tail": ("fqr", "nc", {"--lines=", "--bytes="}, (0, 0)),
+    "wc": ("lwcm", "", {"--lines", "--words", "--bytes", "--chars"}, (0, 0)),
+    "sort": (
+        "bfhnruV",
+        "ktS",
+        {
+            "--numeric-sort",
+            "--reverse",
+            "--unique",
+            "--human-numeric-sort",
+            "--version-sort",
+            "--key=",
+            "--field-separator=",
+        },
+        (0, 0),
+    ),
+    "uniq": (
+        "cdiu",
+        "fs",
+        {"--count", "--repeated", "--unique", "--ignore-case"},
+        (0, 0),
+    ),
+    "cut": (
+        "ns",
+        "bcdf",
+        {"--delimiter=", "--fields=", "--characters=", "--bytes="},
+        (0, 0),
+    ),
+    "tr": ("cCds", "", {"--delete", "--squeeze-repeats", "--complement"}, (1, 2)),
+    "grep": (
+        "cEFhHilnoqsvwx",
+        "eABCm",
+        {
+            "--count",
+            "--ignore-case",
+            "--invert-match",
+            "--line-number",
+            "--only-matching",
+            "--quiet",
+            "--extended-regexp",
+            "--fixed-strings",
+            "--word-regexp",
+            "--max-count=",
+            "--color=",
+            "--colour=",
+        },
+        (1, 1),
+    ),
+    "rg": (
+        "cFHiNnoqsSUvwx",
+        "eABCmM",
+        {
+            "--count",
+            "--ignore-case",
+            "--invert-match",
+            "--line-number",
+            "--no-line-number",
+            "--only-matching",
+            "--quiet",
+            "--fixed-strings",
+            "--word-regexp",
+            "--no-heading",
+            "--no-filename",
+            "--no-config",
+            "--json",
+            "--trim",
+            "--max-count=",
+            "--max-columns=",
+            "--color=",
+            "--colour=",
+        },
+        (1, 1),
+    ),
 }
-READING_FILTERS = FILTER_COMMANDS - {"echo", "printf", "sleep", "true"}
+SHELL_OPERATOR = re.compile(r"[&|;]+")
+DROPPED_REDIRECTION = re.compile(r"(?:&>|>>?)(?:&[12]|\s*/dev/null)(?=[\s;&|]|$)")
+UNMODELED_CHARACTERS = set("`$\\(){}*?[!<>\n\r")
 
 
-def compound_placement(command: str, cwd: str) -> str | None:
-    """Where a command may run without asking, or None when any part is unknown.
+def approves_outside_sandbox(command: str, cwd: str) -> bool:
+    """Whether a command may run outside the sandbox without asking.
 
-    A part that leaves the sandbox must pass the checks that approve a single
-    command, and every other part must be a filter that is harmless anywhere.
+    Only a fixed shape is approved: an optional leading `cd DIR &&`, then git
+    or gh commands that pass the single-command checks, each optionally piped
+    into filters that read nothing but the pipe. A branch switch must come
+    last, because the later checks would see the branch before the switch.
     """
-    located = located_segments(command, cwd)
-    if located is None:
-        return None
-    base = Path(cwd).resolve()
-    leaves_sandbox = False
-    for tokens, current in located:
-        if is_filter(tokens, current, base):
+    planned = plan_command(command, cwd)
+    if planned is None:
+        return False
+    current, pipelines = planned
+    primaries = []
+    for head, *filters in pipelines:
+        if not all(
+            tokens[0] in QUIET_COMMANDS or is_stdin_filter(tokens) for tokens in filters
+        ):
+            return False
+        if head[0] in QUIET_COMMANDS:
             continue
-        if not runs_safely_outside(shlex.join(tokens), str(current)):
-            return None
-        leaves_sandbox = True
-    return OUTSIDE_SANDBOX if leaves_sandbox else INSIDE_SANDBOX
+        if not runs_safely_outside(shlex.join(head), str(current)):
+            return False
+        primaries.append(head)
+    return bool(primaries) and not any(
+        git_subcommand(tokens) in BRANCH_CHANGING_GIT for tokens in primaries[:-1]
+    )
 
 
-def located_segments(command: str, cwd: str) -> list[tuple[list[str], Path]] | None:
-    """Each part of a command with the directory it runs in, following `cd`."""
-    segments = command_segments(command)
+def plan_command(command: str, cwd: str) -> tuple[Path, list[list[list[str]]]] | None:
+    """The directory after leading `cd DIR &&` and the pipelines that follow.
+
+    A `cd` anywhere else, or `||`, makes the directory or the commands that run
+    depend on earlier results, so such commands are not modeled.
+    """
+    parsed = parse_command(command)
     current = Path(cwd).resolve()
-    if segments is None or not current.is_dir():
+    if parsed is None or not current.is_dir():
         return None
-    located = []
-    for tokens in segments:
-        if tokens[0] != "cd":
-            located.append((tokens, current))
-            continue
+    index = 0
+    while (
+        index + 1 < len(parsed)
+        and len(parsed[index][1]) == 1
+        and parsed[index][1][0][0] == "cd"
+        and parsed[index + 1][0] == "&&"
+    ):
+        tokens = parsed[index][1][0]
         if len(tokens) != 2 or tokens[1].startswith("-"):
             return None
         current = (current / tokens[1]).resolve()
         if not current.is_dir():
             return None
-    return located
-
-
-def command_segments(command: str) -> list[list[str]] | None:
-    if has_unmodeled_shell_syntax(command):
-        return None
-    try:
-        lexer = shlex.shlex(
-            DISCARDED_REDIRECTION.sub(" ", command),
-            posix=True,
-            punctuation_chars="();&|<>",
-        )
-        lexer.whitespace_split = True
-        lexer.commenters = ""
-        tokens = list(lexer)
-    except ValueError:
-        return None
-    segments: list[list[str]] = [[]]
-    for token in tokens:
-        if token in SEGMENT_SEPARATORS:
-            segments.append([])
-        elif token and set(token) <= set("();&|<>"):
-            return None
-        else:
-            segments[-1].append(token)
-    if any(not segment for segment in segments):
-        return None
-    return segments
-
-
-def has_unmodeled_shell_syntax(command: str) -> bool:
-    """Expansions, subshells and line breaks change what the parts mean."""
-    quote = None
-    word_start = True
-    for char in command:
-        if quote == "'":
-            if char == "'":
-                quote = None
-            continue
-        if char in {"`", "$", "\\"}:
-            return True
-        if quote == '"':
-            if char == '"':
-                quote = None
-            continue
-        if char in {"'", '"'}:
-            quote = char
-        elif char in {"\n", "\r", "(", ")", "{", "}"}:
-            return True
-        elif char == "~" and word_start:
-            return True
-        word_start = char.isspace() or char in {";", "&", "|"}
-    return quote is not None
-
-
-def is_filter(tokens: list[str], current: Path, base: Path) -> bool:
-    name, args = tokens[0], tokens[1:]
-    if name not in FILTER_COMMANDS:
-        return False
-    if name in READING_FILTERS and not all(
-        stays_within(arg, current, base) for arg in args
+        index += 1
+    rest = parsed[index:]
+    pipelines = [pipeline for _, pipeline in rest]
+    if any(operator == "||" for operator, _ in rest) or any(
+        tokens[0] == "cd" for pipeline in pipelines for tokens in pipeline
     ):
-        return False
-    if name == "sort":
-        # GNU sort accepts any unambiguous prefix of --output and --compress-program.
-        return not (
-            has_short_flag(args, "o")
-            or any(arg.startswith(("--o", "--co")) for arg in option_arguments(args))
-        )
-    if name == "uniq":
-        return len([arg for arg in args if not arg.startswith("-")]) <= 1
-    if name == "rg":
-        return not (
-            has_option(args, "--pre")
-            or has_option(args, "--hostname-bin")
-            or has_option(args, "--follow")
-            or has_short_flag(args, "L")
-        )
-    return True
+        return None
+    return current, pipelines
 
 
-def stays_within(arg: str, current: Path, base: Path) -> bool:
-    """Whether a filter argument, read as a path, stays inside the project.
-
-    Outside the sandbox nothing else keeps a filter from reading other files, so
-    patterns that merely look like paths are refused too.
-    """
-    value = arg
-    if arg.startswith("-"):
-        if "=" in arg:
-            value = arg.split("=", 1)[1]
-        elif "/" in arg:
-            return False
+def parse_command(command: str) -> list[tuple[str | None, list[list[str]]]] | None:
+    """Pipelines with the operator before each, or None for unmodeled syntax."""
+    items = shell_items(command)
+    if items is None:
+        return None
+    parsed: list[tuple[str | None, list[list[str]]]] = [(None, [[]])]
+    for kind, text in items:
+        if kind == "word":
+            parsed[-1][1][-1].append(text)
+        elif text == "|":
+            parsed[-1][1].append([])
         else:
-            return True
-    if not value:
-        return True
-    resolved = (current / value).resolve()
-    return resolved == base or base in resolved.parents
+            parsed.append((text, [[]]))
+    if any(not tokens for _, pipeline in parsed for tokens in pipeline):
+        return None
+    return parsed
+
+
+def shell_items(command: str) -> list[tuple[str, str]] | None:
+    """Words and operators, with operators recognized only outside quotes.
+
+    Output sent to /dev/null or merged into the pipe is dropped. Any other
+    redirection, expansion, glob, comment, subshell or line break is unmodeled.
+    """
+    items: list[tuple[str, str]] = []
+    word: list[str] = []
+    in_word = False
+    quoted = False
+    quote = None
+    index = 0
+
+    def end_word() -> None:
+        nonlocal word, in_word, quoted
+        if in_word:
+            items.append(("word", "".join(word)))
+        word, in_word, quoted = [], False, False
+
+    while index < len(command):
+        char = command[index]
+        if quote is not None:
+            if char == quote:
+                quote = None
+            elif quote == '"' and char in {"`", "$", "\\"}:
+                return None
+            else:
+                word.append(char)
+            index += 1
+            continue
+        redirection = DROPPED_REDIRECTION.match(command, index)
+        if redirection is not None and char in {"&", ">"}:
+            if char == ">" and not quoted and "".join(word) in {"1", "2"}:
+                word, in_word = [], False
+            end_word()
+            index = redirection.end()
+            continue
+        if char in {"&", "|", ";"}:
+            operator = SHELL_OPERATOR.match(command, index).group()
+            if operator not in {"&&", "||", "|", ";"}:
+                return None
+            end_word()
+            items.append(("operator", operator))
+            index += len(operator)
+            continue
+        if char in UNMODELED_CHARACTERS or (char in {"~", "#"} and not in_word):
+            return None
+        if char.isspace():
+            end_word()
+        elif char in {"'", '"'}:
+            quote, in_word, quoted = char, True, True
+        else:
+            word.append(char)
+            in_word = True
+        index += 1
+    if quote is not None:
+        return None
+    end_word()
+    return items
+
+
+def is_stdin_filter(tokens: list[str]) -> bool:
+    spec = STDIN_FILTERS.get(tokens[0])
+    if spec is None:
+        return False
+    flags, valued, long_options, (minimum, maximum) = spec
+    operands = 0
+    args = iter(tokens[1:])
+    for arg in args:
+        if arg == "--":
+            operands += len(list(args))
+            break
+        if arg.startswith("--"):
+            name, has_value, _ = arg.partition("=")
+            if name + has_value not in long_options:
+                return False
+        elif arg.startswith("-") and len(arg) > 1:
+            letters = arg[1:]
+            if tokens[0] in {"head", "tail"} and letters.isdigit():
+                continue
+            for offset, letter in enumerate(letters):
+                if letter in valued:
+                    if letter == "e":
+                        minimum = maximum = 0
+                    if offset == len(letters) - 1 and next(args, None) is None:
+                        return False
+                    break
+                if letter not in flags:
+                    return False
+        else:
+            operands += 1
+    return minimum <= operands <= maximum
+
+
+def git_subcommand(tokens: list[str]) -> str | None:
+    if tokens[0] != "git":
+        return None
+    return git_command(tokens[1:])[0]
 
 
 def runs_safely_outside(command: str, cwd: str) -> bool:
@@ -979,30 +1079,40 @@ def is_safe_gh_read(command: str) -> bool:
 
 def segment_denial_reason(command: str, cwd: str) -> str | None:
     """The first part of a compound command that the policy forbids on its own."""
-    for tokens, current in located_segments(command, cwd) or []:
-        reason = denial_reason(shlex.join(tokens), str(current))
-        if reason is not None:
-            return reason
+    parsed = parse_command(command)
+    if parsed is None or not Path(cwd).is_dir():
+        return None
+    planned = plan_command(command, cwd)
+    current = planned[0] if planned is not None else Path(cwd)
+    for _, pipeline in parsed:
+        for tokens in pipeline:
+            reason = denial_reason(shlex.join(tokens), str(current))
+            if reason is not None:
+                return reason
     return None
 
 
 def pushes_from_protected_branch(command: str, cwd: str) -> bool:
-    located = located_segments(command, cwd)
-    if located is None:
+    """Whether a push may run on a protected branch, assuming so when unsure."""
+    planned = plan_command(command, cwd)
+    if planned is None:
+        if re.search(r"\bgit\b.*\bpush\b", command) is None:
+            return False
         return (
-            re.search(r"\bgit\b.*\bpush\b", command) is not None
-            and Path(cwd).is_dir()
-            and current_branch(cwd) in PROTECTED_BRANCHES
+            re.search(r"\b(?:cd|switch|checkout)\b|\s-C", command) is not None
+            or not Path(cwd).is_dir()
+            or current_branch(cwd) in PROTECTED_BRANCHES
         )
-    for tokens, current in located:
-        if tokens[0] != "git":
-            continue
-        invocation = safe_git_invocation(tokens[1:], str(current))
-        if invocation is None:
-            subcommand, _ = git_command(tokens[1:])
-            target = str(current)
-        else:
-            target, subcommand, _ = invocation
-        if subcommand == "push" and current_branch(target) in PROTECTED_BRANCHES:
-            return True
+    current, pipelines = planned
+    branch_changed = False
+    for pipeline in pipelines:
+        for tokens in pipeline:
+            subcommand = git_subcommand(tokens)
+            branch_changed = branch_changed or subcommand in BRANCH_CHANGING_GIT
+            if subcommand != "push":
+                continue
+            invocation = safe_git_invocation(tokens[1:], str(current))
+            target = invocation[0] if invocation is not None else str(current)
+            if branch_changed or current_branch(target) in PROTECTED_BRANCHES:
+                return True
     return False

@@ -19,8 +19,7 @@ for _policy_dir in (
         break
 
 from command_policy import (  # noqa: E402
-    OUTSIDE_SANDBOX,
-    compound_placement,
+    approves_outside_sandbox,
     denial_reason,
     is_safe_auth_status,
     is_safe_git_permission_request,
@@ -66,7 +65,7 @@ def main() -> int:
         not is_safe_auth_status(command)
         and not is_safe_git_permission_request(command, cwd)
         and not is_safe_push(command, cwd)
-        and compound_placement(command, cwd) != OUTSIDE_SANDBOX
+        and not approves_outside_sandbox(command, cwd)
     ):
         return 0
 

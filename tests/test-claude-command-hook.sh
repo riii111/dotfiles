@@ -20,9 +20,14 @@ mkdir -p "$tmpdir"
 git -C "$tmpdir" init -q
 git -C "$tmpdir" switch -q -c feat/test
 git -C "$tmpdir" remote add origin https://github.com/riii111/test.git
+main_repo="$test_home/ghq/github.com/riii111/main-repo"
+mkdir -p "$main_repo"
+git -C "$main_repo" init -q
+git -C "$main_repo" switch -q -c main
+git -C "$main_repo" remote add origin https://github.com/riii111/main-repo.git
 
 pre_tool_use() {
-	HOME="$test_home" jq -n --arg cwd "$tmpdir" --arg command "$1" \
+	HOME="$test_home" jq -n --arg cwd "${hook_cwd:-$tmpdir}" --arg command "$1" \
 		'{cwd:$cwd,hook_event_name:"PreToolUse",tool_input:{command:$command,description:"probe"}}' |
 		HOME="$test_home" python3 "$runner" "$hook" "$test_home"
 }
@@ -64,8 +69,31 @@ for command in \
 	test -z "$(pre_tool_use "$command")"
 done
 
-output="$(pre_tool_use 'cd missing-dir && git push')"
+output="$(pre_tool_use 'cd missing-dir && git status')"
 test -z "$output"
+
+# Inputs from the review of the first compound-command design; none may be approved.
+# shellcheck disable=SC2016 # Literal expansions are hook inputs, not test-shell operations.
+for command in \
+	'printf -v PATH /tmp/probe-bin; git status' \
+	'git status && cat -- -secret' \
+	'git status | uniq -- - -output=ignored' \
+	'git status && cat *.txt' \
+	"git status && cat 'secret 2>&1 notes'" \
+	$'git status && jq -n -L . \'import "probe" as $s; $s::s\'' \
+	'git status && grep -RS pattern inside-dir' \
+	'git status | grep -R pattern'; do
+	output="$(pre_tool_use "$command")"
+	test -z "$output"
+done
+pre_tool_use 'git switch main && git push origin HEAD' | decision_is ask
+for command in \
+	"echo '&&' cd ../test; git push origin HEAD" \
+	'cd ../test | git push origin HEAD' \
+	'git status || cd ../test; git push origin HEAD'; do
+	hook_cwd="$main_repo" pre_tool_use "$command" | decision_is ask
+done
+hook_cwd="$main_repo" pre_tool_use 'cd ../test && git push origin HEAD' | decision_is allow
 
 git -C "$tmpdir" switch -q -c main
 for command in \

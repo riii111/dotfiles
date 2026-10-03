@@ -10,8 +10,7 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from command_policy import (  # noqa: E402
-    OUTSIDE_SANDBOX,
-    compound_placement,
+    approves_outside_sandbox,
     denial_reason,
     pushes_from_protected_branch,
     segment_denial_reason,
@@ -35,7 +34,7 @@ def main() -> int:
         return respond(
             {"permissionDecision": "ask", "permissionDecisionReason": reason}
         )
-    if compound_placement(command, cwd) == OUTSIDE_SANDBOX:
+    if approves_outside_sandbox(command, cwd):
         return respond(
             {
                 "permissionDecision": "allow",
