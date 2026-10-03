@@ -11,7 +11,8 @@ commit済み候補をfreshなCodex reviewerで独立レビューし、Blocking�
 
 ## 依頼と結果の受取
 
-worktreeで`mkdir -p .reviewctl`を実行し、[依頼JSON](references/request.md)を`.reviewctl/request.json`へ保存する。`$HOME/bin/reviewctl`が未導入なら、chezmoi管理元のCLIとSKILLを導入してから進める。
+`$HOME/bin/reviewctl`が未導入ならユーザーに伝えて停止する。
+worktreeに`.reviewctl/.gitignore`（内容は`*`と改行）を作成してから、[依頼JSON](references/request.md)を`.reviewctl/request.json`へ保存する。
 
 1. `$HOME/bin/reviewctl prepare --request .reviewctl/request.json`を実行し、返されたtool名とargumentsを下表のツールへ渡す。ユーザーがモデル設定を指定した場合だけ`--model`・`--thinking`を渡す。
 2. 送信受理と確定threadIdを確認し、`$HOME/bin/reviewctl record --request .reviewctl/request.json --reviewer-thread-id <確定ID>`で記録する。Codexはturnを終了し、Claudeはwait/readを続ける。
