@@ -14,7 +14,7 @@ worker自身の実行主体で結果の受取方法を選び、reviewerへの依
 
 以下の`codex_app__`付きのツール名は、Claude workerでは表の対応する提供ツールに読み替える。
 Claude workerは自身が`create_thread`で作成したreview Taskへ再レビューを送る。
-独立reviewerには[ai-code-review](../ai-code-review/SKILL.md)を渡す。依頼文のリンク先は、このSKILLのインストール先から解決し、実在を確認した絶対パスへ置き換える。
+独立reviewerには[ai-code-review](../../ai-code-review/SKILL.md)を渡す。依頼文のリンク先は、このSKILLのインストール先から解決し、実在を確認した絶対パスへ置き換える。
 
 ## 初回手順
 
@@ -41,7 +41,7 @@ Claude workerは自身が`create_thread`で作成したreview Taskへ再レビ�
 3. 再レビューのたびに所定の全検証やpushを要求しない。
    worker Taskは必須修正をまとめて対応し、影響する検証を行った新しいcommitを依頼する。Non-blocking は任意であり、未対応だけではサイクルを継続しない。
 4. Codex workerはreview依頼を送った時点でturnを終了する。Claude workerは下記の受取手順を続ける。
-   LGTM後は[task-worker](../task-worker/SKILL.md)の手順へ戻る。
+   LGTM後は[task-worker](../../task-worker/SKILL.md)の手順へ戻る。
 
 ## Claude workerの受取手順
 

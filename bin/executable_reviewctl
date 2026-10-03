@@ -449,7 +449,14 @@ def main(argv=None):
                 "base": state["candidate"]["base"],
                 "head": state["candidate"]["head"],
             }
-            if wake.get("reason") or any(
+            errors = [
+                error
+                for error in snapshot.get("errors", [])
+                if error.get("threadId") == state["reviewer"]
+            ]
+            if errors:
+                output.update(status="needs_attention", errors=errors)
+            elif wake.get("reason") or any(
                 poll.get("latestTurn", {}).get("status") == "completed"
                 for poll in polls
             ):

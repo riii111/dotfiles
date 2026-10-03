@@ -331,6 +331,37 @@ class ReviewCliTest(ReviewFixture):
         self.assertEqual(code, 0, err)
         self.assertEqual(json.loads(out)["status"], "pending")
 
+    def test_wait_exposes_target_errors_and_keeps_timeouts_pending(self):
+        self.write_request()
+        reviewctl.save_state(
+            self.root / "state.json",
+            {
+                "caller": "worker",
+                "socket": str(self.root / "bridge.sock"),
+                "reviewer": "reviewer",
+                "candidate": self.data,
+                "pending": False,
+            },
+        )
+        error = {"threadId": "reviewer", "message": "No Codex thread found"}
+        calls = []
+        with bridge(
+            self.root / "bridge.sock",
+            [
+                result({"timedOut": False, "polls": [], "errors": [error]}),
+                result({"timedOut": True, "polls": [], "errors": []}),
+            ],
+            calls,
+        ):
+            code, out, err = self.invoke("wait")
+            self.assertEqual(code, 0, err)
+            self.assertEqual(json.loads(out)["status"], "needs_attention")
+            self.assertEqual(json.loads(out)["errors"], [error])
+            code, out, err = self.invoke("wait")
+            self.assertEqual(code, 0, err)
+            self.assertEqual(json.loads(out)["status"], "pending")
+        self.assertEqual([call["tool"] for call in calls], ["wait_threads"] * 2)
+
     def test_claude_token_is_sent_but_not_saved(self):
         self.write_request()
         calls = []
