@@ -794,8 +794,21 @@ GH_READ_COMMANDS = {
     ("release", "list"),
     ("release", "view"),
 }
-QUIET_COMMANDS = {"echo", "sleep", "true"}
-BRANCH_CHANGING_GIT = {"switch", "checkout", "rebase"}
+# Commands whose arguments are text, so a "push" in them is not a push.
+TEXT_COMMANDS = {
+    "cut",
+    "echo",
+    "grep",
+    "head",
+    "rg",
+    "sleep",
+    "sort",
+    "tail",
+    "tr",
+    "true",
+    "uniq",
+    "wc",
+}
 # Subcommands after which the checked-out branch and repository are unchanged.
 BRANCH_KEEPING_GIT = {
     "add",
@@ -811,155 +824,54 @@ BRANCH_KEEPING_GIT = {
     "show",
     "status",
 }
-GIT_BUILTINS = (
-    BRANCH_KEEPING_GIT
-    | BRANCH_CHANGING_GIT
-    | {
-        "bisect",
-        "blame",
-        "branch",
-        "cat-file",
-        "check-ignore",
-        "clean",
-        "clone",
-        "config",
-        "describe",
-        "diff-tree",
-        "for-each-ref",
-        "gc",
-        "grep",
-        "init",
-        "merge-base",
-        "mv",
-        "pull",
-        "push",
-        "reflog",
-        "remote",
-        "reset",
-        "restore",
-        "rev-list",
-        "rm",
-        "shortlog",
-        "stash",
-        "submodule",
-        "symbolic-ref",
-        "tag",
-        "update-ref",
-        "worktree",
-    }
-)
+GIT_BUILTINS = BRANCH_KEEPING_GIT | {
+    "bisect",
+    "blame",
+    "branch",
+    "cat-file",
+    "check-ignore",
+    "checkout",
+    "clean",
+    "clone",
+    "config",
+    "describe",
+    "diff-tree",
+    "for-each-ref",
+    "gc",
+    "grep",
+    "init",
+    "merge-base",
+    "mv",
+    "pull",
+    "push",
+    "rebase",
+    "reflog",
+    "remote",
+    "reset",
+    "restore",
+    "rev-list",
+    "rm",
+    "shortlog",
+    "stash",
+    "submodule",
+    "switch",
+    "symbolic-ref",
+    "tag",
+    "update-ref",
+    "worktree",
+}
 GIT_LOCATION_OPTIONS = {"--git-dir", "--work-tree", "--namespace"}
 GIT_LOCATION_ENVIRONMENT = {"GIT_DIR", "GIT_WORK_TREE", "GIT_NAMESPACE"}
-# Options a filter may take when it reads only the pipe: short flags, short
-# options followed by a value, long options (a trailing "=" carries the value),
-# and how many operands it accepts.
-STDIN_FILTERS = {
-    "head": ("", "nc", {"--lines=", "--bytes="}, (0, 0)),
-    "tail": ("fqr", "nc", {"--lines=", "--bytes="}, (0, 0)),
-    "wc": ("lwcm", "", {"--lines", "--words", "--bytes", "--chars"}, (0, 0)),
-    "sort": (
-        "bfhnruV",
-        "ktS",
-        {
-            "--numeric-sort",
-            "--reverse",
-            "--unique",
-            "--human-numeric-sort",
-            "--version-sort",
-            "--key=",
-            "--field-separator=",
-        },
-        (0, 0),
-    ),
-    "uniq": (
-        "cdiu",
-        "fs",
-        {"--count", "--repeated", "--unique", "--ignore-case"},
-        (0, 0),
-    ),
-    "cut": (
-        "ns",
-        "bcdf",
-        {"--delimiter=", "--fields=", "--characters=", "--bytes="},
-        (0, 0),
-    ),
-    "tr": ("cCds", "", {"--delete", "--squeeze-repeats", "--complement"}, (1, 2)),
-    "grep": (
-        "cEFhHilnoqsvwx",
-        "eABCm",
-        {
-            "--count",
-            "--ignore-case",
-            "--invert-match",
-            "--line-number",
-            "--only-matching",
-            "--quiet",
-            "--extended-regexp",
-            "--fixed-strings",
-            "--word-regexp",
-            "--max-count=",
-            "--color=",
-            "--colour=",
-        },
-        (1, 1),
-    ),
-    "rg": (
-        "cFHiNnoqsSUvwx",
-        "eABCmM",
-        {
-            "--count",
-            "--ignore-case",
-            "--invert-match",
-            "--line-number",
-            "--no-line-number",
-            "--only-matching",
-            "--quiet",
-            "--fixed-strings",
-            "--word-regexp",
-            "--no-heading",
-            "--no-filename",
-            "--no-config",
-            "--json",
-            "--trim",
-            "--max-count=",
-            "--max-columns=",
-            "--color=",
-            "--colour=",
-        },
-        (1, 1),
-    ),
-}
 SHELL_OPERATOR = re.compile(r"[&|;]+")
 DROPPED_REDIRECTION = re.compile(r"(?:&>|>>?)(?:&[12]|[ \t]*/dev/null)(?=[ \t;&|]|$)")
 UNMODELED_CHARACTERS = set("`$\\(){}*?[!<>\n\r\x00")
+ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=.*", re.DOTALL)
 
 
-def approves_outside_sandbox(command: str, cwd: str) -> bool:
-    """Whether a command may run outside the sandbox without asking.
+class Word(str):
+    """A shell word after quote removal that remembers whether it was quoted."""
 
-    Only a fixed shape is approved: an optional leading `cd DIR &&`, then git
-    or gh commands that pass the single-command checks, each optionally piped
-    into filters that read nothing but the pipe. A branch switch must come
-    last, because the later checks would see the branch before the switch.
-    """
-    planned = plan_command(command, cwd)
-    if planned is None:
-        return False
-    current, pipelines = planned
-    primaries = []
-    for head, *filters in pipelines:
-        if not all(
-            tokens[0] in QUIET_COMMANDS or is_stdin_filter(tokens) for tokens in filters
-        ):
-            return False
-        if head[0] in QUIET_COMMANDS:
-            continue
-        if not runs_safely_outside(shlex.join(head), str(current)):
-            return False
-        primaries.append(head)
-    return bool(primaries) and not any(
-        git_subcommand(tokens) in BRANCH_CHANGING_GIT for tokens in primaries[:-1]
-    )
+    quoted: bool = False
 
 
 def plan_command(command: str, cwd: str) -> tuple[Path, list[list[list[str]]]] | None:
@@ -1038,7 +950,9 @@ def shell_items(command: str) -> list[tuple[str, str]] | None:
     def end_word() -> None:
         nonlocal word, in_word, quoted
         if in_word:
-            items.append(("word", "".join(word)))
+            text = Word("".join(word))
+            text.quoted = quoted
+            items.append(("word", text))
         word, in_word, quoted = [], False, False
 
     while index < len(command):
@@ -1087,53 +1001,17 @@ def shell_items(command: str) -> list[tuple[str, str]] | None:
     return items
 
 
-def is_stdin_filter(tokens: list[str]) -> bool:
-    spec = STDIN_FILTERS.get(tokens[0])
-    if spec is None:
-        return False
-    # A ripgrep config file can prepend patterns and paths to the arguments.
-    if tokens[0] == "rg" and "--no-config" not in option_arguments(tokens[1:]):
-        return False
-    flags, valued, long_options, (minimum, maximum) = spec
-    operands = 0
-    args = iter(tokens[1:])
-    for arg in args:
-        if arg == "--":
-            operands += len(list(args))
-            break
-        if arg.startswith("--"):
-            name, has_value, _ = arg.partition("=")
-            if name + has_value not in long_options:
-                return False
-        elif arg.startswith("-") and len(arg) > 1:
-            letters = arg[1:]
-            if tokens[0] in {"head", "tail"} and re.fullmatch(r"[0-9]+", letters):
-                continue
-            for offset, letter in enumerate(letters):
-                if letter in valued:
-                    if letter == "e":
-                        minimum = maximum = 0
-                    if offset == len(letters) - 1 and next(args, None) is None:
-                        return False
-                    break
-                if letter not in flags:
-                    return False
-        else:
-            operands += 1
-    return minimum <= operands <= maximum
-
-
-def git_subcommand(tokens: list[str]) -> str | None:
-    words = without_assignments(tokens)
-    if not words or words[0] != "git":
-        return None
-    return git_command(words[1:])[0]
-
-
 def without_assignments(tokens: list[str]) -> list[str]:
+    """The command words after leading `NAME=value` assignments.
+
+    A word is an assignment only when its name is unquoted, so `'A=b' cmd`
+    runs a program called `A=b`. Quoted words are treated as such programs.
+    """
     index = 0
-    while index < len(tokens) and re.fullmatch(
-        r"[A-Za-z_][A-Za-z0-9_]*=.*", tokens[index], re.DOTALL
+    while (
+        index < len(tokens)
+        and not getattr(tokens[index], "quoted", False)
+        and ASSIGNMENT.fullmatch(tokens[index])
     ):
         index += 1
     return tokens[index:]
@@ -1141,13 +1019,11 @@ def without_assignments(tokens: list[str]) -> list[str]:
 
 def git_target(tokens: list[str], cwd: Path) -> str | None:
     """The repository a git command acts on, or None when it cannot be told."""
-    assigned = {
-        token.split("=", 1)[0]
-        for token in tokens[: len(tokens) - len(without_assignments(tokens))]
-    }
+    words = without_assignments(tokens)
+    assigned = {token.split("=", 1)[0] for token in tokens[: len(tokens) - len(words)]}
     if assigned & GIT_LOCATION_ENVIRONMENT:
         return None
-    args = without_assignments(tokens)[1:]
+    args = words[1:]
     target = cwd
     index = 0
     while index < len(args) and args[index].startswith("-"):
@@ -1178,15 +1054,6 @@ def git_alias(name: str, cwd: str) -> str | None:
         text=True,
     )
     return result.stdout.strip() if result.returncode == 0 else None
-
-
-def runs_safely_outside(command: str, cwd: str) -> bool:
-    return (
-        is_safe_auth_status(command)
-        or is_safe_gh_read(command)
-        or is_safe_git_permission_request(command, cwd)
-        or is_safe_push(command, cwd)
-    )
 
 
 def is_safe_gh_read(command: str) -> bool:
@@ -1231,7 +1098,8 @@ def push_needs_approval(command: str, cwd: str) -> bool:
     for pipeline in pipelines:
         for tokens in pipeline:
             words = without_assignments(tokens)
-            if words and words[0] != "git" and is_known_harmless(words):
+            # An assignment such as PATH=... may change which program runs.
+            if words == tokens and is_text_command(tokens):
                 continue
             if not words or words[0] != "git":
                 if mentions_push(" ".join(tokens)):
@@ -1254,13 +1122,8 @@ def push_needs_approval(command: str, cwd: str) -> bool:
     return False
 
 
-def is_known_harmless(words: list[str]) -> bool:
-    """Display, filter and GitHub read commands, whose arguments are only text."""
-    return (
-        words[0] in QUIET_COMMANDS
-        or is_stdin_filter(words)
-        or is_safe_gh_read(shlex.join(words))
-    )
+def is_text_command(tokens: list[str]) -> bool:
+    return tokens[0] in TEXT_COMMANDS or is_safe_gh_read(shlex.join(tokens))
 
 
 def mentions_push(text: str) -> bool:
