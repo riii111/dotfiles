@@ -89,7 +89,8 @@ for command in \
 	'git log --oneline 2>&1 | tail -2; git status -sb' \
 	"cd $tmpdir && git fetch origin" \
 	'gh pr view 1 --json state | jq .state' \
-	'git push origin HEAD 2>&1 | tail -1'; do
+	'git push origin HEAD 2>&1 | tail -1' \
+	'git status && cat notes.txt | grep -c todo'; do
 	permission_request "$command" | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
 done
 # shellcheck disable=SC2016 # Literal expansions are hook inputs, not test-shell operations.
@@ -107,6 +108,15 @@ for command in \
 	'gh api repos/riii111/test | jq .' \
 	$'git status\ntouch outside' \
 	'git status && FOO=1 git diff' \
+	'git status && cat /etc/hosts' \
+	'git status && cat ../outside.txt' \
+	'git status | grep --file=/etc/hosts' \
+	'git status | grep -f/etc/hosts' \
+	'git status && cd .. && cat secret.txt' \
+	'git status | rg --hostname-bin=touch x' \
+	'git status | rg -L secret' \
+	'git status |& tail -1' \
+	'git status <<< input' \
 	'echo done | wc -l'; do
 	test -z "$(permission_request "$command")"
 done

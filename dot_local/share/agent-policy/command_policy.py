@@ -830,7 +830,8 @@ def compound_placement(command: str, cwd: str) -> str | None:
     segments = command_segments(command)
     if segments is None:
         return None
-    current = Path(cwd)
+    base = Path(cwd).resolve()
+    current = base
     leaves_sandbox = False
     for tokens in segments:
         if tokens[0] == "cd":
@@ -840,7 +841,9 @@ def compound_placement(command: str, cwd: str) -> str | None:
             if not current.is_dir():
                 return None
             continue
-        if is_filter(tokens):
+        if is_filter(tokens) and all(
+            stays_within(arg, current, base) for arg in tokens[1:]
+        ):
             continue
         if not runs_safely_outside(shlex.join(tokens), str(current)):
             return None
@@ -913,8 +916,33 @@ def is_filter(tokens: list[str]) -> bool:
     if name == "uniq":
         return len([arg for arg in args if not arg.startswith("-")]) <= 1
     if name == "rg":
-        return not has_option(args, "--pre")
+        return not (
+            has_option(args, "--pre")
+            or has_option(args, "--hostname-bin")
+            or has_option(args, "--follow")
+            or has_short_flag(args, "L")
+        )
     return True
+
+
+def stays_within(arg: str, current: Path, base: Path) -> bool:
+    """Whether a filter argument, read as a path, stays inside the project.
+
+    Outside the sandbox nothing else keeps a filter from reading other files, so
+    patterns that merely look like paths are refused too.
+    """
+    value = arg
+    if arg.startswith("-"):
+        if "=" in arg:
+            value = arg.split("=", 1)[1]
+        elif "/" in arg:
+            return False
+        else:
+            return True
+    if not value:
+        return True
+    resolved = (current / value).resolve()
+    return resolved == base or base in resolved.parents
 
 
 def runs_safely_outside(command: str, cwd: str) -> bool:
