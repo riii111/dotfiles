@@ -809,6 +809,9 @@ TEXT_COMMANDS = {
     "uniq",
     "wc",
 }
+# Text commands that can still write files (sort -o, uniq IN OUT) or run
+# programs (rg --pre), and so may move HEAD before a later push.
+WRITING_TEXT_COMMANDS = {"rg", "sort", "uniq"}
 # Subcommands after which the checked-out branch and repository are unchanged.
 BRANCH_KEEPING_GIT = {
     "add",
@@ -1100,6 +1103,7 @@ def push_needs_approval(command: str, cwd: str) -> bool:
             words = without_assignments(tokens)
             # An assignment such as PATH=... may change which program runs.
             if words == tokens and is_text_command(tokens):
+                branch_unknown = branch_unknown or tokens[0] in WRITING_TEXT_COMMANDS
                 continue
             if not words or words[0] != "git":
                 if mentions_push(" ".join(tokens)):
@@ -1109,9 +1113,10 @@ def push_needs_approval(command: str, cwd: str) -> bool:
             target = git_target(tokens, current)
             subcommand = git_command(words[1:])[0]
             if subcommand is not None and subcommand not in GIT_BUILTINS:
-                alias = git_alias(subcommand, target or str(current))
-                hidden = words if alias is None else [alias]
-                if (alias or "").startswith("!") or mentions_push(" ".join(hidden)):
+                subcommand = resolved_git_command(
+                    subcommand, words, target or str(current)
+                )
+                if subcommand is None:
                     return True
             if subcommand == "push" and (
                 branch_unknown
@@ -1121,6 +1126,30 @@ def push_needs_approval(command: str, cwd: str) -> bool:
                 return True
             branch_unknown = branch_unknown or subcommand not in BRANCH_KEEPING_GIT
     return False
+
+
+def resolved_git_command(name: str, words: list[str], cwd: str) -> str | None:
+    """The builtin a git alias chain ends in, or None when it may hide a push.
+
+    An unknown name that is not an alias is a git extension, which only counts
+    as a push when its words say so.
+    """
+    seen = set()
+    while name not in GIT_BUILTINS:
+        alias = git_alias(name, cwd)
+        if alias is None:
+            return None if mentions_push(" ".join(words)) else name
+        if alias.startswith("!") or mentions_push(alias) or name in seen:
+            return None
+        seen.add(name)
+        try:
+            expanded = shlex.split(alias)
+        except ValueError:
+            return None
+        name = git_command(expanded)[0]
+        if name is None or len(seen) > 10:
+            return None
+    return name
 
 
 def is_text_command(tokens: list[str]) -> bool:

@@ -83,7 +83,12 @@ done
 # Pushes whose branch, repository or options cannot be confirmed.
 git -C "$feature" config alias.pf 'push --force-with-lease'
 git -C "$feature" config alias.st status
+git -C "$feature" config alias.p2 publish
+git -C "$feature" config alias.publish push
+git -C "$feature" config alias.loop1 loop2
+git -C "$feature" config alias.loop2 loop1
 stays_silent 'git st'
+stays_silent 'gh pr view 1 && git log | grep push && git push origin HEAD'
 evil="$test_root/evil"
 mkdir -p "$evil"
 git -C "$evil" init -q
@@ -111,7 +116,12 @@ for command in \
 	"git 'push' origin HEAD; echo \$HOME" \
 	$'git pu\\sh' \
 	'git pf' \
+	'git p2 origin HEAD' \
+	'git loop1' \
 	'git lfs push origin main' \
+	'sort -o .git/HEAD branch.txt && git push origin HEAD' \
+	'uniq branch.txt .git/HEAD && git push origin HEAD' \
+	'rg --pre ./switch x && git push origin HEAD' \
 	'cd missing-dir && git push'; do
 	asks "$command"
 done
