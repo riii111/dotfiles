@@ -56,8 +56,8 @@ class ForceWithLeaseTest(unittest.TestCase):
             load_wrapper("executable_codex-force-with-lease"),
             load_wrapper("executable_codex-read-lines"),
             load_script(
-                ROOT / "dot_codex/hooks/executable_permission_request.py",
-                "permission_request_hook",
+                ROOT / "dot_local/share/agent-policy/command_policy.py",
+                "command_policy",
             ),
         ]
         for module in modules:
