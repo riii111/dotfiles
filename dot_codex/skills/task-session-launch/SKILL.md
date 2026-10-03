@@ -27,7 +27,7 @@ description: |
 ## SKILLの受け渡し
 
 利用中のこのSKILLと同じインストール先にある`task-worker/SKILL.md`と`task-review-cycle/SKILL.md`の実在を確認し、絶対パスを使ったリンクを起動`prompt`へ入れる。
-この環境のインストール先は`/Users/a81803/.codex/skills`。管理元の`dot_codex/skills`ではなく、適用済みファイルを渡す。
+Claude workerの起動時は、harnexusがSKILL本文を入力へ添付できるよう、裸のSKILL名ではなく下記の形式のリンクを渡す。
 
 ```text
 [$task-worker](/Users/a81803/.codex/skills/task-worker/SKILL.md)
@@ -36,10 +36,6 @@ description: |
 task-workerを読んで実装し、レビュー工程ではtask-review-cycleを読んでください。
 依存SKILLや参照資料は、そのSKILL.mdのディレクトリを基準にパスを解決して読んでください。
 ```
-
-インストール先が異なる場合は、リンク先を確認した実際の絶対パスへ置き換える。
-harnexusは`[$skill-name](/absolute/path/SKILL.md)`形式のリンク先本文をClaudeの入力へ添付する。裸の`$task-worker`などの文字列だけで本文が読み込まれるとは扱わない。
-読めないSKILLがあれば、workerを起動する前に解消する。
 
 ## 制約
 
