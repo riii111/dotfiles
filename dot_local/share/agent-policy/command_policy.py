@@ -1108,9 +1108,10 @@ def push_needs_approval(command: str, cwd: str) -> bool:
                 continue
             target = git_target(tokens, current)
             subcommand = git_command(words[1:])[0]
-            if subcommand not in GIT_BUILTINS:
-                alias = git_alias(subcommand or "", target or str(current))
-                if alias is None or alias.startswith("!") or mentions_push(alias):
+            if subcommand is not None and subcommand not in GIT_BUILTINS:
+                alias = git_alias(subcommand, target or str(current))
+                hidden = words if alias is None else [alias]
+                if (alias or "").startswith("!") or mentions_push(" ".join(hidden)):
                     return True
             if subcommand == "push" and (
                 branch_unknown

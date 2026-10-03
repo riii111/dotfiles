@@ -62,6 +62,9 @@ for command in \
 	'git status; echo $(touch outside)' \
 	'touch file' \
 	'cd missing-dir && git status' \
+	'git --version' \
+	'git apply x.patch' \
+	'git lfs ls-files' \
 	$'git status\v'; do
 	stays_silent "$command"
 done
@@ -108,6 +111,7 @@ for command in \
 	"git 'push' origin HEAD; echo \$HOME" \
 	$'git pu\\sh' \
 	'git pf' \
+	'git lfs push origin main' \
 	'cd missing-dir && git push'; do
 	asks "$command"
 done
