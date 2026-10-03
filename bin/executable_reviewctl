@@ -1,0 +1,226 @@
+#!/usr/bin/env python3
+
+"""Prepare independent review requests for existing Codex/Claude tools."""
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+
+class ReviewError(Exception):
+    pass
+
+
+def git(checkout, *args):
+    result = subprocess.run(
+        ["git", "-C", str(checkout), *args], capture_output=True, text=True
+    )
+    if result.returncode:
+        raise ReviewError(result.stderr.strip())
+    return result.stdout.strip()
+
+
+def candidate(path):
+    data = json.loads(path.read_text())
+    if not isinstance(data, dict):
+        raise ReviewError("request must be a JSON object")
+    for key in (
+        "identifier",
+        "checkout",
+        "base",
+        "head",
+        "context",
+        "projectId",
+        "workerId",
+    ):
+        if not isinstance(data.get(key), str) or not data[key].strip():
+            raise ReviewError(f"request requires a nonempty {key}")
+    if not isinstance(data.get("pushed"), bool):
+        raise ReviewError("request requires pushed: true or false")
+    if data.get("pr") is not None and not isinstance(data["pr"], str):
+        raise ReviewError("pr must be a string or null")
+    if data.get("worker") not in ("Claude", "Codex"):
+        raise ReviewError("worker must be Claude or Codex")
+    checkout = Path(data["checkout"])
+    if not checkout.is_absolute() or not checkout.is_dir():
+        raise ReviewError("checkout must be an existing absolute directory")
+    for key in ("base", "head"):
+        if not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", data[key]):
+            raise ReviewError(f"{key} must be a full commit SHA")
+    if (
+        git(checkout, "rev-parse", "--verify", data["base"] + "^{commit}")
+        != data["base"]
+    ):
+        raise ReviewError("base is not a commit")
+    if git(checkout, "rev-parse", "HEAD") != data["head"]:
+        raise ReviewError("checkout HEAD differs from the requested head")
+    if git(checkout, "status", "--porcelain", "--untracked-files=no"):
+        raise ReviewError("checkout has uncommitted tracked changes")
+    return data
+
+
+def review_prompt(data, skills):
+    skill = skills / "ai-code-review" / "SKILL.md"
+    references = skills / "task-review-cycle" / "references"
+    template = references / "reviewer.md"
+    reply = references / ("reply-" + data["worker"].lower() + ".md")
+    if not all(path.is_file() for path in (skill, template, reply)):
+        raise ReviewError("ai-code-review or reviewer templates are not installed")
+    return (template.read_text() + "\n" + reply.read_text()).format(
+        skill_path=str(skill.resolve()),
+        worker=data["worker"],
+        worker_thread_id=data["workerId"],
+        checkout=data["checkout"],
+        pr=data.get("pr") or "未作成（ローカル差分レビュー）",
+        push_state="push済み" if data["pushed"] else "未push",
+        base=data["base"],
+        head=data["head"],
+        context=data["context"],
+    )
+
+
+def save_state(path, data):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(mode="w", dir=path.parent, delete=False) as out:
+        temp = Path(out.name)
+        json.dump(data, out, ensure_ascii=False)
+    try:
+        os.replace(temp, path)
+    finally:
+        temp.unlink(missing_ok=True)
+
+
+def load_state(path):
+    if not path.exists():
+        return None
+    state = json.loads(path.read_text())
+    if (
+        not isinstance(state, dict)
+        or not isinstance(state.get("reviewer"), str)
+        or not state["reviewer"]
+        or not isinstance(state.get("candidate"), dict)
+    ):
+        raise ReviewError(
+            "unsupported review state; inspect it before choosing --state"
+        )
+    return state
+
+
+def check_session(state, data, update_base):
+    if state:
+        for key in ("worker", "workerId", "projectId", "checkout"):
+            if state["candidate"].get(key) != data[key]:
+                raise ReviewError(f"review session must keep the original {key}")
+        if state["candidate"]["base"] != data["base"]:
+            if not update_base:
+                raise ReviewError(
+                    "base changed; use --update-base after integrating upstream"
+                )
+            if (
+                git(data["checkout"], "merge-base", data["base"], data["head"])
+                != data["base"]
+            ):
+                raise ReviewError("updated base must be an ancestor of head")
+
+
+def state_path(explicit):
+    if explicit:
+        return Path(explicit).resolve()
+    return (
+        Path(git(Path.cwd(), "rev-parse", "--show-toplevel")) / ".reviewctl/state.json"
+    )
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+    parser.add_argument(
+        "--state", help="state file; defaults to .reviewctl/state.json in this worktree"
+    )
+    parser.add_argument(
+        "--skills-root",
+        type=Path,
+        default=Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")) / "skills",
+        help="installed skills directory",
+    )
+    commands = parser.add_subparsers(dest="command", required=True)
+    prepare = commands.add_parser(
+        "prepare", help="print tool name and arguments; never send"
+    )
+    prepare.add_argument("--request", type=Path, required=True)
+    prepare.add_argument("--model")
+    prepare.add_argument("--thinking")
+    prepare.add_argument(
+        "--update-base",
+        action="store_true",
+        help="allow a base already integrated into head",
+    )
+    record = commands.add_parser(
+        "record", help="save a confirmed reviewer and submitted candidate"
+    )
+    record.add_argument("--request", type=Path, required=True)
+    record.add_argument("--reviewer-thread-id", required=True)
+    record.add_argument(
+        "--update-base", action="store_true", help="record an explicitly updated base"
+    )
+    commands.add_parser("state", help="show the last recorded reviewer and candidate")
+    args = parser.parse_args(argv)
+    try:
+        path = state_path(args.state)
+        state = load_state(path)
+        if args.command != "state" and not args.state:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            (path.parent / ".gitignore").write_text("*\n")
+        if args.command == "state":
+            if state is None:
+                raise ReviewError("no confirmed reviewer has been recorded")
+            output = state
+        else:
+            data = candidate(args.request)
+            check_session(state, data, args.update_base)
+            if args.command == "record":
+                reviewer = args.reviewer_thread_id
+                if not reviewer.strip() or reviewer.startswith("client-new-thread:"):
+                    raise ReviewError("record requires a confirmed threadId")
+                if reviewer == data["workerId"]:
+                    raise ReviewError("a worker cannot review itself")
+                if state and state["reviewer"] != reviewer:
+                    raise ReviewError("review session must keep the same reviewer")
+                output = {"reviewer": reviewer, "candidate": data}
+                save_state(path, output)
+            else:
+                arguments = {"prompt": review_prompt(data, args.skills_root)}
+                if state:
+                    tool = "send_message_to_thread"
+                    arguments["threadId"] = state["reviewer"]
+                    for key in ("model", "thinking"):
+                        if getattr(args, key) is not None:
+                            arguments[key] = getattr(args, key)
+                else:
+                    tool = "create_thread"
+                    arguments.update(
+                        target={
+                            "type": "project",
+                            "projectId": data["projectId"],
+                            "environment": {"type": "worktree"},
+                        },
+                        title="Review " + data["identifier"],
+                        model=args.model or "gpt-6.1-sol",
+                        thinking=args.thinking or "medium",
+                    )
+                output = {"tool": tool, "arguments": arguments}
+        print(json.dumps(output, ensure_ascii=False))
+        return 0
+    except (ReviewError, OSError, ValueError) as error:
+        print(f"reviewctl: {error}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

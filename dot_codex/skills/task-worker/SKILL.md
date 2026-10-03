@@ -11,7 +11,7 @@ description: |
 直接依存、成果物、添付資料、リポジトリ規約を確認する。
 再開時に必要なら同じタスク管理元を読み直す。
 割り当てられたGit worktreeで目的を表すConventionalな英語branchを作り、実装する。
-実装後は候補をcommitし、`$task-review-cycle`でローカル固定SHA差分の独立レビューを受ける。
+実装後は候補をcommitし、[task-review-cycle](../task-review-cycle/SKILL.md)を読んでローカル固定SHA差分の独立レビューを受ける。
 Blocking が解消されLGTMになるまで同じreview Taskで続ける。Non-blocking は任意とし、未対応だけで再レビューを繰り返さない。
 親への通知や完了記録は扱わない。
 
@@ -39,5 +39,5 @@ PR headとの一致を確認してCIを再実行する。
 
 review開始後にbase branchが進んだことだけを理由に、取り込み・全検証・再reviewを繰り返さない。
 Ready化・merge直前に現在のbaseとのmerge可否と意味的な競合を確認する。
-実際の競合、または変更行・挙動の重複がある場合だけbaseを取り込み、必要な検証と再reviewを行う。
+実際の競合、または変更行・挙動の重複がある場合だけbaseを取り込み、取り込んだbaseのSHAを新しいreview基点として必要な検証と再reviewを行う。
 無関係なbase進行なら、固定したreview結果とheadのchecksを維持してmergeへ進む。

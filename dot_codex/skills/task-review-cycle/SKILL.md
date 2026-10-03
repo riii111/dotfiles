@@ -7,86 +7,28 @@ description: |
 
 # Task Review Cycle
 
-初回にreview Taskを作成するときは、`model`に`gpt-6.1-sol`、`thinking`に`medium`を指定する。
-再レビューでは`model`と`thinking`を指定せず、同じreview Taskの現在設定を維持する。
-ユーザーがmodelまたはreasoning effortを明示した場合だけ、その依頼で対応する値を指定する。
+commit済み候補をfreshなCodex reviewerで独立レビューし、Blockingが解消されるまで同じreview Taskで続ける。Non-blockingは任意とする。review基点と完了条件は[task-worker](../task-worker/SKILL.md)に従う。
 
-## 初回手順
+## 依頼と結果の受取
 
-1. worker checkoutのrepositoryに対応するprojectと`isGitRepository`を`codex_app__list_projects`で解決する。
-   Git repositoryなら`target: { type: "project", projectId: <resolved projectId>, environment: { type: "worktree" } }`を指定する。
-   非Gitなら同じ`type`と`projectId`に`environment: { type: "local" }`を指定する。
-   `codex_app__create_thread`を一度呼ぶ。
-   親・worker Taskはforkせず、freshなproject Taskとして過去の会話を引き継がない。
-   - `title`はworkerと同じ識別子で`Review <identifier>`とし、PR titleやtask titleを含めない。
-   - `prompt`には下記の依頼文を使い、worker Task ID、worker checkout、候補のpush状態、review base SHA、head SHA、PR URLまたは未作成であることを渡す。
-     課題・期待する挙動・制約・対象外と、その根拠となる管理元の該当節だけを事前コンテキストに含める。
-     実装者の思考履歴、過去サイクル、前回のレビュー結果は含めない。
-   - PR作成前の候補もローカル差分としてレビューする。
-     各候補はcommit済みのhead SHAで指定する。
-2. 返された`threadId`を再レビュー用に保持し、worker Taskはturnを終了する。
-   初回依頼を別messageで重複送信しない。
+`$HOME/bin/reviewctl`が未導入ならユーザーに伝えて停止する。
+worktreeに`.reviewctl/.gitignore`（内容は`*`と改行）を作成してから、[依頼JSON](references/request.md)を`.reviewctl/request.json`へ保存する。
 
-## 再レビュー手順
+1. `$HOME/bin/reviewctl prepare --request .reviewctl/request.json`を実行し、返されたtool名とargumentsを下表のツールへ渡す。ユーザーがモデル設定を指定した場合だけ`--model`・`--thinking`を渡す。
+2. 送信受理と確定threadIdを確認し、`$HOME/bin/reviewctl record --request .reviewctl/request.json --reviewer-thread-id <確定ID>`で記録する。Codexはturnを終了し、Claudeはwait/readを続ける。
+3. 最終回答のbase/headが依頼と一致することを確認する。Blockingをまとめて修正・影響検証・commitし、同じJSONのheadとpush/PR状態を更新して再依頼する。判定保留なら不足を解消する。
 
-1. 同じreview Taskへ`codex_app__send_message_to_thread`で`## 依頼文`を送る。
-   worker Task ID、worker checkoutの絶対パス、候補のpush状態、固定したreview base SHA、最新のhead SHA、PR URLまたは未作成であることを入れる。
-2. 前回の指摘は依頼文へ書かない。
-3. 再レビューのたびに所定の全検証やpushを要求しない。
-   worker Taskは必須修正をまとめて対応し、影響する検証を行った新しいcommitを依頼する。Non-blocking は任意であり、未対応だけではサイクルを継続しない。
-4. worker Taskはreview依頼を送った時点でturnを終了する。
-   LGTM後は`$task-worker`の手順へ戻る。
+| worker | 送信ツール | 結果の受取 |
+| --- | --- | --- |
+| Codex | `codex_app__create_thread` / `codex_app__send_message_to_thread` | reviewerの返信で次turnを開始 |
+| Claude | harnexusの`create_thread` / `send_message_to_thread` | `wait_threads` / `read_thread` |
 
-## 依頼文
+Claudeはwait_threadsのtimeoutMsを60000以下にし、cursorを次のafterCursorへ渡す。正常timeoutでは待機を続け、対象別errors・失敗・中断は理由を確認する。最終回答が足りなければread_threadで読み、commentaryだけで判定しない。
+送信結果が不明、またはclientThreadIdだけが返された場合はAppの状態を確認し、確定IDを得るまで再送・recordしない。
+Claude workerのreviewerはCodexモデルに限られる。Claudeモデルを指定された場合は、対応するモデルの指定を求める。
 
-```text
-$ai-code-review
-worker Task ID: <worker Task ID>
-worker checkout: <worker checkoutの絶対パス>
-PR: <PR URLまたは未作成（ローカル差分レビュー）>
-候補状態: <未push / push済み>
-review base SHA: <review base SHA>
-head SHA: <head SHA>
-比較範囲: <review base SHA>...<head SHA>
-事前コンテキスト: <課題・期待する挙動・制約・対象外、および管理元の該当節への参照>
+## 再開と基点更新
 
-事前コンテキストとworker checkoutの適用規約を読んでからレビューを開始してください。
-現在の比較範囲全体をレビューしてください。
-Gitの読み取り、コード読取、必要な検証はworker checkoutを作業ディレクトリにして行ってください。
-branchやcheckoutは変更しないでください。
-worker checkoutのHEADが指定head SHAと一致することを確認してください。
-候補がpush済みでPRがある場合は、PR headが指定head SHAと一致することを確認してください。
-不一致ならLGTMを出さずworkerへ伝えてください。
-一致した場合は、そのheadに対するCI状態も確認してください。
-それ以外（候補が未push、またはPR未作成）は、指定範囲のローカル差分をレビューしてください。
-既存PRがあっても、今回候補が未pushならPR headやCIをレビューの根拠にしないでください。
-再レビューでも前回の指摘だけに限定せず、新しい問題がないか確認してください。
-review開始後にbase branchが進んでも、それだけを理由にLGTMを保留しないでください。
-PRへの投稿、修正、Ready化、mergeは行わないでください。
-```
-
-worker Taskへ返すmessageは次の形式にしてください。
-
-```text
-$task-review-cycle
-
-<ai-code-review の対象SHA・判定・指摘・検証結果>
-```
-
-この`$task-review-cycle`はworker Taskへのmessageの先頭に置く文字列であり、reviewerは適用しません。
-reviewerは`$ai-code-review`でレビューします。
-
-レビュー完了後、`codex_app__send_message_to_thread`の`threadId`にworker Task IDを指定して結果を返してください。
-送信が受理されたことを確認したらreviewerのturnを終了してください。
-
-## 制約
-
-reviewerから`$task-review-cycle`で始まるmessageが届くことでworker Taskの新しいturnが始まり、workerは同じSkillを適用して指摘確認、修正、再レビューを行う。
-
-reviewerは固定された比較範囲の実装を判定する。
-base branchのtipがreview中に進んだこと自体は指摘やLGTM保留の理由にしない。
-現在のbaseとの競合や意味的重複を実際に確認した場合だけ、その具体的根拠をworkerへ返す。
-
-既定はmanualであり、明示許可なしにReady化やmergeをしない。
-許可された場合だけ、最新headと必要なchecksを再確認して実行する。
-再開時は既存の会話、PR、worktree、review Taskを観測して続ける。
+`$HOME/bin/reviewctl state`でreviewerと候補を確認する。CLIはAPIを呼ばず、状態と依頼JSONはGit管理外の`.reviewctl/`に置く。
+実際の競合解消などで上流を取り込んだ場合だけJSONのbaseを更新し、prepareとrecordの両方に`--update-base`を付ける。同じreviewerを維持し、更新した範囲をレビューする。
+明示許可なしにReady化やmergeを行わない。
