@@ -7,28 +7,27 @@ description: |
 
 # Task Review Cycle
 
-commit済み候補をfreshなCodex reviewerで独立レビューし、Blockingが解消されるまで同じreview Taskで修正・再レビューを続ける。Non-blockingは任意とする。
-review baseは[task-worker](../task-worker/SKILL.md)に従って固定し、LGTM後も同じheadで最終検証・Draft PR・CI確認を行う。
+commit済み候補をfreshなCodex reviewerで独立レビューし、Blockingが解消されるまで同じreview Taskで続ける。Non-blockingは任意とする。review基点と完了条件は[task-worker](../task-worker/SKILL.md)に従う。
 
-## 依頼の準備と送信
+## 依頼と結果の受取
 
-[依頼JSON](references/request.md)を作り、`reviewctl prepare --request <JSONファイル>`を実行する。CLIは候補SHAを検証してtool名とargumentsを返す。APIは呼ばず、送信と結果の受取には既存ツールを使う。CLI未導入時は[直接ツールの手順](references/direct-tools.md)に従う。
+worktreeで`mkdir -p .reviewctl`を実行し、[依頼JSON](references/request.md)を`.reviewctl/request.json`へ保存する。`$HOME/bin/reviewctl`が未導入なら、chezmoi管理元のCLIとSKILLを導入してから進める。
+
+1. `$HOME/bin/reviewctl prepare --request .reviewctl/request.json`を実行し、返されたtool名とargumentsを下表のツールへ渡す。ユーザーがモデル設定を指定した場合だけ`--model`・`--thinking`を渡す。
+2. 送信受理と確定threadIdを確認し、`$HOME/bin/reviewctl record --request .reviewctl/request.json --reviewer-thread-id <確定ID>`で記録する。Codexはturnを終了し、Claudeはwait/readを続ける。
+3. 最終回答のbase/headが依頼と一致することを確認する。Blockingをまとめて修正・影響検証・commitし、同じJSONのheadとpush/PR状態を更新して再依頼する。判定保留なら不足を解消する。
 
 | worker | 送信ツール | 結果の受取 |
 | --- | --- | --- |
 | Codex | `codex_app__create_thread` / `codex_app__send_message_to_thread` | reviewerの返信で次turnを開始 |
 | Claude | harnexusの`create_thread` / `send_message_to_thread` | `wait_threads` / `read_thread` |
 
-1. 出力されたtoolのargumentsを対応するツールへ渡す。初回はfreshなreview Taskを作り、再レビューは同じreviewerを使う。モデルの既定は`gpt-6.1-sol`・`medium`。再レビューは現在の設定を維持し、ユーザーが変更を明示した場合だけ`--model`・`--thinking`を渡す。
-2. 送信の受理と確定したthreadIdを確認し、`reviewctl record --request <JSONファイル> --reviewer-thread-id <確定ID>`で保存する。Codex workerはturnを終了する。Claude workerは下記の受取を続ける。
-3. 回答の比較範囲が依頼したbase/headと一致することを確認する。Blockingをまとめて修正・影響検証・commitし、JSONのheadを更新してprepareから再レビューする。判定保留なら不足を解消する。
+Claudeはwait_threadsのtimeoutMsを60000以下にし、cursorを次のafterCursorへ渡す。正常timeoutでは待機を続け、対象別errors・失敗・中断は理由を確認する。最終回答が足りなければread_threadで読み、commentaryだけで判定しない。
+送信結果が不明、またはclientThreadIdだけが返された場合はAppの状態を確認し、確定IDを得るまで再送・recordしない。
+Claude workerのreviewerはCodexモデルに限られる。Claudeモデルを指定された場合は、対応するモデルの指定を求める。
 
-Claude workerは`wait_threads`へreviewer IDを渡し、timeoutMsを60000以下にする。cursorは次回のafterCursorへ渡す。正常timeoutでは待機を続け、対象別errorsや失敗・中断は理由を確認する。完了時の回答が足りなければ`read_thread`で読み、commentaryだけで判定しない。workerへの返信は要求しない。
+## 再開と基点更新
 
-## 制約
-
-projectIdは既存のlist_projectsでrepositoryとisGitRepositoryを確認して選ぶ。CLI経路はGit worktreeのレビューに使う。
-送信結果が不明な場合やclientThreadIdだけが返された場合はAppの状態を確認し、同じ依頼を再送しない。確定IDが分かるまでrecordしない。
-Claude workerのreviewerはCodexモデルに限られる。Claudeモデルを指定された場合は制約を伝え、対応するモデルの指定を求める。
-reviewerには課題・期待する挙動・制約・対象外と管理元の該当節を渡し、実装者の思考履歴・過去サイクル・前回の指摘は含めない。
-再開時は`reviewctl state`と既存review Taskを確認して続ける。明示許可なしにReady化やmergeを行わない。
+`$HOME/bin/reviewctl state`でreviewerと候補を確認する。CLIはAPIを呼ばず、状態と依頼JSONはGit管理外の`.reviewctl/`に置く。
+実際の競合解消などで上流を取り込んだ場合だけJSONのbaseを更新し、prepareとrecordの両方に`--update-base`を付ける。同じreviewerを維持し、更新した範囲をレビューする。
+明示許可なしにReady化やmergeを行わない。
