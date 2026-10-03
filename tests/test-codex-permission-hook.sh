@@ -12,6 +12,8 @@ hook="$repo_root/dot_codex/hooks/executable_permission_request.py"
 runner="$repo_root/tests/run-codex-python-with-home.py"
 hooks_config="$repo_root/dot_codex/hooks.json"
 test_root="$(mktemp -d "${TMPDIR:-/tmp}/codex-permission-hook-test.XXXXXX")"
+# The policy only follows `cd` when the logical path is the physical one.
+test_root="$(cd "$test_root" && pwd -P)"
 test_home="$test_root/home"
 tmpdir="$test_home/ghq/github.com/riii111/test"
 trap 'rm -rf "$test_root"' EXIT
@@ -100,7 +102,9 @@ for command in \
 	'sleep 1; gh pr checks 1 | tail -n 3' \
 	'git add file && git commit -m message && git push -u origin HEAD' \
 	'git diff --stat | sort -rn | cut -d" " -f2 | head -3' \
-	'git status >/dev/null && git log -1 2>/dev/null'; do
+	'git status >/dev/null && git log -1 2>/dev/null' \
+	'git status ;' \
+	'git log -1 3>/dev/null'; do
 	permission_request "$command" | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
 done
 # Inputs from the review of the first compound-command design; none may be approved.
@@ -129,7 +133,35 @@ for command in \
 	'cd ../test; git push origin HEAD'; do
 	test -z "$(hook_cwd="$main_repo" permission_request "$command")"
 done
-hook_cwd="$main_repo" permission_request 'cd ../test && git push origin HEAD' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
+hook_cwd="$main_repo" permission_request "cd $tmpdir && git push origin HEAD" | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
+# Inputs from the verification of the narrowed design; none may be approved.
+evil="$test_root/evil"
+mkdir -p "$evil"
+git -C "$evil" init -q
+git -C "$evil" switch -q -c main
+ln -s "$tmpdir" "$evil/S"
+for command in \
+	'cd ../test && git push origin HEAD' \
+	'cd ./S/.. && git status' \
+	'cd S && git status' \
+	'cd ./S && git status'; do
+	test -z "$(hook_cwd="$evil" permission_request "$command")"
+done
+test -z "$(hook_cwd="$evil/S" permission_request 'cd ./. && git status')"
+for command in \
+	'GIT_PAGER=cat git switch master && git push origin HEAD' \
+	'GIT_EDITOR=true git switch -c master && git push origin HEAD' \
+	'git rebase origin/main main && git push origin HEAD' \
+	$'git status >\n/dev/null' \
+	'git status | head -٢'; do
+	test -z "$(permission_request "$command")"
+done
+for event_name in PreToolUse PermissionRequest; do
+	output="$(HOME="$test_home" jq -n --arg cwd "$tmpdir" --arg event_name "$event_name" \
+		'{cwd:$cwd,hook_event_name:$event_name,tool_input:{command:"git -C a\u0000b status"}}' |
+		HOME="$test_home" python3 "$runner" "$hook" "$test_home")"
+	test -z "$output"
+done
 # shellcheck disable=SC2016 # Literal expansions are hook inputs, not test-shell operations.
 for command in \
 	'git status && touch outside' \

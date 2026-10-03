@@ -795,7 +795,61 @@ GH_READ_COMMANDS = {
     ("release", "view"),
 }
 QUIET_COMMANDS = {"echo", "sleep", "true"}
-BRANCH_CHANGING_GIT = {"switch", "checkout"}
+BRANCH_CHANGING_GIT = {"switch", "checkout", "rebase"}
+# Subcommands after which the checked-out branch and repository are unchanged.
+BRANCH_KEEPING_GIT = {
+    "add",
+    "cherry-pick",
+    "commit",
+    "diff",
+    "fetch",
+    "log",
+    "ls-files",
+    "ls-remote",
+    "merge",
+    "rev-parse",
+    "show",
+    "status",
+}
+GIT_BUILTINS = (
+    BRANCH_KEEPING_GIT
+    | BRANCH_CHANGING_GIT
+    | {
+        "bisect",
+        "blame",
+        "branch",
+        "cat-file",
+        "check-ignore",
+        "clean",
+        "clone",
+        "config",
+        "describe",
+        "diff-tree",
+        "for-each-ref",
+        "gc",
+        "grep",
+        "init",
+        "merge-base",
+        "mv",
+        "pull",
+        "push",
+        "reflog",
+        "remote",
+        "reset",
+        "restore",
+        "rev-list",
+        "rm",
+        "shortlog",
+        "stash",
+        "submodule",
+        "symbolic-ref",
+        "tag",
+        "update-ref",
+        "worktree",
+    }
+)
+GIT_LOCATION_OPTIONS = {"--git-dir", "--work-tree", "--namespace"}
+GIT_LOCATION_ENVIRONMENT = {"GIT_DIR", "GIT_WORK_TREE", "GIT_NAMESPACE"}
 # Options a filter may take when it reads only the pipe: short flags, short
 # options followed by a value, long options (a trailing "=" carries the value),
 # and how many operands it accepts.
@@ -876,8 +930,8 @@ STDIN_FILTERS = {
     ),
 }
 SHELL_OPERATOR = re.compile(r"[&|;]+")
-DROPPED_REDIRECTION = re.compile(r"(?:&>|>>?)(?:&[12]|\s*/dev/null)(?=[\s;&|]|$)")
-UNMODELED_CHARACTERS = set("`$\\(){}*?[!<>\n\r")
+DROPPED_REDIRECTION = re.compile(r"(?:&>|>>?)(?:&[12]|[ \t]*/dev/null)(?=[ \t;&|]|$)")
+UNMODELED_CHARACTERS = set("`$\\(){}*?[!<>\n\r\x00")
 
 
 def approves_outside_sandbox(command: str, cwd: str) -> bool:
@@ -912,12 +966,15 @@ def plan_command(command: str, cwd: str) -> tuple[Path, list[list[list[str]]]] |
     """The directory after leading `cd DIR &&` and the pipelines that follow.
 
     A `cd` anywhere else, or `||`, makes the directory or the commands that run
-    depend on earlier results, so such commands are not modeled.
+    depend on earlier results, so such commands are not modeled. The shell
+    follows `cd` through symbolic links logically, so a target is accepted only
+    when that logical path is also the physical one.
     """
     parsed = parse_command(command)
     current = Path(cwd).resolve()
     if parsed is None or not current.is_dir():
         return None
+    logical = os.path.normpath(cwd)
     index = 0
     while (
         index + 1 < len(parsed)
@@ -926,10 +983,14 @@ def plan_command(command: str, cwd: str) -> tuple[Path, list[list[list[str]]]] |
         and parsed[index + 1][0] == "&&"
     ):
         tokens = parsed[index][1][0]
-        if len(tokens) != 2 or tokens[1].startswith("-"):
+        # Other relative forms may be resolved through CDPATH.
+        if len(tokens) != 2 or not tokens[1].startswith(("/", "./")):
             return None
-        current = (current / tokens[1]).resolve()
-        if not current.is_dir():
+        if ".." in Path(tokens[1]).parts:
+            return None
+        logical = os.path.normpath(os.path.join(logical, tokens[1]))
+        current = Path(logical).resolve()
+        if str(current) != logical or not current.is_dir():
             return None
         index += 1
     rest = parsed[index:]
@@ -954,6 +1015,8 @@ def parse_command(command: str) -> list[tuple[str | None, list[list[str]]]] | No
             parsed[-1][1].append([])
         else:
             parsed.append((text, [[]]))
+    if len(parsed) > 1 and parsed[-1] == (";", [[]]):
+        parsed.pop()
     if any(not tokens for _, pipeline in parsed for tokens in pipeline):
         return None
     return parsed
@@ -991,7 +1054,8 @@ def shell_items(command: str) -> list[tuple[str, str]] | None:
             continue
         redirection = DROPPED_REDIRECTION.match(command, index)
         if redirection is not None and char in {"&", ">"}:
-            if char == ">" and not quoted and "".join(word) in {"1", "2"}:
+            # Digits right before ">" name the file descriptor being redirected.
+            if char == ">" and not quoted and re.fullmatch(r"[0-9]+", "".join(word)):
                 word, in_word = [], False
             end_word()
             index = redirection.end()
@@ -1040,7 +1104,7 @@ def is_stdin_filter(tokens: list[str]) -> bool:
                 return False
         elif arg.startswith("-") and len(arg) > 1:
             letters = arg[1:]
-            if tokens[0] in {"head", "tail"} and letters.isdigit():
+            if tokens[0] in {"head", "tail"} and re.fullmatch(r"[0-9]+", letters):
                 continue
             for offset, letter in enumerate(letters):
                 if letter in valued:
@@ -1057,9 +1121,60 @@ def is_stdin_filter(tokens: list[str]) -> bool:
 
 
 def git_subcommand(tokens: list[str]) -> str | None:
-    if tokens[0] != "git":
+    words = without_assignments(tokens)
+    if not words or words[0] != "git":
         return None
-    return git_command(tokens[1:])[0]
+    return git_command(words[1:])[0]
+
+
+def without_assignments(tokens: list[str]) -> list[str]:
+    index = 0
+    while index < len(tokens) and re.fullmatch(
+        r"[A-Za-z_][A-Za-z0-9_]*=.*", tokens[index], re.DOTALL
+    ):
+        index += 1
+    return tokens[index:]
+
+
+def git_target(tokens: list[str], cwd: Path) -> str | None:
+    """The repository a git command acts on, or None when it cannot be told."""
+    assigned = {
+        token.split("=", 1)[0]
+        for token in tokens[: len(tokens) - len(without_assignments(tokens))]
+    }
+    if assigned & GIT_LOCATION_ENVIRONMENT:
+        return None
+    args = without_assignments(tokens)[1:]
+    target = cwd
+    index = 0
+    while index < len(args) and args[index].startswith("-"):
+        option = args[index]
+        if option.split("=", 1)[0] in GIT_LOCATION_OPTIONS:
+            return None
+        if option == "-C" and index + 1 < len(args):
+            target = target / args[index + 1]
+            index += 2
+        elif option.startswith("-C"):
+            target = target / option[2:]
+            index += 1
+        elif option == "-c" and index + 1 < len(args):
+            index += 2
+        else:
+            index += 1
+    resolved = target.resolve()
+    return str(resolved) if resolved.is_dir() else None
+
+
+def git_alias(name: str, cwd: str) -> str | None:
+    result = subprocess.run(
+        ["git", "config", "--get", f"alias.{name}"],
+        cwd=cwd,
+        env=git_environment(),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.strip() if result.returncode == 0 else None
 
 
 def runs_safely_outside(command: str, cwd: str) -> bool:
@@ -1095,28 +1210,49 @@ def segment_denial_reason(command: str, cwd: str) -> str | None:
     return None
 
 
-def pushes_from_protected_branch(command: str, cwd: str) -> bool:
-    """Whether a push may run on a protected branch, assuming so when unsure."""
+def push_needs_approval(command: str, cwd: str) -> bool:
+    """Whether a push may run on a protected branch or with hidden options.
+
+    Wrappers, other repositories and commands that may move HEAD make the
+    branch at push time unknown, which counts as protected. A push through an
+    alias or an unknown subcommand hides its options from the deny and ask
+    rules, so it always needs approval.
+    """
     planned = plan_command(command, cwd)
     if planned is None:
-        unquoted = re.sub(r"'[^']*'|\"[^\"]*\"", " ", command)
-        if re.search(r"\bgit\b.*\bpush\b", unquoted) is None:
-            return False
-        return (
-            re.search(r"\b(?:cd|switch|checkout)\b|\bgit\s+-C\b", unquoted) is not None
-            or not Path(cwd).is_dir()
-            or current_branch(cwd) in PROTECTED_BRANCHES
-        )
+        return mentions_push(command)
     current, pipelines = planned
-    branch_changed = False
+    branch_unknown = False
     for pipeline in pipelines:
         for tokens in pipeline:
-            subcommand = git_subcommand(tokens)
-            branch_changed = branch_changed or subcommand in BRANCH_CHANGING_GIT
-            if subcommand != "push":
+            words = without_assignments(tokens)
+            if not words or words[0] != "git":
+                if mentions_push(" ".join(tokens)):
+                    return True
+                branch_unknown = branch_unknown or not (
+                    words
+                    and (
+                        words[0] in QUIET_COMMANDS
+                        or is_stdin_filter(words)
+                        or is_safe_gh_read(shlex.join(words))
+                    )
+                )
                 continue
-            invocation = safe_git_invocation(tokens[1:], str(current))
-            target = invocation[0] if invocation is not None else str(current)
-            if branch_changed or current_branch(target) in PROTECTED_BRANCHES:
+            target = git_target(tokens, current)
+            subcommand = git_command(words[1:])[0]
+            if subcommand not in GIT_BUILTINS:
+                alias = git_alias(subcommand or "", target or str(current))
+                if alias is None or alias.startswith("!") or mentions_push(alias):
+                    return True
+            if subcommand == "push" and (
+                branch_unknown
+                or target is None
+                or current_branch(target) in PROTECTED_BRANCHES
+            ):
                 return True
+            branch_unknown = branch_unknown or subcommand not in BRANCH_KEEPING_GIT
     return False
+
+
+def mentions_push(text: str) -> bool:
+    return "push" in re.sub(r"['\"\\]", "", text)

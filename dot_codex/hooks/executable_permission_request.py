@@ -35,6 +35,9 @@ def main() -> int:
     event_name = event.get("hook_event_name")
     if not isinstance(command, str) or not isinstance(cwd, str):
         return 0
+    # Paths with NUL cannot reach git, and nothing is approved for such input.
+    if "\x00" in command + cwd:
+        return 0
     reason = denial_reason(command, cwd) or segment_denial_reason(command, cwd)
     if reason is not None:
         if event_name == "PreToolUse":

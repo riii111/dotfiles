@@ -13,6 +13,8 @@ repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 hook="$repo_root/dot_local/share/agent-policy/executable_claude_pre_tool_use.py"
 runner="$repo_root/tests/run-codex-python-with-home.py"
 test_root="$(mktemp -d "${TMPDIR:-/tmp}/claude-command-hook-test.XXXXXX")"
+# The policy only follows `cd` when the logical path is the physical one.
+test_root="$(cd "$test_root" && pwd -P)"
 test_home="$test_root/home"
 tmpdir="$test_home/ghq/github.com/riii111/test"
 trap 'rm -rf "$test_root"' EXIT
@@ -41,7 +43,9 @@ for command in \
 	'git log --oneline 2>&1 | tail -2; git status -sb' \
 	"cd $tmpdir && git fetch origin" \
 	'gh pr checks 1 | tail -3' \
-	'git push -u origin HEAD 2>&1 | tail -1'; do
+	'git push -u origin HEAD 2>&1 | tail -1' \
+	'git status ;' \
+	'git log -1 3>/dev/null'; do
 	output="$(pre_tool_use "$command")"
 	decision_is allow <<<"$output"
 	jq -e --arg command "$command" \
@@ -96,7 +100,57 @@ for command in \
 	'git status || cd ../test; git push origin HEAD'; do
 	hook_cwd="$main_repo" pre_tool_use "$command" | decision_is ask
 done
-hook_cwd="$main_repo" pre_tool_use 'cd ../test && git push origin HEAD' | decision_is allow
+hook_cwd="$main_repo" pre_tool_use "cd $tmpdir && git push origin HEAD" | decision_is allow
+
+# Inputs from the verification of the narrowed design.
+evil="$test_root/evil"
+mkdir -p "$evil"
+git -C "$evil" init -q
+git -C "$evil" switch -q -c main
+ln -s "$tmpdir" "$evil/S"
+for command in \
+	'cd ./S/.. && git status' \
+	'cd S && git status' \
+	'cd ./S && git status'; do
+	output="$(hook_cwd="$evil" pre_tool_use "$command")"
+	test -z "$output"
+done
+hook_cwd="$evil/S" pre_tool_use 'cd .. && git push origin HEAD' | decision_is ask
+output="$(hook_cwd="$evil/S" pre_tool_use 'cd ./. && git status')"
+test -z "$output"
+git -C "$tmpdir" config alias.pf 'push --force-with-lease'
+git -C "$tmpdir" config alias.st status
+# shellcheck disable=SC2016 # Literal expansions are hook inputs, not test-shell operations.
+for command in \
+	'GIT_PAGER=cat git switch main && git push origin HEAD' \
+	'git rebase origin/main main && git push origin HEAD' \
+	"git -P -C $main_repo push" \
+	"git -c color.ui=never -C $main_repo push" \
+	"git --git-dir=$main_repo/.git push" \
+	"GIT_DIR=$main_repo/.git git push" \
+	'git symbolic-ref HEAD refs/heads/main && git push origin HEAD' \
+	'gh pr checkout 1 && git push origin HEAD' \
+	"pushd $main_repo && git push" \
+	'/usr/bin/git push origin main' \
+	'command git push' \
+	'env git push' \
+	"sh -c 'git push'" \
+	'echo | xargs git push' \
+	"git 'push' origin HEAD; echo \$HOME" \
+	$'git pu\\sh' \
+	'git pf'; do
+	pre_tool_use "$command" | decision_is ask
+done
+for command in \
+	'git st' \
+	$'git status >\n/dev/null' \
+	'git status | head -٢'; do
+	output="$(pre_tool_use "$command")"
+	test -z "$output"
+done
+HOME="$test_home" jq -n --arg cwd "$tmpdir" \
+	'{cwd:$cwd,hook_event_name:"PreToolUse",tool_input:{command:"git -C a\u0000b status"}}' |
+	HOME="$test_home" python3 "$runner" "$hook" "$test_home" | decision_is ask
 
 git -C "$tmpdir" switch -q -c main
 for command in \
