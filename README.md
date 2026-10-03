@@ -124,6 +124,12 @@ sub: Claude Code
 
 `~/.codex/config.toml` is rewritten by the Codex desktop app, so it is `.chezmoiignore`d and not applied. `dot_codex/config.toml.tmpl` is kept only as a hand-maintained reference for base settings; edit the live file directly.
 
+### タスクの独立レビュー
+
+`reviewctl`はharnexus経由で既存のCodex Appに接続し、reviewerの作成・再レビュー・回答取得を行う。harnexusのlink socket対応版を導入してAppを開き、`reviewctl doctor`で接続を確認する。
+
+使い方と依頼JSONは[task-review-cycle](dot_codex/skills/task-review-cycle/SKILL.md)を参照する。接続機能が未導入の環境では、SKILLに記載された既存ツールの手順を使う。
+
 ### Codex command policy
 
 `dot_codex/rules/default.rules` controls commands that need to run outside the sandbox. Keep `sandbox_workspace_write.network_access = false` in the live `~/.codex/config.toml`; otherwise network commands can run inside the sandbox without consulting these rules.

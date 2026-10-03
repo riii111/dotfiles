@@ -21,12 +21,7 @@ description: |
    - ユーザーがmodelまたはreasoning effortを明示した場合だけ、対応する値をその指定で置き換える。
    - `prompt`にタスク管理元、開始対象、親orchestration Task ID（指定されている場合）を含める。
    - `prompt`にworkerの実行主体（Claude / Codex）を明記し、下記のSKILLリンクと読込指示を入れる。リポジトリ規約を読んで割り当てられたGit worktreeで実装するよう依頼する。
-   - `prompt`には作業順の要点を含め、詳細は`$task-worker`に従わせる。
-     - 編集・指摘修正中は影響箇所を検証する。
-       初回レビュー前にbase branchを一度fetchしてreview baseを固定し、commit済みheadをローカル固定SHA差分で独立レビューする。
-     - LGTM後に所定の全検証を行い、review済みheadを通常のpushで公開してDraft PRを作成または更新する。
-       PR headとの一致を確認してからCI成功まで確認する。
-     - 最終検証またはCIでコードを直した場合は、新headを再レビューし、全検証・push・PR head確認・CIをやり直す。
+   - 作業と完了条件はリンクで渡すtask-workerに従わせる。検証・レビュー・PR作成の詳細を起動promptへ重複して書かない。
 3. `codex_app__create_thread`を一度呼ぶ。
 
 ## SKILLの受け渡し

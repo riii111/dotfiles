@@ -12,7 +12,6 @@ description: |
 再開時に必要なら同じタスク管理元を読み直す。
 割り当てられたGit worktreeで目的を表すConventionalな英語branchを作り、実装する。
 実装後は候補をcommitし、[task-review-cycle](../task-review-cycle/SKILL.md)を読んでローカル固定SHA差分の独立レビューを受ける。
-Claude workerはharnexusのツールでreview Taskを作成し、待機・結果読取・修正・再レビューを続ける。Codex workerはreviewerからの返信で再開する。
 Blocking が解消されLGTMになるまで同じreview Taskで続ける。Non-blocking は任意とし、未対応だけで再レビューを繰り返さない。
 親への通知や完了記録は扱わない。
 
