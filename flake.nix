@@ -116,6 +116,7 @@
             nodejs
             pgcli
             pngpaste
+            pnpm
             postgresql_18
             pspg
             ripgrep
