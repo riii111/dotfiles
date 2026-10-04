@@ -19,3 +19,5 @@
 
 workerは`Codex`または`Claude`。checkoutはworkerの絶対パス。未push候補はPRがあってもpushedをfalseにし、PR未作成ならprをnullにする。
 contextには実装者の思考履歴・過去サイクル・前回の指摘を入れない。
+再依頼でもcontextは省略せず、現在の前提を完全に保存する。prepareは送信受理後にrecordしたcontextと比較して再送の要否を決める。
+依頼JSONはレビュー結果を受け取るまで保持し、送信後に候補や前提を更新しない。

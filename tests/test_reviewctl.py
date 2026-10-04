@@ -94,7 +94,7 @@ class ReviewCandidateTest(ReviewFixture):
 
     def test_context_survives_template_rendering(self):
         data = self.write_request()
-        text = reviewctl.review_prompt(data, ROOT / "dot_codex/skills")
+        text = reviewctl.review_prompt(data, ROOT / "dot_codex/skills", self.request)
         self.assertIn(self.data["context"], text)
         self.assertIn(str(self.root), text)
         self.assertIn(self.head + "..." + self.head, text)
@@ -160,6 +160,67 @@ class ReviewSessionTest(ReviewFixture):
         )
         self.assertEqual(code, 0, err)
         self.assertEqual(json.loads(out)["arguments"]["thinking"], "high")
+
+    def test_rerun_omits_unchanged_context_but_keeps_current_candidate(self):
+        self.assertEqual(self.record()[0], 0)
+        self.data.update(
+            head=self.commit("test: review fixes"),
+            pushed=True,
+            pr="https://github.com/example/repo/pull/1",
+        )
+        self.write_request_file()
+        code, out, err = self.invoke("prepare", "--request", str(self.request))
+        self.assertEqual(code, 0, err)
+        arguments = json.loads(out)["arguments"]
+        self.assertEqual(arguments["threadId"], "reviewer")
+        prompt = arguments["prompt"]
+        self.assertNotIn(self.data["context"], prompt)
+        for value in (
+            self.data["workerId"],
+            self.data["checkout"],
+            self.data["pr"],
+            self.head + "..." + self.data["head"],
+            str(self.request.resolve()),
+        ):
+            self.assertIn(value, prompt)
+        saved = json.loads(self.request.read_text())
+        self.assertEqual(saved["context"], self.data["context"])
+        for reference in ("reviewer.md", "reply-codex.md"):
+            path = ROOT / "dot_codex/skills/task-review-cycle/references" / reference
+            self.assertIn(str(path.resolve()), prompt)
+            self.assertTrue(path.is_file())
+
+    def test_changed_context_is_sent_until_accepted_candidate_is_recorded(self):
+        self.assertEqual(self.record()[0], 0)
+        self.data["context"] = "新しい要件と {braces} と $values"
+        self.write_request_file()
+        for _ in range(2):
+            code, out, err = self.invoke("prepare", "--request", str(self.request))
+            self.assertEqual(code, 0, err)
+            self.assertIn(self.data["context"], json.loads(out)["arguments"]["prompt"])
+        self.assertEqual(self.record()[0], 0)
+        code, out, err = self.invoke("prepare", "--request", str(self.request))
+        self.assertEqual(code, 0, err)
+        self.assertNotIn(self.data["context"], json.loads(out)["arguments"]["prompt"])
+
+    def test_full_context_restores_instructions_without_replacing_reviewer(self):
+        for worker in ("Codex", "Claude"):
+            with self.subTest(worker=worker):
+                (self.root / "state.json").unlink(missing_ok=True)
+                self.data["worker"] = worker
+                self.write_request_file()
+                code, out, err = self.invoke("prepare", "--request", str(self.request))
+                self.assertEqual(code, 0, err)
+                initial_prompt = json.loads(out)["arguments"]["prompt"]
+                self.assertEqual(self.record()[0], 0)
+                code, out, err = self.invoke(
+                    "prepare", "--request", str(self.request), "--full-context"
+                )
+                self.assertEqual(code, 0, err)
+                request = json.loads(out)
+                self.assertEqual(request["tool"], "send_message_to_thread")
+                self.assertEqual(request["arguments"]["threadId"], "reviewer")
+                self.assertEqual(request["arguments"]["prompt"], initial_prompt)
 
     def test_record_rejects_provisional_self_and_different_reviewer(self):
         for reviewer in ("client-new-thread:queued", "worker"):

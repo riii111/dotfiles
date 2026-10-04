@@ -7,7 +7,7 @@ description: |
 
 # Task Review Cycle
 
-commit済み候補をfreshなCodex reviewerで独立レビューし、Blockingが解消されるまで同じreview Taskで続ける。Non-blockingは任意とする。review基点と完了条件は[task-worker](../task-worker/SKILL.md)に従う。
+commit済み候補をfreshなCodex reviewerへ渡し、以後は同じreview Taskで続ける。修正・検証・review基点・完了条件は[task-worker](../task-worker/SKILL.md)に従う。
 
 ## 依頼と結果の受取
 
@@ -16,7 +16,11 @@ worktreeに`.reviewctl/.gitignore`（内容は`*`と改行）を作成してか�
 
 1. `$HOME/bin/reviewctl prepare --request .reviewctl/request.json`を実行し、返されたtool名とargumentsを下表のツールへ渡す。ユーザーがモデル設定を指定した場合だけ`--model`・`--thinking`を渡す。
 2. 送信受理と確定threadIdを確認し、`$HOME/bin/reviewctl record --request .reviewctl/request.json --reviewer-thread-id <確定ID>`で記録する。Codexはturnを終了し、Claudeはwait/readを続ける。
-3. 最終回答のbase/headが依頼と一致することを確認する。Blockingをまとめて修正・影響検証・commitし、同じJSONのheadとpush/PR状態を更新して再依頼する。判定保留なら不足を解消する。
+3. 最終回答のbase/headが依頼と一致することを確認する。修正後は同じJSONのheadとpush/PR状態、変更した前提を更新して再依頼する。判定保留なら不足を解消する。
+
+初回は前提とレビュー手順を渡し、再依頼は最新候補と変更した前提を渡す。
+依頼JSONのcontextには毎回完全な前提を残す。reviewctlが記録済み候補と比較し、変わらないcontextの再送を省く。
+履歴不足ならreviewerは依頼JSONと指定された手順ファイルから復元する。全文の再送が必要ならprepareに`--full-context`を付ける。
 
 | worker | 送信ツール | 結果の受取 |
 | --- | --- | --- |
@@ -31,4 +35,3 @@ Claude workerのreviewerはCodexモデルに限られる。Claudeモデルを指
 
 `$HOME/bin/reviewctl state`でreviewerと候補を確認する。CLIはAPIを呼ばず、状態と依頼JSONはGit管理外の`.reviewctl/`に置く。
 実際の競合解消などで上流を取り込んだ場合だけJSONのbaseを更新し、prepareとrecordの両方に`--update-base`を付ける。同じreviewerを維持し、更新した範囲をレビューする。
-明示許可なしにReady化やmergeを行わない。

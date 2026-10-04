@@ -1,4 +1,4 @@
 interface:
   display_name: "Task Review Cycle"
-  short_description: "Draft PRのレビューと修正をLGTMまで反復する。"
-  default_prompt: "$task-review-cycleを使い、担当PRのレビュー工程を再開してください。"
+  short_description: "ローカル固定SHA差分の独立レビューを依頼し、結果を受け取る。"
+  default_prompt: "$task-review-cycleを使い、担当候補の独立レビュー工程を開始・再開してください。"

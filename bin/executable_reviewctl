@@ -64,14 +64,22 @@ def candidate(path):
     return data
 
 
-def review_prompt(data, skills):
+def review_prompt(data, skills, request_path, previous=None, full_context=False):
     skill = skills / "ai-code-review" / "SKILL.md"
     references = skills / "task-review-cycle" / "references"
-    template = references / "reviewer.md"
+    instructions = references / "reviewer.md"
+    followup = previous is not None and not full_context
+    template = references / ("rereviewer.md" if followup else "reviewer.md")
     reply = references / ("reply-" + data["worker"].lower() + ".md")
-    if not all(path.is_file() for path in (skill, template, reply)):
+    if not all(path.is_file() for path in (skill, instructions, template, reply)):
         raise ReviewError("ai-code-review or reviewer templates are not installed")
-    return (template.read_text() + "\n" + reply.read_text()).format(
+    context = data["context"]
+    if followup and previous.get("context") == context:
+        context = "前回依頼と同じ。"
+    body = template.read_text()
+    if not followup:
+        body += "\n" + reply.read_text()
+    return body.format(
         skill_path=str(skill.resolve()),
         worker=data["worker"],
         worker_thread_id=data["workerId"],
@@ -80,7 +88,10 @@ def review_prompt(data, skills):
         push_state="push済み" if data["pushed"] else "未push",
         base=data["base"],
         head=data["head"],
-        context=data["context"],
+        context=context,
+        request_path=str(request_path.resolve()),
+        instructions_path=str(instructions.resolve()),
+        reply_path=str(reply.resolve()),
     )
 
 
@@ -157,6 +168,11 @@ def main(argv=None):
     prepare.add_argument("--model")
     prepare.add_argument("--thinking")
     prepare.add_argument(
+        "--full-context",
+        action="store_true",
+        help="resend all context and instructions to the existing reviewer",
+    )
+    prepare.add_argument(
         "--update-base",
         action="store_true",
         help="allow a base already integrated into head",
@@ -195,7 +211,15 @@ def main(argv=None):
                 output = {"reviewer": reviewer, "candidate": data}
                 save_state(path, output)
             else:
-                arguments = {"prompt": review_prompt(data, args.skills_root)}
+                arguments = {
+                    "prompt": review_prompt(
+                        data,
+                        args.skills_root,
+                        args.request,
+                        previous=state["candidate"] if state else None,
+                        full_context=args.full_context,
+                    )
+                }
                 if state:
                     tool = "send_message_to_thread"
                     arguments["threadId"] = state["reviewer"]
