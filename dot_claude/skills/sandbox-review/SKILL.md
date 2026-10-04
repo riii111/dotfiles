@@ -28,7 +28,7 @@ description: Claude Code の権限確認・auto モードの拒否・Bash サン
    - `sandbox.network.allowedDomains`：毎回確認が出る、信頼できるドメイン。
    - 設定では解消しない：一回限りの操作、調査中の誤検出。
 4. 回数が 2 回未満のものや、1 セッションに偏っているものは候補にしない。セッション数はコマンドごとの括弧内の数で見る。
-5. 「Auto mode denials by cause」で、分類器の利用不可や判定不能（not a settings issue）による拒否は設定変更の候補にしない。規則名が付いた拒否だけを対象にする。
+5. 「Auto mode denials by cause and command」で、分類器の利用不可や判定不能（not a settings issue）による行は設定変更の候補にしない。規則名が付いた行だけを、その行の回数とセッション数で判断する。
 6. 利用者が不満の具体例を挙げていれば、集計よりその例を優先して原因を調べる。
 
 ## 制約

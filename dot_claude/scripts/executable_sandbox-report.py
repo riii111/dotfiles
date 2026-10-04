@@ -176,17 +176,21 @@ def scan_events(path, since, home=str(Path.home())):
         if stamp < since or event not in events:
             continue
         report["places"][event][(record.get("cwd") or "?").replace(home, "~", 1)] += 1
-        if event == "PermissionDenied":
-            report["causes"][denial_cause(record.get("reason"))] += 1
-        if record.get("tool") != "Bash":
-            report["shapes"][event][f"tool: {record.get('tool')}"] += 1
-            continue
-        command = record.get("command", "")
-        shape = command_shape(command)
-        if record.get("unsandboxed"):
-            shape += " (rerun outside the sandbox)"
+        if record.get("tool") == "Bash":
+            command = record.get("command", "")
+            shape = command_shape(command)
+            if record.get("unsandboxed"):
+                shape += " (rerun outside the sandbox)"
+            head = command_head(command)
+        else:
+            shape = head = f"tool: {record.get('tool')}"
         report["shapes"][event][shape] += 1
-        head = command_head(command)
+        if event == "PermissionDenied":
+            # Keep each denial's cause with its command, so classifier outages
+            # never count toward a settings candidate.
+            cause = denial_cause(record.get("reason"))
+            report["causes"][cause] += 1
+            head = f"{cause} | {head}"
         sessions[event].setdefault(head, set()).add(record.get("session"))
         report["commands"][event][head] += 1
     # One session repeating a command weighs less than many sessions hitting it.
@@ -228,12 +232,12 @@ def main(argv=None):
     reruns, failed, writes, hosts = scan(records, str(Path.home()))
     events = scan_events(args.events, time.time() - args.days * 86400)
     print(f"# Sandbox report: last {args.days} days, {len(records)} session records\n")
-    for event, label in (
-        ("PermissionRequest", "Permission prompts"),
-        ("PermissionDenied", "Auto mode denials"),
+    for event, label, by_command in (
+        ("PermissionRequest", "Permission prompts", "by command"),
+        ("PermissionDenied", "Auto mode denials", "by cause and command"),
     ):
         print_section(f"{label} by command shape", events["shapes"][event], args.limit)
-        print_section(f"{label} by command", events["commands"][event], args.limit)
+        print_section(f"{label} {by_command}", events["commands"][event], args.limit)
         print_section(
             f"{label} by working directory", events["places"][event], args.limit
         )

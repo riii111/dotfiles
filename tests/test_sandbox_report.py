@@ -156,11 +156,58 @@ class SandboxReportTest(unittest.TestCase):
         )
         self.assertEqual(
             report["commands"]["PermissionRequest"],
-            {"for  (1 sessions)": 1, "git push  (2 sessions)": 2},
+            {
+                "for  (1 sessions)": 1,
+                "git push  (2 sessions)": 2,
+                "tool: WebFetch  (1 sessions)": 1,
+            },
         )
         self.assertEqual(report["places"]["PermissionRequest"], {"~/ghq/repo": 4})
         self.assertEqual(report["shapes"]["PermissionDenied"], {"single command": 1})
         self.assertEqual(report["causes"], {"rule: Data Exfiltration": 1})
+        self.assertEqual(
+            report["commands"]["PermissionDenied"],
+            {"rule: Data Exfiltration | gh pr  (1 sessions)": 1},
+        )
+
+    def test_denials_keep_each_cause_with_its_command(self):
+        def denials(merge_reason, push_reason):
+            return self.scan_events(
+                [
+                    event(
+                        "PermissionDenied",
+                        "gh pr merge 1",
+                        session=s,
+                        reason=merge_reason,
+                    )
+                    for s in ("a", "b")
+                ]
+                + [
+                    event(
+                        "PermissionDenied",
+                        "git push origin HEAD",
+                        session=s,
+                        reason=push_reason,
+                    )
+                    for s in ("a", "b")
+                ]
+            )["commands"]["PermissionDenied"]
+
+        outage, rule = "Classifier unavailable", "[Data Exfiltration]"
+        self.assertEqual(
+            denials(outage, rule),
+            {
+                "classifier unavailable (not a settings issue) | gh pr  (2 sessions)": 2,
+                "rule: Data Exfiltration | git push  (2 sessions)": 2,
+            },
+        )
+        self.assertEqual(
+            denials(rule, outage),
+            {
+                "rule: Data Exfiltration | gh pr  (2 sessions)": 2,
+                "classifier unavailable (not a settings issue) | git push  (2 sessions)": 2,
+            },
+        )
 
     def test_denial_causes_separate_classifier_failures(self):
         report = self.scan_events(
