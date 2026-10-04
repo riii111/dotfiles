@@ -244,6 +244,18 @@
       "Bash(gcloud secrets versions access*)"
     ]
   },
+  "autoMode": {
+    "environment": [
+      "$defaults",
+{{- if eq .type "work" }}
+      "Source control: github.com/{{ .gh_work_org }} and github.com/riii111, and every repository under them",
+{{- else }}
+      "Source control: github.com/riii111 and github.com/{{ .side_work_org }}, and every repository under them",
+{{- end }}
+      "Trusted repo: local clones under {{ .chezmoi.homeDir }}/ghq/github.com/ for those organizations, including their git worktrees under .claude/worktrees and {{ .chezmoi.homeDir }}/.codex/worktrees, are the user's own working copies",
+      "Claude Code session scratchpads under /private/tmp/claude-*/ and the session $TMPDIR are temporary space owned by the user for the current task"
+    ]
+  },
   "sandbox": {
     "enabled": true,
     "autoAllowBashIfSandboxed": true,
@@ -311,6 +323,30 @@
           {
             "type": "command",
             "command": ".claude/hooks/notify-impl-review.sh"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 {{ .chezmoi.homeDir }}/.claude/hooks/log-permission-event.py",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PermissionDenied": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 {{ .chezmoi.homeDir }}/.claude/hooks/log-permission-event.py",
+            "timeout": 5
           }
         ]
       }

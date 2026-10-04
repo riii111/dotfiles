@@ -1,9 +1,12 @@
 import importlib.machinery
 import importlib.util
+import io
 import json
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -99,6 +102,117 @@ class SandboxReportTest(unittest.TestCase):
         )
         self.assertEqual(hosts, {"example.com": 1})
         self.assertEqual(failed, {})
+
+    def test_command_shape(self):
+        shape = self.report.command_shape
+        self.assertEqual(shape("for f in a b; do echo $f; done"), "loop")
+        self.assertEqual(shape("echo $(git rev-parse HEAD)"), "command substitution")
+        self.assertEqual(shape("S=/tmp/x; ls $S"), "variable assignment")
+        self.assertEqual(shape("git status && git diff | head"), "compound")
+        self.assertEqual(shape("git status"), "single command")
+
+    def test_counts_recorded_prompts_and_denials(self):
+        events = [
+            {
+                "time": "2026-10-04T10:00:00+0900",
+                "event": "PermissionRequest",
+                "tool": "Bash",
+                "command": "for f in a; do gh pr view; done",
+            },
+            {
+                "time": "2026-10-04T10:01:00+0900",
+                "event": "PermissionRequest",
+                "tool": "Bash",
+                "command": "git push origin main",
+                "unsandboxed": True,
+            },
+            {
+                "time": "2026-10-04T10:02:00+0900",
+                "event": "PermissionDenied",
+                "tool": "Bash",
+                "command": "gh pr merge 1",
+            },
+            {
+                "time": "2026-10-04T10:03:00+0900",
+                "event": "PermissionRequest",
+                "tool": "WebFetch",
+            },
+            {
+                "time": "2020-01-01T00:00:00+0900",
+                "event": "PermissionRequest",
+                "tool": "Bash",
+                "command": "old",
+            },
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "events.jsonl"
+            path.write_text("\n".join(json.dumps(e) for e in events) + "\nnot json\n")
+            since = self.report.time.mktime((2026, 10, 1, 0, 0, 0, 0, 0, -1))
+            shapes, commands = self.report.scan_events(path, since)
+        self.assertEqual(
+            shapes["PermissionRequest"],
+            {
+                "loop": 1,
+                "single command (rerun outside the sandbox)": 1,
+                "tool: WebFetch": 1,
+            },
+        )
+        self.assertEqual(commands["PermissionRequest"], {"for": 1, "git push": 1})
+        self.assertEqual(shapes["PermissionDenied"], {"single command": 1})
+
+    def test_missing_event_log_is_empty(self):
+        shapes, commands = self.report.scan_events(Path("/nonexistent/events.jsonl"), 0)
+        self.assertEqual(sum(shapes["PermissionRequest"].values()), 0)
+        self.assertEqual(sum(commands["PermissionDenied"].values()), 0)
+
+
+class LogPermissionEventTest(unittest.TestCase):
+    def setUp(self):
+        path = ROOT / "dot_claude" / "hooks" / "executable_log-permission-event.py"
+        loader = importlib.machinery.SourceFileLoader("log_permission_event", str(path))
+        spec = importlib.util.spec_from_loader(loader.name, loader)
+        assert spec is not None and spec.loader is not None
+        self.hook = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.hook)
+
+    def run_hook(self, payload, log):
+        self.hook.LOG = log
+        stdin = io.StringIO(
+            payload if isinstance(payload, str) else json.dumps(payload)
+        )
+        stdout = io.StringIO()
+        with mock.patch.object(self.hook.sys, "stdin", stdin), redirect_stdout(stdout):
+            self.assertEqual(self.hook.main(), 0)
+        return stdout.getvalue()
+
+    def test_records_bash_prompt_without_deciding(self):
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / "state" / "events.jsonl"
+            output = self.run_hook(
+                {
+                    "hook_event_name": "PermissionRequest",
+                    "session_id": "s1",
+                    "cwd": "/repo",
+                    "permission_mode": "auto",
+                    "tool_name": "Bash",
+                    "tool_input": {
+                        "command": "x" * 600,
+                        "dangerouslyDisableSandbox": True,
+                    },
+                },
+                log,
+            )
+            record = json.loads(log.read_text())
+        self.assertEqual(output, "")
+        self.assertEqual(record["event"], "PermissionRequest")
+        self.assertEqual(len(record["command"]), 500)
+        self.assertTrue(record["unsandboxed"])
+
+    def test_bad_input_is_ignored(self):
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / "events.jsonl"
+            self.assertEqual(self.run_hook("not json", log), "")
+            self.assertFalse(log.exists())
 
 
 if __name__ == "__main__":

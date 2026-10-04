@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Summarize where the Claude Code Bash sandbox got in the way.
+"""Summarize where Claude Code permissions and the Bash sandbox got in the way.
 
-Reads session records under ~/.claude/projects and counts commands rerun
-outside the sandbox, paths the sandbox refused to write, and hosts it refused
-to reach. Command text and paths are printed; tool output is not.
+Reads the permission prompts and auto mode denials that the
+log-permission-event hook records, and session records under ~/.claude/projects
+for commands rerun outside the sandbox, paths the sandbox refused to write, and
+hosts it refused to reach. Command text and paths are printed; tool output is
+not.
 """
 
 import argparse
@@ -21,6 +23,7 @@ QUOTED_PATH = re.compile(
     r"'(/[^'\n]+)'|\"(/[^\"\n]+)\"|(?:on|in|create|open) (/[^\s:'\")]+)"
 )
 NETWORK_DENIAL = re.compile(r"deny network-outbound ([^\s:\\]+)")
+EVENT_LOG = Path.home() / ".local" / "state" / "claude" / "permission-events.jsonl"
 
 
 def command_head(command):
@@ -125,6 +128,46 @@ def scan(paths, home):
     return reruns, failed_commands, write_denials, hosts
 
 
+def command_shape(command):
+    """The shell form that most often explains why a command was not approved."""
+    if re.search(r"(^|[;&|(]\s*|\n)\s*(for|while|until)\s", command):
+        return "loop"
+    if "$(" in command or "`" in command:
+        return "command substitution"
+    if re.search(r"(^|[;&|]\s*|\n)\s*[A-Za-z_][A-Za-z0-9_]*=", command):
+        return "variable assignment"
+    if re.search(r"&&|\|\||;|\||\n", command):
+        return "compound"
+    return "single command"
+
+
+def scan_events(path, since):
+    """Prompts and denials recorded by the log-permission-event hook."""
+    shapes = {"PermissionRequest": Counter(), "PermissionDenied": Counter()}
+    commands = {"PermissionRequest": Counter(), "PermissionDenied": Counter()}
+    if not path.exists():
+        return shapes, commands
+    for line in path.read_text(errors="ignore").splitlines():
+        try:
+            record = json.loads(line)
+            stamp = time.mktime(time.strptime(record["time"], "%Y-%m-%dT%H:%M:%S%z"))
+        except (json.JSONDecodeError, KeyError, ValueError):
+            continue
+        event = record.get("event")
+        if stamp < since or event not in shapes:
+            continue
+        if record.get("tool") != "Bash":
+            shapes[event][f"tool: {record.get('tool')}"] += 1
+            continue
+        command = record.get("command", "")
+        shape = command_shape(command)
+        if record.get("unsandboxed"):
+            shape += " (rerun outside the sandbox)"
+        shapes[event][shape] += 1
+        commands[event][command_head(command)] += 1
+    return shapes, commands
+
+
 def recent_records(projects, days):
     since = time.time() - days * 86400
     return [p for p in projects.rglob("*.jsonl") if p.stat().st_mtime >= since]
@@ -146,11 +189,21 @@ def main(argv=None):
     parser.add_argument(
         "--projects", type=Path, default=Path.home() / ".claude/projects"
     )
+    parser.add_argument("--events", type=Path, default=EVENT_LOG)
     args = parser.parse_args(argv)
 
     records = recent_records(args.projects, args.days)
     reruns, failed, writes, hosts = scan(records, str(Path.home()))
+    shapes, commands = scan_events(args.events, time.time() - args.days * 86400)
     print(f"# Sandbox report: last {args.days} days, {len(records)} session records\n")
+    print_section(
+        "Permission prompts by command shape", shapes["PermissionRequest"], args.limit
+    )
+    print_section("Commands that prompted", commands["PermissionRequest"], args.limit)
+    print_section(
+        "Auto mode denials by command shape", shapes["PermissionDenied"], args.limit
+    )
+    print_section("Commands auto mode denied", commands["PermissionDenied"], args.limit)
     print_section("Commands rerun outside the sandbox", reruns, args.limit)
     print_section("Sandboxed commands that failed to write", failed, args.limit)
     print_section("Paths the sandbox refused to write", writes, args.limit)
