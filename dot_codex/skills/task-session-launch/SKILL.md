@@ -19,27 +19,23 @@ description: |
    - `title`にPR titleやtask titleを含めない。
    - `model`を`claude-opus-5-5`、`thinking`を`medium`にする。
    - ユーザーがmodelまたはreasoning effortを明示した場合だけ、対応する値をその指定で置き換える。
-   - `prompt`は下記の引き継ぎ情報とtask-workerリンクで組み立てる。
+   - `prompt`は[起動依頼](references/worker.md)を使い、下記の引き継ぎ情報を埋める。
 3. `codex_app__create_thread`を一度呼ぶ。
 
 ## 起動prompt
 
-workerの実行主体（Claude / Codex）、開始対象、タスク管理元、許可された到達点を伝える。
+テンプレートのworkerはClaude / Codex、identifierは開始対象、task_sourceはタスク管理元、authorized_scopeはユーザーが許可した到達点を指定する。
 管理元から読める本文や、適用されるAGENTS.mdの規約、モデル設定、task-workerの手順・完了条件は転載しない。
-次の情報は必要な場合だけ加える。
+additional_contextには次の情報を必要な場合だけ加え、不要なら欄ごと省く。
 
 - 管理元にないユーザーとの合意、対象外、追加の許可・制約。
 - 未mergeの依存成果のbranch・SHA・PR base、並行作業との担当境界。
 - worktreeへ入らない資料や規約の絶対パス、親orchestration Task ID。
 - 調査の入口となるファイルパスと、判断に影響する未確認事項。コードから再取得できる説明は省く。
 
-同じインストール先の`task-worker/SKILL.md`の実在を確認し、絶対パスのリンクを渡す。
-Claude workerではharnexusが本文を添付するため、裸のSKILL名ではなく下記の形式を使う。
+同じインストール先の`task-worker/SKILL.md`の実在を確認し、その絶対パスをworker_skill_pathに指定する。
+Claude workerではharnexusが本文を添付するため、テンプレートのSKILLリンク形式を維持する。
 task-review-cycleはtask-workerからレビュー段階で読む。
-
-```text
-[$task-worker](/Users/a81803/.codex/skills/task-worker/SKILL.md)
-```
 
 ## 制約
 
