@@ -20,3 +20,4 @@
 .config/nvim/lua/plugins/noice.lua
 bin/gh-pr-comments
 bin/gh-read
+.claude/hooks/ask-push-on-protected-branch.sh
