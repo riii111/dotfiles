@@ -111,77 +111,117 @@ class SandboxReportTest(unittest.TestCase):
         self.assertEqual(shape("git status && git diff | head"), "compound")
         self.assertEqual(shape("git status"), "single command")
 
-    def test_counts_recorded_prompts_and_denials(self):
-        events = [
-            {
-                "time": "2026-10-04T10:00:00+0900",
-                "event": "PermissionRequest",
-                "tool": "Bash",
-                "command": "for f in a; do gh pr view; done",
-            },
-            {
-                "time": "2026-10-04T10:01:00+0900",
-                "event": "PermissionRequest",
-                "tool": "Bash",
-                "command": "git push origin main",
-                "unsandboxed": True,
-            },
-            {
-                "time": "2026-10-04T10:02:00+0900",
-                "event": "PermissionDenied",
-                "tool": "Bash",
-                "command": "gh pr merge 1",
-            },
-            {
-                "time": "2026-10-04T10:03:00+0900",
-                "event": "PermissionRequest",
-                "tool": "WebFetch",
-            },
-            {
-                "time": "2020-01-01T00:00:00+0900",
-                "event": "PermissionRequest",
-                "tool": "Bash",
-                "command": "old",
-            },
-        ]
+    def scan_events(self, events, since="2026-10-01T00:00:00+09:00"):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "events.jsonl"
             path.write_text("\n".join(json.dumps(e) for e in events) + "\nnot json\n")
-            since = self.report.datetime.fromisoformat(
-                "2026-10-01T00:00:00+09:00"
-            ).timestamp()
-            shapes, commands = self.report.scan_events(path, since)
+            cutoff = self.report.datetime.fromisoformat(since).timestamp()
+            return self.report.scan_events(path, cutoff, home=HOME)
+
+    def test_counts_recorded_prompts_and_denials(self):
+        report = self.scan_events(
+            [
+                event(
+                    "PermissionRequest", "for f in a; do gh pr view; done", session="s1"
+                ),
+                event(
+                    "PermissionRequest",
+                    "git push origin main",
+                    session="s1",
+                    unsandboxed=True,
+                ),
+                event("PermissionRequest", "git push origin main", session="s2"),
+                event(
+                    "PermissionDenied",
+                    "gh pr merge 1",
+                    reason="[Data Exfiltration] moves data",
+                ),
+                {
+                    "time": "2026-10-04T10:03:00+0900",
+                    "event": "PermissionRequest",
+                    "tool": "WebFetch",
+                    "cwd": f"{HOME}/ghq/repo",
+                },
+                event("PermissionRequest", "old", time="2020-01-01T00:00:00+0900"),
+            ]
+        )
         self.assertEqual(
-            shapes["PermissionRequest"],
+            report["shapes"]["PermissionRequest"],
             {
                 "loop": 1,
                 "single command (rerun outside the sandbox)": 1,
+                "single command": 1,
                 "tool: WebFetch": 1,
             },
         )
-        self.assertEqual(commands["PermissionRequest"], {"for": 1, "git push": 1})
-        self.assertEqual(shapes["PermissionDenied"], {"single command": 1})
+        self.assertEqual(
+            report["commands"]["PermissionRequest"],
+            {"for  (1 sessions)": 1, "git push  (2 sessions)": 2},
+        )
+        self.assertEqual(report["places"]["PermissionRequest"], {"~/ghq/repo": 4})
+        self.assertEqual(report["shapes"]["PermissionDenied"], {"single command": 1})
+        self.assertEqual(report["causes"], {"rule: Data Exfiltration": 1})
+
+    def test_denial_causes_separate_classifier_failures(self):
+        report = self.scan_events(
+            [
+                event(
+                    "PermissionDenied", "gh pr merge 1", reason="[Data Exfiltration]"
+                ),
+                event(
+                    "PermissionDenied", "gh pr merge 1", reason="Classifier unavailable"
+                ),
+                event(
+                    "PermissionDenied",
+                    "gh pr merge 1",
+                    reason="Auto mode could not evaluate this action and is blocking it for safety",
+                ),
+                event("PermissionDenied", "gh pr merge 1"),
+            ]
+        )
+        self.assertEqual(
+            report["causes"],
+            {
+                "rule: Data Exfiltration": 1,
+                "classifier unavailable (not a settings issue)": 1,
+                "no verdict (not a settings issue)": 1,
+                "unknown": 1,
+            },
+        )
 
     def test_event_times_keep_their_utc_offset(self):
-        event = {
-            "time": "2026-09-30T23:30:00+0000",
-            "event": "PermissionRequest",
-            "tool": "Bash",
-            "command": "git status",
-        }
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "events.jsonl"
-            path.write_text(json.dumps(event) + "\n")
-            since = self.report.datetime.fromisoformat(
-                "2026-10-01T08:00:00+09:00"
-            ).timestamp()
-            shapes, _ = self.report.scan_events(path, since)
-        self.assertEqual(shapes["PermissionRequest"], {"single command": 1})
+        report = self.scan_events(
+            [event("PermissionRequest", "git status", time="2026-09-30T23:30:00+0000")],
+            since="2026-10-01T08:00:00+09:00",
+        )
+        self.assertEqual(report["shapes"]["PermissionRequest"], {"single command": 1})
 
     def test_missing_event_log_is_empty(self):
-        shapes, commands = self.report.scan_events(Path("/nonexistent/events.jsonl"), 0)
-        self.assertEqual(sum(shapes["PermissionRequest"].values()), 0)
-        self.assertEqual(sum(commands["PermissionDenied"].values()), 0)
+        report = self.report.scan_events(Path("/nonexistent/events.jsonl"), 0)
+        self.assertEqual(sum(report["shapes"]["PermissionRequest"].values()), 0)
+        self.assertEqual(sum(report["causes"].values()), 0)
+
+
+def event(
+    name,
+    command,
+    time="2026-10-04T10:00:00+0900",
+    session="s",
+    reason=None,
+    unsandboxed=False,
+):
+    record = {
+        "time": time,
+        "event": name,
+        "tool": "Bash",
+        "command": command,
+        "session": session,
+        "cwd": f"{HOME}/ghq/repo",
+        "unsandboxed": unsandboxed,
+    }
+    if reason is not None:
+        record["reason"] = reason
+    return record
 
 
 class LogPermissionEventTest(unittest.TestCase):
@@ -227,6 +267,22 @@ class LogPermissionEventTest(unittest.TestCase):
         self.assertEqual(record["event"], "PermissionRequest")
         self.assertEqual(len(record["command"]), 500)
         self.assertTrue(record["unsandboxed"])
+
+    def test_records_denial_reason(self):
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / "events.jsonl"
+            self.run_hook(
+                {
+                    "hook_event_name": "PermissionDenied",
+                    "tool_name": "Bash",
+                    "tool_input": {"command": "gh pr merge 1"},
+                    "reason": "[Data Exfiltration] " + "x" * 400,
+                },
+                log,
+            )
+            record = json.loads(log.read_text())
+        self.assertTrue(record["reason"].startswith("[Data Exfiltration]"))
+        self.assertEqual(len(record["reason"]), 300)
 
     def test_bad_input_is_ignored(self):
         with tempfile.TemporaryDirectory() as directory:

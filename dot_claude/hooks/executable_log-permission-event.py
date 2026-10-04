@@ -12,6 +12,7 @@ from pathlib import Path
 
 LOG = Path.home() / ".local" / "state" / "claude" / "permission-events.jsonl"
 MAX_COMMAND = 500
+MAX_REASON = 300
 
 
 def main() -> int:
@@ -25,6 +26,10 @@ def main() -> int:
             "mode": event.get("permission_mode"),
             "tool": event.get("tool_name"),
         }
+        # Only PermissionDenied carries a reason: the matched rule, or a note that
+        # the classifier gave no verdict or was unavailable.
+        if event.get("reason"):
+            record["reason"] = str(event["reason"])[:MAX_REASON]
         tool_input = event.get("tool_input") or {}
         if event.get("tool_name") == "Bash":
             record["command"] = str(tool_input.get("command", ""))[:MAX_COMMAND]

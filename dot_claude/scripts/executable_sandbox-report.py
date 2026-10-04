@@ -142,12 +142,30 @@ def command_shape(command):
     return "single command"
 
 
-def scan_events(path, since):
+def denial_cause(reason):
+    """A classifier rule name, or why the classifier gave no usable verdict."""
+    if not reason:
+        return "unknown"
+    if reason.startswith("Classifier unavailable"):
+        return "classifier unavailable (not a settings issue)"
+    if reason.startswith("Auto mode could not evaluate"):
+        return "no verdict (not a settings issue)"
+    rule = re.search(r"\[([^\]]+)\]", reason)
+    return f"rule: {rule.group(1)}" if rule else "other"
+
+
+def scan_events(path, since, home=str(Path.home())):
     """Prompts and denials recorded by the log-permission-event hook."""
-    shapes = {"PermissionRequest": Counter(), "PermissionDenied": Counter()}
-    commands = {"PermissionRequest": Counter(), "PermissionDenied": Counter()}
+    events = ("PermissionRequest", "PermissionDenied")
+    report = {
+        "shapes": {event: Counter() for event in events},
+        "commands": {event: Counter() for event in events},
+        "places": {event: Counter() for event in events},
+        "causes": Counter(),
+    }
+    sessions = {event: {} for event in events}
     if not path.exists():
-        return shapes, commands
+        return report
     for line in path.read_text(errors="ignore").splitlines():
         try:
             record = json.loads(line)
@@ -155,18 +173,31 @@ def scan_events(path, since):
         except (json.JSONDecodeError, KeyError, ValueError):
             continue
         event = record.get("event")
-        if stamp < since or event not in shapes:
+        if stamp < since or event not in events:
             continue
+        report["places"][event][(record.get("cwd") or "?").replace(home, "~", 1)] += 1
+        if event == "PermissionDenied":
+            report["causes"][denial_cause(record.get("reason"))] += 1
         if record.get("tool") != "Bash":
-            shapes[event][f"tool: {record.get('tool')}"] += 1
+            report["shapes"][event][f"tool: {record.get('tool')}"] += 1
             continue
         command = record.get("command", "")
         shape = command_shape(command)
         if record.get("unsandboxed"):
             shape += " (rerun outside the sandbox)"
-        shapes[event][shape] += 1
-        commands[event][command_head(command)] += 1
-    return shapes, commands
+        report["shapes"][event][shape] += 1
+        head = command_head(command)
+        sessions[event].setdefault(head, set()).add(record.get("session"))
+        report["commands"][event][head] += 1
+    # One session repeating a command weighs less than many sessions hitting it.
+    for event in events:
+        report["commands"][event] = Counter(
+            {
+                f"{head}  ({len(sessions[event][head])} sessions)": count
+                for head, count in report["commands"][event].items()
+            }
+        )
+    return report
 
 
 def recent_records(projects, days):
@@ -195,16 +226,18 @@ def main(argv=None):
 
     records = recent_records(args.projects, args.days)
     reruns, failed, writes, hosts = scan(records, str(Path.home()))
-    shapes, commands = scan_events(args.events, time.time() - args.days * 86400)
+    events = scan_events(args.events, time.time() - args.days * 86400)
     print(f"# Sandbox report: last {args.days} days, {len(records)} session records\n")
-    print_section(
-        "Permission prompts by command shape", shapes["PermissionRequest"], args.limit
-    )
-    print_section("Commands that prompted", commands["PermissionRequest"], args.limit)
-    print_section(
-        "Auto mode denials by command shape", shapes["PermissionDenied"], args.limit
-    )
-    print_section("Commands auto mode denied", commands["PermissionDenied"], args.limit)
+    for event, label in (
+        ("PermissionRequest", "Permission prompts"),
+        ("PermissionDenied", "Auto mode denials"),
+    ):
+        print_section(f"{label} by command shape", events["shapes"][event], args.limit)
+        print_section(f"{label} by command", events["commands"][event], args.limit)
+        print_section(
+            f"{label} by working directory", events["places"][event], args.limit
+        )
+    print_section("Auto mode denials by cause", events["causes"], args.limit)
     print_section("Commands rerun outside the sandbox", reruns, args.limit)
     print_section("Sandboxed commands that failed to write", failed, args.limit)
     print_section("Paths the sandbox refused to write", writes, args.limit)

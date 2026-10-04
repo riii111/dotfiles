@@ -8,7 +8,8 @@ description: Claude Code の権限確認・auto モードの拒否・Bash サン
 ## 前提
 
 - 設定の管理元は chezmoi の `settings.json.tmpl`。場所は `chezmoi source-path ~/.claude/settings.json` で調べる。
-- `log-permission-event` フックが、確認（PermissionRequest）と auto モードの拒否（PermissionDenied）を `~/.local/state/claude/permission-events.jsonl` に記録している。これが実際に利用者を止めた操作の一次資料になる。
+- `log-permission-event` フックが、確認（PermissionRequest）と auto モードの拒否（PermissionDenied）を `~/.local/state/claude/permission-events.jsonl` に記録している。これが実際に利用者を止めた操作の一次資料になる。拒否には理由も残る。
+- サンドボックス内のコマンドの通信先の確認は、このフックでは記録されない。通信先は「Hosts the sandbox refused」の節で見る。記録の節が空でも「通信先の確認が無かった」とは解釈しない。
 - auto モードでは、ask ルールに一致すれば必ず確認、allow ルールに一致すれば確認なし、どちらでもなければ分類器が判定する。分類器は、`autoMode.environment` に書かれていない場所や組織を外部とみなして止めやすい。
 - サンドボックス内のコマンドは、作業ディレクトリと一時ディレクトリにしか書き込めない。外へ書き込むコマンドは一度失敗し、`dangerouslyDisableSandbox: true` でやり直す。
 - `excludedCommands` のコマンドはサンドボックスの外で動き、`permissions` の許可判定を受ける。`cd x && git …` のように別のコマンドから始まる形は、除外に一致しない。
@@ -26,8 +27,9 @@ description: Claude Code の権限確認・auto モードの拒否・Bash サン
    - `sandbox.excludedCommands`：TLS、ソケット、キーチェーン、`ps` など、サンドボックスと相性の悪いツール。
    - `sandbox.network.allowedDomains`：毎回確認が出る、信頼できるドメイン。
    - 設定では解消しない：一回限りの操作、調査中の誤検出。
-4. 回数が 2 回未満のものや、1 セッションに偏っているものは候補にしない。
-5. 利用者が不満の具体例を挙げていれば、集計よりその例を優先して原因を調べる。
+4. 回数が 2 回未満のものや、1 セッションに偏っているものは候補にしない。セッション数はコマンドごとの括弧内の数で見る。
+5. 「Auto mode denials by cause」で、分類器の利用不可や判定不能（not a settings issue）による拒否は設定変更の候補にしない。規則名が付いた拒否だけを対象にする。
+6. 利用者が不満の具体例を挙げていれば、集計よりその例を優先して原因を調べる。
 
 ## 制約
 
