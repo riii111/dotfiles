@@ -3,33 +3,26 @@ name: sandbox-review
 description: Claude Code の権限確認・auto モードの拒否・Bash サンドボックスで止まったコマンドを集計し、設定の改善を提案する。「サンドボックスが不便」「権限確認が多い」「sandbox-review」と言われたとき、または週次の定期実行で使う。
 ---
 
-実際に出た権限確認と auto モードの拒否、サンドボックスで止まったコマンドを集計し、設定の改善候補を出す。
-
-## 前提
-
-- 設定の管理元は chezmoi の `settings.json.tmpl`。場所は `chezmoi source-path ~/.claude/settings.json` で調べる。
-- `log-permission-event` フックが、確認（PermissionRequest）と auto モードの拒否（PermissionDenied）を `~/.local/state/claude/permission-events.jsonl` に記録している。これが実際に利用者を止めた操作の一次資料になる。拒否には理由も残る。
-- サンドボックス内のコマンドの通信先の確認は、このフックでは記録されない。通信先は「Hosts the sandbox refused」の節で見る。記録の節が空でも「通信先の確認が無かった」とは解釈しない。
-- auto モードでは、ask ルールに一致すれば必ず確認、allow ルールに一致すれば確認なし、どちらでもなければ分類器が判定する。分類器は、`autoMode.environment` に書かれていない場所や組織を外部とみなして止めやすい。
-- サンドボックス内のコマンドは、作業ディレクトリと一時ディレクトリにしか書き込めない。外へ書き込むコマンドは一度失敗し、`dangerouslyDisableSandbox: true` でやり直す。
-- `excludedCommands` のコマンドはサンドボックスの外で動き、`permissions` の許可判定を受ける。`cd x && git …` のように別のコマンドから始まる形は、除外に一致しない。
-- 静的な設定で解決できるものを優先する。CLAUDE.md やプロンプトでの調整は最終手段とし、提案する場合は確実性が低いと明記する。
+Claude Code で実際に出た権限確認と auto モードの拒否、サンドボックスで止まったコマンドを集計し、設定の改善候補を出す。対象は Claude Code の確認だけで、Codex 自身の承認は扱わない。
 
 ## 手順
 
-1. `python3 ~/.claude/scripts/sandbox-report.py --days <日数>` を実行する。日数は指定がなければ 7。
-2. 管理元の `permissions`、`autoMode`、`sandbox` を読む。
-3. 「Permission prompts」と「Auto mode denials」の節を先に見て、回数の多いものから、次のどれで解消できるかを判断する。
-   - `permissions.ask` から外す：意図せず確認を強制しているルール。
-   - `permissions.allow`：副作用が小さく、毎回確認が出るコマンド。
-   - `autoMode.environment`：分類器が外部とみなして止めた、利用者自身のリポジトリ・組織・置き場所。
-   - `sandbox.filesystem.allowWrite`：ツールのキャッシュなど、決まった場所への書き込み。パスは `~/` 始まりで書く。
-   - `sandbox.excludedCommands`：TLS、ソケット、キーチェーン、`ps` など、サンドボックスと相性の悪いツール。
-   - `sandbox.network.allowedDomains`：毎回確認が出る、信頼できるドメイン。
-   - 設定では解消しない：一回限りの操作、調査中の誤検出。
-4. 回数が 2 回未満のものや、1 セッションに偏っているものは候補にしない。セッション数はコマンドごとの括弧内の数で見る。
-5. 「Auto mode denials by cause and command」で、分類器の利用不可や判定不能（not a settings issue）による行は設定変更の候補にしない。規則名が付いた行だけを、その行の回数とセッション数で判断する。
-6. 利用者が不満の具体例を挙げていれば、集計よりその例を優先して原因を調べる。
+1. `python3 ~/.claude/scripts/sandbox-report.py --days <日数>` を実行する。日数は指定がなければ 7。確認と拒否は `log-permission-event` フックの記録（`~/.local/state/claude/permission-events.jsonl`）から、サンドボックスの失敗は会話記録から集計される。
+2. 設定の管理元（`chezmoi source-path ~/.claude/settings.json`）の `permissions`、`autoMode`、`sandbox` を読む。
+3. 優先順位を付ける。利用者が不満の具体例を挙げていれば、それを最優先で調べる。それ以外は、再発回数とセッションの広がり（各行の括弧内のセッション数）で順位を付け、一回限りの操作や一つのセッション内の繰り返しは低くする。
+4. 原因ごとに変更先を決める。
+
+| 集計の節 | 原因 | 変更先 |
+|---|---|---|
+| Permission prompts | ask ルールに一致した（auto モードでも必ず確認になる） | `permissions.ask` から外すか判断する |
+| Permission prompts | 副作用が小さいのに毎回確認が出る | `permissions.allow` |
+| Auto mode denials by cause and command | 規則名が付いた拒否で、自分のリポジトリ・組織・置き場所が外部扱いされた | `autoMode.environment` |
+| Auto mode denials by cause and command | 分類器の利用不可・判定不能（not a settings issue） | 候補にしない |
+| Sandbox の各節 | ツールのキャッシュなど、決まった場所への書き込み | `sandbox.filesystem.allowWrite`（`~/` 始まり） |
+| Sandbox の各節 | TLS・ソケット・キーチェーン・`ps` など、サンドボックスと相性の悪いツール | `sandbox.excludedCommands`（`cd x && …` のように別のコマンドから始まる形には一致しない） |
+| Hosts the sandbox refused | 毎回確認が出る、信頼できる通信先 | `sandbox.network.allowedDomains`（通信先の確認はフックの記録に出ないので、この節で見る） |
+
+5. 静的な設定で解決できるものを優先する。CLAUDE.md やプロンプトでの調整は最終手段とし、提案する場合は確実性が低いと明記する。
 
 ## 制約
 
@@ -45,6 +38,6 @@ description: Claude Code の権限確認・auto モードの拒否・Bash サン
 
 日本語で短く書く。
 
-- 改善候補：1 行ずつ「追加先キー / 値 / 根拠（回数）」。無ければ「候補なし」。
+- 改善候補：1 行ずつ「追加先キー / 値 / 根拠（回数・セッション数）」。無ければ「候補なし」。
 - 見送ったもの：多かったが設定では解消しないもの（あれば 1〜3 行）。
 - 集計の誤検出が目立つ場合だけ、`chezmoi source-path ~/.claude/scripts/sandbox-report.py` の直すべき点を 1 行で添える。

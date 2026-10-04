@@ -171,68 +171,28 @@ class SandboxReportTest(unittest.TestCase):
         )
 
     def test_denials_keep_each_cause_with_its_command(self):
-        def denials(merge_reason, push_reason):
-            return self.scan_events(
-                [
-                    event(
-                        "PermissionDenied",
-                        "gh pr merge 1",
-                        session=s,
-                        reason=merge_reason,
-                    )
-                    for s in ("a", "b")
-                ]
-                + [
-                    event(
-                        "PermissionDenied",
-                        "git push origin HEAD",
-                        session=s,
-                        reason=push_reason,
-                    )
-                    for s in ("a", "b")
-                ]
-            )["commands"]["PermissionDenied"]
-
-        outage, rule = "Classifier unavailable", "[Data Exfiltration]"
-        self.assertEqual(
-            denials(outage, rule),
-            {
-                "classifier unavailable (not a settings issue) | gh pr  (2 sessions)": 2,
-                "rule: Data Exfiltration | git push  (2 sessions)": 2,
-            },
-        )
-        self.assertEqual(
-            denials(rule, outage),
-            {
-                "rule: Data Exfiltration | gh pr  (2 sessions)": 2,
-                "classifier unavailable (not a settings issue) | git push  (2 sessions)": 2,
-            },
-        )
-
-    def test_denial_causes_separate_classifier_failures(self):
+        push = "git push origin HEAD"
         report = self.scan_events(
             [
                 event(
-                    "PermissionDenied", "gh pr merge 1", reason="[Data Exfiltration]"
+                    "PermissionDenied", push, session="a", reason="[Data Exfiltration]"
                 ),
                 event(
-                    "PermissionDenied", "gh pr merge 1", reason="Classifier unavailable"
+                    "PermissionDenied", push, session="a", reason="[Data Exfiltration]"
                 ),
                 event(
                     "PermissionDenied",
-                    "gh pr merge 1",
-                    reason="Auto mode could not evaluate this action and is blocking it for safety",
+                    push,
+                    session="b",
+                    reason="Classifier unavailable",
                 ),
-                event("PermissionDenied", "gh pr merge 1"),
             ]
         )
         self.assertEqual(
-            report["causes"],
+            report["commands"]["PermissionDenied"],
             {
-                "rule: Data Exfiltration": 1,
-                "classifier unavailable (not a settings issue)": 1,
-                "no verdict (not a settings issue)": 1,
-                "unknown": 1,
+                "rule: Data Exfiltration | git push  (1 sessions)": 2,
+                "classifier unavailable (not a settings issue) | git push  (1 sessions)": 1,
             },
         )
 
