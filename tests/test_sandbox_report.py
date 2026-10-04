@@ -147,7 +147,9 @@ class SandboxReportTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "events.jsonl"
             path.write_text("\n".join(json.dumps(e) for e in events) + "\nnot json\n")
-            since = self.report.time.mktime((2026, 10, 1, 0, 0, 0, 0, 0, -1))
+            since = self.report.datetime.fromisoformat(
+                "2026-10-01T00:00:00+09:00"
+            ).timestamp()
             shapes, commands = self.report.scan_events(path, since)
         self.assertEqual(
             shapes["PermissionRequest"],
@@ -159,6 +161,22 @@ class SandboxReportTest(unittest.TestCase):
         )
         self.assertEqual(commands["PermissionRequest"], {"for": 1, "git push": 1})
         self.assertEqual(shapes["PermissionDenied"], {"single command": 1})
+
+    def test_event_times_keep_their_utc_offset(self):
+        event = {
+            "time": "2026-09-30T23:30:00+0000",
+            "event": "PermissionRequest",
+            "tool": "Bash",
+            "command": "git status",
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "events.jsonl"
+            path.write_text(json.dumps(event) + "\n")
+            since = self.report.datetime.fromisoformat(
+                "2026-10-01T08:00:00+09:00"
+            ).timestamp()
+            shapes, _ = self.report.scan_events(path, since)
+        self.assertEqual(shapes["PermissionRequest"], {"single command": 1})
 
     def test_missing_event_log_is_empty(self):
         shapes, commands = self.report.scan_events(Path("/nonexistent/events.jsonl"), 0)
@@ -203,7 +221,9 @@ class LogPermissionEventTest(unittest.TestCase):
                 log,
             )
             record = json.loads(log.read_text())
+            mode = log.stat().st_mode & 0o777
         self.assertEqual(output, "")
+        self.assertEqual(mode, 0o600)
         self.assertEqual(record["event"], "PermissionRequest")
         self.assertEqual(len(record["command"]), 500)
         self.assertTrue(record["unsandboxed"])

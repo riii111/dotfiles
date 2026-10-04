@@ -14,6 +14,7 @@ import re
 import sys
 import time
 from collections import Counter
+from datetime import datetime
 from pathlib import Path
 
 WRITE_ERRORS = re.compile(
@@ -150,7 +151,7 @@ def scan_events(path, since):
     for line in path.read_text(errors="ignore").splitlines():
         try:
             record = json.loads(line)
-            stamp = time.mktime(time.strptime(record["time"], "%Y-%m-%dT%H:%M:%S%z"))
+            stamp = datetime.strptime(record["time"], "%Y-%m-%dT%H:%M:%S%z").timestamp()
         except (json.JSONDecodeError, KeyError, ValueError):
             continue
         event = record.get("event")

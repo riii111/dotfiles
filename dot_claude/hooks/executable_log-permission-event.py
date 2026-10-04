@@ -5,6 +5,7 @@ The hook never returns a decision, so the prompt or denial goes on unchanged.
 """
 
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -28,8 +29,10 @@ def main() -> int:
         if event.get("tool_name") == "Bash":
             record["command"] = str(tool_input.get("command", ""))[:MAX_COMMAND]
             record["unsandboxed"] = bool(tool_input.get("dangerouslyDisableSandbox"))
-        LOG.parent.mkdir(parents=True, exist_ok=True)
-        with LOG.open("a", encoding="utf-8") as log:
+        LOG.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        # Commands can carry secrets, so only the user may read the log.
+        descriptor = os.open(LOG, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+        with os.fdopen(descriptor, "a", encoding="utf-8") as log:
             log.write(json.dumps(record, ensure_ascii=False) + "\n")
     except Exception:
         # A logging failure must never change the permission flow.
