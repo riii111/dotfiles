@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Record permission prompts and auto mode denials for sandbox-review.
+"""Record permission prompts and auto mode denials for permission-analyze.
 
 The hook never returns a decision, so the prompt or denial goes on unchanged.
 """

@@ -1,13 +1,13 @@
 ---
-name: sandbox-review
-description: Claude Code の権限確認・auto モードの拒否・Bash サンドボックスで止まったコマンドを集計し、設定の改善を提案する。「サンドボックスが不便」「権限確認が多い」「sandbox-review」と言われたとき、または週次の定期実行で使う。
+name: permission-analyze
+description: Claude Code の権限確認・auto モードの拒否・Bash サンドボックスで止まったコマンドを集計し、設定の改善を提案する。「サンドボックスが不便」「権限確認が多い」「permission-analyze」と言われたとき、または週次の定期実行で使う。
 ---
 
 Claude Code で実際に出た権限確認と auto モードの拒否、サンドボックスで止まったコマンドを集計し、設定の改善候補を出す。対象は Claude Code の確認だけで、Codex 自身の承認は扱わない。
 
 ## 手順
 
-1. `python3 ~/.claude/scripts/sandbox-report.py --days <日数>` を実行する。日数は指定がなければ 7。確認と拒否は `log-permission-event` フックの記録（`~/.local/state/claude/permission-events.jsonl`）から、サンドボックスの失敗は会話記録から集計される。
+1. `python3 ~/.claude/scripts/permission-report.py --days <日数>` を実行する。日数は指定がなければ 7。確認と拒否は `log-permission-event` フックの記録（`~/.local/state/claude/permission-events.jsonl`）から、サンドボックスの失敗は会話記録から集計される。
 2. 設定の管理元（`chezmoi source-path ~/.claude/settings.json`）の `permissions`、`autoMode`、`sandbox` を読む。
 3. 優先順位を付ける。利用者が不満の具体例を挙げていれば、それを最優先で調べる。それ以外は、再発回数と、取得できる場合はセッションの広がり（確認・拒否のコマンド行の括弧内）で順位を付け、一回限りの操作や一つのセッション内の繰り返しは低くする。
 4. 原因ごとに変更先を決める。
@@ -40,4 +40,4 @@ Claude Code で実際に出た権限確認と auto モードの拒否、サン�
 
 - 改善候補：1 行ずつ「追加先キー / 値 / 根拠（回数と、取得できる場合はセッション数）」。無ければ「候補なし」。
 - 見送ったもの：多かったが設定では解消しないもの（あれば 1〜3 行）。
-- 集計の誤検出が目立つ場合だけ、`chezmoi source-path ~/.claude/scripts/sandbox-report.py` の直すべき点を 1 行で添える。
+- 集計の誤検出が目立つ場合だけ、`chezmoi source-path ~/.claude/scripts/permission-report.py` の直すべき点を 1 行で添える。

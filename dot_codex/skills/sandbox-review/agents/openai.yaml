@@ -1,7 +1,0 @@
-interface:
-  display_name: "Sandbox Review"
-  short_description: "Reviews Claude Code permission prompts"
-  default_prompt: "Use $sandbox-review to summarize recent Claude Code permission prompts, auto mode denials and sandbox failures, then propose settings changes."
-
-policy:
-  allow_implicit_invocation: true

@@ -21,3 +21,6 @@
 bin/gh-pr-comments
 bin/gh-read
 .claude/hooks/ask-push-on-protected-branch.sh
+.claude/skills/sandbox-review
+.claude/scripts/sandbox-report.py
+.codex/skills/sandbox-review

@@ -10,12 +10,12 @@ from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "dot_claude" / "scripts" / "executable_sandbox-report.py"
+SCRIPT = ROOT / "dot_claude" / "scripts" / "executable_permission-report.py"
 HOME = "/Users/someone"
 
 
 def load_report():
-    loader = importlib.machinery.SourceFileLoader("sandbox_report", str(SCRIPT))
+    loader = importlib.machinery.SourceFileLoader("permission_report", str(SCRIPT))
     spec = importlib.util.spec_from_loader(loader.name, loader)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -48,7 +48,7 @@ def result(tool_id, output):
     }
 
 
-class SandboxReportTest(unittest.TestCase):
+class PermissionReportTest(unittest.TestCase):
     def setUp(self):
         self.report = load_report()
 
