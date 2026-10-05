@@ -1,7 +1,7 @@
 # CLI実行を補助するとき
 
-workerは失敗理由と依頼JSONの絶対パスを伝える。実行の補助は許可範囲内で行う。
+workerは失敗理由、依頼JSONと状態保存先の絶対パスを伝える。既定の状態保存先はworker checkoutの`.reviewctl/state.json`。実行の補助は許可範囲内で行う。
 
-補助者は同じCLIのprepare出力をJSONファイルに保存し、workerへその絶対パスだけを渡す。状態保存先を変更した場合はそのパスも渡し、prepare/recordで同じ保存先を使う。
+補助者は同じCLIに`--state`でworkerの状態保存先を明示し、prepare出力をJSONファイルに保存してその絶対パスを渡す。記録済みstateの保存先は変えず、未記録の場合だけ双方が使える保存先を選んで伝える。prepare/recordで同じ保存先を使う。
 workerがJSONのtoolとargumentsを読んで送信する。補助者からreviewerを起動すると、送信元がworkerと一致しなくなる。
 record後の通知は成否と状態保存先だけを渡す。生成したargumentsや既存手順をメッセージへ転載しない。
