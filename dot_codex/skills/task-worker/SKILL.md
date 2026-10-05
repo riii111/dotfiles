@@ -9,6 +9,7 @@ description: |
 
 タスク管理元の最新情報、起動promptの合意・許可範囲、直接依存と関連資料・規約を確認する。再開時は必要な情報を読み直す。
 割り当てられたGit worktreeでConventionalな英語branchを作り、実装する。
+レビュー前に自身の確定Task IDを確認する。Codexは`CODEX_THREAD_ID`、Claudeは起動元のID通知を用い、未確認ならレビューを開始せず通知を待つ。
 候補をcommitしてから[task-review-cycle](../task-review-cycle/SKILL.md)を読み、独立レビューを受ける。
 参照資料の相対パスは、そのSKILL.mdのディレクトリを基準に解決する。
 親への通知や完了記録は扱わない。
@@ -20,6 +21,7 @@ description: |
 
 そのheadを通常のpushで公開し、create-pr SKILL、なければPR templateと直近の慣例に従ってDraft PRを作成・更新する。
 完了条件はPR headとreview済みheadの一致、そのheadの必須検証・独立LGTM・CI成功とする。
+完了報告のGit・PR・CI状態は直近の確認結果に基づき、未追跡・失敗などを未確認のまま断言しない。
 Ready化・mergeは別途依頼された場合だけ行い、その直前に現在のbaseとのmerge可否と意味的な競合を確認する。
 
 ## Review基点
