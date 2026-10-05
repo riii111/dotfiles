@@ -26,6 +26,7 @@ worktreeに`.reviewctl/`を作り、[依頼JSON](references/request.md)を`.revi
 | Claude | harnexusの`create_thread` / `send_message_to_thread` | `wait_threads` / `read_thread` |
 
 Claudeはwait_threadsのtimeoutMsを60000以下にし、cursorを次のafterCursorへ渡す。正常timeoutでは待機を続け、対象別errors・失敗・中断は理由を確認する。最終回答が足りなければread_threadで読み、commentaryだけで判定しない。
+read_threadは最新1turn・出力なしから読み、不足する履歴や出力だけ追加取得する。CLIの実行補助が必要なら[復旧時の受け渡し](references/recovery.md)に従う。
 送信結果が不明、またはclientThreadIdだけが返された場合はAppの状態を確認し、確定IDを得るまで再送・recordしない。
 Claude workerのreviewerはCodexモデルに限られる。Claudeモデルを指定された場合は、対応するモデルの指定を求める。
 

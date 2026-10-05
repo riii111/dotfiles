@@ -7,8 +7,7 @@ PR: {pr}
 比較範囲: {base}...{head}
 事前コンテキスト: {context}
 
-ai-code-reviewに従い、worker checkoutでレビューしてください。branchやcheckoutは変更しないでください。
+worker checkoutでレビューし、branchやcheckoutは変更しないでください。
 受信メタデータにsource_thread_idがあればworker Task IDと照合し、不一致は判定保留にしてください。
-候補がpush済みでPRがある場合はPR headの一致と、そのheadのCI状態を確認してください。
-未pushまたはPR未作成の場合はローカル固定SHA差分を根拠にし、既存PRのheadやCIを根拠にしないでください。
+PRとCIはpush済み候補の同一headだけを根拠にしてください。未push候補はローカル固定SHA差分をレビューしてください。
 base branchが進んだことだけを理由にLGTMを保留しないでください。
