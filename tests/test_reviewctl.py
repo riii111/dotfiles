@@ -297,15 +297,14 @@ class ReviewSessionTest(ReviewFixture):
         self.data["checkout"] = str(checkout)
         self.request = checkout / ".reviewctl/request.json"
         self.request.parent.mkdir()
-        (self.request.parent / ".gitignore").write_text("*\n")
         self.write_request_file()
-        self.assertEqual(reviewctl.git(checkout, "status", "--porcelain"), "")
         with mock.patch.object(reviewctl.Path, "cwd", return_value=checkout):
             code, out, err = self.invoke(
                 "prepare", "--request", str(self.request), default_state=True
             )
             self.assertEqual(code, 0, err)
             self.assertFalse((checkout / ".reviewctl/state.json").exists())
+            self.assertEqual(reviewctl.git(checkout, "status", "--porcelain"), "")
             code, out, err = self.invoke(
                 "record",
                 "--request",
