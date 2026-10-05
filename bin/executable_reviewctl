@@ -64,14 +64,22 @@ def candidate(path):
     return data
 
 
-def review_prompt(data, skills):
+def review_prompt(data, skills, request_path, previous=None, full_context=False):
     skill = skills / "ai-code-review" / "SKILL.md"
     references = skills / "task-review-cycle" / "references"
-    template = references / "reviewer.md"
+    instructions = references / "reviewer.md"
+    followup = previous is not None and not full_context
+    template = references / ("rereviewer.md" if followup else "reviewer.md")
     reply = references / ("reply-" + data["worker"].lower() + ".md")
-    if not all(path.is_file() for path in (skill, template, reply)):
+    if not all(path.is_file() for path in (skill, instructions, template, reply)):
         raise ReviewError("ai-code-review or reviewer templates are not installed")
-    return (template.read_text() + "\n" + reply.read_text()).format(
+    context = data["context"]
+    if followup and previous.get("context") == context:
+        context = "前回依頼と同じ。"
+    body = template.read_text()
+    if not followup:
+        body += "\n" + reply.read_text()
+    return body.format(
         skill_path=str(skill.resolve()),
         worker=data["worker"],
         worker_thread_id=data["workerId"],
@@ -80,17 +88,23 @@ def review_prompt(data, skills):
         push_state="push済み" if data["pushed"] else "未push",
         base=data["base"],
         head=data["head"],
-        context=data["context"],
+        context=context,
+        request_path=str(request_path.resolve()),
+        instructions_path=str(instructions.resolve()),
+        reply_path=str(reply.resolve()),
     )
 
 
-def save_state(path, data):
+def save_state(path, data, *, exclusive=False):
     path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(mode="w", dir=path.parent, delete=False) as out:
         temp = Path(out.name)
         json.dump(data, out, ensure_ascii=False)
     try:
-        os.replace(temp, path)
+        if exclusive:
+            os.link(temp, path)
+        else:
+            os.replace(temp, path)
     finally:
         temp.unlink(missing_ok=True)
 
@@ -101,9 +115,12 @@ def load_state(path):
     state = json.loads(path.read_text())
     if (
         not isinstance(state, dict)
-        or not isinstance(state.get("reviewer"), str)
-        or not state["reviewer"]
         or not isinstance(state.get("candidate"), dict)
+        or (
+            state.get("reviewer") is not None
+            if state.get("pending_create") is True
+            else not isinstance(state.get("reviewer"), str) or not state["reviewer"]
+        )
     ):
         raise ReviewError(
             "unsupported review state; inspect it before choosing --state"
@@ -151,11 +168,16 @@ def main(argv=None):
     )
     commands = parser.add_subparsers(dest="command", required=True)
     prepare = commands.add_parser(
-        "prepare", help="print tool name and arguments; never send"
+        "prepare", help="reserve an initial creation and print tool arguments; never send"
     )
     prepare.add_argument("--request", type=Path, required=True)
     prepare.add_argument("--model")
     prepare.add_argument("--thinking")
+    prepare.add_argument(
+        "--full-context",
+        action="store_true",
+        help="resend all context and instructions to the existing reviewer",
+    )
     prepare.add_argument(
         "--update-base",
         action="store_true",
@@ -170,6 +192,10 @@ def main(argv=None):
         "--update-base", action="store_true", help="record an explicitly updated base"
     )
     commands.add_parser("state", help="show the last recorded reviewer and candidate")
+    reset = commands.add_parser(
+        "reset-pending", help="release an initial creation confirmed not sent"
+    )
+    reset.add_argument("--not-sent", action="store_true", required=True)
     args = parser.parse_args(argv)
     try:
         path = state_path(args.state)
@@ -181,7 +207,21 @@ def main(argv=None):
             if state is None:
                 raise ReviewError("no confirmed reviewer has been recorded")
             output = state
+        elif args.command == "reset-pending":
+            if state is None or state.get("pending_create") is not True:
+                raise ReviewError("no pending creation to release")
+            path.unlink()
+            output = {"released": "pending_create"}
         else:
+            pending = state is not None and state.get("pending_create") is True
+            if args.command == "prepare" and pending:
+                raise ReviewError(
+                    "reviewer creation is pending; inspect the original call and "
+                    "record its confirmed threadId; do not create another. "
+                    "Use reset-pending --not-sent only when the original "
+                    "create_thread call was "
+                    "confirmed not sent"
+                )
             data = candidate(args.request)
             check_session(state, data, args.update_base)
             if args.command == "record":
@@ -190,12 +230,22 @@ def main(argv=None):
                     raise ReviewError("record requires a confirmed threadId")
                 if reviewer == data["workerId"]:
                     raise ReviewError("a worker cannot review itself")
-                if state and state["reviewer"] != reviewer:
+                if pending and state["candidate"] != data:
+                    raise ReviewError("pending creation must keep the original candidate")
+                if state and not pending and state["reviewer"] != reviewer:
                     raise ReviewError("review session must keep the same reviewer")
                 output = {"reviewer": reviewer, "candidate": data}
                 save_state(path, output)
             else:
-                arguments = {"prompt": review_prompt(data, args.skills_root)}
+                arguments = {
+                    "prompt": review_prompt(
+                        data,
+                        args.skills_root,
+                        args.request,
+                        previous=state["candidate"] if state else None,
+                        full_context=args.full_context,
+                    )
+                }
                 if state:
                     tool = "send_message_to_thread"
                     arguments["threadId"] = state["reviewer"]
@@ -215,6 +265,12 @@ def main(argv=None):
                         thinking=args.thinking or "medium",
                     )
                 output = {"tool": tool, "arguments": arguments}
+                if state is None:
+                    save_state(
+                        path,
+                        {"reviewer": None, "pending_create": True, "candidate": data},
+                        exclusive=True,
+                    )
         print(json.dumps(output, ensure_ascii=False))
         return 0
     except (ReviewError, OSError, ValueError) as error:

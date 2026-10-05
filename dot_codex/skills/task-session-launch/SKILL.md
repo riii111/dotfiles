@@ -12,32 +12,26 @@ description: |
 1. `codex_app__list_projects`を一度呼び、repositoryに対応する`projectId`を決める。
 2. 次の内容で`codex_app__create_thread`の入力を組み立てる。
    - Git repositoryでは`target.environment.type`を`worktree`にする。
-   - 通常はprojectのdefault branchからGit worktreeを作るため、`target.environment.startingState`を指定しない。
-   - ユーザーが開始branchを明示した場合だけ、`target.environment.startingState`の`type`を`branch`にし、`branchName`をそのbranchにする。
-   - `title`を`Impl <identifier>`にする。
-   - `<identifier>`にはユーザーの入力とタスク管理元から対象を区別できる短い表記を選ぶ。
-   - `title`にPR titleやtask titleを含めない。
-   - `model`を`claude-opus-5-5`、`thinking`を`medium`にする。
-   - ユーザーがmodelまたはreasoning effortを明示した場合だけ、対応する値をその指定で置き換える。
-   - `prompt`にタスク管理元、開始対象、親orchestration Task ID（指定されている場合）を含める。
-   - `prompt`にworkerの実行主体（Claude / Codex）を明記し、下記のSKILLリンクと読込指示を入れる。リポジトリ規約を読んで割り当てられたGit worktreeで実装するよう依頼する。
-   - 作業と完了条件はリンクで渡すtask-workerに従わせる。検証・レビュー・PR作成の詳細を起動promptへ重複して書かない。
+   - `startingState`は開始branchを明示された場合だけ`{type: "branch", branchName: <branch>}`を指定する。
+   - `title`は`Impl <taskの短い識別子>`とし、task titleやPR titleは含めない。
+   - `model: claude-opus-5-5`、`thinking: medium`を既定とし、ユーザーの明示指定を優先する。
+   - `prompt`は[起動依頼](references/worker.md)を使い、下記の引き継ぎ情報を埋める。
 3. `codex_app__create_thread`を一度呼ぶ。
+4. 確定threadIdを確認し、[ID通知](references/worker-identity.md)を`send_message_to_thread`でそのworkerへ一度送る。Codex Task IDとして扱い、ClaudeのセッションIDとは区別する。
 
-## SKILLの受け渡し
+## 起動prompt
 
-利用中のこのSKILLと同じインストール先にある`task-worker/SKILL.md`と`task-review-cycle/SKILL.md`の実在を確認し、絶対パスを使ったリンクを起動`prompt`へ入れる。
-Claude workerの起動時は、harnexusがSKILL本文を入力へ添付できるよう、裸のSKILL名ではなく下記の形式のリンクを渡す。
+管理元から読める本文や、適用されるAGENTS.mdの規約、モデル設定、task-workerの手順・完了条件は転載しない。
+additional_contextはworkerの判断・実行に必要で、参照先にない情報だけを含める。親の起動管理やコピー元の説明は渡さず、空なら欄ごと省く。
 
-```text
-[$task-worker](/Users/a81803/.codex/skills/task-worker/SKILL.md)
-[$task-review-cycle](/Users/a81803/.codex/skills/task-review-cycle/SKILL.md)
+- 管理元にないユーザーとの合意、対象外、追加の許可・制約。
+- 未mergeの依存成果のbranch・SHA・PR base、並行作業との担当境界。
+- worktreeへ入らない資料や規約の絶対パス。親Task IDはworkerが宛先として使う場合だけ渡す。
+- 調査の入口となるファイルパスと、判断に影響する未確認事項。コードから再取得できる説明は省く。
 
-task-workerを読んで実装し、レビュー工程ではtask-review-cycleを読んでください。
-依存SKILLや参照資料は、そのSKILL.mdのディレクトリを基準にパスを解決して読んでください。
-```
+worker_skill_pathは同じインストール先の実在する`task-worker/SKILL.md`の絶対パスとする。
+Claudeへの本文添付に必要なSKILLリンク形式を維持し、レビュー手順はtask-workerから必要な段階で読む。
 
 ## 制約
 
-`clientThreadId`は`worktree`準備中の正常な結果として扱う。
-`clientThreadId`が返っても`codex_app__create_thread`を重ねて呼ばない。
+`clientThreadId`はworktree準備中の受理結果であり、重複作成しない。

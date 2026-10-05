@@ -94,7 +94,7 @@ class ReviewCandidateTest(ReviewFixture):
 
     def test_context_survives_template_rendering(self):
         data = self.write_request()
-        text = reviewctl.review_prompt(data, ROOT / "dot_codex/skills")
+        text = reviewctl.review_prompt(data, ROOT / "dot_codex/skills", self.request)
         self.assertIn(self.data["context"], text)
         self.assertIn(str(self.root), text)
         self.assertIn(self.head + "..." + self.head, text)
@@ -139,7 +139,10 @@ class ReviewSessionTest(ReviewFixture):
         )
         self.assertEqual(request["arguments"]["model"], "gpt-6.1-sol")
         self.assertEqual(request["arguments"]["thinking"], "medium")
-        self.assertFalse((self.root / "state.json").exists())
+        pending = json.loads((self.root / "state.json").read_text())
+        self.assertTrue(pending["pending_create"])
+        self.assertIsNone(pending["reviewer"])
+        self.assertEqual(pending["candidate"], self.data)
         self.assertEqual(self.record()[0], 0)
         code, out, err = self.invoke("state")
         self.assertEqual(code, 0, err)
@@ -160,6 +163,67 @@ class ReviewSessionTest(ReviewFixture):
         )
         self.assertEqual(code, 0, err)
         self.assertEqual(json.loads(out)["arguments"]["thinking"], "high")
+
+    def test_rerun_omits_unchanged_context_but_keeps_current_candidate(self):
+        self.assertEqual(self.record()[0], 0)
+        self.data.update(
+            head=self.commit("test: review fixes"),
+            pushed=True,
+            pr="https://github.com/example/repo/pull/1",
+        )
+        self.write_request_file()
+        code, out, err = self.invoke("prepare", "--request", str(self.request))
+        self.assertEqual(code, 0, err)
+        arguments = json.loads(out)["arguments"]
+        self.assertEqual(arguments["threadId"], "reviewer")
+        prompt = arguments["prompt"]
+        self.assertNotIn(self.data["context"], prompt)
+        for value in (
+            self.data["workerId"],
+            self.data["checkout"],
+            self.data["pr"],
+            self.head + "..." + self.data["head"],
+            str(self.request.resolve()),
+        ):
+            self.assertIn(value, prompt)
+        saved = json.loads(self.request.read_text())
+        self.assertEqual(saved["context"], self.data["context"])
+        for reference in ("reviewer.md", "reply-codex.md"):
+            path = ROOT / "dot_codex/skills/task-review-cycle/references" / reference
+            self.assertIn(str(path.resolve()), prompt)
+            self.assertTrue(path.is_file())
+
+    def test_changed_context_is_sent_until_accepted_candidate_is_recorded(self):
+        self.assertEqual(self.record()[0], 0)
+        self.data["context"] = "新しい要件と {braces} と $values"
+        self.write_request_file()
+        for _ in range(2):
+            code, out, err = self.invoke("prepare", "--request", str(self.request))
+            self.assertEqual(code, 0, err)
+            self.assertIn(self.data["context"], json.loads(out)["arguments"]["prompt"])
+        self.assertEqual(self.record()[0], 0)
+        code, out, err = self.invoke("prepare", "--request", str(self.request))
+        self.assertEqual(code, 0, err)
+        self.assertNotIn(self.data["context"], json.loads(out)["arguments"]["prompt"])
+
+    def test_full_context_restores_instructions_without_replacing_reviewer(self):
+        for worker in ("Codex", "Claude"):
+            with self.subTest(worker=worker):
+                (self.root / "state.json").unlink(missing_ok=True)
+                self.data["worker"] = worker
+                self.write_request_file()
+                code, out, err = self.invoke("prepare", "--request", str(self.request))
+                self.assertEqual(code, 0, err)
+                initial_prompt = json.loads(out)["arguments"]["prompt"]
+                self.assertEqual(self.record()[0], 0)
+                code, out, err = self.invoke(
+                    "prepare", "--request", str(self.request), "--full-context"
+                )
+                self.assertEqual(code, 0, err)
+                request = json.loads(out)
+                self.assertEqual(request["tool"], "send_message_to_thread")
+                self.assertEqual(request["arguments"]["threadId"], "reviewer")
+                self.assertEqual(request["arguments"]["prompt"], initial_prompt)
 
     def test_record_rejects_provisional_self_and_different_reviewer(self):
         for reviewer in ("client-new-thread:queued", "worker"):
@@ -236,15 +300,15 @@ class ReviewSessionTest(ReviewFixture):
         self.data["checkout"] = str(checkout)
         self.request = checkout / ".reviewctl/request.json"
         self.request.parent.mkdir()
-        (self.request.parent / ".gitignore").write_text("*\n")
         self.write_request_file()
-        self.assertEqual(reviewctl.git(checkout, "status", "--porcelain"), "")
         with mock.patch.object(reviewctl.Path, "cwd", return_value=checkout):
             code, out, err = self.invoke(
                 "prepare", "--request", str(self.request), default_state=True
             )
             self.assertEqual(code, 0, err)
-            self.assertFalse((checkout / ".reviewctl/state.json").exists())
+            pending = json.loads((checkout / ".reviewctl/state.json").read_text())
+            self.assertTrue(pending["pending_create"])
+            self.assertEqual(reviewctl.git(checkout, "status", "--porcelain"), "")
             code, out, err = self.invoke(
                 "record",
                 "--request",
@@ -263,6 +327,81 @@ class ReviewSessionTest(ReviewFixture):
 
     def write_request_file(self):
         self.request.write_text(json.dumps(self.data))
+
+    def test_pending_survives_restart_and_blocks_duplicate_creation(self):
+        self.write_request()
+        command = [
+            str(ROOT / "bin/executable_reviewctl"),
+            "--state",
+            str(self.root / "state.json"),
+            "--skills-root",
+            str(ROOT / "dot_codex/skills"),
+            "prepare",
+            "--request",
+            str(self.request),
+        ]
+        first = subprocess.run(command, capture_output=True, text=True)
+        self.assertEqual(first.returncode, 0, first.stderr)
+        self.assertEqual(json.loads(first.stdout)["tool"], "create_thread")
+        before = (self.root / "state.json").read_text()
+        second = subprocess.run(command, capture_output=True, text=True)
+        self.assertEqual(second.returncode, 1)
+        self.assertEqual(second.stdout, "")
+        self.assertIn("pending", second.stderr)
+        self.assertEqual((self.root / "state.json").read_text(), before)
+        self.assertEqual(self.record()[0], 0)
+        code, out, err = self.invoke("prepare", "--request", str(self.request))
+        self.assertEqual(code, 0, err)
+        self.assertEqual(json.loads(out)["tool"], "send_message_to_thread")
+        self.assertEqual(json.loads(out)["arguments"]["threadId"], "reviewer")
+
+    def test_concurrent_initial_prepares_emit_one_creation(self):
+        self.write_request()
+        command = [
+            str(ROOT / "bin/executable_reviewctl"),
+            "--state",
+            str(self.root / "state.json"),
+            "--skills-root",
+            str(ROOT / "dot_codex/skills"),
+            "prepare",
+            "--request",
+            str(self.request),
+        ]
+        processes = [
+            subprocess.Popen(
+                command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+            )
+            for _ in range(2)
+        ]
+        results = [
+            (*process.communicate(), process.returncode) for process in processes
+        ]
+        self.assertEqual(sorted(code for _, _, code in results), [0, 1])
+        emitted = [json.loads(out) for out, _, code in results if code == 0]
+        self.assertEqual([item["tool"] for item in emitted], ["create_thread"])
+
+    def test_pending_record_rejects_changed_candidate_without_overwrite(self):
+        self.write_request()
+        self.assertEqual(self.invoke("prepare", "--request", str(self.request))[0], 0)
+        before = (self.root / "state.json").read_text()
+        self.data["context"] = "changed while the creation result was unknown"
+        self.assertEqual(self.record()[0], 1)
+        self.assertEqual((self.root / "state.json").read_text(), before)
+
+    def test_only_confirmed_unsent_creation_can_be_released(self):
+        self.write_request()
+        self.assertEqual(self.invoke("prepare", "--request", str(self.request))[0], 0)
+        with self.assertRaises(SystemExit):
+            self.invoke("reset-pending")
+        self.assertTrue((self.root / "state.json").exists())
+        code, out, err = self.invoke("reset-pending", "--not-sent")
+        self.assertEqual(code, 0, err)
+        self.assertFalse((self.root / "state.json").exists())
+        self.assertEqual(self.invoke("prepare", "--request", str(self.request))[0], 0)
+        self.assertEqual(self.record()[0], 0)
+        before = (self.root / "state.json").read_text()
+        self.assertEqual(self.invoke("reset-pending", "--not-sent")[0], 1)
+        self.assertEqual((self.root / "state.json").read_text(), before)
 
 
 if __name__ == "__main__":
