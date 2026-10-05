@@ -139,7 +139,10 @@ class ReviewSessionTest(ReviewFixture):
         )
         self.assertEqual(request["arguments"]["model"], "gpt-6.1-sol")
         self.assertEqual(request["arguments"]["thinking"], "medium")
-        self.assertFalse((self.root / "state.json").exists())
+        pending = json.loads((self.root / "state.json").read_text())
+        self.assertTrue(pending["pending_create"])
+        self.assertIsNone(pending["reviewer"])
+        self.assertEqual(pending["candidate"], self.data)
         self.assertEqual(self.record()[0], 0)
         code, out, err = self.invoke("state")
         self.assertEqual(code, 0, err)
@@ -303,7 +306,8 @@ class ReviewSessionTest(ReviewFixture):
                 "prepare", "--request", str(self.request), default_state=True
             )
             self.assertEqual(code, 0, err)
-            self.assertFalse((checkout / ".reviewctl/state.json").exists())
+            pending = json.loads((checkout / ".reviewctl/state.json").read_text())
+            self.assertTrue(pending["pending_create"])
             self.assertEqual(reviewctl.git(checkout, "status", "--porcelain"), "")
             code, out, err = self.invoke(
                 "record",
@@ -323,6 +327,81 @@ class ReviewSessionTest(ReviewFixture):
 
     def write_request_file(self):
         self.request.write_text(json.dumps(self.data))
+
+    def test_pending_survives_restart_and_blocks_duplicate_creation(self):
+        self.write_request()
+        command = [
+            str(ROOT / "bin/executable_reviewctl"),
+            "--state",
+            str(self.root / "state.json"),
+            "--skills-root",
+            str(ROOT / "dot_codex/skills"),
+            "prepare",
+            "--request",
+            str(self.request),
+        ]
+        first = subprocess.run(command, capture_output=True, text=True)
+        self.assertEqual(first.returncode, 0, first.stderr)
+        self.assertEqual(json.loads(first.stdout)["tool"], "create_thread")
+        before = (self.root / "state.json").read_text()
+        second = subprocess.run(command, capture_output=True, text=True)
+        self.assertEqual(second.returncode, 1)
+        self.assertEqual(second.stdout, "")
+        self.assertIn("pending", second.stderr)
+        self.assertEqual((self.root / "state.json").read_text(), before)
+        self.assertEqual(self.record()[0], 0)
+        code, out, err = self.invoke("prepare", "--request", str(self.request))
+        self.assertEqual(code, 0, err)
+        self.assertEqual(json.loads(out)["tool"], "send_message_to_thread")
+        self.assertEqual(json.loads(out)["arguments"]["threadId"], "reviewer")
+
+    def test_concurrent_initial_prepares_emit_one_creation(self):
+        self.write_request()
+        command = [
+            str(ROOT / "bin/executable_reviewctl"),
+            "--state",
+            str(self.root / "state.json"),
+            "--skills-root",
+            str(ROOT / "dot_codex/skills"),
+            "prepare",
+            "--request",
+            str(self.request),
+        ]
+        processes = [
+            subprocess.Popen(
+                command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+            )
+            for _ in range(2)
+        ]
+        results = [
+            (*process.communicate(), process.returncode) for process in processes
+        ]
+        self.assertEqual(sorted(code for _, _, code in results), [0, 1])
+        emitted = [json.loads(out) for out, _, code in results if code == 0]
+        self.assertEqual([item["tool"] for item in emitted], ["create_thread"])
+
+    def test_pending_record_rejects_changed_candidate_without_overwrite(self):
+        self.write_request()
+        self.assertEqual(self.invoke("prepare", "--request", str(self.request))[0], 0)
+        before = (self.root / "state.json").read_text()
+        self.data["context"] = "changed while the creation result was unknown"
+        self.assertEqual(self.record()[0], 1)
+        self.assertEqual((self.root / "state.json").read_text(), before)
+
+    def test_only_confirmed_unsent_creation_can_be_released(self):
+        self.write_request()
+        self.assertEqual(self.invoke("prepare", "--request", str(self.request))[0], 0)
+        with self.assertRaises(SystemExit):
+            self.invoke("reset-pending")
+        self.assertTrue((self.root / "state.json").exists())
+        code, out, err = self.invoke("reset-pending", "--not-sent")
+        self.assertEqual(code, 0, err)
+        self.assertFalse((self.root / "state.json").exists())
+        self.assertEqual(self.invoke("prepare", "--request", str(self.request))[0], 0)
+        self.assertEqual(self.record()[0], 0)
+        before = (self.root / "state.json").read_text()
+        self.assertEqual(self.invoke("reset-pending", "--not-sent")[0], 1)
+        self.assertEqual((self.root / "state.json").read_text(), before)
 
 
 if __name__ == "__main__":

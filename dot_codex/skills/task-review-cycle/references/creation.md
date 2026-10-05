@@ -1,0 +1,5 @@
+# 作成結果が確認できないとき
+
+`reviewctl state`と元のcreate_thread呼び出し・受理結果を確認する。返されたthreadIdでread/waitが失敗しても、作成失敗とは扱わない。
+clientThreadIdは準備中の受理結果であり、一覧に出ないことも未作成の証拠にはならない。元の呼び出しの履歴・Appの準備状態から確定IDを復元し、source_thread_idと固定SHAを照合して同じstateへrecordする。タイトルだけで選ばない。
+復元できなければpendingを保持して不足を報告する。元のcreate_threadが未送信または送信前に拒否されたと確認できた場合だけ、同じ状態保存先で`reviewctl reset-pending --not-sent`を実行して再度prepareする。timeoutや結果不明を理由に解除しない。
