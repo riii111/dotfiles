@@ -12,7 +12,7 @@ commit済み候補をfreshなCodex reviewerへ渡し、以後は同じreview Tas
 ## 依頼と結果の受取
 
 `$HOME/bin/reviewctl`が未導入ならユーザーに伝えて停止する。
-[依頼JSON](references/request.md)を`.reviewctl/request.json`へ保存する。
+worktreeに`.reviewctl/`を作り、[依頼JSON](references/request.md)を`.reviewctl/request.json`へ保存する。
 
 1. `$HOME/bin/reviewctl prepare --request .reviewctl/request.json`を実行し、返されたtool名とargumentsを下表のツールへ渡す。ユーザーがモデル設定を指定した場合だけ`--model`・`--thinking`を渡す。
 2. 送信受理と確定threadIdを確認し、`$HOME/bin/reviewctl record --request .reviewctl/request.json --reviewer-thread-id <確定ID>`で記録する。Codexはturnを終了し、Claudeはwait/readを続ける。
