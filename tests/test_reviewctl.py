@@ -27,18 +27,17 @@ class ReviewFixture(unittest.TestCase):
         self.run_git("init", "-q")
         self.commit("test: initial")
         self.head = reviewctl.git(self.root, "rev-parse", "HEAD")
+        self.run_git("branch", "base")
         self.request = self.root / "request.json"
         self.data = {
-            "identifier": "example",
-            "worker": "Codex",
-            "workerId": "worker",
+            "taskId": "example",
+            "workerAI": "Codex",
+            "workerChatId": "worker",
             "checkout": str(self.root),
-            "base": self.head,
-            "head": self.head,
-            "context": "日本語と {braces} と $values",
+            "baseBranch": "base",
+            "documentRefs": [str(ROOT / "AGENTS.md"), "https://example.com/task/1"],
             "projectId": "project",
-            "pushed": False,
-            "pr": None,
+            "prUrl": None,
         }
 
     def run_git(self, *arguments):
@@ -75,13 +74,26 @@ class ReviewFixture(unittest.TestCase):
 
 
 class ReviewCandidateTest(ReviewFixture):
-    def test_rejects_stale_head_before_any_review(self):
-        self.commit("test: changed head")
-        with self.assertRaises(reviewctl.ReviewError):
-            self.write_request()
+    def test_rejects_old_free_text_and_manual_snapshot_fields(self):
+        for key, value in (
+            ("context", "copy all historical context"),
+            ("pushed", True),
+            ("head", self.head),
+        ):
+            with self.subTest(key=key):
+                self.data[key] = value
+                with self.assertRaises(reviewctl.ReviewError):
+                    self.write_request()
+                del self.data[key]
 
-    def test_rejects_symbolic_review_base(self):
-        self.data["base"] = "HEAD"
+    def test_resolves_branch_and_current_head_without_manual_shas(self):
+        head = self.commit("test: changed head")
+        data = self.write_request()
+        self.assertEqual(data["base"], self.head)
+        self.assertEqual(data["head"], head)
+
+    def test_rejects_revision_expression_as_base_branch(self):
+        self.data["baseBranch"] = "HEAD~0"
         with self.assertRaises(reviewctl.ReviewError):
             self.write_request()
 
@@ -92,15 +104,79 @@ class ReviewCandidateTest(ReviewFixture):
         with self.assertRaises(reviewctl.ReviewError):
             self.write_request()
 
-    def test_context_survives_template_rendering(self):
+    def test_references_and_fixed_range_survive_rendering(self):
         data = self.write_request()
-        text = reviewctl.review_prompt(data, ROOT / "dot_codex/skills", self.request)
-        self.assertIn(self.data["context"], text)
+        text = reviewctl.review_prompt(data, ROOT / "dot_codex/skills")
+        for reference in self.data["documentRefs"]:
+            self.assertIn(reference, text)
         self.assertIn(str(self.root), text)
         self.assertIn(self.head + "..." + self.head, text)
 
 
 class ReviewSessionTest(ReviewFixture):
+    def legacy_state(self, pending=False):
+        data = {
+            "identifier": "example",
+            "worker": "Codex",
+            "workerId": "worker",
+            "projectId": "project",
+            "checkout": str(self.root),
+            "base": self.head,
+            "head": self.head,
+            "context": "old free text",
+            "pushed": False,
+            "pr": None,
+        }
+        state = {"reviewer": None if pending else "reviewer", "candidate": data}
+        if pending:
+            state["pending_create"] = True
+        (self.root / "state.json").write_text(json.dumps(state))
+        return data
+
+    def test_legacy_confirmed_state_reuses_reviewer_after_schema_migration(self):
+        self.legacy_state()
+        self.write_request_file()
+        code, out, err = self.invoke("prepare", "--request", str(self.request))
+        self.assertEqual(code, 0, err)
+        self.assertEqual(json.loads(out)["arguments"]["threadId"], "reviewer")
+        self.assertNotIn("old free text", json.loads(out)["arguments"]["prompt"])
+        self.assertEqual(self.record()[0], 0)
+        self.assertEqual(
+            json.loads((self.root / "state.json").read_text())["candidate"]["taskId"],
+            "example",
+        )
+
+    def test_legacy_pending_requires_original_request_before_migration(self):
+        old = self.legacy_state(pending=True)
+        self.write_request_file()
+        before = (self.root / "state.json").read_text()
+        self.assertEqual(self.invoke("prepare", "--request", str(self.request))[0], 1)
+        self.assertEqual(self.record()[0], 1)
+        self.assertEqual((self.root / "state.json").read_text(), before)
+        self.request.write_text(json.dumps(old))
+        self.assertEqual(
+            self.invoke(
+                "record",
+                "--request",
+                str(self.request),
+                "--reviewer-thread-id",
+                "reviewer",
+            )[0],
+            0,
+        )
+        self.write_request_file()
+        code, out, err = self.invoke("prepare", "--request", str(self.request))
+        self.assertEqual(code, 0, err)
+        self.assertEqual(json.loads(out)["arguments"]["threadId"], "reviewer")
+
+    def test_initial_record_rejects_checkout_advanced_after_prepare(self):
+        self.write_request_file()
+        self.assertEqual(self.invoke("prepare", "--request", str(self.request))[0], 0)
+        before = (self.root / "state.json").read_text()
+        self.commit("test: changed before acceptance")
+        self.assertEqual(self.record()[0], 1)
+        self.assertEqual((self.root / "state.json").read_text(), before)
+
     def invoke(self, *arguments, default_state=False):
         out, err = io.StringIO(), io.StringIO()
         with redirect_stdout(out), redirect_stderr(err):
@@ -142,7 +218,7 @@ class ReviewSessionTest(ReviewFixture):
         pending = json.loads((self.root / "state.json").read_text())
         self.assertTrue(pending["pending_create"])
         self.assertIsNone(pending["reviewer"])
-        self.assertEqual(pending["candidate"], self.data)
+        self.assertEqual(pending["candidate"], self.write_request())
         self.assertEqual(self.record()[0], 0)
         code, out, err = self.invoke("state")
         self.assertEqual(code, 0, err)
@@ -164,69 +240,52 @@ class ReviewSessionTest(ReviewFixture):
         self.assertEqual(code, 0, err)
         self.assertEqual(json.loads(out)["arguments"]["thinking"], "high")
 
-    def test_rerun_omits_unchanged_context_but_keeps_current_candidate(self):
+    def test_rerun_reuses_reviewer_with_current_head_and_document_references(self):
         self.assertEqual(self.record()[0], 0)
-        self.data.update(
-            head=self.commit("test: review fixes"),
-            pushed=True,
-            pr="https://github.com/example/repo/pull/1",
-        )
+        head = self.commit("test: review fixes")
+        self.data["prUrl"] = "https://github.com/example/repo/pull/1"
         self.write_request_file()
         code, out, err = self.invoke("prepare", "--request", str(self.request))
         self.assertEqual(code, 0, err)
         arguments = json.loads(out)["arguments"]
         self.assertEqual(arguments["threadId"], "reviewer")
         prompt = arguments["prompt"]
-        self.assertNotIn(self.data["context"], prompt)
         for value in (
-            self.data["workerId"],
+            *self.data["documentRefs"],
+            self.data["workerChatId"],
             self.data["checkout"],
-            self.data["pr"],
-            self.head + "..." + self.data["head"],
-            str(self.request.resolve()),
+            self.data["prUrl"],
+            self.head + "..." + head,
         ):
             self.assertIn(value, prompt)
-        saved = json.loads(self.request.read_text())
-        self.assertEqual(saved["context"], self.data["context"])
-        for reference in ("reviewer.md", "reply-codex.md"):
-            path = ROOT / "dot_codex/skills/task-review-cycle/references" / reference
-            self.assertIn(str(path.resolve()), prompt)
-            self.assertTrue(path.is_file())
 
-    def test_changed_context_is_sent_until_accepted_candidate_is_recorded(self):
+    def test_rereview_record_rejects_head_changed_after_prepare(self):
         self.assertEqual(self.record()[0], 0)
-        self.data["context"] = "新しい要件と {braces} と $values"
-        self.write_request_file()
-        for _ in range(2):
-            code, out, err = self.invoke("prepare", "--request", str(self.request))
-            self.assertEqual(code, 0, err)
-            self.assertIn(self.data["context"], json.loads(out)["arguments"]["prompt"])
+        self.commit("test: first fix")
+        self.assertEqual(self.invoke("prepare", "--request", str(self.request))[0], 0)
+        before = (self.root / "state.json").read_text()
+        self.commit("test: change while sending")
+        self.assertEqual(self.record()[0], 1)
+        self.assertEqual((self.root / "state.json").read_text(), before)
+
+    def test_upstream_branch_advancement_keeps_recorded_review_base(self):
         self.assertEqual(self.record()[0], 0)
+        self.run_git("branch", "-f", "base", self.commit("test: upstream advances"))
         code, out, err = self.invoke("prepare", "--request", str(self.request))
         self.assertEqual(code, 0, err)
-        self.assertNotIn(self.data["context"], json.loads(out)["arguments"]["prompt"])
-
-    def test_full_context_restores_instructions_without_replacing_reviewer(self):
-        for worker in ("Codex", "Claude"):
-            with self.subTest(worker=worker):
-                (self.root / "state.json").unlink(missing_ok=True)
-                self.data["worker"] = worker
-                self.write_request_file()
-                code, out, err = self.invoke("prepare", "--request", str(self.request))
-                self.assertEqual(code, 0, err)
-                initial_prompt = json.loads(out)["arguments"]["prompt"]
-                self.assertEqual(self.record()[0], 0)
-                code, out, err = self.invoke(
-                    "prepare", "--request", str(self.request), "--full-context"
-                )
-                self.assertEqual(code, 0, err)
-                request = json.loads(out)
-                self.assertEqual(request["tool"], "send_message_to_thread")
-                self.assertEqual(request["arguments"]["threadId"], "reviewer")
-                self.assertEqual(request["arguments"]["prompt"], initial_prompt)
+        self.assertIn(self.head + "...", json.loads(out)["arguments"]["prompt"])
+        self.assertEqual(
+            json.loads((self.root / "state.json").read_text())["prepared"]["base"],
+            self.head,
+        )
 
     def test_record_rejects_provisional_self_and_different_reviewer(self):
-        for reviewer in ("client-new-thread:queued", "worker"):
+        for reviewer in (
+            "client-new-thread:queued",
+            "worker",
+            "reviewer ",
+            " reviewer",
+        ):
             with self.subTest(reviewer=reviewer):
                 self.assertEqual(self.record(reviewer)[0], 1)
                 self.assertFalse((self.root / "state.json").exists())
@@ -235,14 +294,31 @@ class ReviewSessionTest(ReviewFixture):
         state = json.loads((self.root / "state.json").read_text())
         self.assertEqual(state["reviewer"], "reviewer")
 
+    def test_worker_id_whitespace_cannot_bypass_self_review_rejection(self):
+        for worker_id in ("worker ", " worker"):
+            with self.subTest(worker_id=worker_id):
+                self.data["workerChatId"] = worker_id
+                self.write_request_file()
+                self.assertEqual(
+                    self.invoke(
+                        "record",
+                        "--request",
+                        str(self.request),
+                        "--reviewer-thread-id",
+                        "worker",
+                    )[0],
+                    1,
+                )
+                self.assertFalse((self.root / "state.json").exists())
+
     def test_changed_session_identity_is_rejected_without_overwrite(self):
         self.assertEqual(self.record()[0], 0)
         before = (self.root / "state.json").read_text()
         original = self.data.copy()
         for key, value in (
             ("checkout", str(self.add_worktree())),
-            ("workerId", "other-worker"),
-            ("worker", "Claude"),
+            ("workerChatId", "other-worker"),
+            ("workerAI", "Claude"),
             ("projectId", "other-project"),
         ):
             with self.subTest(key=key):
@@ -255,12 +331,11 @@ class ReviewSessionTest(ReviewFixture):
 
     def test_base_update_requires_integration_and_keeps_reviewer(self):
         self.assertEqual(self.record()[0], 0)
-        before = (self.root / "state.json").read_text()
         self.run_git("checkout", "-qb", "upstream")
         base = self.commit("test: upstream")
         self.run_git("checkout", "-q", "--detach", self.head)
         head = self.commit("test: worker")
-        self.data.update(base=base, head=head)
+        self.data["baseBranch"] = "upstream"
         self.write_request_file()
         code, out, err = self.invoke(
             "prepare", "--request", str(self.request), "--update-base"
@@ -268,7 +343,7 @@ class ReviewSessionTest(ReviewFixture):
         self.assertEqual(code, 1)
         self.assertIn("ancestor", err)
         self.run_git("merge", "--no-edit", base)
-        self.data["head"] = reviewctl.git(self.root, "rev-parse", "HEAD")
+        head = reviewctl.git(self.root, "rev-parse", "HEAD")
         self.write_request_file()
         code, out, err = self.invoke("prepare", "--request", str(self.request))
         self.assertEqual(code, 1)
@@ -279,8 +354,11 @@ class ReviewSessionTest(ReviewFixture):
         self.assertEqual(code, 0, err)
         prepared = json.loads(out)
         self.assertEqual(prepared["arguments"]["threadId"], "reviewer")
-        self.assertIn(base + "..." + self.data["head"], prepared["arguments"]["prompt"])
-        self.assertEqual((self.root / "state.json").read_text(), before)
+        self.assertIn(base + "..." + head, prepared["arguments"]["prompt"])
+        self.assertEqual(
+            json.loads((self.root / "state.json").read_text())["candidate"]["base"],
+            self.head,
+        )
         self.assertEqual(self.record()[0], 1)
         code, out, err = self.invoke(
             "record",
@@ -384,7 +462,7 @@ class ReviewSessionTest(ReviewFixture):
         self.write_request()
         self.assertEqual(self.invoke("prepare", "--request", str(self.request))[0], 0)
         before = (self.root / "state.json").read_text()
-        self.data["context"] = "changed while the creation result was unknown"
+        self.data["documentRefs"].append("https://example.com/changed")
         self.assertEqual(self.record()[0], 1)
         self.assertEqual((self.root / "state.json").read_text(), before)
 

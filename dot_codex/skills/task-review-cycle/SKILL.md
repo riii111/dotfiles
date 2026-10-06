@@ -16,9 +16,7 @@ worktreeに`.reviewctl/`を作り、[依頼JSON](references/request.md)を`.revi
 
 1. `$HOME/bin/reviewctl prepare --request .reviewctl/request.json`を実行し、返されたtool名とargumentsを下表のツールへ渡す。ユーザーがモデル設定を指定した場合だけ`--model`・`--thinking`を渡す。
 2. 送信受理と確定threadIdを確認し、`$HOME/bin/reviewctl record --request .reviewctl/request.json --reviewer-thread-id <確定ID>`で記録する。Codexはturnを終了し、Claudeはwait/readを続ける。
-3. 最終回答のbase/headが依頼と一致することを確認する。修正後は同じJSONのheadとpush/PR状態、変更した前提を更新して再依頼する。判定保留なら不足を解消する。
-
-全文の再送が必要ならprepareに`--full-context`を付ける。
+3. 最終回答のbase/headがstateに記録された候補と一致することを確認する。修正後は同じJSONのPR URL・参照文書を必要に応じて更新し、再依頼する。SHAはreviewctlが取得する。判定保留なら不足を解消する。
 
 | worker | 送信ツール | 結果の受取 |
 | --- | --- | --- |
@@ -33,4 +31,11 @@ Claude workerのreviewerはCodexモデルに限られる。Claudeモデルを指
 ## 再開と基点更新
 
 `$HOME/bin/reviewctl state`でreviewerと候補を確認する。
-競合解消などで上流を取り込んだ場合だけJSONのbaseを更新し、prepareとrecordの両方に`--update-base`を付ける。
+競合解消などで上流を取り込んで基点を更新する場合だけ、prepareとrecordの両方に`--update-base`を付ける。
+
+## レビュー時の確認事項
+
+worker checkoutでレビューし、branchやcheckoutは変更しないでください。
+受信メタデータにsource_thread_idがあればworkerのチャットIDと照合し、不一致は判定保留にしてください。
+ローカル固定SHA差分をレビューし、PRとCIはPRのheadが候補SHAと一致する場合だけ根拠にしてください。
+base branchが進んだことだけを理由にLGTMを保留しないでください。

@@ -24,3 +24,4 @@ bin/gh-read
 .claude/skills/sandbox-review
 .claude/scripts/sandbox-report.py
 .codex/skills/sandbox-review
+.codex/skills/task-review-cycle/references/rereviewer.md
