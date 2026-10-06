@@ -258,12 +258,6 @@ class ReviewSessionTest(ReviewFixture):
             self.head + "..." + head,
         ):
             self.assertIn(value, prompt)
-        self.assertLess(
-            len(prompt),
-            len(
-                reviewctl.review_prompt(self.write_request(), ROOT / "dot_codex/skills")
-            ),
-        )
 
     def test_rereview_record_rejects_head_changed_after_prepare(self):
         self.assertEqual(self.record()[0], 0)
@@ -284,25 +278,6 @@ class ReviewSessionTest(ReviewFixture):
             json.loads((self.root / "state.json").read_text())["prepared"]["base"],
             self.head,
         )
-
-    def test_full_instructions_restores_initial_prompt_without_replacing_reviewer(self):
-        for worker in ("Codex", "Claude"):
-            with self.subTest(worker=worker):
-                (self.root / "state.json").unlink(missing_ok=True)
-                self.data["workerAI"] = worker
-                self.write_request_file()
-                code, out, err = self.invoke("prepare", "--request", str(self.request))
-                self.assertEqual(code, 0, err)
-                initial_prompt = json.loads(out)["arguments"]["prompt"]
-                self.assertEqual(self.record()[0], 0)
-                code, out, err = self.invoke(
-                    "prepare", "--request", str(self.request), "--full-instructions"
-                )
-                self.assertEqual(code, 0, err)
-                request = json.loads(out)
-                self.assertEqual(request["tool"], "send_message_to_thread")
-                self.assertEqual(request["arguments"]["threadId"], "reviewer")
-                self.assertEqual(request["arguments"]["prompt"], initial_prompt)
 
     def test_record_rejects_provisional_self_and_different_reviewer(self):
         for reviewer in ("client-new-thread:queued", "worker"):

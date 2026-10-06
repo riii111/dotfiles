@@ -113,20 +113,18 @@ def pending_candidate(path, saved):
     return data
 
 
-def review_prompt(data, skills, previous=None, full_instructions=False):
+def review_prompt(data, skills):
     skill = skills / "ai-code-review" / "SKILL.md"
     references = skills / "task-review-cycle" / "references"
-    instructions = references / "reviewer.md"
-    followup = previous is not None and not full_instructions
-    template = references / ("rereviewer.md" if followup else "reviewer.md")
+    template = references / "reviewer.md"
+    cycle_skill = skills / "task-review-cycle" / "SKILL.md"
     reply = references / ("reply-" + data["workerAI"].lower() + ".md")
-    if not all(path.is_file() for path in (skill, instructions, template, reply)):
+    if not all(path.is_file() for path in (skill, cycle_skill, template, reply)):
         raise ReviewError("ai-code-review or reviewer templates are not installed")
-    body = template.read_text()
-    if not followup:
-        body += "\n" + reply.read_text()
-    return body.format(
+    return template.read_text().format(
         skill_path=str(skill.resolve()),
+        cycle_skill_path=str(cycle_skill.resolve()),
+        reply_path=str(reply.resolve()),
         task_id=data["taskId"],
         document_refs=document_refs(data["documentRefs"]),
         worker_ai=data["workerAI"],
@@ -135,8 +133,6 @@ def review_prompt(data, skills, previous=None, full_instructions=False):
         pr_url=data["prUrl"] or "null",
         base=data["base"],
         head=data["head"],
-        instructions_path=str(instructions.resolve()),
-        reply_path=str(reply.resolve()),
     )
 
 
@@ -173,21 +169,11 @@ def load_state(path):
     return state
 
 
-def check_session(state, data, update_base):
+def check_session(state, data):
     if state:
         for key in ("taskId", "workerAI", "workerChatId", "projectId", "checkout"):
             if session_value(state["candidate"], key) != session_value(data, key):
                 raise ReviewError(f"review session must keep the original {key}")
-        if state["candidate"]["base"] != data["base"]:
-            if not update_base:
-                raise ReviewError(
-                    "base changed; use --update-base after integrating upstream"
-                )
-            if (
-                git(data["checkout"], "merge-base", data["base"], data["head"])
-                != data["base"]
-            ):
-                raise ReviewError("updated base must be an ancestor of head")
 
 
 def state_path(explicit):
@@ -219,11 +205,6 @@ def main(argv=None):
     prepare.add_argument("--request", type=Path, required=True)
     prepare.add_argument("--model")
     prepare.add_argument("--thinking")
-    prepare.add_argument(
-        "--full-instructions",
-        action="store_true",
-        help="resend the initial review instructions to the existing reviewer",
-    )
     prepare.add_argument(
         "--update-base",
         action="store_true",
@@ -276,7 +257,7 @@ def main(argv=None):
                     state["candidate"] if state else None,
                     args.update_base,
                 )
-            check_session(state, data, args.update_base)
+            check_session(state, data)
             if args.command == "record":
                 reviewer = args.reviewer_thread_id
                 if not reviewer.strip() or reviewer.startswith("client-new-thread:"):
@@ -298,14 +279,7 @@ def main(argv=None):
                 output = {"reviewer": reviewer, "candidate": data}
                 save_state(path, output)
             else:
-                arguments = {
-                    "prompt": review_prompt(
-                        data,
-                        args.skills_root,
-                        previous=state["candidate"] if state else None,
-                        full_instructions=args.full_instructions,
-                    )
-                }
+                arguments = {"prompt": review_prompt(data, args.skills_root)}
                 if state:
                     tool = "send_message_to_thread"
                     arguments["threadId"] = state["reviewer"]
