@@ -52,6 +52,7 @@ test "$(decision gh-loupe issue 26 --compact)" = allow
 test "$(decision sed -n 1,10p file)" = allow
 test "$(decision codex-read-lines 1 10 file)" = allow
 test "$(decision codex-force-with-lease)" = allow
+test "$(decision taskctl review --request .reviewctl/request.json)" = allow
 test "$(decision env rm -rf target)" = prompt
 test "$(decision fd -x rm '{}')" = allow
 test "$(decision awk 'BEGIN { system("rm file") }')" = prompt

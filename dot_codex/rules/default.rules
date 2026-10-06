@@ -53,6 +53,7 @@ prefix_rule(pattern=["bq", "show"], decision="allow", justification="Show BigQue
 prefix_rule(pattern=["pe"], decision="allow", justification="Run prod-errors alert triage")
 prefix_rule(pattern=["codex-read-lines"], decision="allow", justification="Read an approved line range without sed execution features")
 prefix_rule(pattern=["codex-force-with-lease"], decision="allow", justification="Push the current trusted branch with an explicit remote lease")
+prefix_rule(pattern=["taskctl"], decision="allow", justification="Send generated task launch and review requests through the harnexus call socket")
 
 # --- Local search and text processing ---
 prefix_rule(pattern=["fd"], decision="allow", justification="Find local files")

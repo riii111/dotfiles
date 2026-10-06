@@ -261,7 +261,10 @@
     "autoAllowBashIfSandboxed": true,
     "network": {
       "allowedDomains": ["github.com"],
-      "allowUnixSockets": ["/nix/var/nix/daemon-socket/socket"]
+      "allowUnixSockets": [
+        "/nix/var/nix/daemon-socket/socket",
+        "{{ .chezmoi.homeDir }}/.local/state/harnexus/call.sock"
+      ]
     },
     "filesystem": {
       "allowWrite": ["~/.cache/nix"]

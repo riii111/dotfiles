@@ -9,7 +9,7 @@ description: |
 
 参照文書の先頭をタスク管理元とし、対象タスク・合意・依存成果・関連規約を確認する。再開時は必要な文書を読み直す。起動依頼の「進めてよい範囲」を到達点とする。
 割り当てられたGit worktreeでConventionalな英語branchを作り、実装する。
-レビュー前に自身の確定Task IDを確認する。Codexは`CODEX_THREAD_ID`、Claudeは起動元のID通知を用い、未確認ならレビューを開始せず通知を待つ。
+自身のTask IDはCodex・Claudeとも`CODEX_THREAD_ID`とする。
 候補をcommitする。実装・検証までの場合は検証結果とcommitを報告して完了する。Draft PR以降の場合は[task-review-cycle](../task-review-cycle/SKILL.md)を読み、独立レビューを受ける。
 参照資料の相対パスは、そのSKILL.mdのディレクトリを基準に解決する。
 親への通知や完了記録は扱わない。
@@ -26,6 +26,6 @@ Ready化・mergeは別途依頼された場合だけ行い、その直前に現�
 
 ## Review基点
 
-最初のレビュー直前にbase branchをfetchし、そのtipを必要に応じて取り込む。branch名とPR URLを依頼JSONに記録し、reviewctlが取得したbase/head SHAをreview基点と候補にする。
+最初のレビュー直前にbase branchをfetchし、そのtipを必要に応じて取り込む。branch名とPR URLを依頼JSONに記録し、taskctlが取得したbase/head SHAをreview基点と候補にする。
 
 baseの進行だけでは取り込み・全検証・再レビューを繰り返さない。実際の競合や変更行・挙動の重複で上流を取り込んだ場合だけ、そのbase SHAへ基点を更新して必要な検証と再レビューを行う。
