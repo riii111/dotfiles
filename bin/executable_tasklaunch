@@ -1,0 +1,61 @@
+#!/usr/bin/env python3
+
+"""Generate a worker title and prompt from structured task references."""
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+
+sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+
+from dot.handoff import HandoffError, document_refs, read_request, skills_root, task_id
+
+
+COMPLETION_TARGETS = {
+    "implementation": "実装・検証まで",
+    "draft_pr": "Draft PR・CI成功まで",
+    "merge": "マージまで",
+}
+
+
+def prepare(path, skills):
+    data = read_request(path, ("taskId", "documentRefs", "completionTarget"))
+    identifier = task_id(data["taskId"])
+    references = document_refs(data["documentRefs"])
+    target = data["completionTarget"]
+    if not isinstance(target, str) or target not in COMPLETION_TARGETS:
+        raise HandoffError(
+            "completionTarget must be implementation, draft_pr, or merge"
+        )
+    skill = skills / "task-worker/SKILL.md"
+    template = skills / "task-session-launch/references/worker.md"
+    if not skill.is_file() or not template.is_file():
+        raise HandoffError("task-worker or worker template is not installed")
+    return {
+        "title": "Impl " + identifier,
+        "prompt": template.read_text().format(
+            task_id=identifier,
+            document_refs=references,
+            completion_target=COMPLETION_TARGETS[target],
+            worker_skill_path=str(skill.resolve()),
+        ),
+    }
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--request", type=Path, required=True)
+    parser.add_argument("--skills-root", type=Path, default=skills_root())
+    args = parser.parse_args(argv)
+    try:
+        print(json.dumps(prepare(args.request, args.skills_root), ensure_ascii=False))
+        return 0
+    except (HandoffError, OSError, ValueError) as error:
+        print(f"tasklaunch: {error}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

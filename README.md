@@ -124,11 +124,11 @@ sub: Claude Code
 
 `~/.codex/config.toml` is rewritten by the Codex desktop app, so it is `.chezmoiignore`d and not applied. `dot_codex/config.toml.tmpl` is kept only as a hand-maintained reference for base settings; edit the live file directly.
 
-### Independent task reviews
+### Task handoffs
 
-`reviewctl` validates fixed commit SHAs, generates review requests, and saves confirmed reviewer IDs. Use the existing Codex App/harnexus tools to send requests, wait, and read results.
+`tasklaunch` generates worker requests from task IDs, document references, and authorized completion targets. `reviewctl` fixes review commit SHAs from a base branch and the worker checkout, generates review requests, and preserves the reviewer across retries. Use the existing Codex App/harnexus tools to send requests, wait, and read results.
 
-See [task-review-cycle](dot_codex/skills/task-review-cycle/SKILL.md) for usage and the request JSON format.
+See [task-session-launch](dot_codex/skills/task-session-launch/SKILL.md) and [task-review-cycle](dot_codex/skills/task-review-cycle/SKILL.md) for usage and request JSON formats.
 
 ### Codex command policy
 
