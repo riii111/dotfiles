@@ -9,29 +9,18 @@ description: |
 
 ## 手順
 
-1. `codex_app__list_projects`を一度呼び、repositoryに対応する`projectId`を決める。
-2. 次の内容で`codex_app__create_thread`の入力を組み立てる。
-   - Git repositoryでは`target.environment.type`を`worktree`にする。
-   - `startingState`は開始branchを明示された場合だけ`{type: "branch", branchName: <branch>}`を指定する。
-   - `title`は`Impl <taskの短い識別子>`とし、task titleやPR titleは含めない。
-   - `model: claude-opus-5-5`、`thinking: medium`を既定とし、ユーザーの明示指定を優先する。
-   - `prompt`は[起動依頼](references/worker.md)を使い、下記の引き継ぎ情報を埋める。
-3. `codex_app__create_thread`を一度呼ぶ。
-4. 確定threadIdを確認し、[ID通知](references/worker-identity.md)を`send_message_to_thread`でそのworkerへ一度送る。Codex Task IDとして扱い、ClaudeのセッションIDとは区別する。
+1. `codex_app__list_projects`を一度呼び、repositoryに対応するprojectIdを決める。
+2. [起動依頼JSON](references/request.md)を保存し、`$HOME/bin/tasklaunch --request <JSONのパス>`を実行する。
+3. 生成されたtitleとpromptをそのまま使い、create_threadの入力を組み立てる。
+   - Git repositoryではtarget.environment.typeをworktreeにする。
+   - startingStateは開始branchを明示された場合だけ指定する。
+   - modelはclaude-opus-5-5、thinkingはmediumを既定とし、ユーザーの明示指定を優先する。
+4. create_threadを一度呼ぶ。
+5. 確定threadIdを確認し、[ID通知](references/worker-identity.md)をsend_message_to_threadでそのworkerへ一度送る。Codex Task IDとして扱い、ClaudeのセッションIDとは区別する。
 
-## 起動prompt
+## 参照文書
 
-管理元から読める本文や、適用されるAGENTS.mdの規約、モデル設定、task-workerの手順・完了条件は転載しない。
-additional_contextはworkerの判断・実行に必要で、参照先にない情報だけを含める。親の起動管理やコピー元の説明は渡さず、空なら欄ごと省く。
+合意・制約・依存成果・担当境界は文書へ記録し、worktreeへ入らない資料や規約もdocumentRefsで渡す。先頭はタスク管理元とする。
+tasklaunchが[起動依頼](references/worker.md)とtask-workerの実在するリンクから定型文を作る。生成後の追記や言い換えは行わない。未導入なら停止して不足を報告する。
 
-- 管理元にないユーザーとの合意、対象外、追加の許可・制約。
-- 未mergeの依存成果のbranch・SHA・PR base、並行作業との担当境界。
-- worktreeへ入らない資料や規約の絶対パス。親Task IDはworkerが宛先として使う場合だけ渡す。
-- 調査の入口となるファイルパスと、判断に影響する未確認事項。コードから再取得できる説明は省く。
-
-worker_skill_pathは同じインストール先の実在する`task-worker/SKILL.md`の絶対パスとする。
-Claudeへの本文添付に必要なSKILLリンク形式を維持し、レビュー手順はtask-workerから必要な段階で読む。
-
-## 制約
-
-`clientThreadId`はworktree準備中の受理結果であり、重複作成しない。
+clientThreadIdはworktree準備中の受理結果であり、重複作成しない。

@@ -12,8 +12,10 @@ import tempfile
 from pathlib import Path
 
 
-class ReviewError(Exception):
-    pass
+sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+
+from dot.handoff import HandoffError as ReviewError
+from dot.handoff import document_refs, read_request, single_line, skills_root, task_id
 
 
 def git(checkout, *args):
@@ -25,71 +27,114 @@ def git(checkout, *args):
     return result.stdout.strip()
 
 
-def candidate(path):
-    data = json.loads(path.read_text())
-    if not isinstance(data, dict):
-        raise ReviewError("request must be a JSON object")
-    for key in (
-        "identifier",
-        "checkout",
-        "base",
-        "head",
-        "context",
-        "projectId",
-        "workerId",
+def candidate(path, previous=None, update_base=False):
+    data = read_request(
+        path,
+        (
+            "taskId",
+            "workerAI",
+            "workerChatId",
+            "projectId",
+            "checkout",
+            "baseBranch",
+            "documentRefs",
+        ),
+        ("prUrl",),
+    )
+    task_id(data["taskId"])
+    document_refs(data["documentRefs"])
+    for key in ("workerChatId", "projectId", "checkout", "baseBranch"):
+        single_line(data[key], key)
+    if data["workerAI"] not in ("Claude", "Codex"):
+        raise ReviewError("workerAI must be Claude or Codex")
+    if data.get("prUrl") is not None and (
+        not isinstance(data["prUrl"], str)
+        or not re.fullmatch(
+            r"https://[^/\s]+/[^/\s]+/[^/\s]+/pull/[1-9][0-9]*/?", data["prUrl"]
+        )
     ):
-        if not isinstance(data.get(key), str) or not data[key].strip():
-            raise ReviewError(f"request requires a nonempty {key}")
-    if not isinstance(data.get("pushed"), bool):
-        raise ReviewError("request requires pushed: true or false")
-    if data.get("pr") is not None and not isinstance(data["pr"], str):
-        raise ReviewError("pr must be a string or null")
-    if data.get("worker") not in ("Claude", "Codex"):
-        raise ReviewError("worker must be Claude or Codex")
+        raise ReviewError("prUrl must be a pull request URL or null")
+    data.setdefault("prUrl", None)
     checkout = Path(data["checkout"])
     if not checkout.is_absolute() or not checkout.is_dir():
         raise ReviewError("checkout must be an existing absolute directory")
-    for key in ("base", "head"):
-        if not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", data[key]):
-            raise ReviewError(f"{key} must be a full commit SHA")
-    if (
-        git(checkout, "rev-parse", "--verify", data["base"] + "^{commit}")
-        != data["base"]
-    ):
-        raise ReviewError("base is not a commit")
+    data["checkout"] = str(checkout.resolve())
+    if git(checkout, "status", "--porcelain", "--untracked-files=no"):
+        raise ReviewError("checkout has uncommitted tracked changes")
+    data["head"] = git(checkout, "rev-parse", "HEAD")
+    if previous and not update_base:
+        if previous.get("baseBranch") not in (None, data["baseBranch"]):
+            raise ReviewError(
+                "baseBranch changed; use --update-base after integrating upstream"
+            )
+        data["base"] = previous["base"]
+    else:
+        reference = git(
+            checkout,
+            "rev-parse",
+            "--symbolic-full-name",
+            "--verify",
+            "--end-of-options",
+            data["baseBranch"],
+        )
+        if not reference.startswith(("refs/heads/", "refs/remotes/")):
+            raise ReviewError("baseBranch must name a local or remote branch")
+        data["base"] = git(checkout, "rev-parse", "--verify", reference + "^{commit}")
+    if git(checkout, "merge-base", data["base"], data["head"]) != data["base"]:
+        raise ReviewError("review base must be an ancestor of head")
+    return data
+
+
+def session_value(data, key):
+    old_names = {
+        "taskId": "identifier",
+        "workerAI": "worker",
+        "workerChatId": "workerId",
+    }
+    value = data.get(key, data.get(old_names.get(key)))
+    return (
+        str(Path(value).resolve())
+        if key == "checkout" and isinstance(value, str)
+        else value
+    )
+
+
+def pending_candidate(path, saved):
+    if "workerId" not in saved:
+        return candidate(path, saved)
+    data = json.loads(path.read_text())
+    if data != saved:
+        raise ReviewError("pending creation must keep the original candidate")
+    checkout = Path(data["checkout"])
     if git(checkout, "rev-parse", "HEAD") != data["head"]:
-        raise ReviewError("checkout HEAD differs from the requested head")
+        raise ReviewError("checkout HEAD differs from the pending candidate")
     if git(checkout, "status", "--porcelain", "--untracked-files=no"):
         raise ReviewError("checkout has uncommitted tracked changes")
     return data
 
 
-def review_prompt(data, skills, request_path, previous=None, full_context=False):
+def review_prompt(data, skills, previous=None, full_instructions=False):
     skill = skills / "ai-code-review" / "SKILL.md"
     references = skills / "task-review-cycle" / "references"
     instructions = references / "reviewer.md"
-    followup = previous is not None and not full_context
+    followup = previous is not None and not full_instructions
     template = references / ("rereviewer.md" if followup else "reviewer.md")
-    reply = references / ("reply-" + data["worker"].lower() + ".md")
+    reply = references / ("reply-" + data["workerAI"].lower() + ".md")
     if not all(path.is_file() for path in (skill, instructions, template, reply)):
         raise ReviewError("ai-code-review or reviewer templates are not installed")
-    context = data["context"]
-    if followup and previous.get("context") == context:
-        context = "前回依頼と同じ。"
     body = template.read_text()
     if not followup:
         body += "\n" + reply.read_text()
     return body.format(
         skill_path=str(skill.resolve()),
-        worker=data["worker"],
-        worker_thread_id=data["workerId"],
+        task_id=data["taskId"],
+        document_refs=document_refs(data["documentRefs"]),
+        worker_ai=data["workerAI"],
+        worker_chat_id=data["workerChatId"],
         checkout=data["checkout"],
-        pr=data.get("pr") or "未作成（ローカル差分レビュー）",
-        push_state="push済み" if data["pushed"] else "未push",
+        pr_url=data["prUrl"] or "null",
         base=data["base"],
         head=data["head"],
-        context=context,
-        request_path=str(request_path.resolve()),
         instructions_path=str(instructions.resolve()),
         reply_path=str(reply.resolve()),
     )
@@ -130,8 +175,8 @@ def load_state(path):
 
 def check_session(state, data, update_base):
     if state:
-        for key in ("worker", "workerId", "projectId", "checkout"):
-            if state["candidate"].get(key) != data[key]:
+        for key in ("taskId", "workerAI", "workerChatId", "projectId", "checkout"):
+            if session_value(state["candidate"], key) != session_value(data, key):
                 raise ReviewError(f"review session must keep the original {key}")
         if state["candidate"]["base"] != data["base"]:
             if not update_base:
@@ -163,20 +208,21 @@ def main(argv=None):
     parser.add_argument(
         "--skills-root",
         type=Path,
-        default=Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")) / "skills",
+        default=skills_root(),
         help="installed skills directory",
     )
     commands = parser.add_subparsers(dest="command", required=True)
     prepare = commands.add_parser(
-        "prepare", help="reserve an initial creation and print tool arguments; never send"
+        "prepare",
+        help="reserve an initial creation and print tool arguments; never send",
     )
     prepare.add_argument("--request", type=Path, required=True)
     prepare.add_argument("--model")
     prepare.add_argument("--thinking")
     prepare.add_argument(
-        "--full-context",
+        "--full-instructions",
         action="store_true",
-        help="resend all context and instructions to the existing reviewer",
+        help="resend the initial review instructions to the existing reviewer",
     )
     prepare.add_argument(
         "--update-base",
@@ -222,16 +268,31 @@ def main(argv=None):
                     "create_thread call was "
                     "confirmed not sent"
                 )
-            data = candidate(args.request)
+            if args.command == "record" and pending:
+                data = pending_candidate(args.request, state["candidate"])
+            else:
+                data = candidate(
+                    args.request,
+                    state["candidate"] if state else None,
+                    args.update_base,
+                )
             check_session(state, data, args.update_base)
             if args.command == "record":
                 reviewer = args.reviewer_thread_id
                 if not reviewer.strip() or reviewer.startswith("client-new-thread:"):
                     raise ReviewError("record requires a confirmed threadId")
-                if reviewer == data["workerId"]:
+                if reviewer == session_value(data, "workerChatId"):
                     raise ReviewError("a worker cannot review itself")
                 if pending and state["candidate"] != data:
-                    raise ReviewError("pending creation must keep the original candidate")
+                    raise ReviewError(
+                        "pending creation must keep the original candidate"
+                    )
+                if (
+                    state
+                    and state.get("prepared") is not None
+                    and state["prepared"] != data
+                ):
+                    raise ReviewError("prepared candidate changed before record")
                 if state and not pending and state["reviewer"] != reviewer:
                     raise ReviewError("review session must keep the same reviewer")
                 output = {"reviewer": reviewer, "candidate": data}
@@ -241,9 +302,8 @@ def main(argv=None):
                     "prompt": review_prompt(
                         data,
                         args.skills_root,
-                        args.request,
                         previous=state["candidate"] if state else None,
-                        full_context=args.full_context,
+                        full_instructions=args.full_instructions,
                     )
                 }
                 if state:
@@ -260,7 +320,7 @@ def main(argv=None):
                             "projectId": data["projectId"],
                             "environment": {"type": "worktree"},
                         },
-                        title="Review " + data["identifier"],
+                        title="Review " + data["taskId"],
                         model=args.model or "gpt-6.1-sol",
                         thinking=args.thinking or "medium",
                     )
@@ -271,6 +331,8 @@ def main(argv=None):
                         {"reviewer": None, "pending_create": True, "candidate": data},
                         exclusive=True,
                     )
+                else:
+                    save_state(path, {**state, "prepared": data})
         print(json.dumps(output, ensure_ascii=False))
         return 0
     except (ReviewError, OSError, ValueError) as error:
