@@ -280,7 +280,12 @@ class ReviewSessionTest(ReviewFixture):
         )
 
     def test_record_rejects_provisional_self_and_different_reviewer(self):
-        for reviewer in ("client-new-thread:queued", "worker"):
+        for reviewer in (
+            "client-new-thread:queued",
+            "worker",
+            "reviewer ",
+            " reviewer",
+        ):
             with self.subTest(reviewer=reviewer):
                 self.assertEqual(self.record(reviewer)[0], 1)
                 self.assertFalse((self.root / "state.json").exists())
@@ -288,6 +293,23 @@ class ReviewSessionTest(ReviewFixture):
         self.assertEqual(self.record("different")[0], 1)
         state = json.loads((self.root / "state.json").read_text())
         self.assertEqual(state["reviewer"], "reviewer")
+
+    def test_worker_id_whitespace_cannot_bypass_self_review_rejection(self):
+        for worker_id in ("worker ", " worker"):
+            with self.subTest(worker_id=worker_id):
+                self.data["workerChatId"] = worker_id
+                self.write_request_file()
+                self.assertEqual(
+                    self.invoke(
+                        "record",
+                        "--request",
+                        str(self.request),
+                        "--reviewer-thread-id",
+                        "worker",
+                    )[0],
+                    1,
+                )
+                self.assertFalse((self.root / "state.json").exists())
 
     def test_changed_session_identity_is_rejected_without_overwrite(self):
         self.assertEqual(self.record()[0], 0)

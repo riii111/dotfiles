@@ -15,7 +15,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 
 from dot.handoff import HandoffError as ReviewError
-from dot.handoff import document_refs, read_request, single_line, skills_root, task_id
+from dot.handoff import (
+    chat_id,
+    document_refs,
+    read_request,
+    single_line,
+    skills_root,
+    task_id,
+)
 
 
 def git(checkout, *args):
@@ -43,6 +50,7 @@ def candidate(path, previous=None, update_base=False):
     )
     task_id(data["taskId"])
     document_refs(data["documentRefs"])
+    chat_id(data["workerChatId"], "workerChatId")
     for key in ("workerChatId", "projectId", "checkout", "baseBranch"):
         single_line(data[key], key)
     if data["workerAI"] not in ("Claude", "Codex"):
@@ -259,10 +267,10 @@ def main(argv=None):
                 )
             check_session(state, data)
             if args.command == "record":
-                reviewer = args.reviewer_thread_id
-                if not reviewer.strip() or reviewer.startswith("client-new-thread:"):
-                    raise ReviewError("record requires a confirmed threadId")
-                if reviewer == session_value(data, "workerChatId"):
+                reviewer = chat_id(args.reviewer_thread_id, "reviewerThreadId")
+                if reviewer == chat_id(
+                    session_value(data, "workerChatId"), "workerChatId"
+                ):
                     raise ReviewError("a worker cannot review itself")
                 if pending and state["candidate"] != data:
                     raise ReviewError(

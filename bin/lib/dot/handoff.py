@@ -38,6 +38,13 @@ def task_id(value):
     return value
 
 
+def chat_id(value, name):
+    single_line(value, name)
+    if any(char.isspace() for char in value) or value.startswith("client-new-thread:"):
+        raise HandoffError(f"{name} must be a confirmed chat ID without whitespace")
+    return value
+
+
 def document_refs(values):
     if not isinstance(values, list) or not values:
         raise HandoffError("documentRefs must be a nonempty list of paths or URLs")
