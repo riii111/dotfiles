@@ -77,6 +77,9 @@
       "Bash(gh pr update-branch:*)",
       "Bash(gh search:*)",
       "Bash(gh-loupe:*)",
+      "Bash(taskctl launch:*)",
+      "Bash(taskctl review:*)",
+      "Bash(taskctl state:*)",
       "Bash(gh api *)",
       "Bash(gh run view*)",
       "Bash(gh run list*)",
@@ -261,10 +264,7 @@
     "autoAllowBashIfSandboxed": true,
     "network": {
       "allowedDomains": ["github.com"],
-      "allowUnixSockets": [
-        "/nix/var/nix/daemon-socket/socket",
-        "{{ .chezmoi.homeDir }}/.local/state/harnexus/call.sock"
-      ]
+      "allowUnixSockets": ["/nix/var/nix/daemon-socket/socket"]
     },
     "filesystem": {
       "allowWrite": ["~/.cache/nix"]
@@ -278,6 +278,9 @@
       "git *",
       "gh *",
       "gh-loupe *",
+      "taskctl launch *",
+      "taskctl review *",
+      "taskctl state *",
       "gcloud *",
       "bq *",
       "terraform *",

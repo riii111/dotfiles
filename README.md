@@ -126,7 +126,7 @@ sub: Claude Code
 
 ### Task handoffs
 
-`taskctl launch` creates a worker thread from task IDs, document references, and authorized completion targets. `taskctl review` fixes review commit SHAs from a base branch and the worker checkout and sends each new head to the same reviewer. Both send through the harnexus call socket (start the Codex App with `HARNEXUS_CALL_SOCKET=on`), record state before sending, and never resend an unknown result; `taskctl state` shows the sent prompt and expected/actual models.
+`taskctl launch` creates a worker thread from task IDs, document references, and authorized completion targets. `taskctl review` fixes review commit SHAs from a base branch and the worker checkout and sends each new head to the same reviewer. Both send through the harnexus call socket (start the Codex App with `HARNEXUS_CALL_SOCKET=on`), record state under `~/.local/state/taskctl/` before sending, and never resend an unknown result; `taskctl state` shows the sent prompt and expected/actual models.
 
 See [task-session-launch](dot_codex/skills/task-session-launch/SKILL.md) and [task-review-cycle](dot_codex/skills/task-review-cycle/SKILL.md) for usage and request JSON formats.
 

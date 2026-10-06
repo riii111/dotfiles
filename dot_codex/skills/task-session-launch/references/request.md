@@ -17,5 +17,6 @@
 - documentRefs: 管理元を先頭に置く、絶対パスまたはHTTPS URLの配列。合意・規約・判断記録も必要な参照だけ加える。
 - completionTarget: ユーザーが許可した到達点。implementationは実装・検証、draft_prはDraft PR・CI成功、mergeはマージまで。
 - projectId: list_projectsで選んだGit repositoryのprojectId。
+- startingBranch: 任意。ユーザーが開始branchを明示した場合だけ指定する。省略時はprojectのdefault branchから作る。
 
 補足や資料本文は参照文書へ記録する。JSONは上記の項目だけを使う。

@@ -72,16 +72,26 @@ def document_refs(values):
     return "\n".join("- " + value for value in values)
 
 
-def skills_root():
-    return Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")) / "skills"
+def codex_home():
+    return Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
 
 
 def launch_request(path):
     data = read_request(
-        path, ("taskId", "documentRefs", "completionTarget", "projectId")
+        path,
+        ("taskId", "documentRefs", "completionTarget", "projectId"),
+        ("startingBranch",),
     )
     task_id(data["taskId"])
     single_line(data["projectId"], "projectId")
+    branch = data.get("startingBranch")
+    if branch is not None and (
+        not isinstance(branch, str)
+        or not re.fullmatch(r"[\w][\w./-]*", branch)
+        or ".." in branch
+        or branch.endswith((".lock", "/", "."))
+    ):
+        raise HandoffError("startingBranch must be a branch name")
     document_refs(data["documentRefs"])
     if data["completionTarget"] not in COMPLETION_TARGETS:
         raise HandoffError(
@@ -103,9 +113,15 @@ def worker_prompt(data, skills):
     )
 
 
+# Runs unsandboxed: never let repository config start helpers.
+GIT_SAFETY = ("-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null")
+
+
 def git(checkout, *args):
     result = subprocess.run(
-        ["git", "-C", str(checkout), *args], capture_output=True, text=True
+        ["git", *GIT_SAFETY, "-C", str(checkout), *args],
+        capture_output=True,
+        text=True,
     )
     if result.returncode:
         raise HandoffError(result.stderr.strip())
@@ -116,7 +132,7 @@ def review_request(path):
     data = read_request(
         path,
         ("taskId", "workerAI", "projectId", "checkout", "baseBranch", "documentRefs"),
-        ("prUrl",),
+        ("prUrl", "workerChatId"),
     )
     task_id(data["taskId"])
     document_refs(data["documentRefs"])
@@ -133,16 +149,17 @@ def review_request(path):
         raise HandoffError("prUrl must be a pull request URL or null")
     data.setdefault("prUrl", None)
     checkout = Path(data["checkout"])
-    if not checkout.is_absolute() or not checkout.is_dir():
-        raise HandoffError("checkout must be an existing absolute directory")
+    worktrees = (codex_home() / "worktrees").resolve()
+    if not checkout.is_absolute() or not checkout.resolve().is_relative_to(worktrees):
+        raise HandoffError(f"checkout must be a worker worktree under {worktrees}")
+    if not checkout.is_dir():
+        raise HandoffError("checkout must be an existing directory")
     data["checkout"] = str(checkout.resolve())
     return data
 
 
 def candidate(data, previous, update_base):
     checkout = data["checkout"]
-    if git(checkout, "status", "--porcelain", "--untracked-files=no"):
-        raise HandoffError("checkout has uncommitted tracked changes")
     data["head"] = git(checkout, "rev-parse", "HEAD")
     if previous and not update_base:
         if previous.get("baseBranch") not in (None, data["baseBranch"]):

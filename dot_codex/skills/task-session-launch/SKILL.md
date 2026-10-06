@@ -11,11 +11,11 @@ description: |
 
 1. `codex_app__list_projects`を一度呼び、repositoryに対応するprojectIdを決める。
 2. [起動依頼JSON](references/request.md)を保存する。
-3. `taskctl launch --request <JSONの絶対パス>`をサンドボックス外で一度実行する。Codexは`sandbox_permissions: require_escalated`を付ける。
+3. `taskctl launch --request <JSONの絶対パス>`をサンドボックス外で一度実行する。Codexは`sandbox_permissions: require_escalated`を付ける。Claudeはそのまま実行する（サンドボックス対象外）。
    - 既定はclaude-opus-5-5・medium。ユーザーが別モデルを指定した場合だけ`--model`・`--thinking`を渡す。
 4. 出力のthreadId・model・effortを報告する。失敗時は理由を報告して停止し、create_threadを直接呼ばない。
 
-同じprojectIdとtaskIdの再実行は既存workerを返し、新規作成しない。結果不明・モデル不一致は`taskctl state --request <JSON>`で確認し、ユーザーがAppで確認した結果だけを`taskctl resolve --request <JSON> --sent [--thread-id <ID>]`または`--not-sent`で記録する。
+同じprojectIdとtaskIdの再実行は既存workerを返し、新規作成しない。結果不明・モデル不一致は`taskctl state --request <JSON>`で確認し、ユーザーがAppで確認した結果だけを、承認を得て`taskctl resolve --request <JSON> --sent [--thread-id <ID>]`または`--not-sent`で記録する。
 
 ## 参照文書
 

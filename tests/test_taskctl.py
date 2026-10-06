@@ -5,6 +5,7 @@ import json
 import os
 import socket
 import subprocess
+import sys
 import tempfile
 import threading
 import unittest
@@ -64,7 +65,11 @@ class TaskctlFixture(unittest.TestCase):
         self.addCleanup(temp.cleanup)
         self.root = Path(temp.name)
         self.socket = self.root / "call.sock"
+        self.codex = self.root / "codex"
+        self.codex.mkdir()
+        (self.codex / "skills").symlink_to(SKILLS)
         self.env = {
+            "CODEX_HOME": str(self.codex),
             "CODEX_THREAD_ID": "caller",
             "HARNEXUS_CALL_SOCKET": str(self.socket),
             "XDG_STATE_HOME": str(self.root / "state"),
@@ -80,7 +85,7 @@ class TaskctlFixture(unittest.TestCase):
             redirect_stdout(out),
             redirect_stderr(err),
         ):
-            code = taskctl.main(["--skills-root", str(SKILLS), *arguments])
+            code = taskctl.main(list(arguments))
         self.assertEqual(self.harnexus.answers, [], "unused scripted answers")
         output = json.loads(out.getvalue()) if code == 0 else None
         return code, output, err.getvalue()
@@ -167,6 +172,8 @@ class LaunchTest(TaskctlFixture):
             "resolve", "--request", self.write(self.data), "--not-sent"
         )
         self.assertEqual(code, 0, err)
+        code, out, err = self.invoke("state", "--request", self.write(self.data))
+        self.assertEqual(out["refused"][0]["actual"], "gpt-5")
         code, out, err = self.launch(answers=[created("w2", "claude-opus-5-5")])
         self.assertEqual(code, 0, err)
         self.assertEqual(out["threadId"], "w2")
@@ -236,6 +243,44 @@ class LaunchTest(TaskctlFixture):
                     self.data[key] = original
         self.assertEqual(self.harnexus.calls, [])
 
+    def test_starting_branch_sets_starting_state(self):
+        self.data["startingBranch"] = "feat/base"
+        self.assertEqual(self.launch(answers=[created("w1", "claude-opus-5-5")])[0], 0)
+        environment = self.harnexus.calls[0]["arguments"]["target"]["environment"]
+        self.assertEqual(
+            environment["startingState"], {"type": "branch", "branchName": "feat/base"}
+        )
+        for branch in ("-x", "a..b", "a b", "a.lock"):
+            self.data = {**self.data, "taskId": "TR2", "startingBranch": branch}
+            self.assertEqual(self.launch()[0], 1)
+
+    def test_any_other_outcome_is_unknown(self):
+        for index, answer in enumerate(({"outcome": "later"}, {"outcome": None})):
+            with self.subTest(answer=answer):
+                self.data["taskId"] = f"TR{index + 5}"
+                code, _, err = self.launch(answers=[answer])
+                self.assertEqual(code, 1)
+                self.assertIn("never resend", err)
+                self.assertEqual(self.launch()[0], 1)
+
+    def test_concurrent_confirmation_stops_the_send(self):
+        real_save = taskctl.save
+
+        def racing_save(path, data, *, exclusive=False):
+            if exclusive:
+                real_save(path.parent / "state.json", {"threadId": "w0"})
+            real_save(path, data, exclusive=exclusive)
+
+        with mock.patch.object(taskctl, "save", racing_save):
+            code, _, err = self.launch()
+        self.assertEqual(code, 1)
+        self.assertIn("another taskctl run", err)
+        self.assertEqual(self.harnexus.calls, [])
+
+    def test_skills_root_option_is_gone(self):
+        with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            taskctl.main(["--skills-root", "/tmp", "state"])
+
     def test_socket_path_follows_harnexus_state(self):
         with mock.patch.dict(
             os.environ,
@@ -247,8 +292,8 @@ class LaunchTest(TaskctlFixture):
 class ReviewTest(TaskctlFixture):
     def setUp(self):
         super().setUp()
-        self.checkout = self.root / "checkout"
-        self.checkout.mkdir()
+        self.checkout = self.codex / "worktrees/ab12/checkout"
+        self.checkout.mkdir(parents=True)
         self.git("init", "-q")
         self.base = self.commit("test: initial")
         self.git("branch", "base")
@@ -295,7 +340,7 @@ class ReviewTest(TaskctlFixture):
         self.assertEqual(arguments["title"], "Review example")
         self.assertIn(self.base + "..." + head, arguments["prompt"])
         self.assertIn("workerのチャットID: worker", arguments["prompt"])
-        self.assertTrue((self.checkout / ".reviewctl/state.json").is_file())
+        self.assertFalse((self.checkout / ".reviewctl").exists())
         self.assertEqual(self.git("status", "--porcelain"), "")
 
         code, _, err = self.review()
@@ -348,18 +393,57 @@ class ReviewTest(TaskctlFixture):
             upstream + "..." + head, self.harnexus.calls[-1]["arguments"]["prompt"]
         )
 
-    def test_rejects_dirty_checkout_and_changed_worker(self):
-        tracked = self.checkout / "tracked"
-        tracked.write_text("one")
-        self.git("add", "tracked")
-        self.assertEqual(self.review()[0], 1)
-        self.git("commit", "-qm", "test: tracked")
-        self.assertEqual(self.review(answers=[created("r1", "gpt-6.1-sol")])[0], 0)
-        self.commit("test: fix")
-        self.env["CODEX_THREAD_ID"] = "other-worker"
+    def test_runs_only_plumbing_git_in_worker_worktrees(self):
+        git_calls = []
+        real_run = subprocess.run
+
+        def record(command, **kwargs):
+            git_calls.append(command)
+            return real_run(command, **kwargs)
+
+        with mock.patch.object(sys.modules["dot.handoff"].subprocess, "run", record):
+            code, _, err = self.review(answers=[created("r1", "gpt-6.1-sol")])
+        self.assertEqual(code, 0, err)
+        self.assertTrue(git_calls)
+        for command in git_calls:
+            self.assertEqual(
+                command[:5],
+                ["git", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null"],
+            )
+            self.assertIn(command[7], ("rev-parse", "merge-base"))
+        outside = self.root / "outside"
+        outside.mkdir()
+        self.data["checkout"] = str(outside)
         code, _, err = self.review()
         self.assertEqual(code, 1)
-        self.assertIn("original workerChatId", err)
+        self.assertIn("worker worktree", err)
+        link = self.codex / "worktrees/link"
+        link.symlink_to(outside)
+        self.data["checkout"] = str(link)
+        self.assertEqual(self.review()[0], 1)
+
+    def test_never_writes_into_the_checkout(self):
+        before = sorted(self.checkout.iterdir())
+        self.assertEqual(self.review(answers=[created("r1", "gpt-6.1-sol")])[0], 0)
+        self.commit("test: fix")
+        self.assertEqual(self.review(answers=[{"outcome": "done"}])[0], 0)
+        self.assertEqual(sorted(self.checkout.iterdir()), before)
+
+    def test_reviewer_cannot_be_the_worker_and_request_worker_must_match(self):
+        self.data["workerChatId"] = "worker"
+        self.assertEqual(self.review(answers=[DROP])[0], 1)
+        request = self.write(self.data)
+        code, _, err = self.invoke(
+            "resolve", "--request", request, "--sent", "--thread-id", "worker"
+        )
+        self.assertEqual(code, 1)
+        self.assertIn("cannot review itself", err)
+        self.data["workerChatId"] = "someone-else"
+        code, _, err = self.review()
+        self.assertEqual(code, 1)
+        self.assertIn("must equal CODEX_THREAD_ID", err)
+
+    def test_rejects_missing_caller(self):
         self.env["CODEX_THREAD_ID"] = ""
         code, _, err = self.review()
         self.assertEqual(code, 1)
@@ -388,6 +472,16 @@ class ReviewTest(TaskctlFixture):
         code, out, err = self.review(answers=[{"outcome": "done"}])
         self.assertEqual(code, 0, err)
         self.assertEqual(self.harnexus.calls[-1]["arguments"]["threadId"], "r0")
+        self.assertEqual(json.loads(state.read_text())["reviewer"], "r0")
+
+    def test_symlinked_legacy_state_is_refused(self):
+        target = self.root / "elsewhere.json"
+        target.write_text(json.dumps({"reviewer": "r0", "candidate": {}}))
+        (self.checkout / ".reviewctl").mkdir()
+        (self.checkout / ".reviewctl/state.json").symlink_to(target)
+        code, _, err = self.review()
+        self.assertEqual(code, 1)
+        self.assertIn("symlinked", err)
 
 
 if __name__ == "__main__":

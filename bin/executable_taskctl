@@ -18,11 +18,11 @@ from dot.handoff import (
     HandoffError,
     candidate,
     chat_id,
+    codex_home,
     launch_request,
     review_prompt,
     review_request,
     session_value,
-    skills_root,
     worker_prompt,
 )
 
@@ -105,16 +105,13 @@ def load(path):
 class Session:
     """state.json holds the confirmed thread; pending.json blocks any resend."""
 
-    def __init__(self, directory):
+    def __init__(self, directory, legacy=None):
         self.state_path = directory / "state.json"
         self.pending_path = directory / "pending.json"
-        self.state = load(self.state_path)
+        self.history_path = directory / "history.json"
+        self.loaded = load(self.state_path)
+        self.state = self.loaded or (legacy and legacy())
         self.pending = load(self.pending_path)
-        if self.state and self.state.get("pending_create") is True:
-            raise Failure(
-                "legacy reviewctl creation is pending; check the App, and remove "
-                f"{self.state_path} only if no reviewer was created"
-            )
 
     def check_idle(self):
         if not self.pending:
@@ -136,6 +133,9 @@ class Session:
         self.check_idle()
         pending = {"status": "sending", "tool": tool, "arguments": arguments, **extra}
         save(self.pending_path, pending, exclusive=True)
+        if load(self.state_path) != self.loaded:
+            self.pending_path.unlink()
+            raise Failure("another taskctl run changed the state; rerun to check it")
         answer = call(caller, tool, arguments)
         outcome = answer.get("outcome")
         thread = answer.get("threadId") or arguments.get("threadId")
@@ -147,15 +147,18 @@ class Session:
             save(self.pending_path, pending)
             self.pending = pending
             self.check_idle()
-        if outcome == "unknown" or (outcome == "tool_error" and answer.get("threadId")):
-            pending.update(status="unknown", threadId=thread, answer=answer)
-            save(self.pending_path, pending)
-            raise Failure(
-                f"{tool} result is unknown ({json.dumps(answer, ensure_ascii=False)})"
-                "; never resend. Ask the user to check the App"
-            )
-        self.pending_path.unlink()
-        raise Failure(f"{tool} was not sent: {json.dumps(answer, ensure_ascii=False)}")
+        text = json.dumps(answer, ensure_ascii=False)
+        if outcome in ("not_sent", "rejected", "invalid") or (
+            outcome == "tool_error" and not answer.get("threadId")
+        ):
+            self.pending_path.unlink()
+            raise Failure(f"{tool} was not sent: {text}")
+        pending.update(status="unknown", threadId=thread, answer=answer)
+        save(self.pending_path, pending)
+        raise Failure(
+            f"{tool} result is unknown ({text}); never resend. "
+            "Ask the user to check the App"
+        )
 
     def confirm(self, pending, thread, answer=None):
         if not thread:
@@ -188,6 +191,9 @@ class Session:
         if not self.pending:
             raise Failure("nothing is pending")
         if not sent:
+            if self.pending["status"] == "refused":
+                history = load(self.history_path) or []
+                save(self.history_path, [*history, self.pending])
             self.pending_path.unlink()
             return {"released": self.pending["tool"], "status": self.pending["status"]}
         if self.pending["status"] == "refused":
@@ -195,7 +201,11 @@ class Session:
         return self.confirm(self.pending, thread or self.pending.get("threadId"))
 
     def show(self):
-        return {"state": self.state, "pending": self.pending}
+        return {
+            "state": self.state,
+            "pending": self.pending,
+            "refused": load(self.history_path),
+        }
 
 
 class LaunchSession(Session):
@@ -207,6 +217,8 @@ class ReviewSession(Session):
     def confirmed(self, thread, pending, sent):
         if self.state and self.state["reviewer"] != thread:
             raise Failure("review session must keep the same reviewer")
+        if thread == pending["candidate"]["workerChatId"]:
+            raise Failure("a worker cannot review itself")
         return {"reviewer": thread, "candidate": pending["candidate"], "sent": sent}
 
 
@@ -218,14 +230,18 @@ def worktree_target(project):
     }
 
 
-def launch_session(data):
-    key = hashlib.sha256(f"{data['projectId']}\n{data['taskId']}".encode())
-    return LaunchSession(launch_root() / key.hexdigest()[:16])
-
-
-def launch_root():
+def state_root():
     base = os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state"
     return Path(base) / "taskctl"
+
+
+def session_dir(kind, *values):
+    key = hashlib.sha256("\n".join(values).encode()).hexdigest()[:16]
+    return state_root() / kind / key
+
+
+def launch_session(data):
+    return LaunchSession(session_dir("launch", data["projectId"], data["taskId"]))
 
 
 def launch(args):
@@ -239,26 +255,46 @@ def launch(args):
             )
         return {"existing": session.state["threadId"], "state": str(session.state_path)}
     arguments = {
-        "prompt": worker_prompt(data, args.skills_root),
+        "prompt": worker_prompt(data, codex_home() / "skills"),
         "target": worktree_target(data["projectId"]),
         "title": "Impl " + data["taskId"],
         "model": args.model or "claude-opus-5-5",
         "thinking": args.thinking or "medium",
     }
+    if data.get("startingBranch"):
+        arguments["target"]["environment"]["startingState"] = {
+            "type": "branch",
+            "branchName": data["startingBranch"],
+        }
     extra = {"request": data, "workspace": arguments["target"]}
     return session.send(caller_id(), "create_thread", arguments, extra)
 
 
+def legacy_review_state(checkout):
+    path = Path(checkout) / ".reviewctl/state.json"
+    if not os.path.lexists(path):
+        return None
+    if path.resolve() != path:
+        raise Failure(f"refusing symlinked legacy state {path}")
+    state = json.loads(path.read_text())
+    if state.get("pending_create") is True or not state.get("reviewer"):
+        raise Failure(
+            f"legacy reviewctl creation is pending in {path}; check the App, "
+            "and remove it only if no reviewer was created"
+        )
+    return {"reviewer": state["reviewer"], "candidate": state["candidate"]}
+
+
 def review_session(data):
-    directory = Path(data["checkout"]) / ".reviewctl"
-    directory.mkdir(exist_ok=True)
-    (directory / ".gitignore").write_text("*\n")
-    return ReviewSession(directory)
+    directory = session_dir("review", data["checkout"], data["workerChatId"])
+    return ReviewSession(directory, lambda: legacy_review_state(data["checkout"]))
 
 
 def review(args):
     data = review_request(args.request)
-    data["workerChatId"] = caller_id()
+    worker = caller_id()
+    if data.setdefault("workerChatId", worker) != worker:
+        raise HandoffError("workerChatId in the request must equal CODEX_THREAD_ID")
     session = review_session(data)
     session.check_idle()
     previous = session.state["candidate"] if session.state else None
@@ -272,7 +308,7 @@ def review(args):
                 f"head {data['head']} was already sent to reviewer "
                 f"{session.state['reviewer']}; wait for its result"
             )
-    arguments = {"prompt": review_prompt(data, args.skills_root)}
+    arguments = {"prompt": review_prompt(data, codex_home() / "skills")}
     if session.state:
         tool = "send_message_to_thread"
         arguments["threadId"] = session.state["reviewer"]
@@ -294,14 +330,16 @@ def review(args):
 def requested_session(path):
     if "completionTarget" in json.loads(path.read_text()):
         return launch_session(launch_request(path))
-    return review_session(review_request(path))
+    data = review_request(path)
+    data["workerChatId"] = caller_id()
+    return review_session(data)
 
 
 def state(args):
     if args.request:
         return requested_session(args.request).show()
-    root = launch_root()
-    paths = sorted(root.glob("*/*.json")) if root.is_dir() else []
+    root = state_root()
+    paths = sorted(root.glob("*/*/*.json")) if root.is_dir() else []
     return {str(path): load(path) for path in paths}
 
 
@@ -312,7 +350,6 @@ def resolve(args):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--skills-root", type=Path, default=skills_root())
     commands = parser.add_subparsers(dest="command", required=True)
     for name, help_text in (
         ("launch", "create a worker thread once per projectId and taskId"),
