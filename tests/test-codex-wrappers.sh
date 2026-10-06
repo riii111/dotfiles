@@ -10,6 +10,8 @@ remote="$test_root/remote.git"
 skill="$test_home/.codex/skills/demo"
 plugin_skill="$test_home/.codex/plugins/cache/openai-bundled/demo/1.0.0/skills"
 outside="$test_root/outside.txt"
+worktree="$test_root/worktree"
+installed_bin="$test_home/bin"
 read_lines="$repo_root/bin/executable_codex-read-lines"
 force_with_lease="$repo_root/bin/executable_codex-force-with-lease"
 runner="$repo_root/tests/run-codex-python-with-home.py"
@@ -54,6 +56,8 @@ expect_failure() {
 }
 
 test "$(run_read_lines 2 3 file.txt)" = $'two\nthree'
+test "$(GIT_DIR="$remote" GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=remote.origin.url \
+	GIT_CONFIG_VALUE_0=https://example.com/riii111/test.git run_read_lines 1 1 file.txt)" = one
 skill_output="$(cd "$test_home" && HOME="$test_home" python3 "$runner" "$read_lines" "$test_home" 1 2 "$skill/SKILL.md")"
 test "$skill_output" = $'skill one\nskill two'
 plugin_skill_output="$(run_read_lines 1 2 "$plugin_skill/SKILL.md")"
@@ -69,6 +73,18 @@ printf 'Host work-github\n  HostName github.com\n' >"$test_home/.ssh/config"
 git -C "$repo" config url."file://$remote".insteadOf https://github.com/riii111/test.git
 expect_failure run_read_lines 2 3 file.txt
 git -C "$repo" config --unset-all url."file://$remote".insteadOf
+git -C "$repo" config url."file://$remote".pushInsteadOf https://github.com/riii111/test.git
+expect_failure run_read_lines 2 3 file.txt
+expect_failure run_force
+git -C "$repo" config --unset-all url."file://$remote".pushInsteadOf
+for setting in remote.origin.url remote.origin.pushurl; do
+	git -C "$repo" config --add "$setting" https://github.com/riii111/test.git
+	git -C "$repo" config --add "$setting" https://github.com/riii111/other.git
+	expect_failure run_read_lines 2 3 file.txt
+	expect_failure run_force
+	git -C "$repo" config --unset-all "$setting"
+	git -C "$repo" remote set-url origin https://github.com/riii111/test.git
+done
 expect_failure run_read_lines 0 1 file.txt
 expect_failure run_read_lines 2 1 file.txt
 expect_failure run_read_lines 1 1 "$outside"
@@ -79,7 +95,24 @@ expect_failure run_read_lines 1 1 "$plugin_skill/escape.txt"
 expect_failure run_skill_escape
 
 expect_failure run_force unexpected
-expect_failure run_force
+git -C "$repo" worktree add -q "$worktree" main
+printf 'worktree only\n' >"$worktree/worktree.txt"
+worktree_output="$(cd "$worktree" && HOME="$test_home" python3 "$runner" "$read_lines" "$test_home" 1 1 worktree.txt)"
+test "$worktree_output" = 'worktree only'
+
+mkdir -p "$installed_bin/lib"
+cp -R "$repo_root/bin/lib/dot" "$installed_bin/lib/dot"
+cp "$read_lines" "$installed_bin/codex-read-lines"
+cp "$force_with_lease" "$installed_bin/codex-force-with-lease"
+installed_output="$(cd "$worktree" && HOME="$test_home" python3 "$installed_bin/codex-read-lines" 1 1 worktree.txt)"
+test "$installed_output" = 'worktree only'
+for wrapper in "$force_with_lease" "$installed_bin/codex-force-with-lease"; do
+	if output="$(cd "$worktree" && HOME="$test_home" python3 "$wrapper" 2>&1)"; then
+		printf 'protected branch unexpectedly accepted: %s\n' "$wrapper" >&2
+		exit 1
+	fi
+	test "$output" = 'force-with-lease requires a non-protected branch'
+done
 
 git -C "$repo" remote set-url origin https://example.com/riii111/test.git
 expect_failure run_force
