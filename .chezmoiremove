@@ -14,6 +14,7 @@
 .claude/skills/reviewing-adrs
 .claude/skills/rust-review
 .claude/agents/codex-2nd-opinion.md
+.config/wezterm/zen-mode.lua
 .config/nvim/lua/plugins/github-actions.lua
 .config/nvim/lua/plugins/dial.lua
 .config/nvim/lua/plugins/flash.lua
