@@ -62,7 +62,7 @@ class GitHooksTest(unittest.TestCase):
         expected = sorted(
             chezmoi_target_name(path.name) for path in TEMPLATE_SOURCE_DIR.iterdir()
         )
-        self.assertEqual(self.listed_templates(), expected)
+        self.assertEqual(sorted(self.listed_templates()), expected)
 
     def test_each_listed_template_can_be_installed(self):
         hook = self.repo / ".git" / "hooks" / "pre-commit"
