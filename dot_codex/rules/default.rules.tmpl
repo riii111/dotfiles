@@ -57,6 +57,13 @@ prefix_rule(pattern=["harnexus-task", "launch"], decision="allow", justification
 prefix_rule(pattern=["harnexus-task", "review"], decision="allow", justification="Send a generated review request through the harnexus call socket")
 prefix_rule(pattern=["harnexus-task", "state"], decision="allow", justification="Show recorded task launch and review state")
 
+# 名前で許可したwrapperは、絶対パス指定時にインストール先だけを照合する。
+host_executable(name="gh-loupe", paths=["{{ .chezmoi.homeDir }}/.cargo/bin/gh-loupe"])
+host_executable(name="pe", paths=["{{ .chezmoi.homeDir }}/bin/pe"])
+host_executable(name="codex-read-lines", paths=["{{ .chezmoi.homeDir }}/bin/codex-read-lines"])
+host_executable(name="codex-force-with-lease", paths=["{{ .chezmoi.homeDir }}/bin/codex-force-with-lease"])
+host_executable(name="harnexus-task", paths=["{{ .chezmoi.homeDir }}/.local/bin/harnexus-task"])
+
 # --- Local search and text processing ---
 prefix_rule(pattern=["fd"], decision="allow", justification="Find local files")
 prefix_rule(pattern=["rg"], decision="allow", justification="Search local file contents")
