@@ -9,17 +9,6 @@ import sys
 from pathlib import Path
 
 
-REQUIRED_COMMANDS = (
-    "git",
-    "python3",
-    "chezmoi",
-    "brew",
-    "nvim",
-    "lefthook",
-    "nix",
-    "ruff",
-)
-OPTIONAL_COMMANDS = ("shellcheck", "shfmt")
 LINTABLE_SHELLS = frozenset({"bash", "sh"})
 # Keep in sync with NIX_DOTFILES_PROFILE in dot_zshrc.tmpl.
 NIX_DOTFILES_PROFILE = Path.home() / ".nix-profile"
@@ -148,23 +137,6 @@ def collect_detected_shell_targets(paths: list[Path]) -> list[tuple[Path, str]]:
 
 def collect_shell_targets(repo_root: Path) -> list[tuple[Path, str]]:
     return collect_detected_shell_targets(git_tracked_files(repo_root))
-
-
-def resolve_candidate_paths(repo_root: Path, paths: list[str]) -> list[Path]:
-    resolved = []
-    for raw in paths:
-        path = (
-            (repo_root / raw).resolve()
-            if not Path(raw).is_absolute()
-            else Path(raw).resolve()
-        )
-        try:
-            path.relative_to(repo_root)
-        except ValueError:
-            continue
-        if path.is_file():
-            resolved.append(path)
-    return resolved
 
 
 def collect_lintable_shell_targets(paths: list[Path]) -> list[Path]:
@@ -318,62 +290,6 @@ def command_test(_: argparse.Namespace) -> int:
     return 1 if failures else 0
 
 
-def command_check_env(_: argparse.Namespace) -> int:
-    failures = 0
-    missing_required = []
-    for name in REQUIRED_COMMANDS:
-        path = shutil.which(name)
-        print(f"{name}: {'OK' if path else 'MISSING'}")
-        if path is None:
-            missing_required.append(name)
-
-    missing_optional = []
-    for name in OPTIONAL_COMMANDS:
-        path = shutil.which(name)
-        print(f"{name}: {'OK' if path else 'OPTIONAL'}")
-        if path is None:
-            missing_optional.append(name)
-
-    nvim = shutil.which("nvim")
-    if nvim:
-        print("$ nvim --headless +qa")
-        result = subprocess.run(
-            [nvim, "--headless", "+qa"],
-            check=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        if result.returncode == 0:
-            print("nvim headless: OK")
-        else:
-            failures += 1
-            print("nvim headless: FAILED", file=sys.stderr)
-            if result.stderr:
-                print(result.stderr.rstrip(), file=sys.stderr)
-            if result.stdout:
-                print(result.stdout.rstrip(), file=sys.stderr)
-
-    if missing_required:
-        print(
-            "Missing required commands: " + ", ".join(missing_required),
-            file=sys.stderr,
-        )
-        failures += 1
-
-    if missing_optional:
-        print("Optional commands not found: " + ", ".join(missing_optional))
-    return 1 if failures else 0
-
-
-def command_lint_shell(args: argparse.Namespace) -> int:
-    repo_root = resolve_repo_root()
-    targets = collect_lintable_shell_targets(
-        resolve_candidate_paths(repo_root, args.paths)
-    )
-    return run_lint_shell_targets(repo_root, targets)
-
-
 def command_lint_staged_shell(_: argparse.Namespace) -> int:
     repo_root = resolve_repo_root()
     targets = collect_lintable_shell_targets(git_staged_files(repo_root))
@@ -516,16 +432,6 @@ def build_parser() -> argparse.ArgumentParser:
 
     test_parser = subparsers.add_parser("test", help="run repo verification")
     test_parser.set_defaults(func=command_test)
-
-    env_parser = subparsers.add_parser("check-env", help="check local toolchain")
-    env_parser.set_defaults(func=command_check_env)
-
-    lint_shell_parser = subparsers.add_parser(
-        "lint-shell",
-        help="format and lint bash/sh files",
-    )
-    lint_shell_parser.add_argument("paths", nargs="*")
-    lint_shell_parser.set_defaults(func=command_lint_shell)
 
     lint_staged_shell_parser = subparsers.add_parser(
         "lint-staged-shell",

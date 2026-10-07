@@ -58,56 +58,6 @@ class DotCliTest(unittest.TestCase):
 
         self.assertEqual(targets, [(bash_script, "bash")])
 
-    def test_check_env_returns_error_when_required_missing(self):
-        fake_paths = {
-            "git": "/usr/bin/git",
-            "python3": "/usr/bin/python3",
-        }
-
-        def fake_which(name):
-            return fake_paths.get(name)
-
-        with (
-            mock.patch("shutil.which", side_effect=fake_which),
-            mock.patch("sys.stdout", new=io.StringIO()),
-            mock.patch("sys.stderr", new=io.StringIO()),
-        ):
-            result = cli.command_check_env(mock.Mock())
-
-        self.assertEqual(result, 1)
-
-    def test_check_env_reports_nvim_failure_and_continues(self):
-        def fake_which(name):
-            return {
-                "git": "/usr/bin/git",
-                "python3": "/usr/bin/python3",
-                "chezmoi": "/opt/homebrew/bin/chezmoi",
-                "brew": "/opt/homebrew/bin/brew",
-                "nvim": "/opt/homebrew/bin/nvim",
-                "lefthook": "/opt/homebrew/bin/lefthook",
-                "nix": "/nix/var/nix/profiles/default/bin/nix",
-            }.get(name)
-
-        with (
-            mock.patch("shutil.which", side_effect=fake_which),
-            mock.patch(
-                "subprocess.run",
-                return_value=subprocess.CompletedProcess(
-                    ["/opt/homebrew/bin/nvim", "--headless", "+qa"],
-                    1,
-                    "",
-                    "init failed",
-                ),
-            ),
-            mock.patch("sys.stdout", new=io.StringIO()) as stdout,
-            mock.patch("sys.stderr", new=io.StringIO()) as stderr,
-        ):
-            result = cli.command_check_env(mock.Mock())
-
-        self.assertEqual(result, 1)
-        self.assertIn("nvim: OK", stdout.getvalue())
-        self.assertIn("nvim headless: FAILED", stderr.getvalue())
-
     def test_collect_lintable_shell_targets_excludes_zsh_and_templates(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -127,29 +77,6 @@ class DotCliTest(unittest.TestCase):
             )
 
         self.assertEqual(targets, [bash_script])
-
-    def test_resolve_candidate_paths_skips_outside_repo(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            repo_root = Path(tmpdir).resolve()
-            inside = repo_root / "scripts" / "check.sh"
-            inside.parent.mkdir()
-            inside.write_text("#!/usr/bin/env bash\necho ok\n", encoding="utf-8")
-
-            outside_dir = repo_root.parent / "dot-outside-test"
-            outside_dir.mkdir(exist_ok=True)
-            outside = outside_dir / "outside.sh"
-            outside.write_text("#!/usr/bin/env bash\necho ng\n", encoding="utf-8")
-
-            try:
-                paths = cli.resolve_candidate_paths(
-                    repo_root,
-                    ["scripts/check.sh", str(outside)],
-                )
-            finally:
-                outside.unlink(missing_ok=True)
-                outside_dir.rmdir()
-
-        self.assertEqual(paths, [inside.resolve()])
 
     def test_resolve_repo_root_falls_back_to_chezmoi(self):
         with (
@@ -285,32 +212,28 @@ class DotCliTest(unittest.TestCase):
         self.assertEqual(result, 1)
         self.assertIn("zsh not found", stderr.getvalue())
 
-    def test_command_lint_shell_runs_available_tools(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            repo_root = Path(tmpdir).resolve()
-            target = repo_root / "scripts" / "check.sh"
-            target.parent.mkdir()
-            target.write_text("#!/usr/bin/env bash\necho ok\n", encoding="utf-8")
-            calls = []
+    def test_run_lint_shell_targets_runs_available_tools(self):
+        repo_root = Path("/repo")
+        target = repo_root / "scripts" / "check.sh"
+        calls = []
 
-            def fake_run(args, **kwargs):
-                calls.append(tuple(args))
-                return subprocess.CompletedProcess(args, 0, "", "")
+        def fake_run(args, **kwargs):
+            calls.append(tuple(args))
+            return subprocess.CompletedProcess(args, 0, "", "")
 
-            def fake_which(name):
-                return {
-                    "shfmt": "/opt/homebrew/bin/shfmt",
-                    "shellcheck": "/opt/homebrew/bin/shellcheck",
-                }.get(name)
+        def fake_which(name):
+            return {
+                "shfmt": "/opt/homebrew/bin/shfmt",
+                "shellcheck": "/opt/homebrew/bin/shellcheck",
+            }.get(name)
 
-            with (
-                mock.patch.object(cli, "resolve_repo_root", return_value=repo_root),
-                mock.patch("shutil.which", side_effect=fake_which),
-                mock.patch("subprocess.run", side_effect=fake_run),
-                mock.patch("sys.stdout", new=io.StringIO()),
-                mock.patch("sys.stderr", new=io.StringIO()),
-            ):
-                result = cli.command_lint_shell(mock.Mock(paths=["scripts/check.sh"]))
+        with (
+            mock.patch("shutil.which", side_effect=fake_which),
+            mock.patch("subprocess.run", side_effect=fake_run),
+            mock.patch("sys.stdout", new=io.StringIO()),
+            mock.patch("sys.stderr", new=io.StringIO()),
+        ):
+            result = cli.run_lint_shell_targets(repo_root, [target])
 
         self.assertEqual(result, 0)
         self.assertEqual(
@@ -321,21 +244,17 @@ class DotCliTest(unittest.TestCase):
             ],
         )
 
-    def test_command_lint_shell_skips_when_tools_missing(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            repo_root = Path(tmpdir).resolve()
-            target = repo_root / "scripts" / "check.sh"
-            target.parent.mkdir()
-            target.write_text("#!/usr/bin/env bash\necho ok\n", encoding="utf-8")
+    def test_run_lint_shell_targets_skips_when_tools_missing(self):
+        repo_root = Path("/repo")
+        target = repo_root / "scripts" / "check.sh"
 
-            with (
-                mock.patch.object(cli, "resolve_repo_root", return_value=repo_root),
-                mock.patch("shutil.which", return_value=None),
-                mock.patch("subprocess.run") as run,
-                mock.patch("sys.stdout", new=io.StringIO()),
-                mock.patch("sys.stderr", new=io.StringIO()),
-            ):
-                result = cli.command_lint_shell(mock.Mock(paths=["scripts/check.sh"]))
+        with (
+            mock.patch("shutil.which", return_value=None),
+            mock.patch("subprocess.run") as run,
+            mock.patch("sys.stdout", new=io.StringIO()),
+            mock.patch("sys.stderr", new=io.StringIO()),
+        ):
+            result = cli.run_lint_shell_targets(repo_root, [target])
 
         self.assertEqual(result, 0)
         run.assert_not_called()
