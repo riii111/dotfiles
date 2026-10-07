@@ -22,6 +22,7 @@ loader = importlib.machinery.SourceFileLoader(
 spec = importlib.util.spec_from_loader(loader.name, loader)
 taskctl = importlib.util.module_from_spec(spec)
 loader.exec_module(taskctl)
+handoff = sys.modules["dot.handoff"]
 
 DROP = object()
 
@@ -361,6 +362,46 @@ class ReviewTest(TaskctlFixture):
         self.assertEqual(self.review()[0], 1)
         self.assertEqual(len(self.harnexus.calls), 2)
 
+    def test_rereview_tool_error_is_unknown(self):
+        self.assertEqual(self.review(answers=[created("r1", "gpt-6.1-sol")])[0], 0)
+        self.commit("test: fix")
+        answer = {"outcome": "tool_error", "error": "may or may not have taken effect"}
+        code, _, err = self.review(answers=[answer])
+        self.assertEqual(code, 1)
+        self.assertIn("never resend", err)
+        code, _, err = self.review()
+        self.assertEqual(code, 1)
+        self.assertIn("never resend", err)
+        self.assertEqual(len(self.harnexus.calls), 2)
+
+    def test_nested_directory_in_worktree_is_refused(self):
+        nested = self.checkout / "nested"
+        nested.mkdir()
+        self.data["checkout"] = str(nested)
+        code, _, err = self.review()
+        self.assertEqual(code, 1)
+        self.assertIn("top level", err)
+        self.git("init", "-q", "nested")
+        self.assertEqual(self.review()[0], 1)
+        self.assertEqual(self.harnexus.calls, [])
+
+    def test_missing_commit_is_never_fetched(self):
+        marker = self.root / "marker"
+        for key, value in (
+            ("core.repositoryformatversion", "1"),
+            ("extensions.partialClone", "origin"),
+            ("remote.origin.url", str(self.root / "nowhere")),
+            ("remote.origin.promisor", "true"),
+            ("remote.origin.uploadpack", f"touch {marker}; false"),
+        ):
+            self.git("config", key, value)
+        (self.checkout / ".git/refs/heads/base").write_text("1" * 40 + "\n")
+        code, _, err = self.review()
+        self.assertEqual(code, 1)
+        self.assertIn("never fetches", err)
+        self.assertFalse(marker.exists())
+        self.assertEqual(self.harnexus.calls, [])
+
     def test_lost_rereview_answer_blocks_resend(self):
         self.assertEqual(self.review(answers=[created("r1", "gpt-6.1-sol")])[0], 0)
         self.commit("test: fix")
@@ -401,16 +442,14 @@ class ReviewTest(TaskctlFixture):
             git_calls.append(command)
             return real_run(command, **kwargs)
 
-        with mock.patch.object(sys.modules["dot.handoff"].subprocess, "run", record):
+        with mock.patch.object(handoff.subprocess, "run", record):
             code, _, err = self.review(answers=[created("r1", "gpt-6.1-sol")])
         self.assertEqual(code, 0, err)
         self.assertTrue(git_calls)
         for command in git_calls:
-            self.assertEqual(
-                command[:5],
-                ["git", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null"],
-            )
-            self.assertIn(command[7], ("rev-parse", "merge-base"))
+            self.assertEqual(command[:7], ["git", *handoff.GIT_SAFETY])
+            self.assertIn("protocol.allow=never", command)
+            self.assertIn(command[9], ("rev-parse", "merge-base"))
         outside = self.root / "outside"
         outside.mkdir()
         self.data["checkout"] = str(outside)

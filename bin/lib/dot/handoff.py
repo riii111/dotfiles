@@ -113,8 +113,11 @@ def worker_prompt(data, skills):
     )
 
 
-# Runs unsandboxed: never let repository config start helpers.
-GIT_SAFETY = ("-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null")
+# Runs unsandboxed: never let repository config start helpers or transports.
+GIT_SAFETY = (
+    *("-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null"),
+    *("-c", "protocol.allow=never"),
+)
 
 
 def git(checkout, *args):
@@ -122,9 +125,13 @@ def git(checkout, *args):
         ["git", *GIT_SAFETY, "-C", str(checkout), *args],
         capture_output=True,
         text=True,
+        env={**os.environ, "GIT_NO_LAZY_FETCH": "1"},
     )
     if result.returncode:
-        raise HandoffError(result.stderr.strip())
+        error = result.stderr.strip()
+        if "not allowed" in error or "lazy fetch" in error:
+            error += "; taskctl never fetches: fetch the missing commit in the worktree"
+        raise HandoffError(error)
     return result.stdout.strip()
 
 
@@ -148,13 +155,18 @@ def review_request(path):
     ):
         raise HandoffError("prUrl must be a pull request URL or null")
     data.setdefault("prUrl", None)
-    checkout = Path(data["checkout"])
+    checkout = Path(data["checkout"]).resolve()
     worktrees = (codex_home() / "worktrees").resolve()
-    if not checkout.is_absolute() or not checkout.resolve().is_relative_to(worktrees):
-        raise HandoffError(f"checkout must be a worker worktree under {worktrees}")
-    if not checkout.is_dir():
-        raise HandoffError("checkout must be an existing directory")
-    data["checkout"] = str(checkout.resolve())
+    if (
+        not Path(data["checkout"]).is_absolute()
+        or checkout.parent.parent != worktrees
+        or not checkout.is_dir()
+        or git(checkout, "rev-parse", "--show-toplevel") != str(checkout)
+    ):
+        raise HandoffError(
+            f"checkout must be the top level of a worker worktree {worktrees}/<id>/<name>"
+        )
+    data["checkout"] = str(checkout)
     return data
 
 

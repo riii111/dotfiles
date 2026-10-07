@@ -148,8 +148,11 @@ class Session:
             self.pending = pending
             self.check_idle()
         text = json.dumps(answer, ensure_ascii=False)
+        # A lost send_message answer reaches Claude callers as tool_error.
         if outcome in ("not_sent", "rejected", "invalid") or (
-            outcome == "tool_error" and not answer.get("threadId")
+            outcome == "tool_error"
+            and tool == "create_thread"
+            and not answer.get("threadId")
         ):
             self.pending_path.unlink()
             raise Failure(f"{tool} was not sent: {text}")
