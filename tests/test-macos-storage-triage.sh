@@ -2,11 +2,8 @@
 
 set -euo pipefail
 
-skill_dir="$(cd "$(dirname "$0")/.." && pwd)"
-inspect="$skill_dir/scripts/inspect.sh"
-if [ ! -f "$inspect" ]; then
-	inspect="$skill_dir/scripts/executable_inspect.sh"
-fi
+repo_root="$(cd "$(dirname "$0")/.." && pwd)"
+inspect="$repo_root/dot_codex/skills/macos-storage-triage/scripts/executable_inspect.sh"
 tmpdir="$(mktemp -d "${TMPDIR:-/tmp}/macos-storage-triage-test.XXXXXX")"
 mock_bin="$tmpdir/bin"
 mkdir -p "$mock_bin"

@@ -23,5 +23,8 @@ jobs:
       - name: Install Lua
         run: brew install lua
 
+      - name: Install fd
+        run: brew install fd
+
       - name: Run repo verification
         run: ./bin/executable_dotctl test
