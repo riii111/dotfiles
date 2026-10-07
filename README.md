@@ -1,9 +1,6 @@
 # dotfiles
 
-Dev environment for macOS, managed by chezmoi.
-
-![nvim](https://github.com/user-attachments/assets/0511c1be-2d3a-4b09-a14a-10a1e5f715ad)
-
+Personal macOS dotfiles for Kitty, zsh, and Neovim, managed by chezmoi and Nix.
 
 ## Setup
 
@@ -17,146 +14,59 @@ sudo nix run nix-darwin/master#darwin-rebuild -- switch --flake ~/ghq/github.com
 exec zsh
 ```
 
-### Work tools (optional)
+Use `#work` instead of `#personal` on the work machine.
 
-Private work tool layers are managed separately.
+## Maintenance
 
-```bash
-~/bin/dotctl work-tools install
-~/bin/dotctl work-tools update
-```
-
-### Herdr WezTerm status (optional)
-
-Install the release binary at `~/.local/bin/wezterm-git-status-bridge`, then run its `setup --herdr` command. The generated configuration and shell hook use this path; replace the binary in place when updating it.
-
-Herdr needs a one-time plugin link per machine to fire the events that feed the WezTerm right-status git info inside herdr panes.
-
-```bash
-herdr plugin link ~/ghq/github.com/riii111/wezterm-git-status-bridge/contrib/herdr-plugin
-```
-
-### Finder integration (optional)
-
-Route Finder double-clicks to Kitty + Neovim / CsvLens / VisiData.
-
-```bash
-bash ~/ghq/github.com/riii111/dotfiles/scripts/build-open-apps.sh
-nix shell nixpkgs#duti --command bash ~/ghq/github.com/riii111/dotfiles/scripts/setup-default-apps.sh
-```
-
-Routing: text / code → Neovim, csv / tsv → csvlens, parquet / sqlite / jsonl → VisiData, images / pdf → Preview (untouched). Re-run both scripts after a macOS update if associations break.
-macOS may ask for confirmation when replacing an existing default application.
-
-## Nix
-
-Daily CLI tools are managed by the default user Nix profile.
+CLI tools use the default user Nix profile; GUI apps use Homebrew via nix-darwin.
+After updating the Nix packages:
 
 ```bash
 ~/bin/dotctl sync-nix-profile
 exec zsh
 ```
 
-Homebrew stays for GUI / cask packages and is managed by nix-darwin.
+Nix updates arrive as weekly Draft PRs; Neovim plugin updates arrive monthly.
+Review the lockfile diff and commit SHAs, mark **Ready for review** to run CI, then merge and apply manually.
+See [AGENTS.md](AGENTS.md) for update procedures.
 
-Nix updates arrive as weekly Draft PRs; mark them **Ready for review** to run CI, then merge manually.
-
-### Store maintenance
-
-nix-darwin runs store maintenance for every host: GC deletes profile generations older than 7 days daily at 03:15, and store optimisation hard-links duplicate files at 04:15 on Sunday. During Nix builds, free space below 30 GiB triggers GC until 50 GiB is available.
-
-```bash
-nix-collect-garbage --delete-older-than 30d --dry-run
-# After darwin-rebuild switch:
-sudo launchctl print system/org.nixos.nix-gc
-sudo launchctl print system/org.nixos.nix-optimise
-```
-
-### Dev shell
-
-Use the repo shell when you want the flake-pinned toolchain explicitly.
+Use the pinned development tools and run checks with:
 
 ```bash
 nix develop
 nix develop -c ./bin/executable_dotctl test
 ```
 
-## Features
+## Optional integrations
 
-### zsh
+### Work tools
 
-- Deferred `compinit` after prompt display
-- Cache regeneration only on config change
-- Modern CLI: bat, eza, fd, fzf
-- fzf integration: Ctrl-R history, Ctrl-O cd, Ctrl-G repo jump
-
-### Neovim
-
-50+ plugins. Custom colorscheme.
-
-- Bufferline with language-colored labels (GitHub Linguist)
-- Inline reference count (symbol-usage)
-- One-key Quick Fix / Refactor menu
-- Per-language modules (Rust, Go, TypeScript, Python, C++, Kotlin, Terraform, SQL, Lua)
-
-Plugin updates arrive as monthly Draft PRs; review the lockfile diff and commit SHAs, mark **Ready for review** to run CI, then merge manually.
-
-### DB tools: [sabiql](https://github.com/riii111/sabiql)
-
-![sabiql(db tool)](https://github.com/user-attachments/assets/745ab18f-915c-4017-81a6-465c5c5ee11c)
-
-TUI-based DB management tool built with Rust + Ratatui.
-
-- Per-project connection profiles
-- Table browser with column/relation preview
-- Query editor with syntax highlighting
-
-### lazygit
-
-Delta for modern diffs. `|` key toggles split/unified view.
-
-![lazygit](https://github.com/user-attachments/assets/4312502b-c2a9-4269-86a0-9eeda9671fed)
-
-### AI tooling
-
-main: Codex
-sub: Claude Code
-
-`~/.codex/config.toml` is rewritten by the Codex desktop app, so it is `.chezmoiignore`d and not applied. `dot_codex/config.toml.tmpl` is kept only as a hand-maintained reference for base settings; edit the live file directly.
-
-### Task handoffs
-
-Task launches and reviews use `harnexus-task` from [harnexus](https://github.com/riii111/harnexus), installed to `~/.local/bin` with `bun run install:task`.
-Run `bun run install:task` only from a clean, reviewed checkout of harnexus `origin/main`, ideally a separate clone, because sandboxed agents can write to the working checkout.
-
-See [task-session-launch](dot_codex/skills/task-session-launch/SKILL.md) and [task-review-cycle](dot_codex/skills/task-review-cycle/SKILL.md) for usage and request JSON formats.
-
-### Claude Code sandbox
-
-`bun run` is not in `sandbox.excludedCommands`, so package scripts, which the agent can edit, run inside the sandbox.
-
-### Codex command policy
-
-`dot_codex/rules/default.rules.tmpl` controls commands that need to run outside the sandbox. Keep `sandbox_workspace_write.network_access = false` in the live `~/.codex/config.toml`; otherwise network commands can run inside the sandbox without consulting these rules.
-
-After `chezmoi apply`, restart Codex and open `/hooks`. Trust and enable the `PreToolUse` and `PermissionRequest` definitions from `~/.codex/hooks.json`. Codex invalidates that trust when a hook definition changes, so repeat this check after updating the hooks.
-
-Verify the live setup with:
-
-```sh
-rg -n '^network_access = false$' ~/.codex/config.toml
-codex execpolicy check --pretty --rules ~/.codex/rules/default.rules -- gh pr view 1
+```bash
+~/bin/dotctl work-tools install
+~/bin/dotctl work-tools update
 ```
 
-The `PreToolUse` policy reduces accidental direct invocations of recursive `rm` and common destructive Git/GitHub/cloud commands by cooperative agents. It is not a complete enforcement boundary and does not defend against shell indirection, aliases, scripts, interpreters, subprocesses, PATH shadowing, malicious repository code, disabled hooks, or deliberate bypass attempts. Use the sandbox, fixed-purpose wrappers, and repository or platform protections when an operation requires a strong guarantee.
+### Finder
 
-`fd`, `rg` and `sed` have no `allow` rule: `rg --pre`, `fd --exec` and sed `e`/`w` commands can run programs or write files, and prefix rules cannot exclude flags in arbitrary positions. They run inside the sandbox without approval; use `codex-read-lines` for line ranges outside it.
+Open text / code in Neovim, csv / tsv in csvlens, and parquet / sqlite / jsonl in VisiData, all through Kitty.
 
-`prompt` rules still apply only to commands that require sandbox escalation; current hooks cannot force an approval prompt for a command already permitted inside the sandbox.
+```bash
+bash ~/ghq/github.com/riii111/dotfiles/scripts/build-open-apps.sh
+nix shell nixpkgs#duti --command bash ~/ghq/github.com/riii111/dotfiles/scripts/setup-default-apps.sh
+```
 
-Compared with the previous broad allow list, network-dependent builds, `git pull`, direct `gh api`, and `gh pr checkout` can require approval. This is an intentional trade-off: fixed read-only network commands and dedicated wrappers remain autonomous, while commands with broader execution or mutation paths stop for review.
+Re-run both scripts if a macOS update breaks file associations.
 
-## Trade-offs
+## Agent tools
 
-- macOS only (AppleScript, pbcopy, etc.)
-- Kotlin LSP assumes forked version
+- Edit `~/.codex/config.toml` directly; the [template](dot_codex/config.toml.tmpl) is a reference and is not applied by chezmoi.
+- Keep `sandbox_workspace_write.network_access = false` so network commands consult the [command rules](dot_codex/rules/default.rules.tmpl) when they need sandbox escalation.
+- After applying or updating hooks, restart Codex and use `/hooks` to trust and enable `PreToolUse` and `PermissionRequest` from `~/.codex/hooks.json`.
+- Codex rules apply only to sandbox escalation. Hooks reduce accidental destructive commands but do not provide a complete enforcement boundary.
+- In Codex, `fd`, `rg`, and `sed` run inside the sandbox; use `codex-read-lines` to read line ranges outside it.
+- In Claude Code, `bun run` stays inside the sandbox because package scripts are agent-editable.
+
+Task launches and reviews use `harnexus-task` from [harnexus](https://github.com/riii111/harnexus).
+Install it to `~/.local/bin` with `bun run install:task` from a clean, reviewed checkout of harnexus `origin/main`.
+
+Usage: [task-session-launch](dot_codex/skills/task-session-launch/SKILL.md), [task-review-cycle](dot_codex/skills/task-review-cycle/SKILL.md).
