@@ -6,7 +6,6 @@ font-size = 14
 window-padding-x = 20
 window-padding-y = 5
 window-padding-balance = true
-window-theme = ghostty
 background-opacity = 0.65
 background-blur-radius = 20
 custom-shader = ~/.config/ghostty/passthrough.glsl
