@@ -435,14 +435,6 @@ def path_is_within_worktree(cwd: str, raw_path: str) -> bool:
 
 
 def unsafe_git_arguments(subcommand: str | None, subargs: list[str], cwd: str) -> bool:
-    if subcommand == "rebase" and has_rebase_exec_option(subargs):
-        return True
-    if subcommand == "switch" and has_option(subargs, "--orphan"):
-        return True
-    if subcommand in {"diff", "show", "log"} and has_output_option(subargs):
-        return True
-    if subcommand == "diff" and has_option(subargs, "--no-index"):
-        return True
     if subcommand in {"diff", "show", "log"}:
         for arg in subargs:
             if arg.startswith("/"):
@@ -745,8 +737,6 @@ def denial_reason(command: str, cwd: str | None = None) -> str | None:
     if executable_name == "bq" and starts_with(args, ["rm"]):
         return "BigQuery resource deletion is forbidden."
 
-    if executable is None:
-        return compound_denial_reason(command, cwd)
     return compound_denial_reason(command, cwd)
 
 
