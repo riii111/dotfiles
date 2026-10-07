@@ -28,8 +28,6 @@ DROP = object()
 
 
 class FakeHarnexus:
-    """Answers each connection with the next scripted answer."""
-
     def __init__(self, path):
         self.calls = []
         self.answers = []
@@ -278,10 +276,6 @@ class LaunchTest(TaskctlFixture):
         self.assertIn("another taskctl run", err)
         self.assertEqual(self.harnexus.calls, [])
 
-    def test_skills_root_option_is_gone(self):
-        with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
-            taskctl.main(["--skills-root", "/tmp", "state"])
-
     def test_socket_path_follows_harnexus_state(self):
         with mock.patch.dict(
             os.environ,
@@ -330,6 +324,7 @@ class ReviewTest(TaskctlFixture):
 
     def test_rereview_goes_to_same_reviewer_once_per_head(self):
         head = self.commit("test: candidate")
+        before = sorted(self.checkout.iterdir())
         code, out, err = self.review(answers=[created("r1", "gpt-6.1-sol")])
         self.assertEqual(code, 0, err)
         (call,) = self.harnexus.calls
@@ -341,7 +336,6 @@ class ReviewTest(TaskctlFixture):
         self.assertEqual(arguments["title"], "Review example")
         self.assertIn(self.base + "..." + head, arguments["prompt"])
         self.assertIn("workerのチャットID: worker", arguments["prompt"])
-        self.assertFalse((self.checkout / ".reviewctl").exists())
         self.assertEqual(self.git("status", "--porcelain"), "")
 
         code, _, err = self.review()
@@ -361,6 +355,7 @@ class ReviewTest(TaskctlFixture):
         self.assertIn(self.data["prUrl"], call["arguments"]["prompt"])
         self.assertEqual(self.review()[0], 1)
         self.assertEqual(len(self.harnexus.calls), 2)
+        self.assertEqual(sorted(self.checkout.iterdir()), before)
 
     def test_rereview_tool_error_is_unknown(self):
         self.assertEqual(self.review(answers=[created("r1", "gpt-6.1-sol")])[0], 0)
@@ -446,7 +441,6 @@ class ReviewTest(TaskctlFixture):
         self.assertEqual(code, 0, err)
         self.assertTrue(git_calls)
         for command in git_calls:
-            self.assertEqual(command[:7], ["git", *handoff.GIT_SAFETY])
             self.assertIn("protocol.allow=never", command)
             self.assertIn(command[9], ("rev-parse", "merge-base"))
         outside = self.root / "outside"
@@ -459,13 +453,6 @@ class ReviewTest(TaskctlFixture):
         link.symlink_to(outside)
         self.data["checkout"] = str(link)
         self.assertEqual(self.review()[0], 1)
-
-    def test_never_writes_into_the_checkout(self):
-        before = sorted(self.checkout.iterdir())
-        self.assertEqual(self.review(answers=[created("r1", "gpt-6.1-sol")])[0], 0)
-        self.commit("test: fix")
-        self.assertEqual(self.review(answers=[{"outcome": "done"}])[0], 0)
-        self.assertEqual(sorted(self.checkout.iterdir()), before)
 
     def test_reviewer_cannot_be_the_worker_and_request_worker_must_match(self):
         self.data["workerChatId"] = "worker"

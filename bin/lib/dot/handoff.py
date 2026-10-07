@@ -115,8 +115,12 @@ def worker_prompt(data, skills):
 
 # Runs unsandboxed: never let repository config start helpers or transports.
 GIT_SAFETY = (
-    *("-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null"),
-    *("-c", "protocol.allow=never"),
+    "-c",
+    "core.fsmonitor=false",
+    "-c",
+    "core.hooksPath=/dev/null",
+    "-c",
+    "protocol.allow=never",
 )
 
 
