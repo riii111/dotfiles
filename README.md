@@ -57,14 +57,12 @@ nix shell nixpkgs#duti --command bash ~/ghq/github.com/riii111/dotfiles/scripts/
 
 Re-run both scripts if a macOS update breaks file associations.
 
-## Agent tools
+## Codex
 
 - Edit `~/.codex/config.toml` directly; the [template](dot_codex/config.toml.tmpl) is a reference and is not applied by chezmoi.
 - Keep `sandbox_workspace_write.network_access = false` so network commands consult the [command rules](dot_codex/rules/default.rules.tmpl) when they need sandbox escalation.
 - After applying or updating hooks, restart Codex and use `/hooks` to trust and enable `PreToolUse` and `PermissionRequest` from `~/.codex/hooks.json`.
 - Codex rules apply only to sandbox escalation. Hooks reduce accidental destructive commands but do not provide a complete enforcement boundary.
-- In Codex, `fd`, `rg`, and `sed` run inside the sandbox; use `codex-read-lines` to read line ranges outside it.
-- In Claude Code, `bun run` stays inside the sandbox because package scripts are agent-editable.
 
 Task launches and reviews use `harnexus-task` from [harnexus](https://github.com/riii111/harnexus).
 Install it to `~/.local/bin` with `bun run install:task` from a clean, reviewed checkout of harnexus `origin/main`.
