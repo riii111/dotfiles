@@ -8,4 +8,5 @@ fi
 
 repo_root="$(git rev-parse --show-toplevel)"
 test_path="$repo_root/tests/kitty_herdr_mode_test.py"
-kitty +runpy "import runpy; runpy.run_path('$test_path', run_name='__main__')"
+# kitty runs embedded Python with -OO, which strips every assert; compile the test with optimization off.
+kitty +runpy "import sys; path = sys.argv[1]; exec(compile(open(path).read(), path, 'exec', optimize=0), {'__name__': '__main__', '__file__': path})" "$test_path"

@@ -5,6 +5,9 @@ from kitty.fast_data_types import GLFW_MOD_CONTROL, GLFW_MOD_SHIFT, GLFW_MOD_SUP
 from kitty.utils import resolve_abs_or_config_path
 
 
+if not __debug__:
+    raise SystemExit("asserts are disabled; run tests/test-kitty-herdr.sh")
+
 repo_root = Path(__file__).resolve().parents[1]
 config_path = repo_root / "private_dot_config/kitty/kitty.conf"
 options = load_config(str(config_path))
