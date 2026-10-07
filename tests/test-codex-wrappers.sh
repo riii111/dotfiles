@@ -105,6 +105,11 @@ expect_failure_message "$outside_root_message" run_read_lines 1 1 escape.txt
 ln -s "$outside" "$plugin_skill/escape.txt"
 expect_failure_message "$outside_root_message" run_read_lines 1 1 "$plugin_skill/escape.txt"
 expect_failure_message "$outside_root_message" run_skill_escape
+mkdir -p "$test_home/.codex/skills-sibling" "$repo-sibling"
+printf 'sibling\n' >"$test_home/.codex/skills-sibling/SKILL.md"
+printf 'sibling\n' >"$repo-sibling/file.txt"
+expect_failure_message "$outside_root_message" run_read_lines 1 1 "$test_home/.codex/skills-sibling/SKILL.md"
+expect_failure_message "$outside_root_message" run_read_lines 1 1 "$repo-sibling/file.txt"
 
 expect_failure_message 'usage: codex-force-with-lease' run_force unexpected
 git -C "$repo" worktree add -q "$worktree" main
