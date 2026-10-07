@@ -137,8 +137,7 @@ class DotCliTest(unittest.TestCase):
             ("/bin/bash", "-n", "/repo/scripts/check.sh"),
             ("/bin/sh", "-n", "/repo/bin/run"),
         ]
-        for command in expected:
-            self.assertIn(command, calls)
+        self.assertCountEqual(calls, expected)
 
     def test_command_test_collects_failures_without_traceback(self):
         repo_root = Path("/repo")
