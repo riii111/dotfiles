@@ -65,9 +65,11 @@ host_executable(name="codex-force-with-lease", paths=["{{ .chezmoi.homeDir }}/bi
 host_executable(name="harnexus-task", paths=["{{ .chezmoi.homeDir }}/.local/bin/harnexus-task"])
 
 # --- Local search and text processing ---
-prefix_rule(pattern=["fd"], decision="allow", justification="Find local files")
-prefix_rule(pattern=["rg"], decision="allow", justification="Search local file contents")
-prefix_rule(pattern=["sed"], decision="allow", justification="Process local text")
+# fd・rg・sedはallowしない。allowはsandbox外で実行させるため、rg --pre、fd -x/--exec、
+# sedのe・w・Wコマンドで任意のプログラム実行やファイル書き込みができてしまう。
+# フラグやsedスクリプトは任意の位置に置けるため、先頭一致のルールでは危険な形を除外できない。
+# 一致しない場合はsandbox内で確認なしに実行され、sandbox外での実行だけ確認が必要になる。
+# 行範囲の読み取りはcodex-read-linesを使う。
 
 # --- Trusted normal Git / PR workflow ---
 prefix_rule(pattern=["git", "switch", "-c"], decision="allow", justification="Create a normal feature branch")
