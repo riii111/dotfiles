@@ -25,3 +25,8 @@ bin/gh-read
 .claude/scripts/sandbox-report.py
 .codex/skills/sandbox-review
 .codex/skills/task-review-cycle/references/rereviewer.md
+bin/tasklaunch
+bin/reviewctl
+.codex/skills/task-session-launch/references/worker-identity.md
+.codex/skills/task-review-cycle/references/creation.md
+.codex/skills/task-review-cycle/references/recovery.md

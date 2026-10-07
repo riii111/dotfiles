@@ -1,0 +1,393 @@
+#!/usr/bin/env python3
+
+"""Launch task workers and request independent reviews through harnexus."""
+
+import argparse
+import hashlib
+import json
+import os
+import socket
+import sys
+import tempfile
+from pathlib import Path
+
+
+sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+
+from dot.handoff import (
+    HandoffError,
+    candidate,
+    chat_id,
+    codex_home,
+    launch_request,
+    review_prompt,
+    review_request,
+    session_value,
+    worker_prompt,
+)
+
+
+CALL_TIMEOUT = 15 * 60
+SOCKET_HINT = (
+    "start harnexus with HARNEXUS_CALL_SOCKET=on and run taskctl outside the sandbox"
+)
+
+
+class Failure(Exception):
+    pass
+
+
+def socket_path():
+    configured = os.environ.get("HARNEXUS_CALL_SOCKET", "")
+    if configured.startswith("/"):
+        return Path(configured)
+    state = os.environ.get("HARNEXUS_STATE_PATH")
+    if state:
+        return Path(state).parent / "call.sock"
+    return Path.home() / ".local/state/harnexus/call.sock"
+
+
+def caller_id():
+    value = os.environ.get("CODEX_THREAD_ID")
+    if not value:
+        raise HandoffError("CODEX_THREAD_ID is not set; run taskctl from a thread")
+    return chat_id(value, "CODEX_THREAD_ID")
+
+
+def call(caller, tool, arguments):
+    path = socket_path()
+    line = json.dumps(
+        {"threadId": caller, "tool": tool, "arguments": arguments}, ensure_ascii=False
+    )
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as conn:
+        conn.settimeout(CALL_TIMEOUT)
+        try:
+            conn.connect(str(path))
+        except OSError as error:
+            return {"outcome": "not_sent", "error": f"{path}: {error}; {SOCKET_HINT}"}
+        try:
+            conn.sendall(line.encode() + b"\n")
+            data = b""
+            while not data.endswith(b"\n"):
+                chunk = conn.recv(65536)
+                if not chunk:
+                    break
+                data += chunk
+            answer = json.loads(data)
+            if not isinstance(answer, dict) or "outcome" not in answer:
+                raise ValueError("answer without outcome")
+            return answer
+        except (OSError, ValueError) as error:
+            # The request may already have reached the App.
+            return {"outcome": "unknown", "error": f"no answer: {error}"}
+
+
+def save(path, data, *, exclusive=False):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(mode="w", dir=path.parent, delete=False) as out:
+        temp = Path(out.name)
+        json.dump(data, out, ensure_ascii=False, indent=1)
+    try:
+        if exclusive:
+            os.link(temp, path)
+        else:
+            os.replace(temp, path)
+    except FileExistsError:
+        raise Failure(f"another taskctl run is sending; inspect {path}")
+    finally:
+        temp.unlink(missing_ok=True)
+
+
+def load(path):
+    return json.loads(path.read_text()) if path.exists() else None
+
+
+class Session:
+    """state.json holds the confirmed thread; pending.json blocks any resend."""
+
+    def __init__(self, directory, legacy=None):
+        self.state_path = directory / "state.json"
+        self.pending_path = directory / "pending.json"
+        self.history_path = directory / "history.json"
+        self.loaded = load(self.state_path)
+        self.state = self.loaded or (legacy and legacy())
+        self.pending = load(self.pending_path)
+
+    def check_idle(self):
+        if not self.pending:
+            return
+        status = self.pending.get("status")
+        if status == "refused":
+            raise Failure(
+                "thread {threadId} refused its first turn: expected {expected}, "
+                "actual {actual}; fix the model, then resolve --not-sent".format(
+                    **self.pending
+                )
+            )
+        raise Failure(
+            f"previous {self.pending['tool']} ended as {status}; never resend. "
+            "Ask the user to check the App, then run resolve --sent or --not-sent"
+        )
+
+    def send(self, caller, tool, arguments, extra):
+        self.check_idle()
+        pending = {"status": "sending", "tool": tool, "arguments": arguments, **extra}
+        save(self.pending_path, pending, exclusive=True)
+        if load(self.state_path) != self.loaded:
+            self.pending_path.unlink()
+            raise Failure("another taskctl run changed the state; rerun to check it")
+        answer = call(caller, tool, arguments)
+        outcome = answer.get("outcome")
+        thread = answer.get("threadId") or arguments.get("threadId")
+        if outcome == "done":
+            return self.confirm(pending, thread, answer)
+        if outcome == "model_mismatch":
+            pending.update(status="refused", threadId=thread, answer=answer)
+            pending.update(expected=answer.get("expected"), actual=answer.get("actual"))
+            save(self.pending_path, pending)
+            self.pending = pending
+            self.check_idle()
+        text = json.dumps(answer, ensure_ascii=False)
+        # A lost send_message answer reaches Claude callers as tool_error.
+        if outcome in ("not_sent", "rejected", "invalid") or (
+            outcome == "tool_error"
+            and tool == "create_thread"
+            and not answer.get("threadId")
+        ):
+            self.pending_path.unlink()
+            raise Failure(f"{tool} was not sent: {text}")
+        pending.update(status="unknown", threadId=thread, answer=answer)
+        save(self.pending_path, pending)
+        raise Failure(
+            f"{tool} result is unknown ({text}); never resend. "
+            "Ask the user to check the App"
+        )
+
+    def confirm(self, pending, thread, answer=None):
+        if not thread:
+            raise Failure(
+                "thread ID is unknown; check the App, then resolve --sent --thread-id"
+            )
+        sent = {
+            "tool": pending["tool"],
+            "prompt": pending["arguments"]["prompt"],
+            "expected": {
+                "model": pending["arguments"].get("model"),
+                "effort": pending["arguments"].get("thinking"),
+            },
+            "actual": {key: (answer or {}).get(key) for key in ("model", "effort")},
+            "workspace": pending["workspace"],
+            "answer": answer,
+        }
+        state = self.confirmed(chat_id(thread, "threadId"), pending, sent)
+        save(self.state_path, state)
+        self.pending_path.unlink()
+        return {
+            "tool": sent["tool"],
+            "threadId": thread,
+            **{key: sent["actual"][key] for key in ("model", "effort")},
+            "expected": sent["expected"],
+            "state": str(self.state_path),
+        }
+
+    def resolve(self, sent, thread):
+        if not self.pending:
+            raise Failure("nothing is pending")
+        if not sent:
+            if self.pending["status"] == "refused":
+                history = load(self.history_path) or []
+                save(self.history_path, [*history, self.pending])
+            self.pending_path.unlink()
+            return {"released": self.pending["tool"], "status": self.pending["status"]}
+        if self.pending["status"] == "refused":
+            raise Failure("a refused first turn never ran; use --not-sent")
+        return self.confirm(self.pending, thread or self.pending.get("threadId"))
+
+    def show(self):
+        return {
+            "state": self.state,
+            "pending": self.pending,
+            "refused": load(self.history_path),
+        }
+
+
+class LaunchSession(Session):
+    def confirmed(self, thread, pending, sent):
+        return {"threadId": thread, "request": pending["request"], "sent": sent}
+
+
+class ReviewSession(Session):
+    def confirmed(self, thread, pending, sent):
+        if self.state and self.state["reviewer"] != thread:
+            raise Failure("review session must keep the same reviewer")
+        if thread == pending["candidate"]["workerChatId"]:
+            raise Failure("a worker cannot review itself")
+        return {"reviewer": thread, "candidate": pending["candidate"], "sent": sent}
+
+
+def worktree_target(project):
+    return {
+        "type": "project",
+        "projectId": project,
+        "environment": {"type": "worktree"},
+    }
+
+
+def state_root():
+    base = os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state"
+    return Path(base) / "taskctl"
+
+
+def session_dir(kind, *values):
+    key = hashlib.sha256("\n".join(values).encode()).hexdigest()[:16]
+    return state_root() / kind / key
+
+
+def launch_session(data):
+    return LaunchSession(session_dir("launch", data["projectId"], data["taskId"]))
+
+
+def launch(args):
+    data = launch_request(args.request)
+    session = launch_session(data)
+    if session.state:
+        if session.state["request"] != data:
+            raise Failure(
+                f"{data['taskId']} already has worker {session.state['threadId']} "
+                "launched with a different request"
+            )
+        return {"existing": session.state["threadId"], "state": str(session.state_path)}
+    arguments = {
+        "prompt": worker_prompt(data, codex_home() / "skills"),
+        "target": worktree_target(data["projectId"]),
+        "title": "Impl " + data["taskId"],
+        "model": args.model or "claude-opus-5-5",
+        "thinking": args.thinking or "medium",
+    }
+    if data.get("startingBranch"):
+        arguments["target"]["environment"]["startingState"] = {
+            "type": "branch",
+            "branchName": data["startingBranch"],
+        }
+    extra = {"request": data, "workspace": arguments["target"]}
+    return session.send(caller_id(), "create_thread", arguments, extra)
+
+
+def legacy_review_state(checkout):
+    path = Path(checkout) / ".reviewctl/state.json"
+    if not os.path.lexists(path):
+        return None
+    if path.resolve() != path:
+        raise Failure(f"refusing symlinked legacy state {path}")
+    state = json.loads(path.read_text())
+    if state.get("pending_create") is True or not state.get("reviewer"):
+        raise Failure(
+            f"legacy reviewctl creation is pending in {path}; check the App, "
+            "and remove it only if no reviewer was created"
+        )
+    return {"reviewer": state["reviewer"], "candidate": state["candidate"]}
+
+
+def review_session(data):
+    directory = session_dir("review", data["checkout"], data["workerChatId"])
+    return ReviewSession(directory, lambda: legacy_review_state(data["checkout"]))
+
+
+def review(args):
+    data = review_request(args.request)
+    worker = caller_id()
+    if data.setdefault("workerChatId", worker) != worker:
+        raise HandoffError("workerChatId in the request must equal CODEX_THREAD_ID")
+    session = review_session(data)
+    session.check_idle()
+    previous = session.state["candidate"] if session.state else None
+    data = candidate(data, previous, args.update_base)
+    if previous:
+        for key in ("taskId", "workerAI", "workerChatId", "projectId", "checkout"):
+            if session_value(previous, key) != session_value(data, key):
+                raise HandoffError(f"review session must keep the original {key}")
+        if previous["head"] == data["head"]:
+            raise Failure(
+                f"head {data['head']} was already sent to reviewer "
+                f"{session.state['reviewer']}; wait for its result"
+            )
+    arguments = {"prompt": review_prompt(data, codex_home() / "skills")}
+    if session.state:
+        tool = "send_message_to_thread"
+        arguments["threadId"] = session.state["reviewer"]
+        for key in ("model", "thinking"):
+            if getattr(args, key) is not None:
+                arguments[key] = getattr(args, key)
+    else:
+        tool = "create_thread"
+        arguments.update(
+            target=worktree_target(data["projectId"]),
+            title="Review " + data["taskId"],
+            model=args.model or "gpt-6.1-sol",
+            thinking=args.thinking or "medium",
+        )
+    extra = {"candidate": data, "workspace": data["checkout"]}
+    return session.send(data["workerChatId"], tool, arguments, extra)
+
+
+def requested_session(path):
+    if "completionTarget" in json.loads(path.read_text()):
+        return launch_session(launch_request(path))
+    data = review_request(path)
+    data["workerChatId"] = caller_id()
+    return review_session(data)
+
+
+def state(args):
+    if args.request:
+        return requested_session(args.request).show()
+    root = state_root()
+    paths = sorted(root.glob("*/*/*.json")) if root.is_dir() else []
+    return {str(path): load(path) for path in paths}
+
+
+def resolve(args):
+    thread = args.thread_id and chat_id(args.thread_id, "--thread-id")
+    return requested_session(args.request).resolve(args.sent, thread)
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest="command", required=True)
+    for name, help_text in (
+        ("launch", "create a worker thread once per projectId and taskId"),
+        ("review", "send the current head to the worker's reviewer"),
+    ):
+        command = commands.add_parser(name, help=help_text)
+        command.add_argument("--request", type=Path, required=True)
+        command.add_argument("--model")
+        command.add_argument("--thinking")
+        command.set_defaults(func=globals()[name])
+    commands.choices["review"].add_argument(
+        "--update-base",
+        action="store_true",
+        help="fix a new base already integrated into head",
+    )
+    show = commands.add_parser("state", help="show recorded state")
+    show.add_argument("--request", type=Path)
+    show.set_defaults(func=state)
+    settle = commands.add_parser(
+        "resolve", help="settle an unknown or refused send after checking the App"
+    )
+    settle.add_argument("--request", type=Path, required=True)
+    outcome = settle.add_mutually_exclusive_group(required=True)
+    outcome.add_argument("--sent", action="store_true")
+    outcome.add_argument("--not-sent", action="store_true")
+    settle.add_argument("--thread-id")
+    settle.set_defaults(func=resolve)
+    args = parser.parse_args(argv)
+    try:
+        print(json.dumps(args.func(args), ensure_ascii=False))
+        return 0
+    except (Failure, HandoffError, OSError, ValueError) as error:
+        print(f"taskctl: {error}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
