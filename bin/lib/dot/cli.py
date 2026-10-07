@@ -208,13 +208,12 @@ def command_test(_: argparse.Namespace) -> int:
             failures += 1
             print_process_failure("ruff check", ruff_result)
 
-    for directory, label in (("tests", "python tests"),):
-        test_result = run_command(
-            ["python3", "-m", "unittest", "discover", directory], repo_root
-        )
-        if test_result.returncode != 0:
-            failures += 1
-            print_process_failure(label, test_result)
+    test_result = run_command(
+        ["python3", "-m", "unittest", "discover", "tests"], repo_root
+    )
+    if test_result.returncode != 0:
+        failures += 1
+        print_process_failure("python tests", test_result)
 
     bash = shutil.which("bash")
     for test_path in sorted((repo_root / "tests").glob("test-*.sh")):
