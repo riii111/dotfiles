@@ -16,7 +16,6 @@ read_lines="$repo_root/bin/executable_codex-read-lines"
 force_with_lease="$repo_root/bin/executable_codex-force-with-lease"
 outside_root_message='file is outside an approved root'
 untrusted_checkout_message='current repository is not a trusted GitHub checkout'
-runner="$repo_root/tests/run-codex-python-with-home.py"
 trap 'rm -rf "$test_root"' EXIT
 
 mkdir -p "$repo" "$skill" "$plugin_skill"
@@ -38,16 +37,16 @@ git -C "$repo" add file.txt
 git -C "$repo" commit -q -m update
 
 run_read_lines() {
-	(cd "$repo" && HOME="$test_home" python3 "$runner" "$read_lines" "$test_home" "$@")
+	(cd "$repo" && HOME="$test_home" python3 "$read_lines" "$@")
 }
 
 run_skill_escape() {
-	(cd "$test_home" && HOME="$test_home" python3 "$runner" "$read_lines" "$test_home" 1 1 \
+	(cd "$test_home" && HOME="$test_home" python3 "$read_lines" 1 1 \
 		"$test_home/.codex/skills/../outside.txt")
 }
 
 run_force() {
-	(cd "$repo" && HOME="$test_home" python3 "$runner" "$force_with_lease" "$test_home" "$@")
+	(cd "$repo" && HOME="$test_home" python3 "$force_with_lease" "$@")
 }
 
 expect_failure_message() {
@@ -69,7 +68,7 @@ expect_failure_message() {
 test "$(run_read_lines 2 3 file.txt)" = $'two\nthree'
 test "$(GIT_DIR="$remote" GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=remote.origin.url \
 	GIT_CONFIG_VALUE_0=https://example.com/riii111/test.git run_read_lines 1 1 file.txt)" = one
-skill_output="$(cd "$test_home" && HOME="$test_home" python3 "$runner" "$read_lines" "$test_home" 1 2 "$skill/SKILL.md")"
+skill_output="$(cd "$test_home" && HOME="$test_home" python3 "$read_lines" 1 2 "$skill/SKILL.md")"
 test "$skill_output" = $'skill one\nskill two'
 plugin_skill_output="$(run_read_lines 1 2 "$plugin_skill/SKILL.md")"
 test "$plugin_skill_output" = $'plugin skill one\nplugin skill two'
@@ -108,7 +107,7 @@ expect_failure_message "$outside_root_message" run_skill_escape
 expect_failure_message 'usage: codex-force-with-lease' run_force unexpected
 git -C "$repo" worktree add -q "$worktree" main
 printf 'worktree only\n' >"$worktree/worktree.txt"
-worktree_output="$(cd "$worktree" && HOME="$test_home" python3 "$runner" "$read_lines" "$test_home" 1 1 worktree.txt)"
+worktree_output="$(cd "$worktree" && HOME="$test_home" python3 "$read_lines" 1 1 worktree.txt)"
 test "$worktree_output" = 'worktree only'
 
 mkdir -p "$installed_bin/lib"

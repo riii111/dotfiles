@@ -9,7 +9,6 @@ export GIT_PAGER=cat
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 hook="$repo_root/dot_codex/hooks/executable_permission_request.py"
-runner="$repo_root/tests/run-codex-python-with-home.py"
 hooks_config="$repo_root/dot_codex/hooks.json"
 test_root="$(mktemp -d "${TMPDIR:-/tmp}/codex-permission-hook-test.XXXXXX")"
 test_home="$test_root/home"
@@ -25,7 +24,7 @@ run_hook() {
 	local command="$2"
 	HOME="$test_home" jq -n --arg cwd "$tmpdir" --arg event_name "$event_name" --arg command "$command" \
 		'{cwd:$cwd,hook_event_name:$event_name,tool_input:{command:$command}}' |
-		HOME="$test_home" python3 "$runner" "$hook" "$test_home"
+		HOME="$test_home" python3 "$hook"
 }
 
 jq -e '.hooks.PreToolUse[0].matcher == "^Bash$"' "$hooks_config" >/dev/null
