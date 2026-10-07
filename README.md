@@ -131,6 +131,10 @@ Run `bun run install:task` only from a clean, reviewed checkout of harnexus `ori
 
 See [task-session-launch](dot_codex/skills/task-session-launch/SKILL.md) and [task-review-cycle](dot_codex/skills/task-review-cycle/SKILL.md) for usage and request JSON formats.
 
+### Claude Code sandbox
+
+`bun run` is not in `sandbox.excludedCommands`, so package scripts, which the agent can edit, run inside the sandbox.
+
 ### Codex command policy
 
 `dot_codex/rules/default.rules.tmpl` controls commands that need to run outside the sandbox. Keep `sandbox_workspace_write.network_access = false` in the live `~/.codex/config.toml`; otherwise network commands can run inside the sandbox without consulting these rules.
@@ -145,6 +149,8 @@ codex execpolicy check --pretty --rules ~/.codex/rules/default.rules -- gh pr vi
 ```
 
 The `PreToolUse` policy reduces accidental direct invocations of recursive `rm` and common destructive Git/GitHub/cloud commands by cooperative agents. It is not a complete enforcement boundary and does not defend against shell indirection, aliases, scripts, interpreters, subprocesses, PATH shadowing, malicious repository code, disabled hooks, or deliberate bypass attempts. Use the sandbox, fixed-purpose wrappers, and repository or platform protections when an operation requires a strong guarantee.
+
+`fd`, `rg` and `sed` have no `allow` rule: `rg --pre`, `fd --exec` and sed `e`/`w` commands can run programs or write files, and prefix rules cannot exclude flags in arbitrary positions. They run inside the sandbox without approval; use `codex-read-lines` for line ranges outside it.
 
 `prompt` rules still apply only to commands that require sandbox escalation; current hooks cannot force an approval prompt for a command already permitted inside the sandbox.
 
