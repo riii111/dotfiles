@@ -15,12 +15,17 @@
 .claude/skills/reviewing-adrs
 .claude/skills/rust-review
 .claude/agents/codex-2nd-opinion.md
+.config/wezterm/zen-mode.lua
+.config/wezterm/tests/herdr_mode_test.lua
 .config/nvim/lua/plugins/github-actions.lua
 .config/nvim/lua/plugins/dial.lua
 .config/nvim/lua/plugins/flash.lua
 .config/nvim/lua/plugins/noice.lua
 bin/gh-pr-comments
 bin/gh-read
+.claude/hooks/notify-impl-review.sh
+.claude/skills/pr-review/scripts/pr-review-setup.sh
+.claude/README.md
 .claude/hooks/ask-push-on-protected-branch.sh
 .claude/skills/sandbox-review
 .claude/scripts/sandbox-report.py

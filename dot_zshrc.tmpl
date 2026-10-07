@@ -14,45 +14,6 @@ export NIX_DOTFILES_SHARE="${NIX_DOTFILES_PROFILE}/share"
 stty -ixon
 
 # ==========================================
-# Zsh Startup Caching Mechanism
-# ==========================================
-# Cache slow initialization commands to improve startup speed
-ZSHRC_CACHE_DIR="$XDG_CACHE_HOME/zsh"
-ZSHRC_CACHE_FILE="$ZSHRC_CACHE_DIR/init-cache.zsh"
-ZSHRC_SOURCE="$HOME/.zshrc"
-
-[[ ! -d "$ZSHRC_CACHE_DIR" ]] && mkdir -p "$ZSHRC_CACHE_DIR"
-
-if [[ ! -f "$ZSHRC_CACHE_FILE" ]] || [[ "$ZSHRC_SOURCE" -nt "$ZSHRC_CACHE_FILE" ]]; then
-    {
-        echo "# Generated at $(date)"
-        echo "# This file is auto-generated. Do not edit manually."
-        echo
-
-        if command -v pyenv >/dev/null 2>&1; then
-            echo "# pyenv initialization"
-            pyenv init --path
-        fi
-
-        # brew --prefix llvm is slow
-        if command -v brew >/dev/null 2>&1; then
-            echo
-            echo "# brew llvm path"
-            echo "export PATH=\"$(brew --prefix llvm)/bin:\$PATH\""
-        fi
-
-        if command -v go >/dev/null 2>&1; then
-            echo
-            echo "# go paths"
-            echo "export PATH=\"\$PATH:$(go env GOPATH)/bin:\$HOME/go/bin\""
-        fi
-
-    } > "$ZSHRC_CACHE_FILE"
-fi
-
-source "$ZSHRC_CACHE_FILE"
-
-# ==========================================
 # Shell Options
 # ==========================================
 setopt IGNORE_EOF

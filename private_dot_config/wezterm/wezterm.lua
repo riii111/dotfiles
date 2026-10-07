@@ -4,7 +4,6 @@ local config = wezterm.config_builder()
 local keymaps = require("keymaps")
 local herdr_mode = require("herdr_mode")
 require("on")
-require("zen-mode")
 
 ---------------------------------------------------------------
 -- Font
