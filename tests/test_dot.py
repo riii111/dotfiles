@@ -474,10 +474,16 @@ class DotCliTest(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             cli.command_work_tools_apply(SimpleNamespace(name="unknown"))
 
-    def test_read_first_line_returns_empty_on_oserror(self):
+    def test_read_first_line_returns_empty_for_unreadable_and_binary_files(self):
         path = Path("/tmp/unreadable")
         with mock.patch.object(Path, "open", side_effect=PermissionError):
             self.assertEqual(cli.read_first_line(path), "")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            binary = Path(tmpdir) / "logo.png"
+            binary.write_bytes(b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\xff\xfe\xfd")
+
+            self.assertEqual(cli.read_first_line(binary), "")
 
 
 if __name__ == "__main__":
