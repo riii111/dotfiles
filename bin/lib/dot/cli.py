@@ -99,8 +99,6 @@ def detect_shebang_shell(first_line: str) -> str | None:
                 continue
             command = Path(token).name
             break
-        if not command:
-            return None
 
     if command.startswith("python"):
         return None

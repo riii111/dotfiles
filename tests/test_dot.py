@@ -21,15 +21,11 @@ class DotCliTest(unittest.TestCase):
                 "#!/usr/bin/env python3\nprint('hi')\n", encoding="utf-8"
             )
 
-            self.assertEqual(cli.detect_shell(bash_script), "bash")
-            self.assertIsNone(cli.detect_shell(python_script))
-
-    def test_detect_shell_skips_exotic_shebangs(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            root = Path(tmpdir)
-            fish_script = root / "script"
+            fish_script = root / "fish_tool"
             fish_script.write_text("#!/usr/bin/env fish\necho hi\n", encoding="utf-8")
 
+            self.assertEqual(cli.detect_shell(bash_script), "bash")
+            self.assertIsNone(cli.detect_shell(python_script))
             self.assertIsNone(cli.detect_shell(fish_script))
 
     def test_detect_shebang_shell_handles_env_dash_s(self):
@@ -37,9 +33,8 @@ class DotCliTest(unittest.TestCase):
             cli.detect_shebang_shell("#!/usr/bin/env -S bash -eu"),
             "bash",
         )
-
-    def test_detect_shebang_shell_returns_none_when_env_only_has_flags(self):
-        self.assertIsNone(cli.detect_shebang_shell("#!/usr/bin/env -Sbash"))
+        self.assertIsNone(cli.detect_shebang_shell("#!/usr/bin/env"))
+        self.assertIsNone(cli.detect_shebang_shell("#!/usr/bin/env -S"))
 
     def test_collect_shell_targets_skips_templates(self):
         with tempfile.TemporaryDirectory() as tmpdir:
