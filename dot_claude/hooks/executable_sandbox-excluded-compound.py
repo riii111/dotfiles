@@ -1,445 +1,209 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3 -I
 """Deny Bash commands that join a sandbox-excluded program with other code.
 
-Claude Code decides sandbox exclusion for the whole command string: a command
-that matches sandbox.excludedCommands (for example `git *`) runs entirely
-outside the sandbox. `git status; cp x ~/.local/bin/y` would then run the `cp`
-unsandboxed, and each part can still match an allow rule, so nothing prompts.
-This hook denies such commands unless the excluded program runs alone.
-
-The shell parsing is deliberately conservative: when unsure, it denies.
+Claude Code runs a whole command outside the sandbox when it matches
+sandbox.excludedCommands, so `git status; cp x ~/.local/bin/y` would run the
+`cp` unsandboxed without a prompt. Errors and bad input fail closed.
 """
 
 import json
 import os
 import re
+import shlex
 import sys
 from pathlib import Path
 
-# Commands that run the next word as a program, and shell keywords that can
-# precede one. When a segment starts with one of these, every word is checked.
-WRAPPERS = {
-    "!",
-    "{",
-    "}",
-    "builtin",
-    "caffeinate",
-    "chronic",
-    "command",
-    "do",
-    "doas",
-    "done",
-    "elif",
-    "else",
-    "env",
-    "eval",
-    "exec",
-    "fi",
-    "flock",
-    "if",
-    "ionice",
-    "nice",
-    "nohup",
-    "setsid",
-    "stdbuf",
-    "sudo",
-    "then",
-    "time",
-    "timeout",
-    "unbuffer",
-    "until",
-    "watch",
-    "while",
-    "xargs",
-    "bash",
-    "sh",
-    "zsh",
+HEREDOC = re.compile(r"\$\(cat <<'([A-Za-z_]\w*)'\n")
+REDIRECTS = re.compile(r"(?<!\S)(2>&1|2?>/dev/null)(?!\S)")
+CD = re.compile(r"cd [\w./~+@-]+")
+# Filters allowed after one final pipe: (flag pattern, flags taking a value,
+# maximum positional arguments). Files as arguments are not allowed.
+FILTERS = {
+    "head": (r"-[nc]?[0-9]+", {"-n", "-c"}, 0),
+    "tail": (r"-[nc]?[0-9]+", {"-n", "-c"}, 0),
+    "wc": (r"-[lcwm]+", set(), 0),
+    "jq": (r"-[rcejSM]+|--(raw|compact)-output", set(), 1),
+    "rg": (
+        r"-[inwvFcoxS]+|--(ignore-case|fixed-strings|count|invert-match)",
+        {"-e"},
+        1,
+    ),
+    "sort": (r"-[rnuhfbV]+", set(), 0),
+    "uniq": (r"-[cdiu]+", set(), 0),
+    "cut": (r"-[df].+|-[cb][0-9,-]+", {"-d", "-f", "-c", "-b"}, 0),
+    "tr": (r"-[dsc]+", set(), 2),
 }
-# Read-only filters allowed after a final pipe. jq cannot run programs or
-# write files; head, tail and wc are limited to plain counts.
-SAFE_PIPE = re.compile(r"(head|tail)( (-n ?|-c ?|-)[0-9]+)?|wc( -[lcmw]+)?|jq( .*)?")
-SAFE_TARGETS = {"/dev/null", "/dev/stdout", "/dev/stderr"}
-HEREDOC_SUBST = re.compile(r"\$\(\s*cat\s+<<(-?)\s*(['\"])([A-Za-z_][A-Za-z0-9_]*)\2\n")
 REASON = (
-    "{name} is excluded from the sandbox, so this whole command would run "
-    "unsandboxed. Run the {name} command alone: no ;, &&, ||, |, &, newlines, "
-    "$(...), backticks, process substitution or redirection to files "
-    "(2>&1, >/dev/null and a final | head, tail, wc or jq are fine). "
-    "Use `git -C <dir>` instead of `cd <dir> && git`. Problem: {problem}"
+    "{} is excluded from the sandbox, so this whole command would run unsandboxed. "
+    "Run it alone, without ;, &, |, <, >, (, ), $, backticks or newlines. Allowed: "
+    "2>&1, >/dev/null, a leading `cd <path> &&`, chains of excluded commands, and "
+    "one final pipe into head, tail, wc, jq, rg, sort, uniq, cut or tr."
 )
 
 
-def excluded_names(patterns):
-    """Map each excluded program to the literal words that follow it.
-
-    `cargo test *` gives {"cargo": [("test",)]}. None means every command.
-    """
+def parse_patterns(patterns):
+    """Map each excluded program to its literal words; None means every command."""
     names = {}
-    for pattern in patterns:
-        words = str(pattern).replace(":*", " *").split()
-        first = words[0] if words else ""
-        if not first or any(char in first for char in "*?["):
+    for words in (pattern.replace(":*", " *").split() for pattern in patterns):
+        if not words or "*" in words[0]:
             return None
         literal = []
         for word in words[1:]:
-            if any(char in word for char in "*?["):
+            if "*" in word:
                 break
             literal.append(word)
-        names.setdefault(first.rsplit("/", 1)[-1], []).append(tuple(literal))
+        names.setdefault(words[0].rsplit("/", 1)[-1], []).append(literal)
     return names
 
 
-def strip_heredoc_substitutions(command):
-    """Replace `$(cat <<'EOF' ... EOF)` with a literal word.
-
-    A quoted delimiter keeps the body literal, so only `cat` runs. The body
-    must end at the first delimiter line and be followed directly by `)`.
-    """
-    result = []
-    position = 0
-    while True:
-        match = HEREDOC_SUBST.search(command, position)
-        if match is None:
-            break
-        strip_tabs, delimiter = match.group(1) == "-", match.group(3)
-        lines_start = match.end()
-        cursor = lines_start
-        end = None
-        while cursor <= len(command):
-            newline = command.find("\n", cursor)
-            line = command[cursor:] if newline == -1 else command[cursor:newline]
-            if (line.lstrip("\t") if strip_tabs else line) == delimiter:
-                after = command[cursor + len(line) :]
-                closing = re.match(r"\s*\)", after)
-                if closing:
-                    end = cursor + len(line) + closing.end()
-                break
-            if newline == -1:
-                break
-            cursor = newline + 1
-        if end is None:
-            result.append(command[position : match.end()])
-            position = match.end()
-            continue
-        result.append(command[position : match.start()])
-        result.append("HEREDOC")
-        position = end
-    result.append(command[position:])
-    return "".join(result)
-
-
-class Lexer:
-    """Split a shell command into segments and record risky constructs."""
-
-    def __init__(self, command):
-        self.text = command
-        self.i = 0
-        self.segments = [("", [])]
-        self.word = None
-        self.word_digits = True
-        self.redirect = None
-        self.heredocs = []
-        self.problems = []
-        self.substitution = False
-
-    def peek(self, offset=0):
-        index = self.i + offset
-        return self.text[index] if index < len(self.text) else ""
-
-    def add(self, text):
-        if self.word is None:
-            self.word = ""
-        self.word += text
-
-    def end_word(self):
-        if self.word is None:
-            return
-        word, self.word = self.word, None
-        target, self.redirect = self.redirect, None
-        if target == "out":
-            if word not in SAFE_TARGETS:
-                self.problems.append(f"redirection to {word}")
-        elif target == "heredoc":
-            pass
-        elif target != "in":
-            self.segments[-1][1].append(word)
-
-    def separator(self, token):
-        self.end_word()
-        if self.redirect is not None:
-            self.problems.append(f"redirection before {token!r}")
-            self.redirect = None
-        self.segments.append((token, []))
-
-    def substitute(self, token):
-        self.substitution = True
-        self.problems.append(f"{token} substitution")
-        self.separator(token)
-
-    def read_heredoc_delimiter(self, strip_tabs):
-        while self.peek() in (" ", "\t"):
-            self.i += 1
-        start = self.i
-        while self.peek() and self.peek() not in " \t\n;&|<>()":
-            if self.peek() in "'\"":
-                quote = self.peek()
-                end = self.text.find(quote, self.i + 1)
-                self.i = len(self.text) if end == -1 else end + 1
-            else:
-                self.i += 1
-        raw = self.text[start : self.i]
-        quoted = any(char in raw for char in "'\"\\")
-        delimiter = raw.replace("'", "").replace('"', "").replace("\\", "")
-        self.heredocs.append((delimiter, quoted, strip_tabs))
-
-    def read_heredoc_bodies(self):
-        for delimiter, quoted, strip_tabs in self.heredocs:
-            while self.i < len(self.text):
-                newline = self.text.find("\n", self.i)
-                end = len(self.text) if newline == -1 else newline
-                line = self.text[self.i : end]
-                self.i = end + 1
-                if (line.lstrip("\t") if strip_tabs else line) == delimiter:
-                    break
-                if not quoted and re.search(r"(?<!\\)(\$\(|`)", line):
-                    self.substitution = True
-                    self.problems.append("substitution in a heredoc")
-        self.heredocs = []
-
-    def double_quoted(self):
-        self.i += 1
-        self.add("")
-        while self.i < len(self.text):
-            char = self.peek()
-            if char == '"':
-                self.i += 1
-                return
-            if char == "\\" and self.peek(1) in ('"', "\\", "$", "`", "\n"):
-                if self.peek(1) != "\n":
-                    self.add(self.peek(1))
-                self.i += 2
-                continue
-            if char == "`" or (char == "$" and self.peek(1) == "("):
-                self.substitution = True
-                self.problems.append("substitution inside double quotes")
-            self.add(char)
-            self.i += 1
-        self.problems.append("unterminated double quote")
-
-    def run(self):
-        while self.i < len(self.text):
-            char, next_char = self.peek(), self.peek(1)
-            if char == "\\":
-                if next_char != "\n":
-                    self.add(next_char)
-                self.i += 2
-            elif char == "'":
-                end = self.text.find("'", self.i + 1)
-                if end == -1:
-                    self.problems.append("unterminated single quote")
-                    end = len(self.text)
-                self.add(self.text[self.i + 1 : end])
-                self.i = end + 1
-            elif char == "$" and next_char == "'":
-                end = self.i + 2
-                while end < len(self.text) and self.text[end] != "'":
-                    end += 2 if self.text[end] == "\\" else 1
-                self.add(self.text[self.i + 2 : end])
-                self.i = end + 1
-            elif char == '"':
-                self.double_quoted()
-            elif char == "$" and next_char == "(":
-                self.i += 2
-                self.substitute("$(")
-            elif char == "`":
-                self.i += 1
-                self.substitute("`")
-            elif char in "<>" and next_char == "(":
-                self.i += 2
-                self.substitute(char + "(")
-            elif char == "#" and self.word is None:
-                newline = self.text.find("\n", self.i)
-                self.i = len(self.text) if newline == -1 else newline
-            elif char in " \t":
-                self.end_word()
-                self.i += 1
-            elif char == "\n":
-                self.i += 1
-                self.separator("\n")
-                self.read_heredoc_bodies()
-            elif char == "&" and next_char == ">":
-                self.end_word()
-                self.i += 3 if self.peek(2) == ">" else 2
-                self.redirect = "out"
-            elif char == ">":
-                if self.word is not None and self.word.isdigit():
-                    self.word = None
-                self.end_word()
-                self.i += 1
-                if self.peek() in (">", "|"):
-                    self.i += 1
-                if self.peek() == "&":
-                    self.i += 1
-                    match = re.match(r"[0-9]+-?|-", self.text[self.i :])
-                    if match:
-                        self.i += match.end()
-                        continue
-                self.redirect = "out"
-            elif char == "<":
-                if self.word is not None and self.word.isdigit():
-                    self.word = None
-                self.end_word()
-                if self.text.startswith("<<<", self.i):
-                    self.i += 3
-                elif next_char == "<":
-                    self.i += 2
-                    strip_tabs = self.peek() == "-"
-                    self.i += 1 if strip_tabs else 0
-                    self.read_heredoc_delimiter(strip_tabs)
-                elif next_char == ">":
-                    self.i += 2
-                    self.redirect = "out"
-                elif next_char == "&":
-                    self.i += 2
-                    match = re.match(r"[0-9]+-?|-", self.text[self.i :])
-                    self.i += match.end() if match else 0
-                else:
-                    self.i += 1
-                    self.redirect = "in"
-            elif char in ";&|()":
-                token = char
-                if self.text.startswith(("&&", "||", ";;", "|&"), self.i):
-                    token = self.text[self.i : self.i + 2]
-                self.i += len(token)
-                self.separator(token)
-            else:
-                self.add(char)
-                self.i += 1
-        self.end_word()
-        if self.redirect is not None:
-            self.problems.append("redirection without a target")
-        self.read_heredoc_bodies()
-        return self
-
-
-def basename(word):
-    return word.rsplit("/", 1)[-1]
-
-
-def matches(words, literals):
-    """Whether the words after a program contain every literal word in order.
-
-    Options may sit between them, so this matches more than Claude Code does.
-    """
-    for literal in literals:
-        rest = iter(words)
-        if all(word in rest for word in literal):
-            return True
-    return False
-
-
-def runs_excluded(words, names):
+def excluded(words, names):
+    while words and (
+        words[0] in ("!", "{", "(") or re.match(r"[A-Za-z_]\w*=", words[0])
+    ):
+        words = words[1:]
     if not words:
         return None
-    if names is None:
-        return basename(words[0])
-    index = 0
-    while index < len(words) and re.match(r"[A-Za-z_][A-Za-z0-9_]*=", words[index]):
-        index += 1
-    if index == len(words):
-        return None
-    last = len(words) if basename(words[index]) in WRAPPERS else index + 1
-    for position in range(index, last):
-        name = basename(words[position])
-        if name in names and matches(words[position + 1 :], names[name]):
-            return name
+    name = words[0].lstrip("(").rsplit("/", 1)[-1]
+    if names is None or any(
+        words[1 : len(lit) + 1] == lit for lit in names.get(name, [])
+    ):
+        return name
     return None
 
 
-def raw_mentions(command, names):
+def safe_filter(words):
+    flags, valued, positional = FILTERS.get(words[0], (None, set(), 0))
+    rest = iter(words[1:])
+    for word in rest:
+        if word in valued:
+            next(rest, None)
+        elif word.startswith("-") and (flags is None or not re.fullmatch(flags, word)):
+            return False
+        elif not word.startswith("-"):
+            positional -= 1
+    return flags is not None and positional >= 0
+
+
+def split(command):
+    """Split at ;, &&, || and | outside quotes; return (segments, bad)."""
+    segments, separators, start, quote, bad, i = [], [], 0, None, False, 0
+    while i < len(command):
+        char, pair = command[i], command[i : i + 2]
+        if quote != "'" and char == "\\":
+            i += 1
+        elif char in "'\"" and quote in (None, char):
+            quote = None if quote else char
+        elif quote != "'" and char in "$`":
+            bad = True
+        elif quote is None and (pair in ("&&", "||") or char in ";|"):
+            segments.append(command[start:i])
+            separators.append(pair if pair in ("&&", "||") else char)
+            i += len(separators[-1]) - 1
+            start = i + 1
+        elif quote is None and char in "&<>()\n":
+            bad = True
+        i += 1
+    return segments + [command[start:]], separators, bad or quote is not None
+
+
+def strip_commit_heredocs(command):
+    """Replace `$(cat <<'EOF' ... EOF\n)` whose body ends at the first EOF line."""
+    out, position = [], 0
+    while match := HEREDOC.search(command, position):
+        closing = f"\n{match.group(1)}\n)"
+        end = command.find(closing[:-1], match.end() - 1)
+        if end == -1 or not command.startswith(closing, end):
+            break
+        out.append(command[position : match.start()] + "HEREDOC")
+        position = end + len(closing)
+    return "".join(out) + command[position:]
+
+
+def mentions(text, names):
     if names is None:
         return "this command"
-    for name in sorted(names):
-        if re.search(rf"(?<![\w.-]){re.escape(name)}(?![\w.-])", command):
-            return name
-    return None
+    return next(
+        (n for n in names if re.search(rf"(?<![\w.-]){re.escape(n)}(?![\w.-])", text)),
+        None,
+    )
 
 
 def check(command, patterns):
-    """Return a deny reason, or None when the command may run as is."""
-    names = excluded_names(patterns)
-    if names is not None and not names:
-        return None
+    names = parse_patterns(patterns)
+    text = REDIRECTS.sub("", strip_commit_heredocs(command.rstrip("\n")))
+    segments, separators, bad = split(text)
     try:
-        lexer = Lexer(strip_heredoc_substitutions(command)).run()
-    except Exception as error:  # Unknown syntax: decide from the raw text.
-        name = raw_mentions(command, names)
-        return (
-            REASON.format(name=name, problem=f"parse error: {error}") if name else None
-        )
-    segments = [(token, words) for token, words in lexer.segments if words]
-    excluded = None
-    for _, words in segments:
-        excluded = excluded or runs_excluded(words, names)
-    if excluded is None and lexer.substitution:
-        excluded = raw_mentions(command, names)
-    if excluded is None:
-        return None
-    problems = list(lexer.problems)
-    for position, (token, words) in enumerate(segments):
-        if position == 0:
-            continue
-        if token == "|" and SAFE_PIPE.fullmatch(" ".join(words)):
-            continue
-        problems.append(f"{token!r} joins another command")
-    if not problems:
-        return None
-    return REASON.format(name=excluded, problem="; ".join(problems))
+        words = [shlex.split(segment) for segment in segments]
+    except ValueError:
+        name = mentions(command, names)
+        return REASON.format(name) if name else None
+    name = next(filter(None, (excluded(w, names) for w in words)), None)
+    if name is None:
+        name = mentions(command, names) if re.search(r"\$\(|`", command) else None
+        return REASON.format(name) if name else None
+    if names is None:
+        return REASON.format(name) if bad or separators else None
+    if separators and separators[0] == "&&" and CD.fullmatch(segments[0].strip()):
+        words, separators = words[1:], separators[1:]
+    if separators and separators[-1] == "|" and words[-1] and safe_filter(words[-1]):
+        words, separators = words[:-1], separators[:-1]
+    if not words[-1] and separators and separators[-1] == ";":
+        words, separators = words[:-1], separators[:-1]
+    if bad or "|" in separators or not all(excluded(w, names) for w in words):
+        return REASON.format(name)
+    return None
 
 
 def load_patterns(cwd):
     paths = [Path.home() / ".claude" / "settings.json"]
-    for root in {cwd, os.environ.get("CLAUDE_PROJECT_DIR")}:
+    for root in (cwd, os.environ.get("CLAUDE_PROJECT_DIR")):
         if root:
             paths += [
-                Path(root, ".claude", name)
-                for name in ("settings.json", "settings.local.json")
+                Path(root, ".claude", n)
+                for n in ("settings.json", "settings.local.json")
             ]
     patterns = []
     for path in paths:
+        if not path.exists():
+            continue
         try:
-            settings = json.loads(path.read_text(encoding="utf-8"))
-        except FileNotFoundError:
+            value = json.loads(path.read_text(encoding="utf-8"))["sandbox"][
+                "excludedCommands"
+            ]
+        except KeyError:
             continue
-        except (OSError, ValueError):
-            patterns.append("*")
-            continue
-        sandbox = settings.get("sandbox") if isinstance(settings, dict) else None
-        if isinstance(sandbox, dict):
-            patterns += sandbox.get("excludedCommands") or []
+        except (OSError, ValueError, TypeError):
+            value = None
+        ok = isinstance(value, list) and all(isinstance(v, str) for v in value)
+        patterns += value if ok else ["*"]
     return patterns
 
 
 def main():
-    event = json.load(sys.stdin)
-    tool_input = event.get("tool_input") or {}
-    command = tool_input.get("command")
-    if event.get("tool_name", "Bash") != "Bash" or not isinstance(command, str):
-        return 0
-    reason = check(command, load_patterns(event.get("cwd")))
-    if reason:
-        json.dump(
-            {
-                "hookSpecificOutput": {
-                    "hookEventName": "PreToolUse",
-                    "permissionDecision": "deny",
-                    "permissionDecisionReason": reason,
-                }
-            },
-            sys.stdout,
+    raw, patterns = "", None
+    try:
+        raw = sys.stdin.read()
+        event = json.loads(raw)
+        patterns = load_patterns(event.get("cwd"))
+        command = event["tool_input"]["command"]
+        if not isinstance(command, str):
+            raise TypeError("command is not a string")
+        reason = check(command, patterns)
+    except Exception:
+        name = (
+            "this command"
+            if patterns is None
+            else mentions(raw, parse_patterns(patterns))
         )
-    return 0
+        reason = REASON.format(name) if name else None
+    if reason:
+        decision = {"permissionDecision": "deny", "permissionDecisionReason": reason}
+        print(
+            json.dumps(
+                {"hookSpecificOutput": {"hookEventName": "PreToolUse", **decision}}
+            )
+        )
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()
