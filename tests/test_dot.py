@@ -374,10 +374,10 @@ class DotCliTest(unittest.TestCase):
                 cli,
                 "WORK_TOOL_REPOS",
                 {
-                    "prod-errors": {
-                        "repo": "git@example.com:prod-errors.git",
-                        "path": tool_path,
-                    }
+                    "prod-errors": cli.WorkTool(
+                        repo="git@example.com:prod-errors.git",
+                        path=tool_path,
+                    )
                 },
             ),
             mock.patch.object(Path, "exists", return_value=False),
@@ -405,10 +405,10 @@ class DotCliTest(unittest.TestCase):
                 cli,
                 "WORK_TOOL_REPOS",
                 {
-                    "prod-errors": {
-                        "repo": "git@example.com:prod-errors.git",
-                        "path": tool_path,
-                    }
+                    "prod-errors": cli.WorkTool(
+                        repo="git@example.com:prod-errors.git",
+                        path=tool_path,
+                    )
                 },
             ),
             mock.patch.object(Path, "exists", return_value=True),
@@ -447,10 +447,10 @@ class DotCliTest(unittest.TestCase):
                 cli,
                 "WORK_TOOL_REPOS",
                 {
-                    "prod-errors": {
-                        "repo": "git@example.com:prod-errors.git",
-                        "path": tool_path,
-                    }
+                    "prod-errors": cli.WorkTool(
+                        repo="git@example.com:prod-errors.git",
+                        path=tool_path,
+                    )
                 },
             ),
             mock.patch.object(Path, "exists", return_value=True),
@@ -483,10 +483,10 @@ class DotCliTest(unittest.TestCase):
                 cli,
                 "WORK_TOOL_REPOS",
                 {
-                    "prod-errors": {
-                        "repo": "git@example.com:prod-errors.git",
-                        "path": Path("/tmp/prod-errors"),
-                    }
+                    "prod-errors": cli.WorkTool(
+                        repo="git@example.com:prod-errors.git",
+                        path=Path("/tmp/prod-errors"),
+                    )
                 },
             ),
             mock.patch.object(Path, "exists", return_value=False),

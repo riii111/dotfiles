@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import NamedTuple
 
 
 LINTABLE_SHELLS = frozenset({"bash", "sh"})
@@ -14,11 +15,18 @@ LINTABLE_SHELLS = frozenset({"bash", "sh"})
 NIX_DOTFILES_PROFILE = Path.home() / ".nix-profile"
 NIX_DOTFILES_PROFILE_ELEMENT = "cli"
 NIX_DOTFILES_INSTALLABLE = ".#cli"
+
+
+class WorkTool(NamedTuple):
+    repo: str
+    path: Path
+
+
 WORK_TOOL_REPOS = {
-    "prod-errors": {
-        "repo": "git@github.com:riii111/prod-errors.git",
-        "path": Path.home() / "ghq" / "github.com" / "riii111" / "prod-errors",
-    },
+    "prod-errors": WorkTool(
+        repo="git@github.com:riii111/prod-errors.git",
+        path=Path.home() / "ghq" / "github.com" / "riii111" / "prod-errors",
+    ),
 }
 
 
@@ -346,7 +354,7 @@ def command_sync_nix_profile(_: argparse.Namespace) -> int:
     return 0
 
 
-def select_work_tools(name: str | None) -> list[tuple[str, dict[str, object]]]:
+def select_work_tools(name: str | None) -> list[tuple[str, WorkTool]]:
     if name is None:
         return list(WORK_TOOL_REPOS.items())
     try:
@@ -361,14 +369,11 @@ def select_work_tools(name: str | None) -> list[tuple[str, dict[str, object]]]:
 def command_work_tools_install(args: argparse.Namespace) -> int:
     failures = 0
     for name, tool in select_work_tools(args.name):
-        path = tool["path"]
-        if not isinstance(path, Path):
-            raise RuntimeError(f"invalid work tool path: {name}")
-        if path.exists():
+        if tool.path.exists():
             print(f"{name}: already installed")
             continue
 
-        result = run_command(["ghq", "get", str(tool["repo"])], Path.home())
+        result = run_command(["ghq", "get", tool.repo], Path.home())
         if result.returncode != 0:
             print_process_failure(f"{name} install", result)
             failures += 1
@@ -376,10 +381,8 @@ def command_work_tools_install(args: argparse.Namespace) -> int:
     return 1 if failures else 0
 
 
-def apply_work_tool(name: str, tool: dict[str, object]) -> int:
-    path = tool["path"]
-    if not isinstance(path, Path):
-        raise RuntimeError(f"invalid work tool path: {name}")
+def apply_work_tool(name: str, tool: WorkTool) -> int:
+    path = tool.path
     if not path.exists():
         raise RuntimeError(
             f"{name} is not installed; run `dotctl work-tools install {name}`"
@@ -405,9 +408,7 @@ def command_work_tools_apply(args: argparse.Namespace) -> int:
 def command_work_tools_update(args: argparse.Namespace) -> int:
     failures = 0
     for name, tool in select_work_tools(args.name):
-        path = tool["path"]
-        if not isinstance(path, Path):
-            raise RuntimeError(f"invalid work tool path: {name}")
+        path = tool.path
         if not path.exists():
             raise RuntimeError(
                 f"{name} is not installed; run `dotctl work-tools install {name}`"
