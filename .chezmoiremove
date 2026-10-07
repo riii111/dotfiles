@@ -21,6 +21,8 @@
 bin/gh-pr-comments
 bin/gh-read
 .claude/hooks/notify-impl-review.sh
+.claude/skills/pr-review/scripts/pr-review-setup.sh
+.claude/README.md
 .claude/hooks/ask-push-on-protected-branch.sh
 .claude/skills/sandbox-review
 .claude/scripts/sandbox-report.py
