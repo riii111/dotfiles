@@ -133,7 +133,7 @@ See [task-session-launch](dot_codex/skills/task-session-launch/SKILL.md) and [ta
 
 ### Claude Code sandbox
 
-Claude Code runs a whole Bash command outside the sandbox when it matches `sandbox.excludedCommands`, so `dot_claude/hooks/executable_sandbox-excluded-compound.py` denies commands that join an excluded program with other commands, substitutions or file redirections. `bun run` stays inside the sandbox because package scripts are writable by the agent.
+`bun run` is not in `sandbox.excludedCommands`, so package scripts, which the agent can edit, run inside the sandbox.
 
 ### Codex command policy
 
