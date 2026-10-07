@@ -28,6 +28,8 @@ printf 'one\ntwo\nthree\n' >"$repo/file.txt"
 printf 'skill one\nskill two\n' >"$skill/SKILL.md"
 printf 'plugin skill one\nplugin skill two\n' >"$plugin_skill/SKILL.md"
 printf 'outside\n' >"$outside"
+printf 'plugin level\n' >"$test_home/.codex/plugins/cache/openai-bundled/demo/SKILL.md"
+printf 'outside\n' >"$test_home/.codex/outside.txt"
 git -C "$repo" add file.txt
 git -C "$repo" commit -q -m initial
 git -C "$repo" branch -M main
