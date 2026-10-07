@@ -126,13 +126,14 @@ sub: Claude Code
 
 ### Task handoffs
 
-`taskctl launch` creates a worker thread from task IDs, document references, and authorized completion targets. `taskctl review` fixes review commit SHAs from a base branch and the worker checkout and sends each new head to the same reviewer. Both send through the harnexus call socket (start the Codex App with `HARNEXUS_CALL_SOCKET=on`), record state under `~/.local/state/taskctl/` before sending, and never resend an unknown result; `taskctl state` shows the sent prompt and expected/actual models.
+Task launches and reviews use `harnexus-task` from [harnexus](https://github.com/riii111/harnexus), installed to `~/.local/bin` with `bun run install:task`.
+Run `bun run install:task` only from a clean, reviewed checkout of harnexus `origin/main`, ideally a separate clone, because sandboxed agents can write to the working checkout.
 
 See [task-session-launch](dot_codex/skills/task-session-launch/SKILL.md) and [task-review-cycle](dot_codex/skills/task-review-cycle/SKILL.md) for usage and request JSON formats.
 
 ### Codex command policy
 
-`dot_codex/rules/default.rules` controls commands that need to run outside the sandbox. Keep `sandbox_workspace_write.network_access = false` in the live `~/.codex/config.toml`; otherwise network commands can run inside the sandbox without consulting these rules.
+`dot_codex/rules/default.rules.tmpl` controls commands that need to run outside the sandbox. Keep `sandbox_workspace_write.network_access = false` in the live `~/.codex/config.toml`; otherwise network commands can run inside the sandbox without consulting these rules.
 
 After `chezmoi apply`, restart Codex and open `/hooks`. Trust and enable the `PreToolUse` and `PermissionRequest` definitions from `~/.codex/hooks.json`. Codex invalidates that trust when a hook definition changes, so repeat this check after updating the hooks.
 

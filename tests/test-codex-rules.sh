@@ -8,10 +8,14 @@ if ! command -v codex >/dev/null 2>&1; then
 fi
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
-rules="$repo_root/dot_codex/rules/default.rules"
+home=/home/rules-test
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+rules="$work/default.rules"
+sed "s|{{ .chezmoi.homeDir }}|$home|g" "$repo_root/dot_codex/rules/default.rules.tmpl" >"$rules"
 
 decision() {
-	codex execpolicy check --rules "$rules" -- "$@" | jq -r '.decision // "no_match"'
+	codex execpolicy check --rules "$rules" --resolve-host-executables -- "$@" | jq -r '.decision // "no_match"'
 }
 
 test "$(decision cargo metadata --no-deps)" = no_match
@@ -52,10 +56,14 @@ test "$(decision gh-loupe issue 26 --compact)" = allow
 test "$(decision sed -n 1,10p file)" = allow
 test "$(decision codex-read-lines 1 10 file)" = allow
 test "$(decision codex-force-with-lease)" = allow
-test "$(decision taskctl launch --request request.json)" = allow
-test "$(decision taskctl review --request request.json)" = allow
-test "$(decision taskctl state)" = allow
-test "$(decision taskctl resolve --request request.json --not-sent)" = no_match
+test "$(decision harnexus-task launch --request request.json)" = allow
+test "$(decision harnexus-task review --request request.json)" = allow
+test "$(decision harnexus-task state)" = allow
+test "$(decision harnexus-task resolve --request request.json --not-sent)" = no_match
+test "$(decision "$home/.local/bin/harnexus-task" launch --request r.json)" = allow
+test "$(decision /tmp/x/harnexus-task launch --request r.json)" = no_match
+test "$(decision "$home/bin/codex-force-with-lease")" = allow
+test "$(decision /tmp/x/codex-force-with-lease)" = no_match
 test "$(decision env rm -rf target)" = prompt
 test "$(decision fd -x rm '{}')" = allow
 test "$(decision awk 'BEGIN { system("rm file") }')" = prompt
