@@ -26,6 +26,6 @@ Ready化・mergeは別途依頼された場合だけ行い、その直前に現�
 
 ## Review基点
 
-最初のレビュー直前にbase branchをfetchし、そのtipを必要に応じて取り込む。branch名とPR URLを依頼JSONに記録し、taskctlが取得したbase/head SHAをreview基点と候補にする。
+最初のレビュー直前にbase branchをfetchし、そのtipを必要に応じて取り込む。branch名とPR URLを依頼JSONに記録し、harnexus-taskが取得したbase/head SHAをreview基点と候補にする。
 
 baseの進行だけでは取り込み・全検証・再レビューを繰り返さない。実際の競合や変更行・挙動の重複で上流を取り込んだ場合だけ、そのbase SHAへ基点を更新して必要な検証と再レビューを行う。
