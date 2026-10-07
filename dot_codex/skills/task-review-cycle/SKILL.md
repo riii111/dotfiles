@@ -17,7 +17,7 @@ worktreeに`*`だけの`.gitignore`を置いた`.reviewctl/`を作り、[依頼J
 1. `harnexus-task review --request <worktree>/.reviewctl/request.json`をサンドボックス外で一度実行する。Codexは`sandbox_permissions: require_escalated`を付け、Claudeはそのまま実行する（サンドボックス対象外）。ユーザーがモデル設定を指定した場合だけ`--model`・`--thinking`を渡す。
 2. harnexus-taskがbase/head SHAを固定し、初回はreviewerを作成、以後は同じreviewerへ送る。同じheadは再送しない。失敗時は出力の理由を報告し、create_thread・send_message_to_threadを直接呼ばない。
 3. 結果を受け取る。Codexはturnを終了し、reviewerの返信で次turnを始める。Claudeはharnexusの`wait_threads` / `read_thread`で待つ。
-4. 最終回答のbase/headが`harnexus-task state --request <JSON>`の候補と一致することを確認する。修正後は同じJSONのPR URL・参照文書を必要に応じて更新し、手順1から繰り返す。判定保留なら不足を解消する。
+4. 最終回答のbase/headが`harnexus-task state --request <JSON>`の`base`・`head`と一致することを確認する。修正後は同じJSONのPR URL・参照文書を必要に応じて更新し、手順1から繰り返す。判定保留なら不足を解消する。
 
 Claudeはwait_threadsのtimeoutMsを60000以下にし、cursorを次のafterCursorへ渡す。正常timeoutでは待機を続け、対象別errors・失敗・中断は理由を確認する。最終回答が足りなければread_threadで最新1turn・出力なしから読み、commentaryだけで判定しない。
 Claude workerのreviewerはCodexモデルに限られる。Claudeモデルを指定された場合は、対応するモデルの指定を求める。
@@ -26,7 +26,7 @@ Claude workerのreviewerはCodexモデルに限られる。Claudeモデルを指
 
 ## 再開と基点更新
 
-`harnexus-task state --request <JSON>`でreviewer・送信したprompt・期待と実際のモデルを確認する。
+`harnexus-task state --request <JSON>`の出力は平らなJSONで、`reviewerThreadId`・`base`・`head`・`prompt`（最後に送ったもの）・`requested`/`actual`（reviewerのモデル）・`pending`・`pendingHead`・`pendingThreadId`を最上位から読む。
 競合解消などで上流を取り込んで基点を更新する場合だけ`--update-base`を付ける。
 
 ## レビュー時の確認事項
