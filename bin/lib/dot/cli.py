@@ -7,29 +7,26 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import NamedTuple
 
 
-REQUIRED_COMMANDS = (
-    "git",
-    "python3",
-    "chezmoi",
-    "brew",
-    "nvim",
-    "lefthook",
-    "nix",
-    "ruff",
-)
-OPTIONAL_COMMANDS = ("shellcheck", "shfmt")
 LINTABLE_SHELLS = frozenset({"bash", "sh"})
 # Keep in sync with NIX_DOTFILES_PROFILE in dot_zshrc.tmpl.
 NIX_DOTFILES_PROFILE = Path.home() / ".nix-profile"
 NIX_DOTFILES_PROFILE_ELEMENT = "cli"
 NIX_DOTFILES_INSTALLABLE = ".#cli"
+
+
+class WorkTool(NamedTuple):
+    repo: str
+    path: Path
+
+
 WORK_TOOL_REPOS = {
-    "prod-errors": {
-        "repo": "git@github.com:riii111/prod-errors.git",
-        "path": Path.home() / "ghq" / "github.com" / "riii111" / "prod-errors",
-    },
+    "prod-errors": WorkTool(
+        repo="git@github.com:riii111/prod-errors.git",
+        path=Path.home() / "ghq" / "github.com" / "riii111" / "prod-errors",
+    ),
 }
 
 
@@ -110,8 +107,6 @@ def detect_shebang_shell(first_line: str) -> str | None:
                 continue
             command = Path(token).name
             break
-        if not command:
-            return None
 
     if command.startswith("python"):
         return None
@@ -148,23 +143,6 @@ def collect_detected_shell_targets(paths: list[Path]) -> list[tuple[Path, str]]:
 
 def collect_shell_targets(repo_root: Path) -> list[tuple[Path, str]]:
     return collect_detected_shell_targets(git_tracked_files(repo_root))
-
-
-def resolve_candidate_paths(repo_root: Path, paths: list[str]) -> list[Path]:
-    resolved = []
-    for raw in paths:
-        path = (
-            (repo_root / raw).resolve()
-            if not Path(raw).is_absolute()
-            else Path(raw).resolve()
-        )
-        try:
-            path.relative_to(repo_root)
-        except ValueError:
-            continue
-        if path.is_file():
-            resolved.append(path)
-    return resolved
 
 
 def collect_lintable_shell_targets(paths: list[Path]) -> list[Path]:
@@ -238,13 +216,12 @@ def command_test(_: argparse.Namespace) -> int:
             failures += 1
             print_process_failure("ruff check", ruff_result)
 
-    for directory, label in (("tests", "python tests"),):
-        test_result = run_command(
-            ["python3", "-m", "unittest", "discover", directory], repo_root
-        )
-        if test_result.returncode != 0:
-            failures += 1
-            print_process_failure(label, test_result)
+    test_result = run_command(
+        ["python3", "-m", "unittest", "discover", "tests"], repo_root
+    )
+    if test_result.returncode != 0:
+        failures += 1
+        print_process_failure("python tests", test_result)
 
     bash = shutil.which("bash")
     for test_path in sorted((repo_root / "tests").glob("test-*.sh")):
@@ -318,62 +295,6 @@ def command_test(_: argparse.Namespace) -> int:
     return 1 if failures else 0
 
 
-def command_check_env(_: argparse.Namespace) -> int:
-    failures = 0
-    missing_required = []
-    for name in REQUIRED_COMMANDS:
-        path = shutil.which(name)
-        print(f"{name}: {'OK' if path else 'MISSING'}")
-        if path is None:
-            missing_required.append(name)
-
-    missing_optional = []
-    for name in OPTIONAL_COMMANDS:
-        path = shutil.which(name)
-        print(f"{name}: {'OK' if path else 'OPTIONAL'}")
-        if path is None:
-            missing_optional.append(name)
-
-    nvim = shutil.which("nvim")
-    if nvim:
-        print("$ nvim --headless +qa")
-        result = subprocess.run(
-            [nvim, "--headless", "+qa"],
-            check=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        if result.returncode == 0:
-            print("nvim headless: OK")
-        else:
-            failures += 1
-            print("nvim headless: FAILED", file=sys.stderr)
-            if result.stderr:
-                print(result.stderr.rstrip(), file=sys.stderr)
-            if result.stdout:
-                print(result.stdout.rstrip(), file=sys.stderr)
-
-    if missing_required:
-        print(
-            "Missing required commands: " + ", ".join(missing_required),
-            file=sys.stderr,
-        )
-        failures += 1
-
-    if missing_optional:
-        print("Optional commands not found: " + ", ".join(missing_optional))
-    return 1 if failures else 0
-
-
-def command_lint_shell(args: argparse.Namespace) -> int:
-    repo_root = resolve_repo_root()
-    targets = collect_lintable_shell_targets(
-        resolve_candidate_paths(repo_root, args.paths)
-    )
-    return run_lint_shell_targets(repo_root, targets)
-
-
 def command_lint_staged_shell(_: argparse.Namespace) -> int:
     repo_root = resolve_repo_root()
     targets = collect_lintable_shell_targets(git_staged_files(repo_root))
@@ -433,7 +354,7 @@ def command_sync_nix_profile(_: argparse.Namespace) -> int:
     return 0
 
 
-def select_work_tools(name: str | None) -> list[tuple[str, dict[str, object]]]:
+def select_work_tools(name: str | None) -> list[tuple[str, WorkTool]]:
     if name is None:
         return list(WORK_TOOL_REPOS.items())
     try:
@@ -448,14 +369,11 @@ def select_work_tools(name: str | None) -> list[tuple[str, dict[str, object]]]:
 def command_work_tools_install(args: argparse.Namespace) -> int:
     failures = 0
     for name, tool in select_work_tools(args.name):
-        path = tool["path"]
-        if not isinstance(path, Path):
-            raise RuntimeError(f"invalid work tool path: {name}")
-        if path.exists():
+        if tool.path.exists():
             print(f"{name}: already installed")
             continue
 
-        result = run_command(["ghq", "get", str(tool["repo"])], Path.home())
+        result = run_command(["ghq", "get", tool.repo], Path.home())
         if result.returncode != 0:
             print_process_failure(f"{name} install", result)
             failures += 1
@@ -463,10 +381,8 @@ def command_work_tools_install(args: argparse.Namespace) -> int:
     return 1 if failures else 0
 
 
-def apply_work_tool(name: str, tool: dict[str, object]) -> int:
-    path = tool["path"]
-    if not isinstance(path, Path):
-        raise RuntimeError(f"invalid work tool path: {name}")
+def apply_work_tool(name: str, tool: WorkTool) -> int:
+    path = tool.path
     if not path.exists():
         raise RuntimeError(
             f"{name} is not installed; run `dotctl work-tools install {name}`"
@@ -492,9 +408,7 @@ def command_work_tools_apply(args: argparse.Namespace) -> int:
 def command_work_tools_update(args: argparse.Namespace) -> int:
     failures = 0
     for name, tool in select_work_tools(args.name):
-        path = tool["path"]
-        if not isinstance(path, Path):
-            raise RuntimeError(f"invalid work tool path: {name}")
+        path = tool.path
         if not path.exists():
             raise RuntimeError(
                 f"{name} is not installed; run `dotctl work-tools install {name}`"
@@ -516,16 +430,6 @@ def build_parser() -> argparse.ArgumentParser:
 
     test_parser = subparsers.add_parser("test", help="run repo verification")
     test_parser.set_defaults(func=command_test)
-
-    env_parser = subparsers.add_parser("check-env", help="check local toolchain")
-    env_parser.set_defaults(func=command_check_env)
-
-    lint_shell_parser = subparsers.add_parser(
-        "lint-shell",
-        help="format and lint bash/sh files",
-    )
-    lint_shell_parser.add_argument("paths", nargs="*")
-    lint_shell_parser.set_defaults(func=command_lint_shell)
 
     lint_staged_shell_parser = subparsers.add_parser(
         "lint-staged-shell",

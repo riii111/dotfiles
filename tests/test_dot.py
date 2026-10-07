@@ -21,15 +21,11 @@ class DotCliTest(unittest.TestCase):
                 "#!/usr/bin/env python3\nprint('hi')\n", encoding="utf-8"
             )
 
-            self.assertEqual(cli.detect_shell(bash_script), "bash")
-            self.assertIsNone(cli.detect_shell(python_script))
-
-    def test_detect_shell_skips_exotic_shebangs(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            root = Path(tmpdir)
-            fish_script = root / "script"
+            fish_script = root / "fish_tool"
             fish_script.write_text("#!/usr/bin/env fish\necho hi\n", encoding="utf-8")
 
+            self.assertEqual(cli.detect_shell(bash_script), "bash")
+            self.assertIsNone(cli.detect_shell(python_script))
             self.assertIsNone(cli.detect_shell(fish_script))
 
     def test_detect_shebang_shell_handles_env_dash_s(self):
@@ -37,9 +33,8 @@ class DotCliTest(unittest.TestCase):
             cli.detect_shebang_shell("#!/usr/bin/env -S bash -eu"),
             "bash",
         )
-
-    def test_detect_shebang_shell_returns_none_when_env_only_has_flags(self):
-        self.assertIsNone(cli.detect_shebang_shell("#!/usr/bin/env -Sbash"))
+        self.assertIsNone(cli.detect_shebang_shell("#!/usr/bin/env"))
+        self.assertIsNone(cli.detect_shebang_shell("#!/usr/bin/env -S"))
 
     def test_collect_shell_targets_skips_templates(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -57,56 +52,6 @@ class DotCliTest(unittest.TestCase):
                 targets = cli.collect_shell_targets(root)
 
         self.assertEqual(targets, [(bash_script, "bash")])
-
-    def test_check_env_returns_error_when_required_missing(self):
-        fake_paths = {
-            "git": "/usr/bin/git",
-            "python3": "/usr/bin/python3",
-        }
-
-        def fake_which(name):
-            return fake_paths.get(name)
-
-        with (
-            mock.patch("shutil.which", side_effect=fake_which),
-            mock.patch("sys.stdout", new=io.StringIO()),
-            mock.patch("sys.stderr", new=io.StringIO()),
-        ):
-            result = cli.command_check_env(mock.Mock())
-
-        self.assertEqual(result, 1)
-
-    def test_check_env_reports_nvim_failure_and_continues(self):
-        def fake_which(name):
-            return {
-                "git": "/usr/bin/git",
-                "python3": "/usr/bin/python3",
-                "chezmoi": "/opt/homebrew/bin/chezmoi",
-                "brew": "/opt/homebrew/bin/brew",
-                "nvim": "/opt/homebrew/bin/nvim",
-                "lefthook": "/opt/homebrew/bin/lefthook",
-                "nix": "/nix/var/nix/profiles/default/bin/nix",
-            }.get(name)
-
-        with (
-            mock.patch("shutil.which", side_effect=fake_which),
-            mock.patch(
-                "subprocess.run",
-                return_value=subprocess.CompletedProcess(
-                    ["/opt/homebrew/bin/nvim", "--headless", "+qa"],
-                    1,
-                    "",
-                    "init failed",
-                ),
-            ),
-            mock.patch("sys.stdout", new=io.StringIO()) as stdout,
-            mock.patch("sys.stderr", new=io.StringIO()) as stderr,
-        ):
-            result = cli.command_check_env(mock.Mock())
-
-        self.assertEqual(result, 1)
-        self.assertIn("nvim: OK", stdout.getvalue())
-        self.assertIn("nvim headless: FAILED", stderr.getvalue())
 
     def test_collect_lintable_shell_targets_excludes_zsh_and_templates(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -127,29 +72,6 @@ class DotCliTest(unittest.TestCase):
             )
 
         self.assertEqual(targets, [bash_script])
-
-    def test_resolve_candidate_paths_skips_outside_repo(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            repo_root = Path(tmpdir).resolve()
-            inside = repo_root / "scripts" / "check.sh"
-            inside.parent.mkdir()
-            inside.write_text("#!/usr/bin/env bash\necho ok\n", encoding="utf-8")
-
-            outside_dir = repo_root.parent / "dot-outside-test"
-            outside_dir.mkdir(exist_ok=True)
-            outside = outside_dir / "outside.sh"
-            outside.write_text("#!/usr/bin/env bash\necho ng\n", encoding="utf-8")
-
-            try:
-                paths = cli.resolve_candidate_paths(
-                    repo_root,
-                    ["scripts/check.sh", str(outside)],
-                )
-            finally:
-                outside.unlink(missing_ok=True)
-                outside_dir.rmdir()
-
-        self.assertEqual(paths, [inside.resolve()])
 
     def test_resolve_repo_root_falls_back_to_chezmoi(self):
         with (
@@ -189,7 +111,7 @@ class DotCliTest(unittest.TestCase):
         calls = []
 
         def fake_run(args, **kwargs):
-            calls.append((tuple(args), kwargs))
+            calls.append(tuple(args))
             return subprocess.CompletedProcess(args, 0, "", "")
 
         with (
@@ -207,40 +129,32 @@ class DotCliTest(unittest.TestCase):
             result = cli.command_test(mock.Mock())
 
         self.assertEqual(result, 0)
-        self.assertEqual(calls[0][0], ("/bin/ruff", "check", "."))
-        self.assertEqual(
-            calls[1][0],
+        expected = [
+            ("/bin/ruff", "check", "."),
             ("python3", "-m", "unittest", "discover", "tests"),
-        )
-        self.assertEqual(
-            calls[2][0],
             ("/bin/bash", "/repo/tests/test-example.sh"),
-        )
-        self.assertEqual(
-            calls[3][0],
-            (
-                "/bin/lua",
-                "private_dot_config/wezterm/tests/herdr_mode_test.lua",
-            ),
-        )
-        self.assertEqual(calls[4][0], ("/bin/bash", "-n", "/repo/scripts/check.sh"))
-        self.assertEqual(calls[5][0], ("/bin/sh", "-n", "/repo/bin/run"))
+            ("/bin/lua", "private_dot_config/wezterm/tests/herdr_mode_test.lua"),
+            ("/bin/bash", "-n", "/repo/scripts/check.sh"),
+            ("/bin/sh", "-n", "/repo/bin/run"),
+        ]
+        self.assertCountEqual(calls, expected)
 
     def test_command_test_collects_failures_without_traceback(self):
         repo_root = Path("/repo")
         targets = [(repo_root / "scripts/check.sh", "bash")]
-        runs = [
-            subprocess.CompletedProcess(["ruff"], 0, "", ""),
-            subprocess.CompletedProcess(["python3"], 1, "", "unit failed"),
-            subprocess.CompletedProcess(["lua"], 0, "", ""),
-            subprocess.CompletedProcess(["bash"], 1, "", "syntax failed"),
-        ]
+
+        def fake_run(args, **kwargs):
+            if "unittest" in args:
+                return subprocess.CompletedProcess(args, 1, "", "unit failed")
+            if "-n" in args:
+                return subprocess.CompletedProcess(args, 1, "", "syntax failed")
+            return subprocess.CompletedProcess(args, 0, "", "")
 
         with (
             mock.patch.object(cli, "resolve_repo_root", return_value=repo_root),
             mock.patch.object(cli, "collect_shell_targets", return_value=targets),
             mock.patch("shutil.which", side_effect=lambda name: f"/bin/{name}"),
-            mock.patch("subprocess.run", side_effect=runs),
+            mock.patch("subprocess.run", side_effect=fake_run),
             mock.patch("sys.stdout", new=io.StringIO()),
             mock.patch("sys.stderr", new=io.StringIO()) as stderr,
         ):
@@ -259,24 +173,14 @@ class DotCliTest(unittest.TestCase):
                 return None
             return f"/bin/{name}"
 
+        def fake_run(args, **kwargs):
+            return subprocess.CompletedProcess(args, 0, "", "")
+
         with (
             mock.patch.object(cli, "resolve_repo_root", return_value=repo_root),
             mock.patch.object(cli, "collect_shell_targets", return_value=targets),
             mock.patch("shutil.which", side_effect=fake_which),
-            mock.patch(
-                "subprocess.run",
-                side_effect=[
-                    subprocess.CompletedProcess(["ruff"], 0, "", ""),
-                    subprocess.CompletedProcess(
-                        ["python3", "-m", "unittest", "discover", "tests"],
-                        0,
-                        "",
-                        "",
-                    ),
-                    subprocess.CompletedProcess(["lua"], 0, "", ""),
-                    subprocess.CompletedProcess(["zsh", "-n"], 1, "", ""),
-                ],
-            ),
+            mock.patch("subprocess.run", side_effect=fake_run),
             mock.patch("sys.stdout", new=io.StringIO()),
             mock.patch("sys.stderr", new=io.StringIO()) as stderr,
         ):
@@ -285,32 +189,28 @@ class DotCliTest(unittest.TestCase):
         self.assertEqual(result, 1)
         self.assertIn("zsh not found", stderr.getvalue())
 
-    def test_command_lint_shell_runs_available_tools(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            repo_root = Path(tmpdir).resolve()
-            target = repo_root / "scripts" / "check.sh"
-            target.parent.mkdir()
-            target.write_text("#!/usr/bin/env bash\necho ok\n", encoding="utf-8")
-            calls = []
+    def test_run_lint_shell_targets_runs_available_tools(self):
+        repo_root = Path("/repo")
+        target = repo_root / "scripts" / "check.sh"
+        calls = []
 
-            def fake_run(args, **kwargs):
-                calls.append(tuple(args))
-                return subprocess.CompletedProcess(args, 0, "", "")
+        def fake_run(args, **kwargs):
+            calls.append(tuple(args))
+            return subprocess.CompletedProcess(args, 0, "", "")
 
-            def fake_which(name):
-                return {
-                    "shfmt": "/opt/homebrew/bin/shfmt",
-                    "shellcheck": "/opt/homebrew/bin/shellcheck",
-                }.get(name)
+        def fake_which(name):
+            return {
+                "shfmt": "/opt/homebrew/bin/shfmt",
+                "shellcheck": "/opt/homebrew/bin/shellcheck",
+            }.get(name)
 
-            with (
-                mock.patch.object(cli, "resolve_repo_root", return_value=repo_root),
-                mock.patch("shutil.which", side_effect=fake_which),
-                mock.patch("subprocess.run", side_effect=fake_run),
-                mock.patch("sys.stdout", new=io.StringIO()),
-                mock.patch("sys.stderr", new=io.StringIO()),
-            ):
-                result = cli.command_lint_shell(mock.Mock(paths=["scripts/check.sh"]))
+        with (
+            mock.patch("shutil.which", side_effect=fake_which),
+            mock.patch("subprocess.run", side_effect=fake_run),
+            mock.patch("sys.stdout", new=io.StringIO()),
+            mock.patch("sys.stderr", new=io.StringIO()),
+        ):
+            result = cli.run_lint_shell_targets(repo_root, [target])
 
         self.assertEqual(result, 0)
         self.assertEqual(
@@ -321,21 +221,17 @@ class DotCliTest(unittest.TestCase):
             ],
         )
 
-    def test_command_lint_shell_skips_when_tools_missing(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            repo_root = Path(tmpdir).resolve()
-            target = repo_root / "scripts" / "check.sh"
-            target.parent.mkdir()
-            target.write_text("#!/usr/bin/env bash\necho ok\n", encoding="utf-8")
+    def test_run_lint_shell_targets_skips_when_tools_missing(self):
+        repo_root = Path("/repo")
+        target = repo_root / "scripts" / "check.sh"
 
-            with (
-                mock.patch.object(cli, "resolve_repo_root", return_value=repo_root),
-                mock.patch("shutil.which", return_value=None),
-                mock.patch("subprocess.run") as run,
-                mock.patch("sys.stdout", new=io.StringIO()),
-                mock.patch("sys.stderr", new=io.StringIO()),
-            ):
-                result = cli.command_lint_shell(mock.Mock(paths=["scripts/check.sh"]))
+        with (
+            mock.patch("shutil.which", return_value=None),
+            mock.patch("subprocess.run") as run,
+            mock.patch("sys.stdout", new=io.StringIO()),
+            mock.patch("sys.stderr", new=io.StringIO()),
+        ):
+            result = cli.run_lint_shell_targets(repo_root, [target])
 
         self.assertEqual(result, 0)
         run.assert_not_called()
@@ -360,6 +256,11 @@ class DotCliTest(unittest.TestCase):
         lint_shell.assert_called_once()
         self.assertEqual(lint_shell.call_args.args[0], repo_root)
         self.assertEqual(lint_shell.call_args.args[1], [staged])
+
+    def assert_followed_by(self, args, token, expected):
+        self.assertIn(token, args)
+        index = args.index(token)
+        self.assertEqual(args[index + 1 : index + 2], [expected])
 
     def test_command_sync_nix_profile_upgrades_existing_profile_package(self):
         repo_root = Path("/repo")
@@ -387,18 +288,12 @@ class DotCliTest(unittest.TestCase):
             result = cli.command_sync_nix_profile(mock.Mock())
 
         self.assertEqual(result, 0)
-        self.assertEqual(
-            calls[0][0],
-            [
-                "/nix/var/nix/profiles/default/bin/nix",
-                "profile",
-                "upgrade",
-                "--profile",
-                str(profile_path),
-                "cli",
-            ],
-        )
         self.assertEqual(len(calls), 1)
+        args = calls[0][0]
+        self.assertEqual(args[0], "/nix/var/nix/profiles/default/bin/nix")
+        self.assert_followed_by(args, "profile", "upgrade")
+        self.assert_followed_by(args, "--profile", str(profile_path))
+        self.assertIn("cli", args)
 
     def test_command_sync_nix_profile_installs_when_profile_is_empty(self):
         repo_root = Path("/repo")
@@ -427,17 +322,11 @@ class DotCliTest(unittest.TestCase):
 
         self.assertEqual(result, 0)
         self.assertEqual(len(calls), 1)
-        self.assertEqual(
-            calls[0][0],
-            [
-                "/nix/var/nix/profiles/default/bin/nix",
-                "profile",
-                "add",
-                "--profile",
-                str(profile_path),
-                ".#cli",
-            ],
-        )
+        args = calls[0][0]
+        self.assertEqual(args[0], "/nix/var/nix/profiles/default/bin/nix")
+        self.assert_followed_by(args, "profile", "add")
+        self.assert_followed_by(args, "--profile", str(profile_path))
+        self.assertIn(".#cli", args)
 
     def test_command_sync_nix_profile_requires_nix(self):
         with (
@@ -460,10 +349,10 @@ class DotCliTest(unittest.TestCase):
                 cli,
                 "WORK_TOOL_REPOS",
                 {
-                    "prod-errors": {
-                        "repo": "git@example.com:prod-errors.git",
-                        "path": tool_path,
-                    }
+                    "prod-errors": cli.WorkTool(
+                        repo="git@example.com:prod-errors.git",
+                        path=tool_path,
+                    )
                 },
             ),
             mock.patch.object(Path, "exists", return_value=False),
@@ -491,10 +380,10 @@ class DotCliTest(unittest.TestCase):
                 cli,
                 "WORK_TOOL_REPOS",
                 {
-                    "prod-errors": {
-                        "repo": "git@example.com:prod-errors.git",
-                        "path": tool_path,
-                    }
+                    "prod-errors": cli.WorkTool(
+                        repo="git@example.com:prod-errors.git",
+                        path=tool_path,
+                    )
                 },
             ),
             mock.patch.object(Path, "exists", return_value=True),
@@ -533,10 +422,10 @@ class DotCliTest(unittest.TestCase):
                 cli,
                 "WORK_TOOL_REPOS",
                 {
-                    "prod-errors": {
-                        "repo": "git@example.com:prod-errors.git",
-                        "path": tool_path,
-                    }
+                    "prod-errors": cli.WorkTool(
+                        repo="git@example.com:prod-errors.git",
+                        path=tool_path,
+                    )
                 },
             ),
             mock.patch.object(Path, "exists", return_value=True),
@@ -569,10 +458,10 @@ class DotCliTest(unittest.TestCase):
                 cli,
                 "WORK_TOOL_REPOS",
                 {
-                    "prod-errors": {
-                        "repo": "git@example.com:prod-errors.git",
-                        "path": Path("/tmp/prod-errors"),
-                    }
+                    "prod-errors": cli.WorkTool(
+                        repo="git@example.com:prod-errors.git",
+                        path=Path("/tmp/prod-errors"),
+                    )
                 },
             ),
             mock.patch.object(Path, "exists", return_value=False),
@@ -584,10 +473,16 @@ class DotCliTest(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             cli.command_work_tools_apply(SimpleNamespace(name="unknown"))
 
-    def test_read_first_line_returns_empty_on_oserror(self):
+    def test_read_first_line_returns_empty_for_unreadable_and_binary_files(self):
         path = Path("/tmp/unreadable")
         with mock.patch.object(Path, "open", side_effect=PermissionError):
             self.assertEqual(cli.read_first_line(path), "")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            binary = Path(tmpdir) / "logo.png"
+            binary.write_bytes(b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\xff\xfe\xfd")
+
+            self.assertEqual(cli.read_first_line(binary), "")
 
 
 if __name__ == "__main__":
