@@ -19,13 +19,8 @@ function _create_hook_from_template() {
 function setup-git-hooks() {
   local template="$1"
   if [[ -z "$template" ]]; then
-    echo ""
-    echo ""
-    echo "利用可能なテンプレート:"
-    echo "  pre_commit_rust.zsh        - Rust専用 (cargo fmt)"
-    echo "  pre_commit_rust_sql.zsh    - Rust + SQL (cargo fmt + sqlfluff)"
-    echo "  pre_commit_go.zsh          - Go専用 (goimports)"
-    echo "  pre_commit_rs_next_sql.zsh - Rust + Next.js + SQL統合"
+    echo "使い方: setup-git-hooks <テンプレート>"
+    list-git-hook-templates
     return 1
   fi
 
@@ -47,10 +42,11 @@ function setup-git-hooks() {
 function list-git-hook-templates() {
   _ensure_hook_template_dir
   echo "利用可能なGitフックテンプレート:"
-  if [[ -d "$GIT_HOOK_TEMPLATE_DIR" ]]; then
-    ls -la "$GIT_HOOK_TEMPLATE_DIR" | grep -E '\.(zsh|sh)$' | awk '{print "  " $9}'
+  local -a templates=("$GIT_HOOK_TEMPLATE_DIR"/*.(zsh|sh)(N-.:t))
+  if (( ${#templates} )); then
+    printf '  %s\n' "${templates[@]}"
   else
-    echo "  テンプレートディレクトリが存在しないのだ"
+    echo "  テンプレートが見つからないのだ"
   fi
-} 
+}
 
