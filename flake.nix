@@ -19,7 +19,6 @@
       # This dotfiles repo is macOS-only for now, so keep the shell darwin-only too.
       systems = [
         "aarch64-darwin"
-        "x86_64-darwin"
       ];
       forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f system);
       mkCli =
@@ -48,16 +47,6 @@
             done
           '';
           mkVersionEntry = name: value: { inherit name value; };
-          visidata = pkgs.visidata.overrideAttrs (old: {
-            # Upstream tests need a writable home and must not share files across Nix builders.
-            preCheck = (old.preCheck or "") + ''
-              export HOME="$TMPDIR/visidata-home"
-              mkdir -p "$HOME/Library/Application Support"
-              cp -R tests/xdg/data/visidata "$HOME/Library/Application Support/visidata"
-              substituteInPlace tests/test-vdx.sh \
-                --replace-fail '/tmp/vd-nosave-output.txt' "$TMPDIR/vd-nosave-output.txt"
-            '';
-          });
           mdfriedKitty = pkgs.rustPlatform.buildRustPackage {
             inherit (pkgs.mdfried)
               pname
