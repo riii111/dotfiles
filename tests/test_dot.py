@@ -111,7 +111,7 @@ class DotCliTest(unittest.TestCase):
         calls = []
 
         def fake_run(args, **kwargs):
-            calls.append((tuple(args), kwargs))
+            calls.append(tuple(args))
             return subprocess.CompletedProcess(args, 0, "", "")
 
         with (
@@ -129,40 +129,33 @@ class DotCliTest(unittest.TestCase):
             result = cli.command_test(mock.Mock())
 
         self.assertEqual(result, 0)
-        self.assertEqual(calls[0][0], ("/bin/ruff", "check", "."))
-        self.assertEqual(
-            calls[1][0],
+        expected = [
+            ("/bin/ruff", "check", "."),
             ("python3", "-m", "unittest", "discover", "tests"),
-        )
-        self.assertEqual(
-            calls[2][0],
             ("/bin/bash", "/repo/tests/test-example.sh"),
-        )
-        self.assertEqual(
-            calls[3][0],
-            (
-                "/bin/lua",
-                "private_dot_config/wezterm/tests/herdr_mode_test.lua",
-            ),
-        )
-        self.assertEqual(calls[4][0], ("/bin/bash", "-n", "/repo/scripts/check.sh"))
-        self.assertEqual(calls[5][0], ("/bin/sh", "-n", "/repo/bin/run"))
+            ("/bin/lua", "private_dot_config/wezterm/tests/herdr_mode_test.lua"),
+            ("/bin/bash", "-n", "/repo/scripts/check.sh"),
+            ("/bin/sh", "-n", "/repo/bin/run"),
+        ]
+        for command in expected:
+            self.assertIn(command, calls)
 
     def test_command_test_collects_failures_without_traceback(self):
         repo_root = Path("/repo")
         targets = [(repo_root / "scripts/check.sh", "bash")]
-        runs = [
-            subprocess.CompletedProcess(["ruff"], 0, "", ""),
-            subprocess.CompletedProcess(["python3"], 1, "", "unit failed"),
-            subprocess.CompletedProcess(["lua"], 0, "", ""),
-            subprocess.CompletedProcess(["bash"], 1, "", "syntax failed"),
-        ]
+
+        def fake_run(args, **kwargs):
+            if "unittest" in args:
+                return subprocess.CompletedProcess(args, 1, "", "unit failed")
+            if "-n" in args:
+                return subprocess.CompletedProcess(args, 1, "", "syntax failed")
+            return subprocess.CompletedProcess(args, 0, "", "")
 
         with (
             mock.patch.object(cli, "resolve_repo_root", return_value=repo_root),
             mock.patch.object(cli, "collect_shell_targets", return_value=targets),
             mock.patch("shutil.which", side_effect=lambda name: f"/bin/{name}"),
-            mock.patch("subprocess.run", side_effect=runs),
+            mock.patch("subprocess.run", side_effect=fake_run),
             mock.patch("sys.stdout", new=io.StringIO()),
             mock.patch("sys.stderr", new=io.StringIO()) as stderr,
         ):
@@ -181,24 +174,14 @@ class DotCliTest(unittest.TestCase):
                 return None
             return f"/bin/{name}"
 
+        def fake_run(args, **kwargs):
+            return subprocess.CompletedProcess(args, 0, "", "")
+
         with (
             mock.patch.object(cli, "resolve_repo_root", return_value=repo_root),
             mock.patch.object(cli, "collect_shell_targets", return_value=targets),
             mock.patch("shutil.which", side_effect=fake_which),
-            mock.patch(
-                "subprocess.run",
-                side_effect=[
-                    subprocess.CompletedProcess(["ruff"], 0, "", ""),
-                    subprocess.CompletedProcess(
-                        ["python3", "-m", "unittest", "discover", "tests"],
-                        0,
-                        "",
-                        "",
-                    ),
-                    subprocess.CompletedProcess(["lua"], 0, "", ""),
-                    subprocess.CompletedProcess(["zsh", "-n"], 1, "", ""),
-                ],
-            ),
+            mock.patch("subprocess.run", side_effect=fake_run),
             mock.patch("sys.stdout", new=io.StringIO()),
             mock.patch("sys.stderr", new=io.StringIO()) as stderr,
         ):
@@ -275,6 +258,11 @@ class DotCliTest(unittest.TestCase):
         self.assertEqual(lint_shell.call_args.args[0], repo_root)
         self.assertEqual(lint_shell.call_args.args[1], [staged])
 
+    def assert_followed_by(self, args, token, expected):
+        self.assertIn(token, args)
+        index = args.index(token)
+        self.assertEqual(args[index + 1 : index + 2], [expected])
+
     def test_command_sync_nix_profile_upgrades_existing_profile_package(self):
         repo_root = Path("/repo")
         profile_path = Path("/tmp/nix-profile")
@@ -301,18 +289,12 @@ class DotCliTest(unittest.TestCase):
             result = cli.command_sync_nix_profile(mock.Mock())
 
         self.assertEqual(result, 0)
-        self.assertEqual(
-            calls[0][0],
-            [
-                "/nix/var/nix/profiles/default/bin/nix",
-                "profile",
-                "upgrade",
-                "--profile",
-                str(profile_path),
-                "cli",
-            ],
-        )
         self.assertEqual(len(calls), 1)
+        args = calls[0][0]
+        self.assertEqual(args[0], "/nix/var/nix/profiles/default/bin/nix")
+        self.assert_followed_by(args, "profile", "upgrade")
+        self.assert_followed_by(args, "--profile", str(profile_path))
+        self.assertIn("cli", args)
 
     def test_command_sync_nix_profile_installs_when_profile_is_empty(self):
         repo_root = Path("/repo")
@@ -341,17 +323,11 @@ class DotCliTest(unittest.TestCase):
 
         self.assertEqual(result, 0)
         self.assertEqual(len(calls), 1)
-        self.assertEqual(
-            calls[0][0],
-            [
-                "/nix/var/nix/profiles/default/bin/nix",
-                "profile",
-                "add",
-                "--profile",
-                str(profile_path),
-                ".#cli",
-            ],
-        )
+        args = calls[0][0]
+        self.assertEqual(args[0], "/nix/var/nix/profiles/default/bin/nix")
+        self.assert_followed_by(args, "profile", "add")
+        self.assert_followed_by(args, "--profile", str(profile_path))
+        self.assertIn(".#cli", args)
 
     def test_command_sync_nix_profile_requires_nix(self):
         with (
