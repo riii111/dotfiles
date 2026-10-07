@@ -1,5 +1,4 @@
 # Repo files that shouldn't be in $HOME
-Brewfile
 README.md
 AGENTS.md
 LICENSE
@@ -9,6 +8,7 @@ flake.lock
 tests
 scripts
 config/pi
+.config/wezterm/tests
 
 # Python runtime artifacts
 **/__pycache__/**
