@@ -20,6 +20,7 @@
 .config/nvim/lua/plugins/noice.lua
 bin/gh-pr-comments
 bin/gh-read
+.claude/hooks/notify-impl-review.sh
 .claude/hooks/ask-push-on-protected-branch.sh
 .claude/skills/sandbox-review
 .claude/scripts/sandbox-report.py
