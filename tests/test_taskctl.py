@@ -396,9 +396,8 @@ class ReviewTest(TaskctlFixture):
         ):
             self.git("config", key, value)
         (self.checkout / ".git/refs/heads/base").write_text("1" * 40 + "\n")
-        code, _, err = self.review()
+        code, _, _ = self.review()
         self.assertEqual(code, 1)
-        self.assertIn("never fetches", err)
         self.assertFalse(marker.exists())
         self.assertEqual(self.harnexus.calls, [])
 

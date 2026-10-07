@@ -128,10 +128,10 @@ def git(checkout, *args):
         env={**os.environ, "GIT_NO_LAZY_FETCH": "1"},
     )
     if result.returncode:
-        error = result.stderr.strip()
-        if "not allowed" in error or "lazy fetch" in error:
-            error += "; taskctl never fetches: fetch the missing commit in the worktree"
-        raise HandoffError(error)
+        raise HandoffError(
+            result.stderr.strip()
+            + "; taskctl never fetches, so fetch any missing commit in the worktree"
+        )
     return result.stdout.strip()
 
 
