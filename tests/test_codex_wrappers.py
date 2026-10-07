@@ -65,7 +65,7 @@ class GitTrustTest(unittest.TestCase):
                 "run",
                 side_effect=subprocess.TimeoutExpired(["ssh", "-G"], 2),
             ):
-                self.assertFalse(module.github_host("github.com"))
+                self.assertIs(module.github_host("github.com"), False)
 
     def test_github_ssh_endpoints(self):
         for host, port, trusted in (

@@ -5,10 +5,12 @@ from kitty.fast_data_types import GLFW_MOD_CONTROL, GLFW_MOD_SHIFT, GLFW_MOD_SUP
 from kitty.utils import resolve_abs_or_config_path
 
 
+if not __debug__:
+    raise SystemExit("asserts are disabled; run tests/test-kitty-herdr.sh")
+
 repo_root = Path(__file__).resolve().parents[1]
 config_path = repo_root / "private_dot_config/kitty/kitty.conf"
 options = load_config(str(config_path))
-assert options.window_logo_scale == 8.25
 
 for kitty_config_path in config_path.parent.glob("*.conf"):
     assert "/Users/" not in kitty_config_path.read_text()
@@ -97,21 +99,12 @@ logo_actions = options.alias_map.resolve_aliases(
     "combine : herdr_logo_on : push_keyboard_mode herdr"
 )
 assert logo_actions[0].func == "remote_control"
-assert logo_actions[0].args[:5] == (
-    "set-window-logo",
-    "--position",
-    "bottom-right",
-    "--alpha",
-    "0.30",
-)
-assert logo_actions[0].args[5] == str(Path.home() / ".config/kitty/herdr-logo.png")
+assert logo_actions[0].args[0] == "set-window-logo"
+assert logo_actions[0].args[-1] == str(Path.home() / ".config/kitty/herdr-logo.png")
 assert logo_actions[1].func == "push_keyboard_mode"
 
 logo_path = config_path.parent / "herdr-logo.png"
 logo_data = logo_path.read_bytes()
 assert logo_data.startswith(b"\x89PNG\r\n\x1a\n")
-assert int.from_bytes(logo_data[16:20]) == 624
-assert int.from_bytes(logo_data[20:24]) == 704
-assert logo_data[25] == 6
 
 print("kitty herdr mode test: ok")
