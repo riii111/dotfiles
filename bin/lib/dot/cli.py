@@ -202,6 +202,20 @@ def print_process_failure(
         print(result.stdout.rstrip(), file=sys.stderr)
 
 
+def check_shell_syntax(shell_path: str, script: Path, label: str, cwd: Path) -> bool:
+    result = subprocess.run(
+        [shell_path, "-n", str(script)],
+        cwd=cwd,
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    if result.returncode != 0:
+        print_process_failure(f"shell syntax ({label})", result)
+    return result.returncode == 0
+
+
 def command_test(_: argparse.Namespace) -> int:
     repo_root = resolve_repo_root()
     failures = 0
@@ -259,29 +273,15 @@ def command_test(_: argparse.Namespace) -> int:
     print(f"Checking {len(targets)} shell targets")
     shell_failures: list[str] = []
     for path, shell in targets:
+        name = str(path.relative_to(repo_root))
         shell_path = shutil.which(shell)
         if shell_path is None:
-            shell_failures.append(str(path.relative_to(repo_root)))
-            print(
-                f"shell syntax ({path.relative_to(repo_root)}): {shell} not found",
-                file=sys.stderr,
-            )
+            shell_failures.append(name)
+            print(f"shell syntax ({name}): {shell} not found", file=sys.stderr)
             continue
 
-        result = subprocess.run(
-            [shell_path, "-n", str(path)],
-            cwd=repo_root,
-            check=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        if result.returncode != 0:
-            shell_failures.append(str(path.relative_to(repo_root)))
-            print_process_failure(
-                f"shell syntax ({path.relative_to(repo_root)})",
-                result,
-            )
+        if not check_shell_syntax(shell_path, path, name, repo_root):
+            shell_failures.append(name)
 
     if shell_failures:
         failures += 1
