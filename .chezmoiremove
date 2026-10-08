@@ -38,3 +38,9 @@ bin/reviewctl
 .codex/skills/task-review-cycle/references/recovery.md
 bin/taskctl
 bin/lib/dot/handoff.py
+.git-hooks.zsh
+.git_hook_templates/pre_commit_claude_resume.zsh
+.git_hook_templates/pre_commit_go.zsh
+.git_hook_templates/pre_commit_rs.zsh
+.git_hook_templates/pre_commit_rs_sql.zsh
+.git_hook_templates/pre_commit_rs_sql_nextjs.zsh
