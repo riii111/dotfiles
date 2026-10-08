@@ -379,6 +379,8 @@ class DotCliTest(unittest.TestCase):
         self.assertNotIn("for personal", stderr)
         # A template that does not render is not syntax-checked.
         self.assertEqual(syntax_checks, ["dot_zshrc.personal"])
+        # chezmoi's own message gives the line in the template, so no hint.
+        self.assertNotIn("line numbers refer", stderr)
         self.assertEqual(len(outcome.scratch_dirs), len(cli.MACHINE_TYPES))
 
     def test_command_test_reports_template_syntax_failure(self):
@@ -399,6 +401,13 @@ class DotCliTest(unittest.TestCase):
         self.assertIn("parse error near `}'", stderr)
         self.assertIn("Shell syntax failed: dot_zshrc.tmpl for work", stderr)
         self.assertNotIn("for personal", stderr)
+        # The shell's line numbers are those of the render, so say how to get it.
+        self.assertIn(
+            "line numbers refer to the rendered text: chezmoi --config "
+            "tests/chezmoi/work.toml --source . execute-template --file dot_zshrc.tmpl",
+            stderr,
+        )
+        self.assertEqual(stderr.count("line numbers refer"), 1)
         self.assertEqual(len(outcome.scratch_dirs), len(cli.MACHINE_TYPES))
 
     def test_command_test_requires_chezmoi_for_shell_templates(self):

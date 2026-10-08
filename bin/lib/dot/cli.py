@@ -325,6 +325,13 @@ def check_shell_template(repo_root: Path, template: Path, shell_path: str) -> li
             script.write_bytes(rendered.stdout)
             if not check_shell_syntax(shell_path, script, label, repo_root):
                 failures.append(label)
+                # The shell numbers the lines of the render, not of the template.
+                print(
+                    "line numbers refer to the rendered text: chezmoi "
+                    f"--config {data_name} --source . execute-template "
+                    f"--file {shlex.quote(name)}",
+                    file=sys.stderr,
+                )
     return failures
 
 
