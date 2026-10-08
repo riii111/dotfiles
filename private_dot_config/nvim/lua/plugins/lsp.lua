@@ -18,12 +18,29 @@ return {
 		cond = not vim.g.vscode,
 		dependencies = { "neovim/nvim-lspconfig" },
 		config = function()
-			-- `go env` prints an error text instead of a path when go is missing or broken
-			for _, name in ipairs({ "GOROOT", "GOPATH" }) do
-				if not vim.env[name] and vim.fn.executable("go") == 1 then
-					local result = vim.system({ "go", "env", name }, { text = true }):wait()
-					if result.code == 0 then
-						vim.env[name] = vim.trim(result.stdout)
+			if vim.fn.executable("go") ~= 1 or (vim.env.GOROOT and vim.env.GOPATH) then
+				return
+			end
+			-- `go env` prints an error text instead of paths when go is broken. GOTOOLCHAIN=local keeps it from
+			-- downloading the toolchain that a go.mod asks for, and a go that hangs must not block the startup.
+			local result
+			local job = vim.system(
+				{ "go", "env", "GOROOT", "GOPATH" },
+				{ text = true, env = { GOTOOLCHAIN = "local" } },
+				function(done)
+					result = done
+				end
+			)
+			vim.wait(3000, function()
+				return result ~= nil
+			end, nil, true)
+			if not result then
+				job:kill(9)
+			elseif result.code == 0 then
+				local lines = vim.split(result.stdout, "\n")
+				for i, name in ipairs({ "GOROOT", "GOPATH" }) do
+					if lines[i] ~= "" and not vim.env[name] then
+						vim.env[name] = lines[i]
 					end
 				end
 			end
