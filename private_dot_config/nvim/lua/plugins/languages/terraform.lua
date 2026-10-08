@@ -52,6 +52,9 @@ return {
 					args = { "--format", "json" },
 					to_stdin = false,
 					from_stderr = false,
+					-- tflint exits with 1 for a file with a syntax error; null-ls takes that for an error of
+					-- the generator and stops using the source
+					ignore_stderr = true,
 					format = "json",
 					check_exit_code = { 0, 2 },
 					on_output = function(params)
