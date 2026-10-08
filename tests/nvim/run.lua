@@ -127,7 +127,9 @@ local function languages()
 	vim.fn.mkdir(dir .. "/bin", "p")
 	vim.fn.mkdir(dir .. "/py", "p")
 	-- ruff and tflint report one finding as JSON and exit with 1 and 2 like the real tools do when they
-	-- found something; the formatters append a line to what they read.
+	-- found something; the formatters append a line to what they read. When libuv handles the exit of one
+	-- child it reports all children that have exited, and null-ls stops reading a command at that report,
+	-- so output written while the loop was busy is lost: the stubs wait before they exit.
 	local ruff_report = vim.json.encode({
 		{
 			code = "F401",
@@ -148,11 +150,11 @@ local function languages()
 	})
 	tool(
 		dir .. "/bin/ruff",
-		[[[ "$1" = check ] || { cat; echo "# ruff"; exit 0; }]],
-		"echo '" .. ruff_report .. "'; exit 1"
+		[[[ "$1" = check ] || { cat; echo "# ruff"; sleep 0.5; exit 0; }]],
+		"echo '" .. ruff_report .. "'; sleep 0.5; exit 1"
 	)
-	tool(dir .. "/bin/terraform", [[cat; echo "# terraform"]])
-	tool(dir .. "/bin/tflint", "echo '" .. tflint_report .. "'; exit 2")
+	tool(dir .. "/bin/terraform", [[cat; echo "# terraform"; sleep 0.5]])
+	tool(dir .. "/bin/tflint", "echo '" .. tflint_report .. "'; sleep 0.5; exit 2")
 	vim.env.PATH = dir .. "/bin:" .. vim.env.PATH
 	-- requirements.txt keeps get_ruff_command from looking for a uv project above the temporary directory
 	vim.fn.writefile({}, dir .. "/py/requirements.txt")
