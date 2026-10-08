@@ -68,7 +68,7 @@
 2) Language module
    - Create `lua/plugins/languages/<lang>.lua` and:
      - Extend Treesitter parser/filetype registration via `utils.treesitter.extend`.
-     - Configure LSP with `lspconfig` (root detection via `lspconfig.util.root_pattern`).
+     - Configure LSP with `vim.lsp.config` and `vim.lsp.enable` (root detection via `root_markers`).
      - Register formatters/linters with null‑ls only if the LSP lacks them.
      - Bind `<M-CR>` and refactor menu via `utils.lsp-actions`.
 
@@ -127,11 +127,11 @@ return {
 - No diagnostics? Check server is installed in Mason and buffer `filetype` is correct.
 - clang‑tidy: let clangd handle it; do not add `null-ls` diagnostics.
 - Format conflicts: ensure only one of LSP or null‑ls formats for the filetype.
-- LSP not starting ("No active clients"): If you roll your own `vim.lsp.config/enable`, run config+enable *after* FileType. The safe path is to put config + `vim.lsp.enable` in `ftplugin/<lang>.lua`, or just use `lspconfig.setup` which already wires FileType autostart.
+- LSP not starting ("No active clients"): If you roll your own `vim.lsp.config/enable`, run config+enable *after* FileType. The safe path is to put config + `vim.lsp.enable` in `ftplugin/<lang>.lua`, or in the `virtual = true` spec with `ft` from the skeleton, which lazy.nvim loads on FileType.
 
 ## Do & Don’t
 
-- Do: prefer root detection via `lspconfig.util.root_pattern`.
+- Do: prefer root detection via `root_markers` in `vim.lsp.config`.
 - Do: keep language logic self‑contained in its module.
 - Don’t: hard‑code absolute paths or introduce redundant formatters/linters.
 
