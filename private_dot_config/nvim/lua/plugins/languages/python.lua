@@ -85,7 +85,11 @@ return {
 					if action == "format" then
 						return vim.list_extend(base_args, { "format", "--stdin-filename", "$FILENAME", "-" })
 					elseif action == "check" then
-						return vim.list_extend(base_args, { "check", "--output-format", "json", "$FILENAME" })
+						-- `fix = true` in the ruff configuration would otherwise rewrite the file under the buffer
+						return vim.list_extend(
+							base_args,
+							{ "check", "--no-fix", "--output-format", "json", "$FILENAME" }
+						)
 					end
 					return base_args
 				end
