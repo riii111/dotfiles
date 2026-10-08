@@ -28,5 +28,8 @@ jobs:
       - name: Install fd
         run: brew install fd
 
+      - name: Install chezmoi
+        run: brew install chezmoi
+
       - name: Run repo verification
         run: ./bin/executable_dotctl test
