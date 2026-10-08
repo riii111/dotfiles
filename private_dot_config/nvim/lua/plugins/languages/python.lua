@@ -97,7 +97,7 @@ return {
 						command = get_ruff_command(),
 						args = get_ruff_args("check"),
 						to_stdin = false,
-						from_stderr = true,
+						ignore_stderr = true,
 						format = "json",
 						check_exit_code = function(code)
 							return code <= 1
