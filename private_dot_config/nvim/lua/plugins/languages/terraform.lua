@@ -53,9 +53,7 @@ return {
 					to_stdin = false,
 					from_stderr = false,
 					format = "json",
-					check_exit_code = function(code)
-						return code <= 1
-					end,
+					check_exit_code = { 0, 2 },
 					on_output = function(params)
 						local diagnostics = {}
 						if params.output and params.output.issues then
