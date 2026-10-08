@@ -85,10 +85,10 @@ return {
 					if action == "format" then
 						return vim.list_extend(base_args, { "format", "--stdin-filename", "$FILENAME", "-" })
 					elseif action == "check" then
-						-- `fix = true` in the ruff configuration would otherwise rewrite the file under the buffer
+						-- `fix = true` in the ruff configuration would make ruff print the fixed code after the JSON
 						return vim.list_extend(
 							base_args,
-							{ "check", "--no-fix", "--output-format", "json", "$FILENAME" }
+							{ "check", "--no-fix", "--output-format", "json", "--stdin-filename", "$FILENAME", "-" }
 						)
 					end
 					return base_args
@@ -100,7 +100,7 @@ return {
 					generator = null_ls.generator({
 						command = get_ruff_command(),
 						args = get_ruff_args("check"),
-						to_stdin = false,
+						to_stdin = true,
 						ignore_stderr = true,
 						format = "json",
 						check_exit_code = function(code)
