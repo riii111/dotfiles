@@ -36,11 +36,10 @@ return {
 			local terraform_fmt = {
 				method = null_ls.methods.FORMATTING,
 				filetypes = { "terraform", "hcl", "terraform-vars" },
-				generator = null_ls.generator({
+				generator = null_ls.formatter({
 					command = "terraform",
 					args = { "fmt", "-" },
 					to_stdin = true,
-					from_stdout = true,
 				}),
 			}
 
