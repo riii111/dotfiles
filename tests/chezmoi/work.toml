@@ -1,0 +1,15 @@
+# Static data for rendering shell templates in `dotctl test` as a work machine.
+# It mirrors the work branch of .chezmoi.toml.tmpl without its prompts.
+# Keep the keys in sync with that branch.
+[template]
+# A key missing here must fail the render instead of rendering empty.
+options = ["missingkey=error"]
+
+[data]
+type = "work"
+git_email = "work@example.com"
+git_name = "work-user"
+gh_work_org = "work-org"
+gh_work_user = "work-gh-user"
+gcp_project = "work-gcp-project"
+work_project = "work-project"

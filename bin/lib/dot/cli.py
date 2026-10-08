@@ -2,15 +2,30 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import NamedTuple
 
 
 LINTABLE_SHELLS = frozenset({"bash", "sh"})
+# chezmoi source names of the zsh startup files. They have neither a shebang nor an
+# extension, and may carry attribute prefixes such as private_.
+ZSH_STARTUP_FILES = (
+    "dot_zshenv",
+    "dot_zprofile",
+    "dot_zshrc",
+    "dot_zlogin",
+    "dot_zlogout",
+)
+# The machine types of .chezmoi.toml.tmpl. Shell templates are rendered for each of
+# them with the static data in tests/chezmoi/<machine type>.toml.
+MACHINE_TYPES = ("personal", "work")
+CHEZMOI_TEST_DATA_DIR = Path("tests") / "chezmoi"
 # Keep in sync with NIX_DOTFILES_PROFILE in dot_zshrc.tmpl.
 NIX_DOTFILES_PROFILE = Path.home() / ".nix-profile"
 NIX_DOTFILES_PROFILE_ELEMENT = "cli"
@@ -116,10 +131,12 @@ def detect_shebang_shell(first_line: str) -> str | None:
 
 
 def detect_shell(path: Path) -> str | None:
-    suffix = path.suffix
+    # A chezmoi template is classified by the file it renders to.
+    name = path.name.removesuffix(".tmpl")
+    suffix = Path(name).suffix
     # `.zsh` files in this repo are intentionally treated as zsh scripts
     # even if the shebang is omitted or differs.
-    if suffix == ".zsh":
+    if suffix == ".zsh" or name.endswith(ZSH_STARTUP_FILES):
         return "zsh"
 
     shell = detect_shebang_shell(read_first_line(path))
@@ -133,6 +150,8 @@ def detect_shell(path: Path) -> str | None:
 def collect_detected_shell_targets(paths: list[Path]) -> list[tuple[Path, str]]:
     targets: list[tuple[Path, str]] = []
     for path in paths:
+        # Templates are not shell syntax until chezmoi renders them, and shfmt -w
+        # would rewrite their actions. See collect_shell_template_targets.
         if path.suffix == ".tmpl" or not path.is_file():
             continue
         shell = detect_shell(path)
@@ -141,8 +160,20 @@ def collect_detected_shell_targets(paths: list[Path]) -> list[tuple[Path, str]]:
     return targets
 
 
+def collect_shell_template_targets(paths: list[Path]) -> list[tuple[Path, str]]:
+    targets: list[tuple[Path, str]] = []
+    for path in paths:
+        if path.suffix != ".tmpl" or not path.is_file():
+            continue
+        shell = detect_shell(path)
+        if shell is not None:
+            targets.append((path, shell))
+    return targets
+
+
 def collect_shell_targets(repo_root: Path) -> list[tuple[Path, str]]:
-    return collect_detected_shell_targets(git_tracked_files(repo_root))
+    paths = git_tracked_files(repo_root)
+    return collect_detected_shell_targets(paths) + collect_shell_template_targets(paths)
 
 
 def collect_lintable_shell_targets(paths: list[Path]) -> list[Path]:
@@ -193,13 +224,115 @@ def run_command(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
 
 def print_process_failure(
     label: str,
-    result: subprocess.CompletedProcess[str],
+    result: subprocess.CompletedProcess[str] | subprocess.CompletedProcess[bytes],
 ) -> None:
     print(f"{label}: failed (exit {result.returncode})", file=sys.stderr)
-    if result.stderr:
-        print(result.stderr.rstrip(), file=sys.stderr)
-    if result.stdout:
-        print(result.stdout.rstrip(), file=sys.stderr)
+    for output in (result.stderr, result.stdout):
+        if isinstance(output, bytes):
+            output = output.decode("utf-8", errors="replace")
+        if output:
+            print(output.rstrip(), file=sys.stderr)
+
+
+def check_shell_syntax(shell_path: str, script: Path, label: str, cwd: Path) -> bool:
+    result = subprocess.run(
+        [shell_path, "-n", str(script)],
+        cwd=cwd,
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        # The shell echoes the offending line, which need not be valid UTF-8.
+        errors="replace",
+    )
+    if result.returncode != 0:
+        print_process_failure(f"shell syntax ({label})", result)
+    return result.returncode == 0
+
+
+def render_chezmoi_template(
+    chezmoi: str,
+    repo_root: Path,
+    template: Path,
+    data_file: Path,
+    scratch: Path,
+) -> subprocess.CompletedProcess[bytes]:
+    # Only PATH and a throwaway HOME reach chezmoi, and its state goes to scratch
+    # rather than next to the config file in the repo. That keeps the render from
+    # reading or writing the machine's own chezmoi config, source and state.
+    # The output stays raw bytes: text mode would turn CRLF into LF, hiding what
+    # a shell rejects, and fail on bytes that are not UTF-8.
+    return subprocess.run(
+        [
+            chezmoi,
+            "--config",
+            str(data_file),
+            "--source",
+            str(repo_root),
+            "--persistent-state",
+            str(scratch / "chezmoistate.boltdb"),
+            "execute-template",
+            "--file",
+            str(template),
+        ],
+        cwd=repo_root,
+        env={"PATH": os.environ.get("PATH", os.defpath), "HOME": str(scratch)},
+        check=False,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+
+def check_shell_template(repo_root: Path, template: Path, shell_path: str) -> list[str]:
+    """Render a shell template for each machine type and syntax-check the result.
+
+    Returns the failed checks, each named "<template> for <machine type>".
+    """
+    name = str(template.relative_to(repo_root))
+    chezmoi = shutil.which("chezmoi")
+    if chezmoi is None:
+        print(
+            f"shell syntax ({name}): chezmoi not found "
+            "(run inside nix develop or install chezmoi)",
+            file=sys.stderr,
+        )
+        return [name]
+
+    failures: list[str] = []
+    for machine in MACHINE_TYPES:
+        label = f"{name} for {machine}"
+        data_name = CHEZMOI_TEST_DATA_DIR / f"{machine}.toml"
+        data_file = repo_root / data_name
+        if not data_file.is_file():
+            # chezmoi ignores a missing --config, and the render would then fail on
+            # the first data key with a message that hides the real cause.
+            print(f"template render ({label}): {data_name} not found", file=sys.stderr)
+            failures.append(label)
+            continue
+
+        with tempfile.TemporaryDirectory() as scratch_dir:
+            scratch = Path(scratch_dir)
+            rendered = render_chezmoi_template(
+                chezmoi, repo_root, template, data_file, scratch
+            )
+            if rendered.returncode != 0:
+                print_process_failure(f"template render ({label})", rendered)
+                failures.append(label)
+                continue
+
+            script = scratch / f"{template.name.removesuffix('.tmpl')}.{machine}"
+            script.write_bytes(rendered.stdout)
+            if not check_shell_syntax(shell_path, script, label, repo_root):
+                failures.append(label)
+                # The shell numbers the lines of the render, not of the template.
+                print(
+                    "line numbers refer to the rendered text: chezmoi "
+                    f"--config {data_name} --source . execute-template "
+                    f"--file {shlex.quote(name)}",
+                    file=sys.stderr,
+                )
+    return failures
 
 
 def command_test(_: argparse.Namespace) -> int:
@@ -259,29 +392,17 @@ def command_test(_: argparse.Namespace) -> int:
     print(f"Checking {len(targets)} shell targets")
     shell_failures: list[str] = []
     for path, shell in targets:
+        name = str(path.relative_to(repo_root))
         shell_path = shutil.which(shell)
         if shell_path is None:
-            shell_failures.append(str(path.relative_to(repo_root)))
-            print(
-                f"shell syntax ({path.relative_to(repo_root)}): {shell} not found",
-                file=sys.stderr,
-            )
+            shell_failures.append(name)
+            print(f"shell syntax ({name}): {shell} not found", file=sys.stderr)
             continue
 
-        result = subprocess.run(
-            [shell_path, "-n", str(path)],
-            cwd=repo_root,
-            check=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        if result.returncode != 0:
-            shell_failures.append(str(path.relative_to(repo_root)))
-            print_process_failure(
-                f"shell syntax ({path.relative_to(repo_root)})",
-                result,
-            )
+        if path.suffix == ".tmpl":
+            shell_failures.extend(check_shell_template(repo_root, path, shell_path))
+        elif not check_shell_syntax(shell_path, path, name, repo_root):
+            shell_failures.append(name)
 
     if shell_failures:
         failures += 1

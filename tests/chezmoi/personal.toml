@@ -1,0 +1,16 @@
+# Static data for rendering shell templates in `dotctl test` as a personal machine.
+# It mirrors the personal branch of .chezmoi.toml.tmpl without its prompts and
+# 1Password lookup. Keep the keys in sync with that branch.
+[template]
+# A key missing here must fail the render instead of rendering empty.
+options = ["missingkey=error"]
+
+[data]
+type = "personal"
+git_email = "personal@example.com"
+git_email_side_work = "side-work@example.com"
+git_name = "riii111"
+side_work_org = "side-work-org"
+side_work_1p_vault = "side-work-vault"
+git_signing_key_side_work = "ssh-ed25519 AAAAexample"
+side_work_project = "side-work-project"
