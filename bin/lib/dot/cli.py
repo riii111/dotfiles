@@ -224,13 +224,14 @@ def run_command(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
 
 def print_process_failure(
     label: str,
-    result: subprocess.CompletedProcess[str],
+    result: subprocess.CompletedProcess[str] | subprocess.CompletedProcess[bytes],
 ) -> None:
     print(f"{label}: failed (exit {result.returncode})", file=sys.stderr)
-    if result.stderr:
-        print(result.stderr.rstrip(), file=sys.stderr)
-    if result.stdout:
-        print(result.stdout.rstrip(), file=sys.stderr)
+    for output in (result.stderr, result.stdout):
+        if isinstance(output, bytes):
+            output = output.decode("utf-8", errors="replace")
+        if output:
+            print(output.rstrip(), file=sys.stderr)
 
 
 def check_shell_syntax(shell_path: str, script: Path, label: str, cwd: Path) -> bool:
@@ -241,6 +242,8 @@ def check_shell_syntax(shell_path: str, script: Path, label: str, cwd: Path) -> 
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        # The shell echoes the offending line, which need not be valid UTF-8.
+        errors="replace",
     )
     if result.returncode != 0:
         print_process_failure(f"shell syntax ({label})", result)
@@ -253,10 +256,12 @@ def render_chezmoi_template(
     template: Path,
     data_file: Path,
     scratch: Path,
-) -> subprocess.CompletedProcess[str]:
+) -> subprocess.CompletedProcess[bytes]:
     # Only PATH and a throwaway HOME reach chezmoi, and its state goes to scratch
     # rather than next to the config file in the repo. That keeps the render from
     # reading or writing the machine's own chezmoi config, source and state.
+    # The output stays raw bytes: text mode would turn CRLF into LF, hiding what
+    # a shell rejects, and fail on bytes that are not UTF-8.
     return subprocess.run(
         [
             chezmoi,
@@ -276,7 +281,6 @@ def render_chezmoi_template(
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        encoding="utf-8",
     )
 
 
@@ -318,7 +322,7 @@ def check_shell_template(repo_root: Path, template: Path, shell_path: str) -> li
                 continue
 
             script = scratch / f"{template.name.removesuffix('.tmpl')}.{machine}"
-            script.write_text(rendered.stdout, encoding="utf-8")
+            script.write_bytes(rendered.stdout)
             if not check_shell_syntax(shell_path, script, label, repo_root):
                 failures.append(label)
     return failures

@@ -1,4 +1,5 @@
 import io
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -244,6 +245,18 @@ class DotCliTest(unittest.TestCase):
         self.assertEqual(result, 1)
         self.assertIn("zsh not found", stderr.getvalue())
 
+    def make_template_repo(self, root, machines=cli.MACHINE_TYPES):
+        """Write the test data files and the zsh template that a render needs."""
+        data_dir = root / cli.CHEZMOI_TEST_DATA_DIR
+        data_dir.mkdir(parents=True)
+        for machine in machines:
+            (data_dir / f"{machine}.toml").write_text(
+                f'[data]\ntype = "{machine}"\n', encoding="utf-8"
+            )
+        template = root / "dot_zshrc.tmpl"
+        template.write_text('{{ if eq .type "work" }}\n', encoding="utf-8")
+        return template
+
     def run_command_test_for_template(
         self, fake_run, which=None, machines=cli.MACHINE_TYPES
     ):
@@ -266,14 +279,7 @@ class DotCliTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
-            data_dir = root / cli.CHEZMOI_TEST_DATA_DIR
-            data_dir.mkdir(parents=True)
-            for machine in machines:
-                (data_dir / f"{machine}.toml").write_text(
-                    f'[data]\ntype = "{machine}"\n', encoding="utf-8"
-                )
-            template = root / "dot_zshrc.tmpl"
-            template.write_text('{{ if eq .type "work" }}\n', encoding="utf-8")
+            template = self.make_template_repo(root, machines)
 
             with (
                 mock.patch.object(cli, "resolve_repo_root", return_value=root),
@@ -304,13 +310,14 @@ class DotCliTest(unittest.TestCase):
             if args[0] == "/bin/chezmoi":
                 machine = Path(args[args.index("--config") + 1]).stem
                 renders[machine] = (tuple(args), kwargs)
-                return subprocess.CompletedProcess(args, 0, f"print {machine}\n", "")
+                rendered = f"print {machine}\n".encode()
+                return subprocess.CompletedProcess(args, 0, rendered, b"")
             if "-n" in args:
                 script = Path(args[-1])
                 syntax_checks[script.name] = (
                     tuple(args[:-1]),
                     script.parent,
-                    script.read_text(encoding="utf-8"),
+                    script.read_bytes(),
                 )
             return subprocess.CompletedProcess(args, 0, "", "")
 
@@ -342,7 +349,7 @@ class DotCliTest(unittest.TestCase):
             # The rendered text, not the template, is what the shell checks.
             self.assertEqual(
                 syntax_checks[f"dot_zshrc.{machine}"],
-                (("/bin/zsh", "-n"), scratch, f"print {machine}\n"),
+                (("/bin/zsh", "-n"), scratch, f"print {machine}\n".encode()),
             )
         self.assertEqual(len(syntax_checks), 2)
         self.assertEqual(len(outcome.scratch_dirs), len(cli.MACHINE_TYPES))
@@ -355,9 +362,9 @@ class DotCliTest(unittest.TestCase):
                 machine = Path(args[args.index("--config") + 1]).stem
                 if machine == "work":
                     return subprocess.CompletedProcess(
-                        args, 1, "", 'map has no entry for key "gcp_projct"'
+                        args, 1, b"", b'map has no entry for key "gcp_projct"'
                     )
-                return subprocess.CompletedProcess(args, 0, "print ok\n", "")
+                return subprocess.CompletedProcess(args, 0, b"print ok\n", b"")
             if "-n" in args:
                 syntax_checks.append(Path(args[-1]).name)
             return subprocess.CompletedProcess(args, 0, "", "")
@@ -377,7 +384,7 @@ class DotCliTest(unittest.TestCase):
     def test_command_test_reports_template_syntax_failure(self):
         def fake_run(args, **kwargs):
             if args[0] == "/bin/chezmoi":
-                return subprocess.CompletedProcess(args, 0, "print ok\n", "")
+                return subprocess.CompletedProcess(args, 0, b"print ok\n", b"")
             if "-n" in args and args[-1].endswith("dot_zshrc.work"):
                 return subprocess.CompletedProcess(
                     args, 1, "", "dot_zshrc.work:3: parse error near `}'"
@@ -417,7 +424,7 @@ class DotCliTest(unittest.TestCase):
         def fake_run(args, **kwargs):
             if args[0] == "/bin/chezmoi":
                 renders.append(Path(args[args.index("--config") + 1]).stem)
-                return subprocess.CompletedProcess(args, 0, "print ok\n", "")
+                return subprocess.CompletedProcess(args, 0, b"print ok\n", b"")
             return subprocess.CompletedProcess(args, 0, "", "")
 
         outcome = self.run_command_test_for_template(fake_run, machines=("personal",))
@@ -429,6 +436,81 @@ class DotCliTest(unittest.TestCase):
             outcome.stderr,
         )
         self.assertEqual(renders, ["personal"])
+
+    def check_template_with_bash(self, rendered):
+        """Run check_shell_template with a fake chezmoi that renders `rendered`.
+
+        The syntax check is a real bash -n. Returns the failed checks, the bytes
+        bash was given to check, and what was printed to stderr.
+        """
+        bash = shutil.which("bash")
+        if bash is None:
+            self.skipTest("bash is not installed")
+        real_run = subprocess.run
+        checked = []
+
+        def fake_run(args, **kwargs):
+            if args[0] == "/bin/chezmoi":
+                return subprocess.CompletedProcess(args, 0, rendered, b"")
+            checked.append(Path(args[-1]).read_bytes())
+            return real_run(args, **kwargs)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            template = self.make_template_repo(root)
+            with (
+                mock.patch("shutil.which", return_value="/bin/chezmoi"),
+                mock.patch("subprocess.run", side_effect=fake_run),
+                mock.patch("sys.stderr", new=io.StringIO()) as stderr,
+            ):
+                failures = cli.check_shell_template(root, template, bash)
+
+        return failures, checked, stderr.getvalue()
+
+    def test_check_shell_template_fails_a_render_with_crlf_line_endings(self):
+        rendered = b"if true; then\r\n  echo hi\r\nfi\r\n"
+
+        failures, checked, _ = self.check_template_with_bash(rendered)
+
+        self.assertCountEqual(
+            failures, [f"dot_zshrc.tmpl for {m}" for m in cli.MACHINE_TYPES]
+        )
+        # bash is given the carriage returns, as it is by the file chezmoi writes.
+        self.assertEqual(checked, [rendered] * len(cli.MACHINE_TYPES))
+
+    def test_check_shell_template_passes_bytes_that_are_not_utf8_to_the_shell(self):
+        rendered = b"# caf\xe9\necho ok\n"
+
+        failures, checked, _ = self.check_template_with_bash(rendered)
+
+        self.assertEqual(failures, [])
+        self.assertEqual(checked, [rendered] * len(cli.MACHINE_TYPES))
+
+    def test_check_shell_template_names_the_template_when_shell_output_is_not_utf8(
+        self,
+    ):
+        # bash echoes the offending line back, byte included.
+        failures, _, stderr = self.check_template_with_bash(b"echo caf\xe9 )\n")
+
+        self.assertCountEqual(
+            failures, [f"dot_zshrc.tmpl for {m}" for m in cli.MACHINE_TYPES]
+        )
+        self.assertIn("shell syntax (dot_zshrc.tmpl for work): failed", stderr)
+        self.assertIn("caf�", stderr)
+
+    def test_command_test_names_the_template_when_render_error_is_not_utf8(self):
+        def fake_run(args, **kwargs):
+            if args[0] == "/bin/chezmoi":
+                return subprocess.CompletedProcess(args, 1, b"", b"bad byte \xe9 here")
+            return subprocess.CompletedProcess(args, 0, "", "")
+
+        outcome = self.run_command_test_for_template(fake_run)
+
+        self.assertEqual(outcome.result, 1)
+        self.assertIn(
+            "template render (dot_zshrc.tmpl for work): failed (exit 1)", outcome.stderr
+        )
+        self.assertIn("bad byte � here", outcome.stderr)
 
     def test_chezmoi_test_data_type_matches_its_file_name(self):
         import tomllib
