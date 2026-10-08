@@ -61,9 +61,9 @@ return {
 								if issue.range then
 									table.insert(diagnostics, {
 										row = issue.range.start.line,
-										col = issue.range.start.column - 1,
+										col = issue.range.start.column,
 										end_row = issue.range["end"].line,
-										end_col = issue.range["end"].column - 1,
+										end_col = issue.range["end"].column,
 										source = "tflint",
 										message = issue.message,
 										code = issue.rule.name,
