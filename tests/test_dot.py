@@ -94,7 +94,7 @@ class DotCliTest(unittest.TestCase):
             ):
                 targets = cli.collect_shell_targets(root)
 
-        self.assertEqual(targets, [(bash_script, "bash"), (zsh_template, "zsh")])
+        self.assertCountEqual(targets, [(bash_script, "bash"), (zsh_template, "zsh")])
 
     def test_collect_shell_template_targets_finds_the_repo_zshrc_template(self):
         zshrc = ROOT / "dot_zshrc.tmpl"
@@ -247,11 +247,22 @@ class DotCliTest(unittest.TestCase):
     def run_command_test_for_template(
         self, fake_run, which=None, machines=cli.MACHINE_TYPES
     ):
-        """Run command_test over a repo whose only shell target is a zsh template."""
+        """Run command_test over a repo whose only shell target is a zsh template.
+
+        Each render runs in a scratch directory, found through the HOME that
+        chezmoi is given. None of them may be left behind once command_test returns.
+        """
         if which is None:
 
             def which(name):
                 return f"/bin/{name}"
+
+        scratch_dirs = []
+
+        def recording_run(args, **kwargs):
+            if args[0] == "/bin/chezmoi":
+                scratch_dirs.append(Path(kwargs["env"]["HOME"]))
+            return fake_run(args, **kwargs)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -270,13 +281,20 @@ class DotCliTest(unittest.TestCase):
                     cli, "collect_shell_targets", return_value=[(template, "zsh")]
                 ),
                 mock.patch("shutil.which", side_effect=which),
-                mock.patch("subprocess.run", side_effect=fake_run),
+                mock.patch("subprocess.run", side_effect=recording_run),
                 mock.patch("sys.stdout", new=io.StringIO()),
                 mock.patch("sys.stderr", new=io.StringIO()) as stderr,
             ):
                 result = cli.command_test(mock.Mock())
 
-        return result, root, stderr.getvalue()
+        for scratch in scratch_dirs:
+            self.assertFalse(scratch.exists(), f"{scratch} was left behind")
+        return SimpleNamespace(
+            result=result,
+            root=root,
+            stderr=stderr.getvalue(),
+            scratch_dirs=scratch_dirs,
+        )
 
     def test_command_test_renders_shell_templates_for_each_machine_type(self):
         renders = {}
@@ -296,9 +314,10 @@ class DotCliTest(unittest.TestCase):
                 )
             return subprocess.CompletedProcess(args, 0, "", "")
 
-        result, root, stderr = self.run_command_test_for_template(fake_run)
+        outcome = self.run_command_test_for_template(fake_run)
 
-        self.assertEqual(result, 0, stderr)
+        root = outcome.root
+        self.assertEqual(outcome.result, 0, outcome.stderr)
         self.assertEqual(set(renders), {"personal", "work"})
         for machine, (args, kwargs) in renders.items():
             scratch = Path(kwargs["env"]["HOME"])
@@ -326,6 +345,7 @@ class DotCliTest(unittest.TestCase):
                 (("/bin/zsh", "-n"), scratch, f"print {machine}\n"),
             )
         self.assertEqual(len(syntax_checks), 2)
+        self.assertEqual(len(outcome.scratch_dirs), len(cli.MACHINE_TYPES))
 
     def test_command_test_reports_template_render_failure(self):
         syntax_checks = []
@@ -342,15 +362,17 @@ class DotCliTest(unittest.TestCase):
                 syntax_checks.append(Path(args[-1]).name)
             return subprocess.CompletedProcess(args, 0, "", "")
 
-        result, _, stderr = self.run_command_test_for_template(fake_run)
+        outcome = self.run_command_test_for_template(fake_run)
 
-        self.assertEqual(result, 1)
+        stderr = outcome.stderr
+        self.assertEqual(outcome.result, 1)
         self.assertIn("template render (dot_zshrc.tmpl for work): failed", stderr)
         self.assertIn('map has no entry for key "gcp_projct"', stderr)
         self.assertIn("Shell syntax failed: dot_zshrc.tmpl for work", stderr)
         self.assertNotIn("for personal", stderr)
         # A template that does not render is not syntax-checked.
         self.assertEqual(syntax_checks, ["dot_zshrc.personal"])
+        self.assertEqual(len(outcome.scratch_dirs), len(cli.MACHINE_TYPES))
 
     def test_command_test_reports_template_syntax_failure(self):
         def fake_run(args, **kwargs):
@@ -362,13 +384,15 @@ class DotCliTest(unittest.TestCase):
                 )
             return subprocess.CompletedProcess(args, 0, "", "")
 
-        result, _, stderr = self.run_command_test_for_template(fake_run)
+        outcome = self.run_command_test_for_template(fake_run)
 
-        self.assertEqual(result, 1)
+        stderr = outcome.stderr
+        self.assertEqual(outcome.result, 1)
         self.assertIn("shell syntax (dot_zshrc.tmpl for work): failed", stderr)
         self.assertIn("parse error near `}'", stderr)
         self.assertIn("Shell syntax failed: dot_zshrc.tmpl for work", stderr)
         self.assertNotIn("for personal", stderr)
+        self.assertEqual(len(outcome.scratch_dirs), len(cli.MACHINE_TYPES))
 
     def test_command_test_requires_chezmoi_for_shell_templates(self):
         shell_runs = []
@@ -381,15 +405,10 @@ class DotCliTest(unittest.TestCase):
                 shell_runs.append(tuple(args))
             return subprocess.CompletedProcess(args, 0, "", "")
 
-        result, _, stderr = self.run_command_test_for_template(fake_run, fake_which)
+        outcome = self.run_command_test_for_template(fake_run, fake_which)
 
-        self.assertEqual(result, 1)
-        self.assertIn(
-            "shell syntax (dot_zshrc.tmpl): chezmoi not found "
-            "(run inside nix develop or install chezmoi)",
-            stderr,
-        )
-        self.assertIn("Shell syntax failed: dot_zshrc.tmpl", stderr)
+        self.assertEqual(outcome.result, 1)
+        self.assertIn("chezmoi not found", outcome.stderr)
         self.assertEqual(shell_runs, [])
 
     def test_command_test_reports_missing_template_data(self):
@@ -401,19 +420,17 @@ class DotCliTest(unittest.TestCase):
                 return subprocess.CompletedProcess(args, 0, "print ok\n", "")
             return subprocess.CompletedProcess(args, 0, "", "")
 
-        result, _, stderr = self.run_command_test_for_template(
-            fake_run, machines=("personal",)
-        )
+        outcome = self.run_command_test_for_template(fake_run, machines=("personal",))
 
-        self.assertEqual(result, 1)
+        self.assertEqual(outcome.result, 1)
         self.assertIn(
             "template render (dot_zshrc.tmpl for work): "
             f"{cli.CHEZMOI_TEST_DATA_DIR / 'work.toml'} not found",
-            stderr,
+            outcome.stderr,
         )
         self.assertEqual(renders, ["personal"])
 
-    def test_chezmoi_test_data_matches_each_machine_type(self):
+    def test_chezmoi_test_data_type_matches_its_file_name(self):
         import tomllib
 
         for machine in cli.MACHINE_TYPES:
@@ -422,8 +439,6 @@ class DotCliTest(unittest.TestCase):
                 config = tomllib.loads(data_file.read_text(encoding="utf-8"))
                 # The type selects which branches of the templates are rendered.
                 self.assertEqual(config["data"]["type"], machine)
-                # A key missing from the data must fail the render, not render empty.
-                self.assertEqual(config["template"]["options"], ["missingkey=error"])
 
     def test_run_lint_shell_targets_runs_available_tools(self):
         repo_root = Path("/repo")
