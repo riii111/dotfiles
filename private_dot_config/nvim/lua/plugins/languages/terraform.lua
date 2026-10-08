@@ -11,9 +11,11 @@ return {
 	},
 
 	{
-		"neovim/nvim-lspconfig",
+		"terraform-lsp-setup",
+		virtual = true,
 		ft = { "terraform", "hcl", "terraform-vars" },
-		dependencies = { "nvimtools/none-ls.nvim" },
+		cond = not vim.g.vscode,
+		dependencies = { "neovim/nvim-lspconfig", "nvimtools/none-ls.nvim" },
 		config = function()
 			-- Configure terraform-ls
 			vim.lsp.config("terraform_ls", {
