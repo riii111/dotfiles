@@ -1,7 +1,10 @@
 return {
 	{
-		"neovim/nvim-lspconfig",
+		"python-lsp-setup",
+		virtual = true,
 		ft = "python",
+		cond = not vim.g.vscode,
+		dependencies = { "neovim/nvim-lspconfig", "nvimtools/none-ls.nvim" },
 		config = function()
 			local function find_basedpyright_cmd()
 				local mason_bin = vim.fn.stdpath("data") .. "/mason/bin/"
