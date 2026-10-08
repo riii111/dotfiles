@@ -8,9 +8,42 @@ return {
 			"mason-org/mason.nvim",
 		},
 		priority = 50,
+	},
+
+	-- Not part of the nvim-lspconfig spec above: lazy.nvim runs only the last `config` among a plugin's specs
+	{
+		"go-env-setup",
+		virtual = true,
+		lazy = false,
+		cond = not vim.g.vscode,
+		dependencies = { "neovim/nvim-lspconfig" },
 		config = function()
-			vim.env.GOROOT = vim.env.GOROOT or vim.fn.system("go env GOROOT"):gsub("\n", "")
-			vim.env.GOPATH = vim.env.GOPATH or vim.fn.system("go env GOPATH"):gsub("\n", "")
+			if vim.fn.executable("go") ~= 1 or (vim.env.GOROOT and vim.env.GOPATH) then
+				return
+			end
+			-- `go env` prints an error text instead of paths when go is broken. GOTOOLCHAIN=local keeps it from
+			-- downloading the toolchain that a go.mod asks for, and a go that hangs must not block the startup.
+			local result
+			local job = vim.system(
+				{ "go", "env", "GOROOT", "GOPATH" },
+				{ text = true, env = { GOTOOLCHAIN = "local" } },
+				function(done)
+					result = done
+				end
+			)
+			vim.wait(3000, function()
+				return result ~= nil
+			end, nil, true)
+			if not result then
+				job:kill(9)
+			elseif result.code == 0 then
+				local lines = vim.split(result.stdout, "\n")
+				for i, name in ipairs({ "GOROOT", "GOPATH" }) do
+					if lines[i] ~= "" and not vim.env[name] then
+						vim.env[name] = lines[i]
+					end
+				end
+			end
 		end,
 	},
 

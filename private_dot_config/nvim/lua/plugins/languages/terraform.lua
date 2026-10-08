@@ -11,9 +11,11 @@ return {
 	},
 
 	{
-		"neovim/nvim-lspconfig",
+		"terraform-lsp-setup",
+		virtual = true,
 		ft = { "terraform", "hcl", "terraform-vars" },
-		dependencies = { "nvimtools/none-ls.nvim" },
+		cond = not vim.g.vscode,
+		dependencies = { "neovim/nvim-lspconfig", "nvimtools/none-ls.nvim" },
 		config = function()
 			-- Configure terraform-ls
 			vim.lsp.config("terraform_ls", {
@@ -34,11 +36,10 @@ return {
 			local terraform_fmt = {
 				method = null_ls.methods.FORMATTING,
 				filetypes = { "terraform", "hcl", "terraform-vars" },
-				generator = null_ls.generator({
+				generator = null_ls.formatter({
 					command = "terraform",
 					args = { "fmt", "-" },
 					to_stdin = true,
-					from_stdout = true,
 				}),
 			}
 
@@ -49,22 +50,34 @@ return {
 				generator = null_ls.generator({
 					command = "tflint",
 					args = { "--format", "json" },
+					-- tflint lints the directory it runs in; null-ls would run it in the root of its project
+					cwd = function(params)
+						return vim.fs.dirname(params.bufname)
+					end,
+					-- `nvim new/main.tf`: null-ls fails to spawn in a directory that does not exist and stops
+					-- using the source, and tflint in the project root would report the files found there
+					runtime_condition = function(params)
+						return vim.uv.fs_stat(vim.fs.dirname(params.bufname)) ~= nil
+					end,
 					to_stdin = false,
 					from_stderr = false,
+					-- tflint exits with 1 for a file with a syntax error; null-ls takes that for an error of
+					-- the generator and stops using the source
+					ignore_stderr = true,
 					format = "json",
-					check_exit_code = function(code)
-						return code <= 1
-					end,
+					check_exit_code = { 0, 2 },
 					on_output = function(params)
 						local diagnostics = {}
+						-- tflint reports the issues of every file in the directory
+						local filename = vim.fs.basename(params.bufname)
 						if params.output and params.output.issues then
 							for _, issue in ipairs(params.output.issues) do
-								if issue.range then
+								if issue.range and issue.range.filename == filename then
 									table.insert(diagnostics, {
 										row = issue.range.start.line,
-										col = issue.range.start.column - 1,
+										col = issue.range.start.column,
 										end_row = issue.range["end"].line,
-										end_col = issue.range["end"].column - 1,
+										end_col = issue.range["end"].column,
 										source = "tflint",
 										message = issue.message,
 										code = issue.rule.name,

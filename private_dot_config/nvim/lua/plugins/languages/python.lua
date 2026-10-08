@@ -1,7 +1,10 @@
 return {
 	{
-		"neovim/nvim-lspconfig",
+		"python-lsp-setup",
+		virtual = true,
 		ft = "python",
+		cond = not vim.g.vscode,
+		dependencies = { "neovim/nvim-lspconfig", "nvimtools/none-ls.nvim" },
 		config = function()
 			local function find_basedpyright_cmd()
 				local mason_bin = vim.fn.stdpath("data") .. "/mason/bin/"
@@ -82,7 +85,11 @@ return {
 					if action == "format" then
 						return vim.list_extend(base_args, { "format", "--stdin-filename", "$FILENAME", "-" })
 					elseif action == "check" then
-						return vim.list_extend(base_args, { "check", "--output-format", "json", "$FILENAME" })
+						-- `fix = true` in the ruff configuration would make ruff print the fixed code after the JSON
+						return vim.list_extend(
+							base_args,
+							{ "check", "--no-fix", "--output-format", "json", "--stdin-filename", "$FILENAME", "-" }
+						)
 					end
 					return base_args
 				end
@@ -93,8 +100,8 @@ return {
 					generator = null_ls.generator({
 						command = get_ruff_command(),
 						args = get_ruff_args("check"),
-						to_stdin = false,
-						from_stderr = true,
+						to_stdin = true,
+						ignore_stderr = true,
 						format = "json",
 						check_exit_code = function(code)
 							return code <= 1
@@ -106,10 +113,10 @@ return {
 									if diag.location then
 										table.insert(diagnostics, {
 											row = diag.location.row,
-											col = diag.location.column - 1,
+											col = diag.location.column,
 											end_row = diag.end_location and diag.end_location.row or diag.location.row,
-											end_col = diag.end_location and diag.end_location.column - 1
-												or diag.location.column,
+											end_col = diag.end_location and diag.end_location.column
+												or diag.location.column + 1,
 											source = "ruff",
 											message = diag.message,
 											code = diag.code,
@@ -126,11 +133,10 @@ return {
 				local ruff_formatting = {
 					method = null_ls.methods.FORMATTING,
 					filetypes = { "python" },
-					generator = null_ls.generator({
+					generator = null_ls.formatter({
 						command = get_ruff_command(),
 						args = get_ruff_args("format"),
 						to_stdin = true,
-						from_stdout = true,
 					}),
 				}
 
