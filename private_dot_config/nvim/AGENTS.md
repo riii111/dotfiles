@@ -84,6 +84,8 @@
 
 lazy.nvim runs only the last `config`/`init` among all specs of the same plugin (just `opts`, `dependencies`, `cmd`, `event`, `ft` and `keys` are merged), so a `config` on the shared `neovim/nvim-lspconfig` spec silently disables the setup of every other language; give each setup its own uniquely named `virtual = true` spec (the check in `tests/nvim/run.lua` fails otherwise).
 
+`config` runs once, for the first buffer of the filetype, so the buffer-local keymaps are set from a `FileType` autocmd, as in `terraform.lua`.
+
 ```lua
 return {
   {
@@ -105,12 +107,17 @@ return {
       vim.lsp.config("<server>", { root_markers = { ".git", "<project files>" } })
       vim.lsp.enable("<server>")
       local ok, actions = pcall(require, "utils.lsp-actions"); if ok then
-        local opts = { buffer = true, silent = true }
-        vim.keymap.set("n", "<M-CR>", actions.language_specific_code_action, opts)
-        if actions.<lang>_refactor_menu then
-          vim.keymap.set("n", "<D-S-r>", actions.<lang>_refactor_menu, opts)
-          vim.keymap.set("n", "<M-S-r>", actions.<lang>_refactor_menu, opts)
-        end
+        vim.api.nvim_create_autocmd("FileType", {
+          pattern = { "<lang>" },
+          callback = function()
+            local opts = { buffer = true, silent = true }
+            vim.keymap.set("n", "<M-CR>", actions.language_specific_code_action, opts)
+            if actions.<lang>_refactor_menu then
+              vim.keymap.set("n", "<D-S-r>", actions.<lang>_refactor_menu, opts)
+              vim.keymap.set("n", "<M-S-r>", actions.<lang>_refactor_menu, opts)
+            end
+          end,
+        })
       end
     end,
   },
