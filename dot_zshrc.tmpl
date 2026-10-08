@@ -76,22 +76,6 @@ export GOTOOLCHAIN=auto
 # rust
 export PATH="$HOME/.cargo/bin:$PATH"
 
-# Rust Development
-function rust-test-unit() {
-  local dir="${1:-$PWD}"
-  (cd -- "$dir" && cargo nextest run --workspace --lib -j"$(sysctl -n hw.ncpu)" --features test_utils)
-}
-
-function rust-test-integration() {
-  local dir="${1:-$PWD}"
-  (cd -- "$dir" && cargo nextest run --workspace --test -j"$(sysctl -n hw.ncpu)" --features test_utils)
-}
-
-function rust-test-all() {
-  local dir="${1:-$PWD}"
-  (cd -- "$dir" && cargo nextest run --workspace -j"$(sysctl -n hw.ncpu)" --features test_utils)
-}
-
 # bun
 export BUN_INSTALL="$HOME/.bun"
 export PATH="$BUN_INSTALL/bin:$PATH"
