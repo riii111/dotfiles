@@ -129,11 +129,10 @@ return {
 				local ruff_formatting = {
 					method = null_ls.methods.FORMATTING,
 					filetypes = { "python" },
-					generator = null_ls.generator({
+					generator = null_ls.formatter({
 						command = get_ruff_command(),
 						args = get_ruff_args("format"),
 						to_stdin = true,
-						from_stdout = true,
 					}),
 				}
 
