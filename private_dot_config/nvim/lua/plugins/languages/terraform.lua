@@ -54,6 +54,11 @@ return {
 					cwd = function(params)
 						return vim.fs.dirname(params.bufname)
 					end,
+					-- `nvim new/main.tf`: null-ls fails to spawn in a directory that does not exist and stops
+					-- using the source, and tflint in the project root would report the files found there
+					runtime_condition = function(params)
+						return vim.uv.fs_stat(vim.fs.dirname(params.bufname)) ~= nil
+					end,
 					to_stdin = false,
 					from_stderr = false,
 					-- tflint exits with 1 for a file with a syntax error; null-ls takes that for an error of
