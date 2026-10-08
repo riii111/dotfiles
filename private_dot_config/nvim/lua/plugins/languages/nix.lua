@@ -11,9 +11,10 @@ return {
 	},
 
 	{
-		name = "nix-lsp-setup",
-		dir = vim.fn.stdpath("config") .. "/lua/plugins/languages",
+		"nix-lsp-setup",
+		virtual = true,
 		lazy = false,
+		cond = not vim.g.vscode,
 		dependencies = {
 			"neovim/nvim-lspconfig",
 			"nvimtools/none-ls.nvim",

@@ -11,8 +11,8 @@ return {
 	},
 
 	{
-		name = "zig-lsp-setup",
-		dir = vim.fn.stdpath("config") .. "/lua/plugins/languages",
+		"zig-lsp-setup",
+		virtual = true,
 		lazy = false,
 		dependencies = {
 			"neovim/nvim-lspconfig",
