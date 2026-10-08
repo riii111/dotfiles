@@ -66,34 +66,106 @@ local function unshadowed()
 	)
 end
 
-local function has_source(null_ls, filetype, method)
-	for _, source in ipairs(null_ls.get_sources()) do
-		if source.filetypes[filetype] and source.methods[null_ls.methods[method]] then
-			return true
-		end
-	end
-	return false
+-- Stub tools at the front of PATH let the revived none-ls sources run the way format-on-save and
+-- diagnostics do. A source that is registered but broken (no on_output, wrong stream or exit status,
+-- shifted columns) then has no effect or a wrong one.
+local function tool(path, ...)
+	vim.fn.writefile({ "#!/bin/sh", ... }, path)
+	vim.uv.fs_chmod(path, tonumber("755", 8))
+end
+
+local function open(path, lines)
+	vim.fn.writefile(lines, path)
+	-- a new tab keeps pending callbacks of the Oil window from touching this buffer
+	vim.cmd.tabedit(vim.fn.fnameescape(path))
+	local attached = vim.wait(10000, function()
+		return #vim.lsp.get_clients({ bufnr = 0, name = "null-ls" }) > 0
+	end, 50)
+	assert(attached, "null-ls did not attach to " .. path)
+end
+
+local function reports(source, col, end_col)
+	local found
+	vim.wait(10000, function()
+		found = vim.iter(vim.diagnostic.get(0)):find(function(diagnostic)
+			return diagnostic.source == source
+		end)
+		return found ~= nil
+	end, 50)
+	assert(found, source .. " reported no diagnostic")
+	assert(
+		found.col == col and found.end_col == end_col,
+		source .. " marked columns " .. found.col .. "-" .. found.end_col
+	)
+end
+
+local function last_line(path)
+	local lines = vim.fn.readfile(path)
+	return lines[#lines]
+end
+
+local function formats_on_write(path, marker)
+	vim.cmd.write()
+	local formatted = vim.wait(10000, function()
+		return last_line(path) == marker
+	end, 50)
+	assert(formatted, "format-on-save did not change " .. path)
 end
 
 -- Language setups live in their own specs; each one must have run once its trigger fired.
 local function languages()
 	assert(vim.env.GOROOT and vim.env.GOPATH, "go-env-setup did not run")
 	assert(vim.lsp.is_enabled("nixd"), "nix-lsp-setup did not run")
+	assert(
+		vim.iter(require("null-ls").get_sources()):any(function(source)
+			return source.name == "nixfmt"
+		end),
+		"nixfmt is not registered"
+	)
 
-	local null_ls = require("null-ls")
-	assert(has_source(null_ls, "nix", "FORMATTING"), "nixfmt is not registered")
+	local dir = vim.fn.tempname()
+	vim.fn.mkdir(dir .. "/bin", "p")
+	vim.fn.mkdir(dir .. "/py", "p")
+	-- ruff and tflint report one finding as JSON and exit with 1 and 2 like the real tools do when they
+	-- found something; the formatters append a line to what they read.
+	local ruff_report = vim.json.encode({
+		{
+			code = "F401",
+			message = "unused",
+			location = { row = 1, column = 8 },
+			end_location = { row = 1, column = 10 },
+		},
+	})
+	local tflint_report = vim.json.encode({
+		issues = {
+			{
+				rule = { name = "unused", severity = "warning" },
+				message = "unused",
+				range = { filename = "main.tf", start = { line = 1, column = 10 }, ["end"] = { line = 1, column = 13 } },
+			},
+		},
+		errors = {},
+	})
+	tool(
+		dir .. "/bin/ruff",
+		[[[ "$1" = check ] || { cat; echo "# ruff"; exit 0; }]],
+		"echo '" .. ruff_report .. "'; exit 1"
+	)
+	tool(dir .. "/bin/terraform", [[cat; echo "# terraform"]])
+	tool(dir .. "/bin/tflint", "echo '" .. tflint_report .. "'; exit 2")
+	vim.env.PATH = dir .. "/bin:" .. vim.env.PATH
+	-- requirements.txt keeps get_ruff_command from looking for a uv project above the temporary directory
+	vim.fn.writefile({}, dir .. "/py/requirements.txt")
 
-	vim.cmd.enew()
-	vim.bo.filetype = "python"
+	open(dir .. "/py/sample.py", { "import os", "x=1" })
 	assert(vim.lsp.is_enabled("basedpyright"), "python-lsp-setup did not run")
-	assert(has_source(null_ls, "python", "FORMATTING"), "ruff formatting is not registered")
-	assert(has_source(null_ls, "python", "DIAGNOSTICS"), "ruff diagnostics are not registered")
+	reports("ruff", 7, 9)
+	formats_on_write(dir .. "/py/sample.py", "# ruff")
 
-	vim.cmd.enew()
-	vim.bo.filetype = "terraform"
+	open(dir .. "/main.tf", { 'variable "x" {}' })
 	assert(vim.lsp.is_enabled("terraform_ls"), "terraform-lsp-setup did not run")
-	assert(has_source(null_ls, "terraform", "FORMATTING"), "terraform fmt is not registered")
-	assert(has_source(null_ls, "terraform", "DIAGNOSTICS"), "tflint is not registered")
+	reports("tflint", 9, 12)
+	formats_on_write(dir .. "/main.tf", "# terraform")
 	for _, lhs in ipairs({ "<M-CR>", "<D-S-r>", "<M-S-r>" }) do
 		assert(vim.fn.maparg(lhs, "n", false, true).buffer == 1, "terraform keymap " .. lhs .. " is not set")
 	end
