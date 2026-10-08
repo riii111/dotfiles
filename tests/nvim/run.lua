@@ -227,6 +227,39 @@ cat; echo "# terraform"; sleep 0.5
 	vim.fn.mkdir(dir .. "/new", "p")
 	formats_on_write(dir .. "/new/main.tf", "# terraform")
 	reports("tflint", 0, 9, 12)
+
+	-- go-env-setup asks go once for both variables, without toolchain downloads, and exports nothing when go
+	-- fails or hangs; a variable that is set stays
+	local goroot, gopath = vim.env.GOROOT, vim.env.GOPATH
+	local function go_env(script, preset)
+		tool(dir .. "/bin/go", "log=" .. stub_log .. "\n" .. script)
+		vim.env.GOROOT, vim.env.GOPATH = preset, nil
+		local started = vim.uv.hrtime()
+		require("lazy.core.config").plugins["go-env-setup"].config()
+		return { vim.env.GOROOT, vim.env.GOPATH }, (vim.uv.hrtime() - started) / 1e6
+	end
+	local go = [[
+[ "$*" = "env GOROOT GOPATH" ] || { echo "go: unexpected arguments: $*" >> $log; exit 3; }
+[ "$GOTOOLCHAIN" = local ] || { echo "go: GOTOOLCHAIN is $GOTOOLCHAIN" >> $log; exit 3; }
+printf '/stub/goroot\n/stub/gopath\n'
+]]
+	local exported = go_env(go)
+	assert(
+		vim.deep_equal(exported, { "/stub/goroot", "/stub/gopath" }),
+		"go-env-setup exported " .. vim.inspect(exported) .. why()
+	)
+	exported = go_env(go, "/preset")
+	assert(vim.deep_equal(exported, { "/preset", "/stub/gopath" }), "go-env-setup exported " .. vim.inspect(exported))
+	exported = go_env('echo "go: cannot find GOROOT directory"; exit 2')
+	assert(vim.tbl_isempty(exported), "go-env-setup exported " .. vim.inspect(exported))
+	local elapsed
+	exported, elapsed = go_env("sleep 8")
+	assert(
+		vim.tbl_isempty(exported) and elapsed < 6000,
+		("go-env-setup took %d ms for a go that hangs"):format(elapsed)
+	)
+	vim.env.GOROOT, vim.env.GOPATH = goroot, gopath
+	os.remove(dir .. "/bin/go")
 end
 
 local function smoke()
