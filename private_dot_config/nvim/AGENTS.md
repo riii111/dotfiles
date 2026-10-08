@@ -82,6 +82,8 @@
 
 ## Example Skeleton (new `plugins/languages/<lang>.lua`)
 
+lazy.nvim runs only the last `config`/`init` among all specs of the same plugin (just `opts`, `dependencies`, `cmd`, `event`, `ft` and `keys` are merged), so a `config` on the shared `neovim/nvim-lspconfig` spec silently disables the setup of every other language; give each setup its own uniquely named `virtual = true` spec (the check in `tests/nvim/run.lua` fails otherwise).
+
 ```lua
 return {
   {
@@ -95,12 +97,13 @@ return {
     end,
   },
   {
-    "neovim/nvim-lspconfig",
+    "<lang>-lsp-setup",
+    virtual = true,
     ft = { "<lang>" },
+    dependencies = { "neovim/nvim-lspconfig" },
     config = function()
-      local lspconfig = require("lspconfig")
-      local util = lspconfig.util
-      lspconfig.<server>.setup({ root_dir = util.root_pattern(".git", "<project files>") })
+      vim.lsp.config("<server>", { root_markers = { ".git", "<project files>" } })
+      vim.lsp.enable("<server>")
       local ok, actions = pcall(require, "utils.lsp-actions"); if ok then
         local opts = { buffer = true, silent = true }
         vim.keymap.set("n", "<M-CR>", actions.language_specific_code_action, opts)
