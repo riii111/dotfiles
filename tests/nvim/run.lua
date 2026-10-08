@@ -67,37 +67,58 @@ local function unshadowed()
 end
 
 -- Stub tools at the front of PATH let the revived none-ls sources run the way format-on-save and
--- diagnostics do. A source that is registered but broken (no on_output, wrong stream or exit status,
--- shifted columns) then has no effect or a wrong one.
-local function tool(path, ...)
-	vim.fn.writefile({ "#!/bin/sh", ... }, path)
+-- diagnostics do. A source that is registered but broken (no on_output, wrong stream, exit status,
+-- arguments or directory, shifted columns) then has no effect or a wrong one.
+local function tool(path, script)
+	vim.fn.writefile(vim.split("#!/bin/sh\n" .. script, "\n"), path)
 	vim.uv.fs_chmod(path, tonumber("755", 8))
 end
 
-local function open(path, lines)
-	vim.fn.writefile(lines, path)
+-- the stubs write why they refused to work to this file
+local stub_log
+
+local function why()
+	local lines = vim.fn.filereadable(stub_log) == 1 and vim.fn.uniq(vim.fn.sort(vim.fn.readfile(stub_log))) or {}
+	return #lines > 0 and " (stub log: " .. table.concat(lines, "; ") .. ")" or ""
+end
+
+local function open(path, lines, filetype)
+	if lines then
+		vim.fn.writefile(lines, path)
+	end
 	-- a new tab keeps pending callbacks of the Oil window from touching this buffer
 	vim.cmd.tabedit(vim.fn.fnameescape(path))
+	if filetype then
+		vim.bo.filetype = filetype
+	end
 	local attached = vim.wait(10000, function()
 		return #vim.lsp.get_clients({ bufnr = 0, name = "null-ls" }) > 0
 	end, 50)
 	assert(attached, "null-ls did not attach to " .. path)
 end
 
-local function reports(source, col, end_col)
-	local found
-	vim.wait(10000, function()
-		found = vim.tbl_filter(function(diagnostic)
-			return diagnostic.source == source
-		end, vim.diagnostic.get(0))
-		return #found > 0
-	end, 50)
-	assert(#found > 0, source .. " reported no diagnostic")
-	assert(#found == 1, source .. " reported " .. #found .. " diagnostics")
-	assert(
-		found[1].col == col and found[1].end_col == end_col,
-		source .. " marked columns " .. found[1].col .. "-" .. found[1].end_col
+-- the diagnostics of a source as lnum:col-end_col/severity, separated by commas
+local function marks(source)
+	local found = vim.tbl_filter(function(diagnostic)
+		return diagnostic.source == source
+	end, vim.diagnostic.get(0))
+	return table.concat(
+		vim.tbl_map(function(diagnostic)
+			return ("%d:%d-%d/%d"):format(diagnostic.lnum, diagnostic.col, diagnostic.end_col, diagnostic.severity)
+		end, found),
+		","
 	)
+end
+
+-- waits until `source` has one warning at lnum:col-end_col and nothing else (no arguments: no diagnostic)
+local function reports(source, lnum, col, end_col)
+	local expected = lnum and ("%d:%d-%d/%d"):format(lnum, col, end_col, vim.diagnostic.severity.WARN) or ""
+	local found
+	local matched = vim.wait(10000, function()
+		found = marks(source)
+		return found == expected
+	end, 50)
+	assert(matched, ("%s marks [%s] instead of [%s]%s"):format(source, found, expected, why()))
 end
 
 local function last_line(path)
@@ -110,7 +131,7 @@ local function formats_on_write(path, marker)
 	local formatted = vim.wait(10000, function()
 		return last_line(path) == marker
 	end, 50)
-	assert(formatted, "format-on-save did not change " .. path)
+	assert(formatted, "format-on-save did not change " .. path .. why())
 end
 
 -- Language setups live in their own specs; each one must have run once its trigger fired.
@@ -127,20 +148,15 @@ local function languages()
 	local dir = vim.fn.tempname()
 	vim.fn.mkdir(dir .. "/bin", "p")
 	vim.fn.mkdir(dir .. "/py", "p")
+	stub_log = dir .. "/stub.log"
 	-- ruff and tflint report their findings as JSON and exit with 1 and 2 like the real tools do when they
-	-- found something. ruff check fails without --no-fix; tflint needs a .tf file in its directory, reports
-	-- a finding of another file as well and writes to stderr where a file called noise is; the formatters
-	-- append a line to what they read. When libuv handles the exit of one child it reports all children
-	-- that have exited, and null-ls stops reading a command at that report, so output written while the
-	-- loop was busy is lost: the stubs wait before they exit.
-	local ruff_report = vim.json.encode({
-		{
-			code = "F401",
-			message = "unused",
-			location = { row = 1, column = 8 },
-			end_location = { row = 1, column = 10 },
-		},
-	})
+	-- found something. ruff reads the buffer from stdin and finds the unused import wherever it is in it;
+	-- tflint needs a .tf file in its directory, reports a finding of another file as well and writes to
+	-- stderr where a file called noise is; the formatters append a line to what they read. A stub says why
+	-- in the log and exits with 3 unless it gets exactly the arguments the source should pass. When libuv
+	-- handles the exit of one child it reports all children that have exited, and null-ls stops reading a
+	-- command at that report, so output written while the loop was busy is lost: the stubs wait before
+	-- they exit.
 	local tflint_issue = {
 		rule = { name = "unused", severity = "warning" },
 		message = "unused",
@@ -148,31 +164,51 @@ local function languages()
 	}
 	local other_issue = vim.tbl_deep_extend("force", tflint_issue, { range = { filename = "other.tf" } })
 	local tflint_report = vim.json.encode({ issues = { tflint_issue, other_issue }, errors = {} })
-	tool(
-		dir .. "/bin/ruff",
-		[[[ "$1" = check ] || { cat; echo "# ruff"; sleep 0.5; exit 0; }]],
-		[[case "$*" in *--no-fix*) ;; *) exit 3 ;; esac]],
-		"echo '" .. ruff_report .. "'; sleep 0.5; exit 1"
-	)
-	tool(dir .. "/bin/terraform", [[cat; echo "# terraform"; sleep 0.5]])
-	tool(
-		dir .. "/bin/tflint",
-		"[ -f main.tf ] || exit 3",
-		"[ -f noise ] && echo warning >&2",
-		"echo '" .. tflint_report .. "'; sleep 0.5; exit 2"
-	)
+	tool(dir .. "/bin/ruff", "log=" .. stub_log .. [[
+
+case "$*" in
+"format --stdin-filename "*" -") cat; echo "# ruff"; sleep 0.5; exit 0 ;;
+"check --no-fix --output-format json --stdin-filename "*" -") ;;
+*) echo "ruff: unexpected arguments: $*" >> $log; exit 3 ;;
+esac
+row=$(awk '/import os/ { print NR; exit }')
+[ -n "$row" ] || { echo '[]'; sleep 0.5; exit 0; }
+printf '[{"code":"F401","message":"unused","location":{"row":%s,"column":8},
+"end_location":{"row":%s,"column":10}}]\n' "$row" "$row"
+sleep 0.5; exit 1
+]])
+	tool(dir .. "/bin/terraform", "log=" .. stub_log .. [[
+
+[ "$*" = "fmt -" ] || { echo "terraform: unexpected arguments: $*" >> $log; exit 3; }
+cat; echo "# terraform"; sleep 0.5
+]])
+	tool(dir .. "/bin/tflint", "log=" .. stub_log .. [[
+
+[ "$*" = "--format json" ] || { echo "tflint: unexpected arguments: $*" >> $log; exit 3; }
+[ -f main.tf ] || { echo "tflint: no main.tf in $PWD" >> $log; exit 3; }
+[ -f noise ] && echo warning >&2
+]] .. "echo '" .. tflint_report .. "'; sleep 0.5; exit 2")
 	vim.env.PATH = dir .. "/bin:" .. vim.env.PATH
 	-- requirements.txt keeps get_ruff_command from looking for a uv project above the temporary directory
 	vim.fn.writefile({}, dir .. "/py/requirements.txt")
 
 	open(dir .. "/py/sample.py", { "import os", "x=1" })
 	assert(vim.lsp.is_enabled("basedpyright"), "python-lsp-setup did not run")
-	reports("ruff", 7, 9)
+	reports("ruff", 0, 7, 9)
+	-- ruff gets the buffer: an edit that is not saved moves the finding, and one that fixes it clears it
+	vim.api.nvim_buf_set_lines(0, 0, 0, false, { "# comment" })
+	reports("ruff", 1, 7, 9)
+	vim.api.nvim_buf_set_lines(0, 0, -1, false, { "x=1" })
+	reports("ruff")
 	formats_on_write(dir .. "/py/sample.py", "# ruff")
+	-- a file that is not on disk yet
+	open(dir .. "/py/new.py")
+	vim.api.nvim_buf_set_lines(0, 0, -1, false, { "import os" })
+	reports("ruff", 0, 7, 9)
 
 	open(dir .. "/main.tf", { 'variable "x" {}' })
 	assert(vim.lsp.is_enabled("terraform_ls"), "terraform-lsp-setup did not run")
-	reports("tflint", 9, 12)
+	reports("tflint", 0, 9, 12)
 	formats_on_write(dir .. "/main.tf", "# terraform")
 	for _, lhs in ipairs({ "<M-CR>", "<D-S-r>", "<M-S-r>" }) do
 		assert(vim.fn.maparg(lhs, "n", false, true).buffer == 1, "terraform keymap " .. lhs .. " is not set")
@@ -181,7 +217,16 @@ local function languages()
 	vim.fn.mkdir(dir .. "/noisy", "p")
 	vim.fn.writefile({}, dir .. "/noisy/noise")
 	open(dir .. "/noisy/main.tf", { 'variable "x" {}' })
-	reports("tflint", 9, 12)
+	reports("tflint", 0, 9, 12)
+
+	-- `nvim new/main.tf` before the directory exists must not make null-ls give up the source
+	open(dir .. "/new/main.tf", nil, "terraform")
+	vim.wait(1000, function()
+		return false
+	end, 50)
+	vim.fn.mkdir(dir .. "/new", "p")
+	formats_on_write(dir .. "/new/main.tf", "# terraform")
+	reports("tflint", 0, 9, 12)
 end
 
 local function smoke()
