@@ -8,6 +8,15 @@ return {
 			"mason-org/mason.nvim",
 		},
 		priority = 50,
+	},
+
+	-- Not part of the nvim-lspconfig spec above: lazy.nvim runs only the last `config` among a plugin's specs
+	{
+		"go-env-setup",
+		virtual = true,
+		lazy = false,
+		cond = not vim.g.vscode,
+		dependencies = { "neovim/nvim-lspconfig" },
 		config = function()
 			vim.env.GOROOT = vim.env.GOROOT or vim.fn.system("go env GOROOT"):gsub("\n", "")
 			vim.env.GOPATH = vim.env.GOPATH or vim.fn.system("go env GOPATH"):gsub("\n", "")
