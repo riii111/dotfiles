@@ -109,10 +109,10 @@ return {
 									if diag.location then
 										table.insert(diagnostics, {
 											row = diag.location.row,
-											col = diag.location.column - 1,
+											col = diag.location.column,
 											end_row = diag.end_location and diag.end_location.row or diag.location.row,
-											end_col = diag.end_location and diag.end_location.column - 1
-												or diag.location.column,
+											end_col = diag.end_location and diag.end_location.column
+												or diag.location.column + 1,
 											source = "ruff",
 											message = diag.message,
 											code = diag.code,
