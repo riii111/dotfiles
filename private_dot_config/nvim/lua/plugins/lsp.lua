@@ -18,8 +18,15 @@ return {
 		cond = not vim.g.vscode,
 		dependencies = { "neovim/nvim-lspconfig" },
 		config = function()
-			vim.env.GOROOT = vim.env.GOROOT or vim.fn.system("go env GOROOT"):gsub("\n", "")
-			vim.env.GOPATH = vim.env.GOPATH or vim.fn.system("go env GOPATH"):gsub("\n", "")
+			-- `go env` prints an error text instead of a path when go is missing or broken
+			for _, name in ipairs({ "GOROOT", "GOPATH" }) do
+				if not vim.env[name] and vim.fn.executable("go") == 1 then
+					local result = vim.system({ "go", "env", name }, { text = true }):wait()
+					if result.code == 0 then
+						vim.env[name] = vim.trim(result.stdout)
+					end
+				end
+			end
 		end,
 	},
 
