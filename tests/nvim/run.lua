@@ -87,15 +87,16 @@ end
 local function reports(source, col, end_col)
 	local found
 	vim.wait(10000, function()
-		found = vim.iter(vim.diagnostic.get(0)):find(function(diagnostic)
+		found = vim.tbl_filter(function(diagnostic)
 			return diagnostic.source == source
-		end)
-		return found ~= nil
+		end, vim.diagnostic.get(0))
+		return #found > 0
 	end, 50)
-	assert(found, source .. " reported no diagnostic")
+	assert(#found > 0, source .. " reported no diagnostic")
+	assert(#found == 1, source .. " reported " .. #found .. " diagnostics")
 	assert(
-		found.col == col and found.end_col == end_col,
-		source .. " marked columns " .. found.col .. "-" .. found.end_col
+		found[1].col == col and found[1].end_col == end_col,
+		source .. " marked columns " .. found[1].col .. "-" .. found[1].end_col
 	)
 end
 
@@ -126,10 +127,12 @@ local function languages()
 	local dir = vim.fn.tempname()
 	vim.fn.mkdir(dir .. "/bin", "p")
 	vim.fn.mkdir(dir .. "/py", "p")
-	-- ruff and tflint report one finding as JSON and exit with 1 and 2 like the real tools do when they
-	-- found something; the formatters append a line to what they read. When libuv handles the exit of one
-	-- child it reports all children that have exited, and null-ls stops reading a command at that report,
-	-- so output written while the loop was busy is lost: the stubs wait before they exit.
+	-- ruff and tflint report their findings as JSON and exit with 1 and 2 like the real tools do when they
+	-- found something. ruff check fails without --no-fix; tflint needs a .tf file in its directory, reports
+	-- a finding of another file as well and writes to stderr where a file called noise is; the formatters
+	-- append a line to what they read. When libuv handles the exit of one child it reports all children
+	-- that have exited, and null-ls stops reading a command at that report, so output written while the
+	-- loop was busy is lost: the stubs wait before they exit.
 	local ruff_report = vim.json.encode({
 		{
 			code = "F401",
@@ -138,23 +141,26 @@ local function languages()
 			end_location = { row = 1, column = 10 },
 		},
 	})
-	local tflint_report = vim.json.encode({
-		issues = {
-			{
-				rule = { name = "unused", severity = "warning" },
-				message = "unused",
-				range = { filename = "main.tf", start = { line = 1, column = 10 }, ["end"] = { line = 1, column = 13 } },
-			},
-		},
-		errors = {},
-	})
+	local tflint_issue = {
+		rule = { name = "unused", severity = "warning" },
+		message = "unused",
+		range = { filename = "main.tf", start = { line = 1, column = 10 }, ["end"] = { line = 1, column = 13 } },
+	}
+	local other_issue = vim.tbl_deep_extend("force", tflint_issue, { range = { filename = "other.tf" } })
+	local tflint_report = vim.json.encode({ issues = { tflint_issue, other_issue }, errors = {} })
 	tool(
 		dir .. "/bin/ruff",
 		[[[ "$1" = check ] || { cat; echo "# ruff"; sleep 0.5; exit 0; }]],
+		[[case "$*" in *--no-fix*) ;; *) exit 3 ;; esac]],
 		"echo '" .. ruff_report .. "'; sleep 0.5; exit 1"
 	)
 	tool(dir .. "/bin/terraform", [[cat; echo "# terraform"; sleep 0.5]])
-	tool(dir .. "/bin/tflint", "echo '" .. tflint_report .. "'; sleep 0.5; exit 2")
+	tool(
+		dir .. "/bin/tflint",
+		"[ -f main.tf ] || exit 3",
+		"[ -f noise ] && echo warning >&2",
+		"echo '" .. tflint_report .. "'; sleep 0.5; exit 2"
+	)
 	vim.env.PATH = dir .. "/bin:" .. vim.env.PATH
 	-- requirements.txt keeps get_ruff_command from looking for a uv project above the temporary directory
 	vim.fn.writefile({}, dir .. "/py/requirements.txt")
@@ -171,6 +177,11 @@ local function languages()
 	for _, lhs in ipairs({ "<M-CR>", "<D-S-r>", "<M-S-r>" }) do
 		assert(vim.fn.maparg(lhs, "n", false, true).buffer == 1, "terraform keymap " .. lhs .. " is not set")
 	end
+
+	vim.fn.mkdir(dir .. "/noisy", "p")
+	vim.fn.writefile({}, dir .. "/noisy/noise")
+	open(dir .. "/noisy/main.tf", { 'variable "x" {}' })
+	reports("tflint", 9, 12)
 end
 
 local function smoke()
