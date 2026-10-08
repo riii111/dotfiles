@@ -50,6 +50,10 @@ return {
 				generator = null_ls.generator({
 					command = "tflint",
 					args = { "--format", "json" },
+					-- tflint lints the directory it runs in; null-ls would run it in the root of its project
+					cwd = function(params)
+						return vim.fs.dirname(params.bufname)
+					end,
 					to_stdin = false,
 					from_stderr = false,
 					-- tflint exits with 1 for a file with a syntax error; null-ls takes that for an error of
@@ -59,9 +63,11 @@ return {
 					check_exit_code = { 0, 2 },
 					on_output = function(params)
 						local diagnostics = {}
+						-- tflint reports the issues of every file in the directory
+						local filename = vim.fs.basename(params.bufname)
 						if params.output and params.output.issues then
 							for _, issue in ipairs(params.output.issues) do
-								if issue.range then
+								if issue.range and issue.range.filename == filename then
 									table.insert(diagnostics, {
 										row = issue.range.start.line,
 										col = issue.range.start.column,
