@@ -26,8 +26,8 @@ Claude workerのreviewerはCodexモデルに限られる。Claudeモデルを指
 
 ## LGTM後の資料
 
-LGTMの最終回答には[レビュー資料](references/packet.md)が含まれる。資料が無い・書式と違う場合は自分で補わず、その旨を完了報告に書く。
-最終回答にlessons候補があれば、参照文書に含まれる`lessons.md`（ディスパッチ運用では`~/agent-desk/lessons.md`）の「候補」欄へ追記する。参照文書に無ければ完了報告にそのまま載せる。
+LGTMの最終回答には[レビュー資料](references/packet.md)が含まれる。資料が無い・書式と違う場合は自分で補わず、PR本文にも貼らずに、その旨を完了報告に書く。
+最終回答にlessons候補があれば、完了報告にそのまま載せる。`lessons.md`の「候補」欄への記録は呼び出し元が行う（ディスパッチ運用では`~/agent-desk/lessons.md`を想定）。
 
 ## 再開と基点更新
 
@@ -40,4 +40,4 @@ worker checkoutでレビューし、branchやcheckoutは変更しないでくだ
 受信メタデータにsource_thread_idがあればworkerのチャットIDと照合し、不一致は判定保留にしてください。
 ローカル固定SHA差分をレビューし、PRとCIはPRのheadが候補SHAと一致する場合だけ根拠にしてください。
 base branchが進んだことだけを理由にLGTMを保留しないでください。
-LGTMを出すときは、判断ログを照合して[レビュー資料](references/packet.md)を作り、最終回答の末尾に含めてください。
+LGTMを出すときは、判断ログを照合して[レビュー資料](references/packet.md)（このSKILL.mdのディレクトリ基準）を作り、最終回答の末尾に含めてください。
