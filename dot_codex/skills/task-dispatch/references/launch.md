@@ -4,8 +4,8 @@
 
 1. `worker_thread`が空である。値があれば起動せず、`needs_decision`にして`next_action`に「既存workerへの続行をAppで指示する」と書く。
 2. Issueに`owner`以外の担当者や、紐づく未mergeのPRがない。あれば`needs_decision`にする。
-3. `harnexus-task state`（`--request`なし）の記録に、同じIssueを指す別のtaskId（`#456`・`456`など手動運用の書き方）がない。あれば`needs_decision`にする。
-4. `codex_app__list_projects`を一度呼び、`config.yaml`の`repos`に書いたパスと一致するprojectを選ぶ。一致がない、または複数あれば`needs_decision`にする。
+3. `harnexus-task state`（`--request`なし）の記録に、同じIssueを指す別のlaunchがない。taskIdが別の書き方（`#456`・`456`など）のものと、documentRefsに同じIssueのURLを含むものを探す。あれば`needs_decision`にする。
+4. `codex_app__list_projects`を一度呼び、`config.yaml`の`repos.<owner/repo>.path`と一致するprojectを選ぶ。一致がない、または複数あれば`needs_decision`にする。
 
 確認を通ったら、次の順に進める。
 

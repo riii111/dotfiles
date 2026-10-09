@@ -43,11 +43,12 @@ attempts:
 - PRがmergeされずにcloseされた：`needs_decision`。
 - `running`で`worker_thread`が空：`harnexus-task state --request requests/<file>.json`を見る。`workerThreadId`があれば書いて`launched`を追記する。`pending`があれば`needs_decision`にし、Appで確認する内容を`next_action`に書く。どちらもなければ`ready`に戻す。
 - `running`で`pr`が空：Issueに紐づくPR（Developmentのリンク、本文で閉じるIssueに指定したPR）を探し、`pr`・`branch`に書く。
-- `running`でDraft PRがある：headのCIが成功していれば`review_ready`にする。CIのcheckが1つもなければ成功とみなし、朝刊のリスク欄に「CIなし」と添える。`review_ready`にしたら、`worker_thread`の最新1turnを出力なしで`read_thread`し、完了報告の`lessons候補`を取る。
-- `running`でそれ以外：`worker_thread`の最新1turnを出力なしで`read_thread`する。turnが進行中なら何もしない。最終回答で止まっていれば、人の判断を求めている場合は`needs_decision`、それ以外（CIの失敗、手順の途中）は朝刊の「続行が必要」に載せる。idleだけで停止と判断しない。
-- `running`で、最後の`launched`から`limits.task_hours`を過ぎた：`needs_decision`にし、止まった位置を`next_action`に書く。
+- `running`でDraft PRがある：headのCIが成功していれば`review_ready`にする。`config.yaml`の`repos`で`ci: false`としたリポジトリだけはcheckなしで進め、朝刊のリスク欄に「CIなし」と添える。それ以外でcheckが1つもなければ、まだ登録されていないものとして次回まで待つ。
+- `review_ready`で`attempts`に`lessons_read`がない：`worker_thread`の最新1turnを出力なしで`read_thread`する。turnが終わっていれば完了報告の`lessons候補`を取り、`lessons_read`を追記する。進行中なら次回に持ち越す。
+- `running`でそれ以外：`worker_thread`の最新1turnを出力なしで`read_thread`する。turnが進行中なら何もしない。最終回答で止まっていれば、人の判断を求めている場合は`needs_decision`、それ以外（CIの失敗、手順の途中）は朝刊の「続行が必要」に載せ、初回だけ`continue_listed`を追記する。idleだけで停止と判断しない。
+- `running`で、最後の`launched`から`limits.task_hours`を過ぎた：`needs_decision`にし、止まった位置を`next_action`に書く。朝刊の「続行が必要」に一度でも載せた項目は人がAppで扱っているため、時間枠を適用しない。
 - `review_ready`でPRがReadyになった：人に渡ったものとして`review_ready`のまま残し、未レビューのDraft PRには数えない。
-- `review_ready`で、`owner`のレビュー（状態は問わない）またはレビューコメントがあり、そのIDが`attempts`の`review_round`にない：IDを`review_round`で記録し、朝刊の「続行が必要」に載せる。`review_round`が`limits.max_review_rounds`を超えたら`needs_decision`にする。
+- `review_ready`で、`owner`のpull request review（`COMMENTED`または`CHANGES_REQUESTED`）があり、そのレビューのIDが`attempts`の`review_round`にない：IDを`review_round`で記録し、朝刊の「続行が必要」に載せる。レビューに属するコメントは別に数えない。`review_round`が`limits.max_review_rounds`を超えたら`needs_decision`にする。
 
 ## attempts
 
@@ -55,7 +56,9 @@ task-dispatchが行った操作と結果を古い順に追記する。`result`�
 
 - `launch_requested`：起動の直前。
 - `launched`：起動を確認した。`note`にthreadIdを書く。
-- `review_round`：`owner`のレビューを検出した。`note`にレビューまたはコメントのIDを書く。
+- `review_round`：`owner`のレビューを検出した。`note`にレビューのIDを書く。
+- `continue_listed`：朝刊の「続行が必要」に載せた。
+- `lessons_read`：workerの完了報告から`lessons候補`を読んだ。
 - `investigated`：読み取り専用の調査をした。`note`は確かめた点とその真偽、出典のファイル・行だけを書き、コードやコメントを引用しない。
 - `needs_decision`：人の判断待ちにした。
 - `failed`：起動や照合が失敗した。`note`に理由を書く。

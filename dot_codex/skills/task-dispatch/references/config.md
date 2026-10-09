@@ -4,8 +4,10 @@
 
 ```yaml
 owner: your-github-login       # 承認・レビューとして扱うGitHubアカウント
-repos:                         # GitHubのリポジトリと、Codex projectのローカルパスの対応
-  org/repo: /Users/you/src/org/repo
+repos:                         # 起動してよいリポジトリ
+  org/repo:
+    path: /Users/you/src/org/repo  # Codex projectのローカルパス
+    ci: true                   # CIのないリポジトリだけfalse
 project:                       # 優先度・期限を読むGitHub Project。なければ省略
   owner: org
   number: 1
