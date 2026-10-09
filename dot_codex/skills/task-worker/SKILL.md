@@ -33,7 +33,7 @@ description: |
 最終検証やCIで候補を修正した場合も、新headを独立レビューする。全検証は修正のたびに繰り返さず、LGTM後の最終headでリポジトリ所定の必須検証を完了する。
 
 そのheadを通常のpushで公開し、create-pr SKILL、なければPR templateと直近の慣例に従ってDraft PRを作成・更新する。
-PR本文の末尾に`## レビュー資料`を置き、そのheadでLGTMを出した最終回答の[レビュー資料](../task-review-cycle/references/packet.md)のYAMLを`yaml`のコードブロックで貼る。貼る直前に`verification`をPR headのcheck結果としてGitHubから取り直し、`ci`と、`not_run`のうちCI jobの分を書き換える。実行中ならCI完了後にもう一度更新する。新しいheadでLGTMを受けたら資料ごと差し替える。
+PR本文の末尾に`## レビュー資料`を置き、そのheadでLGTMを出した最終回答の[レビュー資料](../task-review-cycle/references/packet.md)のYAMLを`yaml`のコードブロックで貼る。貼る直前に`verification`をPR headのcheck結果としてGitHubから取り直し、`ci`（「未取得」の理由も含む）と、`not_run`のうちCI jobの分を書き換える。実行中ならCI完了後にもう一度更新する。新しいheadでLGTMを受けたら資料ごと差し替える。
 完了条件はPR headとreview済みheadの一致、そのheadの必須検証・独立LGTM・CI成功とする。
 完了報告のGit・PR・CI状態は直近の確認結果に基づき、未追跡・失敗などを未確認のまま断言しない。
 Ready化・mergeは別途依頼された場合だけ行い、その直前に現在のbaseとのmerge可否と意味的な競合を確認する。
