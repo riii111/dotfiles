@@ -14,12 +14,26 @@ description: |
 参照資料の相対パスは、そのSKILL.mdのディレクトリを基準に解決する。
 親への通知や完了記録は扱わない。
 
+## 判断ログ
+
+タスク・ADR・規約で決まっていない点を自分で選んだら、worktreeの`.reviewctl/decisions.md`へその場で追記する。`.reviewctl/`が無ければ`*`だけの`.gitignore`を置いて作る。1件の書式は次のとおり。
+
+```markdown
+## <決めた点>
+- 選択: <選んだもの>
+- 他の候補: <検討した他の案>
+- 理由: <選んだ理由>
+```
+
+ログがあれば、レビュー依頼JSONのdocumentRefsの末尾にその絶対パスを加える。
+
 ## 修正と完了
 
 編集中と修正時は影響箇所を検証する。Blockingと採用する任意改善をまとめて修正・commitし、同じreview TaskでLGTMまで続ける。Non-blockingの未対応だけでは再レビューしない。
 最終検証やCIで候補を修正した場合も、新headを独立レビューする。全検証は修正のたびに繰り返さず、LGTM後の最終headでリポジトリ所定の必須検証を完了する。
 
 そのheadを通常のpushで公開し、create-pr SKILL、なければPR templateと直近の慣例に従ってDraft PRを作成・更新する。
+PR本文の末尾に`## レビュー資料`を置き、そのheadでLGTMを出した最終回答の[レビュー資料](../task-review-cycle/references/packet.md)のYAMLを貼る。貼る直前に`verification.ci`をPR headのcheck結果としてGitHubから取り直し、実行中ならCI完了後にもう一度更新する。新しいheadでLGTMを受けたら資料ごと差し替える。
 完了条件はPR headとreview済みheadの一致、そのheadの必須検証・独立LGTM・CI成功とする。
 完了報告のGit・PR・CI状態は直近の確認結果に基づき、未追跡・失敗などを未確認のまま断言しない。
 Ready化・mergeは別途依頼された場合だけ行い、その直前に現在のbaseとのmerge可否と意味的な競合を確認する。

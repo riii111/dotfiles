@@ -24,6 +24,11 @@ Claude workerのreviewerはCodexモデルに限られる。Claudeモデルを指
 
 結果不明・モデル不一致では再実行しても送信されない。ユーザーがAppで確認した結果だけを、承認を得て`harnexus-task resolve --request <JSON> --sent [--thread-id <ID>]`または`--not-sent`で記録する。
 
+## LGTM後の資料
+
+LGTMの最終回答には[レビュー資料](references/packet.md)が含まれる。資料が無い・書式と違う場合は自分で補わず、その旨を完了報告に書く。
+最終回答にlessons候補があれば、参照文書に含まれる`lessons.md`（ディスパッチ運用では`~/agent-desk/lessons.md`）の「候補」欄へ追記する。参照文書に無ければ完了報告にそのまま載せる。
+
 ## 再開と基点更新
 
 `harnexus-task state --request <JSON>`の出力は平らなJSONで、`reviewerThreadId`・`base`・`head`・`prompt`（最後に送ったもの）・`requested`/`actual`（reviewerのモデル）・`pending`・`pendingHead`・`pendingThreadId`を最上位から読む。
@@ -35,3 +40,4 @@ worker checkoutでレビューし、branchやcheckoutは変更しないでくだ
 受信メタデータにsource_thread_idがあればworkerのチャットIDと照合し、不一致は判定保留にしてください。
 ローカル固定SHA差分をレビューし、PRとCIはPRのheadが候補SHAと一致する場合だけ根拠にしてください。
 base branchが進んだことだけを理由にLGTMを保留しないでください。
+LGTMを出すときは、判断ログを照合して[レビュー資料](references/packet.md)を作り、最終回答の末尾に含めてください。
