@@ -7,6 +7,8 @@ description: |
 
 # Task Orchestration
 
+統括役はCodexを既定とし、ユーザーがClaudeでの統括を指示した場合（AppでClaudeを選択した場合を含む）にClaudeを使う。workerは既定Claude、reviewerはCodexとし、統括役の選択から変更しない。
+
 開始時と再開時に、ユーザーが指定したタスク管理元を読む。
 タスク管理元に記載された依存関係を確認する。
 依存が満たされていて、互いに並行して進められるtaskをすべて開始対象にする。
