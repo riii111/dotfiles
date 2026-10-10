@@ -22,8 +22,7 @@ attempts:
 
 ## key
 
-同じ仕事なら必ず同じ値になるものを使う。
-GitHubのIssueは`gh:<owner>/<repo>#<番号>`とする。
+Issueのkeyは`gh:<owner>/<repo>#<番号>`とする。
 ファイル名はkeyの英数字・`.`・`-`以外を`_`に置き換えたもの（例：`gh_org_repo_456.yaml`）。
 重複の判定はファイル名ではなく`key`の値で行う。
 
@@ -57,9 +56,7 @@ GitHubのIssueは`gh:<owner>/<repo>#<番号>`とする。
 
 ### 遷移表
 
-照合で使う。
-上の行から順に当てはめ、最初に当たった行だけを使う。
-`done`の項目は照合しない。
+`done`以外の項目を照合し、表を上から当てはめて最初に当たった行に従う。
 表を当てはめる前に、`pr`が空の`running`は、Issueに紐づくPR（Developmentのリンク、本文で閉じるIssueに指定したPR）を探し、あれば`pr`・`branch`に書く。PRがなければレビュー可能ではない。
 
 | 現在 | 条件 | 移る先 | 記録 |
@@ -80,16 +77,6 @@ GitHubのIssueは`gh:<owner>/<repo>#<番号>`とする。
 `running`のturnは、`worker_thread`の最新1turnを出力なしで`read_thread`して確かめる。idleだけで停止と判断しない。
 `ready`から先の遷移（起動、確認を通らない場合、起動の失敗）は照合ではなく[起動](launch.md)の手順で決め、この表は使わない。
 判定の2行（`discovered`と判定による`needs_decision`）は予定の回だけで使い、ほかの回では状態を変えない。
-
-headが更新されたときの例：
-
-| 段階 | 照合の結果 |
-| --- | --- |
-| headのCIが成功し、そのheadで独立レビューを終えてworkerが完了を報告した | running → review_ready |
-| ownerのレビューを受けてworkerが修正をpush | review_ready → running（headの更新・CI実行中） |
-| 新しいheadのCIが失敗し、workerが止まった | runningのまま。次の起動の回で続行を送る |
-| 新しいheadのCIが成功したが、独立レビューはまだ古いhead | runningのまま（レビュー未了） |
-| 新しいheadで独立レビューを終え、workerが完了を報告した | running → review_ready |
 
 ### 起動結果の確認
 

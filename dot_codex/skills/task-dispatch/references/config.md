@@ -1,7 +1,6 @@
 # config.yaml
 
-人が作成・編集する。
-task-dispatchは読むだけで書き換えない。
+人が作成・編集し、task-dispatchは読み取り専用とする。
 
 ```yaml
 owner: your-github-login       # 承認・レビューとして扱うGitHubアカウント
@@ -35,11 +34,9 @@ calendar:
 - `repos`にないリポジトリのIssueは起動せず、`needs_decision`にする。
 - `sources[].query`は`gh search issues`にそのまま渡す。
   リポジトリ・ラベルに加えて作成者を`owner`に絞り、人が開始を許した範囲だけを書く。
-- 予定と報告の案件の見出しは`sources[].name`で、`umbrella`の最上位の親Issueへリンクする。
-  `umbrella`を省略した発見元はリンクなしの見出しにする。
-- 起動の順は、`project`の優先度・期限と依存関係を先に適用し、同じ順位の中で`kind`の区分を使う。
-- `max_continues`は、最後に`review_ready`へ移した後（なければ起動後）の送信を理由ごとに数える。
-  上限に達した後の停止は、続行を送らず人の判断待ちにする。
+- `sources[].name`と`umbrella`の表示方法は[予定と報告の書き方](digest.md#書き方)に従う。
+- `project`と`kind`による優先順は[今夜の予定を作成する](plan.md#今夜の予定を作成する)に従う。
+- `max_continues`の数え方と上限到達時の扱いは[既存workerへの続行](continue.md)に従う。
 - 新規起動の数の決め方は[新規起動する件数](launch.md#新規起動する件数)に書く。
 - 上限と時刻の値は例。運用しながら人が調整する。
 - `calendar.enabled`がfalseなら、退勤時刻を聞かず、毎日`schedule.plan_at`に予定を作る。休みも読まない。
@@ -54,7 +51,6 @@ calendar:
 | 平日 22:00 | `$task-dispatch 起動` | 続行を送り、OK済みで残った項目を起動する |
 
 予定の回（`$task-dispatch 予定`）は、task-dispatchが[今日の予定作成時刻を決める](schedule.md#今日の予定作成時刻を決める)で登録し、使い終えたら消す。
-どの回もScheduled Taskが毎回新しいスレッドを作り、通知はCodex Appに任せる。
 予定の回は退勤の1時間前で、ユーザーが在席してスレッドに返事をできる時刻とする。
 手動で再実行するときも、同じ指示を使う。
 

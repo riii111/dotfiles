@@ -6,7 +6,7 @@
 ## 候補を台帳に追加する
 
 `config.yaml`の`sources`のクエリを`gh search issues --limit 100`で実行し、台帳にないkeyを`discovered`で追加する。
-keyは[item](item.md#key)の規則で作り、既存項目との重複はファイル名ではなく`key`の値で確かめる。
+keyの作成と重複の確認は[itemの規則](item.md#key)に従う。
 結果が100件に達したら予定に書く。
 読めないitemがある実行では、新しい項目を追加しない。
 `sources`にないリポジトリやクエリは調べない。
@@ -52,5 +52,5 @@ OKは不要で、`planned`も記録しない。
 
 新規起動は[新規起動する件数](launch.md#新規起動する件数)の枠まで載せる。
 枠が0で新規起動を載せなかったときは、予定の`## そのほか`に1文で書く。
-予定を書いたら、`days/<日付>.yaml`に自分のスレッドを書き、[Scheduled Taskの扱い](schedule.md#scheduled-taskの扱い)に従って自分のScheduled Taskを消す。
-最終回答には[予定のスレッド](digest.md#スレッドでのやりとり)の書き方で予定とOKの返し方を書き、ユーザーの返事を待つ。
+予定を書いたら、[スレッドを記録](schedule.md#スレッドの扱い)し、[Scheduled Taskを削除](schedule.md#scheduled-taskの扱い)する。
+[スレッドでのやりとり](digest.md#スレッドでのやりとり)に従って予定とOKの返し方を返し、ユーザーの返事を待つ。
