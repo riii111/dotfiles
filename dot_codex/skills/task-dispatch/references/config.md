@@ -28,7 +28,7 @@ limits:
   run_minutes: 30              # 1回の実行の時間枠
   task_hours: 24               # 最後にrunningへ移してからreview_readyまでの時間枠
 schedule:
-  plan_at: "17:30"             # Calendarがオフの日に予定を作る時刻
+  plan_at: "17:00"             # Calendarがオフの日と、退勤時刻の返事がない日に予定を作る時刻
 calendar:
   enabled: false               # trueで、朝に今日の予定から退勤予定と不在を読む
   leave_title: 退勤             # 退勤予定とみなす予定の名前
