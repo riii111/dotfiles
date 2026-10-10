@@ -67,4 +67,4 @@ Re-run both scripts if a macOS update breaks file associations.
 Task launches and reviews use `harnexus-task` from [harnexus](https://github.com/riii111/harnexus).
 Install it to `~/.local/bin` with `bun run install:task` from a clean, reviewed checkout of harnexus `origin/main`.
 
-Usage: [task-session-launch](dot_codex/skills/task-session-launch/SKILL.md), [task-review-cycle](dot_codex/skills/task-review-cycle/SKILL.md).
+Usage: [task-session-launch](dot_codex/skills/task-session-launch/SKILL.md), [task-review-cycle](dot_codex/skills/task-review-cycle/SKILL.md), [task-dispatch](dot_codex/skills/task-dispatch/SKILL.md).
