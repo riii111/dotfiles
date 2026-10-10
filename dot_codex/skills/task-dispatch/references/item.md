@@ -48,8 +48,11 @@ attempts:
 
 ### 遷移表
 
-上の行から順に当てはめ、最初に当たった行だけを使う。`done`の項目は照合しない。
-表を当てはめる前に、`pr`が空の`running`はIssueに紐づくPR（Developmentのリンク、本文で閉じるIssueに指定したPR）を探し、あれば`pr`・`branch`に書く。PRがなければレビュー可能ではない。
+照合で使う。上の行から順に当てはめ、最初に当たった行だけを使う。`done`の項目は照合しない。
+表を当てはめる前に、次の2つを済ませる。
+
+- 人による変更の検出：itemの`status`が、`attempts`の最後の`status`記録の移った先（それより新しい`launch_requested`があれば`running`）と違えば、人が書き換えたものとして`status`を「<前>→<後>: 人が変更」で記録する。
+- `pr`が空の`running`は、Issueに紐づくPR（Developmentのリンク、本文で閉じるIssueに指定したPR）を探し、あれば`pr`・`branch`に書く。PRがなければレビュー可能ではない。
 
 | 現在 | 条件 | 移る先 | 記録 |
 | --- | --- | --- | --- |
@@ -65,15 +68,12 @@ attempts:
 | review_ready | 新しい`owner`のレビューで`review_round`が`limits.max_review_rounds`を超えた | needs_decision | `review_round`・`status` |
 | review_ready | `review_round`にない`owner`のレビューがある | review_ready | `review_round` |
 | review_ready | 上のどれでもない | review_ready | なし |
-| ready | [起動](launch.md)の確認を通らない | needs_decision | `status` |
-| ready | 起動した | running | `launch_requested`・`launched` |
-| running | 起動の結果が不明・モデル不一致・起動失敗（[起動](launch.md)の手順5） | needs_decision | `status` |
 | discovered・investigating | SKILLの判定 | ready・investigating・needs_decision | `status` |
 | needs_decision | SKILLの判定で再判定の条件を満たした | ready・investigating・needs_decision | `status` |
-| needs_decision | 人が`status`を書き換えた | 人が選んだ先 | なし |
 
 `running`のturnは、`worker_thread`の最新1turnを出力なしで`read_thread`して確かめる。idleだけで停止と判断しない。
-「最後に`running`へ移した」時刻は、最後の`launched`または`→running`の`status`のうち新しいほうとする。
+「最後に`running`へ移した」時刻は、最後の`launched`または`→running`の`status`のうち新しいほうとする。人が`running`へ戻した場合も、検出時の記録から数え直す。
+`ready`から先の遷移（起動、確認を通らない場合、起動の失敗）は照合ではなく[起動](launch.md)の手順で決め、この表は使わない。
 
 headが更新されたときの例：
 
@@ -98,6 +98,11 @@ headが更新されたときの例：
 
 workerが修正をpushしてheadが変われば、そのレビューは対応済みになる。pushを伴わない対応で済んだ場合は、人がそのIDを`handled_reviews`に書く。
 
+## 問いへの回答
+
+`head`が現在のheadと一致するレビュー資料の`human_decisions`について、その資料のheadのcommit以降に`owner`が書いたPRのコメントとレビューを読み、各問いに答えているかを確かめる。答えていれば`decision_answered`を記録し、同じheadの間は朝刊の問いに載せない。答えが変更を求める場合は、workerへの指示が要るため「続行が必要」に載せる。
+答えたかどうか判断できない問いは載せたままにする。`owner`以外の書き込みは回答として扱わない。
+
 ## lessonsの読み取り
 
 `review_ready`で、現在のheadについての`lessons_read`がなければ、`worker_thread`の最新1turnを出力なしで`read_thread`する。turnが終わっていれば完了報告の`lessons候補`を取り、`lessons_read`をhead付きで追記する。進行中なら次回に持ち越す。
@@ -111,6 +116,7 @@ task-dispatchが行った操作と結果を古い順に追記する。`result`�
 - `launched`：起動を確認した。`note`にthreadIdを書く。
 - `review_round`：`owner`のレビューを検出した。`note`にレビューのIDを書く。
 - `continue_listed`：`running`の項目を朝刊の「続行が必要」に初めて載せた。
+- `decision_answered`：レビュー資料の問いに`owner`が答えていた。`note`にheadの先頭7桁と問いの要約を自分の言葉で書く。
 - `lessons_read`：workerの完了報告から`lessons候補`を読んだ。`note`にheadを書く。
 - `investigated`：読み取り専用の調査をした。`note`は確かめた点とその真偽、出典のファイル・行だけを書き、コードやコメントを引用しない。
 - `failed`：起動や照合が失敗した。`note`に理由を書く。

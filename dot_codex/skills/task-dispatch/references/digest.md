@@ -45,10 +45,10 @@
 
 ## 各節
 
-- 前回からの変化：この実行で`attempts`に追記した`status`・`launched`・`review_round`を項目ごとに1行で書く。なければ「なし」と書く。
-- 今答えないと進まない問い：`needs_decision`の`next_action`と、資料の`head`がPRの現在のheadと一致するレビュー資料の`human_decisions`から作る。各行にPRまたはIssueへのリンクと、workerのチャットを示す`worker_thread`を付ける。AppのチャットへのURLの形式が確かめられるまでは、threadIdをそのまま書く。
+- 前回からの変化：この実行で`attempts`に追記した`status`・`launched`・`review_round`・`decision_answered`を項目ごとに1行で書く。なければ「なし」と書く。
+- 今答えないと進まない問い：`needs_decision`の`next_action`と、資料の`head`がPRの現在のheadと一致するレビュー資料の`human_decisions`から作る。[回答済み](item.md#問いへの回答)の問いは載せず、「前回からの変化」に回答済みとして外したことを書く。各行にPRまたはIssueへのリンクと、workerのチャットを示す`worker_thread`を付ける。AppのチャットへのURLの形式が確かめられるまでは、threadIdをそのまま書く。
 - PRを読むときの確認点：`head`が一致するレビュー資料の`risk`・`risk_reasons`・`review_targets`を要約する。問いとは節を分け、答えを求めない書き方にする。
-- 続行が必要：[item](item.md#遷移表)で「続行が必要」とした`running`の項目と、[未対応のownerのレビュー](item.md#ownerのレビュー)がある項目。対応されるまで毎回載せる。
+- 続行が必要：[item](item.md#遷移表)で「続行が必要」とした`running`の項目、[未対応のownerのレビュー](item.md#ownerのレビュー)がある項目、[変更を求める回答](item.md#問いへの回答)があった項目。対応されるまで毎回載せる。
 - タスク一覧：案件（umbrella issue）ごとに分ける。umbrellaのない項目は最後に「案件なし」としてまとめる。
 
 ## レビュー資料の扱い

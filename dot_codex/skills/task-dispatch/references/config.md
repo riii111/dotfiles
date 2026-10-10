@@ -25,7 +25,7 @@ limits:
   max_launches_per_run: 2      # 1回の実行で新規に起動する件数の上限
   max_investigations_per_run: 2  # 1回の実行で調査する件数の上限
   run_minutes: 30              # 1回の実行の時間枠
-  task_hours: 24               # 起動からreview_readyまでの時間枠
+  task_hours: 24               # 最後にrunningへ移してからreview_readyまでの時間枠
 ```
 
 - `repos`にないリポジトリのIssueは起動せず、`needs_decision`にする。
