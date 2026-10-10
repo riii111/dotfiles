@@ -38,7 +38,7 @@ GitHubのIssueは`gh:<owner>/<repo>#<番号>`とする。
 | review_ready | 現在のheadがレビュー可能。人のレビュー待ち |
 | done | Issueのclose、またはPRのmerge |
 
-`status`を変えるのは、この節の遷移表・[起動](launch.md)・[続行の送信](#続行の送信)・[報告のスレッドへの返事](schedule.md#報告のスレッドへの返事)だけとする。
+`status`を変えるのは、この節の遷移表・[起動](launch.md)・[続行の送信](continue.md)・[報告のスレッドへの返事](schedule.md#報告のスレッドへの返事)だけとする。
 人の判断を求めて止まったworkerには、人がAppでworkerに直接答えるか、IssueかPRへのコメントか予定のスレッドで答える。
 `worker_thread`を空にするのは、ユーザーがスレッドでworkerがないと伝えた場合だけとする。
 
@@ -69,13 +69,13 @@ GitHubのIssueは`gh:<owner>/<repo>#<番号>`とする。
 | running | `worker_thread`が空 | 下記「起動結果の確認」 | 下記 |
 | running | レビュー可能 | review_ready | `status`（noteにhead） |
 | running | worker_threadの最新turnが、大きな設計判断を求める最終回答で止まっている | needs_decision（問いを`question`に書く） | `status` |
-| running | worker_threadの最新turnが、それ以外の最終回答で止まっている | [続行の送信](#続行の送信)の理由`stopped`として起動の回で決める | なし |
+| running | worker_threadの最新turnが、それ以外の最終回答で止まっている | [続行の送信](continue.md)の理由`stopped`として起動の回で決める | なし |
 | running | 上のどれでもない（turnが進行中、CIが実行中など） | running | なし |
 | review_ready | 現在のheadでレビュー可能でない | running | `status`（noteに理由：headの更新・CI実行中・CI失敗・レビュー未了） |
-| review_ready | 上のどれでもない | review_ready（続行の理由があれば起動の回で[続行の送信](#続行の送信)を決める） | なし |
+| review_ready | 上のどれでもない | review_ready（続行の理由があれば起動の回で[続行の送信](continue.md)を決める） | なし |
 | needs_decision | `worker_thread`の最新turnが、最後に`needs_decision`へ移した後に始まっている（人がAppで答えて再開した） | running | `status` |
-| discovered | [判定](plan.md#判定) | ready・needs_decision | `status` |
-| needs_decision | [判定](plan.md#判定)の再判定条件を満たした | ready・needs_decision | `status` |
+| discovered | [着手できるか判断する](plan.md#着手できるか判断する) | ready・needs_decision | `status` |
+| needs_decision | [着手できるか判断する](plan.md#着手できるか判断する)の再判定条件を満たした | ready・needs_decision | `status` |
 
 `running`のturnは、`worker_thread`の最新1turnを出力なしで`read_thread`して確かめる。idleだけで停止と判断しない。
 `ready`から先の遷移（起動、確認を通らない場合、起動の失敗）は照合ではなく[起動](launch.md)の手順で決め、この表は使わない。
@@ -101,42 +101,8 @@ headが更新されたときの例：
 ## ownerのレビュー
 
 `owner`のpull request review（`COMMENTED`または`CHANGES_REQUESTED`）のうち、レビューのcommitがPRの現在のheadと同じものを未対応とする。
-未対応のレビューへの対応は[続行の送信](#続行の送信)で送る。
+未対応のレビューへの対応は[続行の送信](continue.md)で送る。
 workerが修正をpushしてheadが変われば、そのレビューは対応済みになる。
-
-## 続行の送信
-
-task-dispatchは、task-orchestrationと同じくworkerへ追加指示を送る。
-対象は、人の判断を待たずに続行するだけで進むものに限り、OKは要らない。
-
-| 理由 | 条件 | ref |
-| --- | --- | --- |
-| stopped | `running`で、worker_threadの最新turnが人の判断を求めない最終回答で止まっている（CIの失敗での停止など） | なし |
-| review | [未対応のownerのレビュー](#ownerのレビュー)がある | レビューのID |
-| resume | `needs_decision`から再判定で`ready`になり、`worker_thread`に値がある（[起動の確認](launch.md#起動の確認)の1） | 再判定のきっかけにしたコメントのID、Issueの更新時刻、またはメモに追記した時刻 |
-
-送るかどうかは、`attempts`の`continue_sent`だけで決める。
-次の表を上から当てはめ、最初に当たった行の扱いにする。
-起動の回は表のとおりに送る。
-予定の回は送らず、行5に当たるものを見込みとして予定に書く。
-
-| 行 | 状況 | 扱い |
-| --- | --- | --- |
-| 1 | workerの最新turnが進行中 | 送らず、次の起動の回に持ち越す |
-| 2 | 同じ理由・同じhead・同じrefの`continue_sent`があり、その送信より後にworkerのturnが終わっている | 送らない。送っても進まなかったものとして`needs_decision`にし、止まった位置と送った内容を`next_action`に書く |
-| 3 | 同じ理由・同じhead・同じrefの`continue_sent`があり、その送信より後のturnがない | 送らない。届いていない可能性があるため`needs_decision`にし、Appで確かめる内容を`next_action`に書く |
-| 4 | 同じ理由の`continue_sent`が、最後に`review_ready`へ移した後（なければ最後の`launched`の後）に`limits.max_continues`件ある | 送らずに`needs_decision`にし、繰り返し止まった位置を`next_action`に書く |
-| 5 | 上のどれでもない | 送る |
-
-送るときは、`attempts`に`continue_sent`を追記してファイルへ書いてから、`codex_app__send_message_to_thread`の`threadId`に`worker_thread`を指定して送る。
-同じ項目に複数の理由があれば1通にまとめ、`continue_sent`は理由ごとに書く。
-送信が受理されたことを確かめられなければ（エラー・タイムアウトを含む）再送しない。
-`failed`を記録して`needs_decision`にし、Appで送信の有無を確かめる内容を`next_action`に書く。
-
-`resume`を送ったら`running`にし、`status`を記録する。
-messageの先頭に`$task-worker`を置き、PRのURL・head・理由・refを自分の言葉で書く。
-[決めたことのメモ](launch.md#決めたことのメモ)があれば、その絶対パスも書く。
-レビューや回答の文面は転記せず、workerがGitHubから読む。
 
 ## attempts
 

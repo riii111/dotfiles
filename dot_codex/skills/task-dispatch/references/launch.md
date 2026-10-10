@@ -43,7 +43,7 @@ OKは予定の一覧ではなく、Issueごとに`attempts`の`approved`で記�
 有効なOKとは、最後の`approved`のうち、それより後に`approval_revoked`も、`ready`以外へ移る`status`の記録もないものをいう。
 一度OKした項目は、有効なOKが残る限り次の日も聞き直さない。
 
-### 量
+### 新規起動する件数
 
 新規起動の枠は、`limits.max_unreviewed_drafts`から次の件数を引き、0未満なら0とする。
 
@@ -79,7 +79,7 @@ OK済みで枠が空くのを待つ項目は、夜の起動の回が起動する
 
 | 確認 | 通らないとき |
 | --- | --- |
-| 1. `worker_thread`が空である | 新規起動にせず、[続行の送信](item.md#続行の送信)の理由`resume`で既存workerへの続行として扱う |
+| 1. `worker_thread`が空である | 新規起動にせず、[続行の送信](continue.md)の理由`resume`で既存workerへの続行として扱う |
 | 2. Issueに`owner`以外の担当者や、紐づく未mergeのPRがない | `needs_decision` |
 | 3. `harnexus-task state`（`--request`なし）の記録に、同じIssueを指す別のlaunchがない。taskIdが別の書き方（`#456`・`456`など）のものと、documentRefsに同じIssueのURLを含むものも探す | `needs_decision` |
 | 4. 依存先（blocked by）がすべて完了し、Issueが今も`sources`のクエリに当たる | 依存先が未完了なら`ready`のまま`next_action`に依存先を書く。クエリに当たらなければ`needs_decision` |
@@ -90,7 +90,7 @@ OK済みで枠が空くのを待つ項目は、夜の起動の回が起動する
 返事と起動の回で使う。
 対象は、最新の予定と追加分の未使用の`planned`のうち、[有効なOK](#okの記録)のある項目とする。
 OKのない`planned`は起動せず、そのまま残す。
-予定の優先順に1件ずつ、[量](#量)の枠が残る間だけ扱う。
+予定の優先順に1件ずつ、[新規起動する件数](#新規起動する件数)の枠が残る間だけ扱う。
 枠を超えた項目は`planned`のまま次の回に回す。
 項目が`ready`でなくなっていれば起動せず、`plan_cancelled`に変わった点を書く。
 上の確認を通らなかった`planned`も、`plan_cancelled`に確認の番号を書いて閉じる。
