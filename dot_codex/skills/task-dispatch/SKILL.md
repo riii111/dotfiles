@@ -25,6 +25,7 @@ description: |
 
 `config.yaml`がない、または`harnexus-task`が未導入なら、その回の予定か報告に理由を書いて終了する（起動の回は[記録](#記録)の書き方に従う）。
 次に`.lock/`をmkdirで作り、`.lock/started_at`に現在時刻を書く。3つの回で同じlockを使う。作れなければ、`started_at`から`limits.run_minutes`の2倍を過ぎていない限り、何も書かずに終了する。過ぎていればlockを作り直し、その回は起動と送信をせず、前回の実行が残っていたことを記録する。
+1回の実行は`limits.run_minutes`分までとし、時間を過ぎたら新しい項目に手を付けず、記録へ進む。
 GitHubの読み取りは`gh-loupe`で取れるものを使い、取れないものだけ`gh`を使う。
 
 ## 手順
@@ -48,7 +49,7 @@ GitHubの読み取りは`gh-loupe`で取れるものを使い、取れないも�
 ### 判定
 
 `lessons.md`の「本採用」と各項目の`attempts`を読んでから、`discovered`・`investigating`・`needs_decision`の項目を判定する。「候補」は判定の規則として使わない。
-`needs_decision`は、Issue本文の編集か、IssueまたはPRへの`owner`のコメントが、最後に`needs_decision`へ移した記録より新しい場合だけ判定し直す。[予定の取り消し](references/item.md#予定の取り消し)で`owner`のコメントにより移した項目は、次の予定の回で一度判定し直す。
+`needs_decision`は、Issue本文の編集か、IssueまたはPRへの`owner`のコメントが、最後に`needs_decision`へ移した記録より新しい場合だけ判定し直す。[予定の取り消し](references/item.md#予定の取り消し)で`needs_decision`に移した項目は、取り消しのときの`status`記録より後に`status`記録がなければ判定し直す。判定したら、結果が同じでも`status`を記録する。
 
 次の2点を両方満たせば`ready`、調査で解消できそうなら`investigating`、それ以外は`needs_decision`にする。`kind: investigation`の項目は`ready`にせず、`investigating`として扱う。
 
@@ -79,7 +80,7 @@ GitHubの読み取りは`gh-loupe`で取れるものを使い、取れないも�
 
 - 未レビューのDraft PR（`review_ready`でPRがDraftのもののうち、[未対応のownerのレビュー](references/item.md#ownerのレビュー)がないもの）が`max_unreviewed_drafts`件以上なら、新規起動を予定に載せない。
 - `owner`のレビューの往復が`max_review_rounds`を超えた項目は、遷移表に従って`needs_decision`にする。
-- 1回の予定に載せる新規起動は`max_launches_per_run`件までとする。
+- 1回の予定に載せる新規起動は`max_launches_per_run`件までとする。上限で新規起動を載せなかったときは、予定の`## そのほか`に1文で書く。
 
 ### 起動
 
@@ -87,13 +88,13 @@ GitHubの読み取りは`gh-loupe`で取れるものを使い、取れないも�
 
 ### 報告
 
-前回の報告より後の`attempts`、GitHubの状態、workerの最新の最終回答から、[報告の書き方](references/digest.md#朝の報告)で`runs/<日付>-report.md`に書く。比べる予定は、直前の`runs/<日付>-plan.md`とする。
+前回の報告（なければ比べる予定）より後の`attempts`、GitHubの状態、workerの最新の最終回答から、[報告の書き方](references/digest.md#朝の報告)で`runs/<日付>-report.md`に書く。比べる予定は、今日より前の日付で最新の`runs/<日付>-plan.md`とする。
 `lessons.md`の「候補」を、[lessons](references/digest.md#lessons)の書式で自分の実行結果から更新する。
 
 ### 記録
 
 各項目の`attempts`を更新し、`items/`・`requests/`・`runs/`・`lessons.md`だけをcommitする。commitできなければその回の予定か報告にその旨を書き、ファイルはそのまま残す。台帳の正しさはファイルの内容で保ち、commitは履歴のために使う。
-起動の回は人が読む文書を書かない。起動を止めた理由や失敗は`attempts`に残し、項目に結び付かないもの（lockの残り・commitの失敗・前提の不足）は`runs/<日付>-plan.md`の末尾に追記して、朝の報告で伝える。
+起動の回は予定の項目を書き換えない。起動を止めた理由や失敗は`attempts`に残し、項目に結び付かないもの（lockの残り・commitの失敗・前提の不足）は`runs/<日付>-plan.md`の`## そのほか`に追記して、朝の報告で伝える。ファイルや見出しがなければ作る。
 実行の最終回答には、書いた予定か報告の本文だけを返す。起動の回は、起動と送信の件数を1文で返す。
 
 ## 完了条件

@@ -43,7 +43,8 @@ attempts:
 
 - PRがopenである。
 - 現在のheadのcheckがすべて成功している。`config.yaml`の`repos`で`ci: false`としたリポジトリだけはcheckなしでよい。checkが1つもなければ、まだ登録されていないものとして満たさない。
-- `worker_thread`の最新turnが最終回答で終わっていて、`harnexus-task state --request <作業ディレクトリ>/.reviewctl/request.json`の`head`（最後に独立レビューへ送ったhead）が現在のheadと一致する。作業ディレクトリは、`config.yaml`の`repos.<owner/repo>.path`で`git worktree list --porcelain`を実行し、itemの`branch`と一致するものとする。見つからなければ満たさない。
+- `worker_thread`の最新turnが、独立レビューのLGTMとCIの成功を伝える完了報告で終わっている。完了報告に人の判断が必要な点や確かめていないことがあっても、ここでは満たすものとし、朝の報告で伝える。
+- `harnexus-task state --request <作業ディレクトリ>/.reviewctl/request.json`の`head`（最後に独立レビューへ送ったhead）が現在のheadと一致する。作業ディレクトリは、`config.yaml`の`repos.<owner/repo>.path`で`git worktree list --porcelain`を実行し、itemの`branch`と一致するものとする。見つからなければ満たさない。
 
 ### 遷移表
 
@@ -73,6 +74,7 @@ attempts:
 `running`のturnは、`worker_thread`の最新1turnを出力なしで`read_thread`して確かめる。idleだけで停止と判断しない。
 「最後に`running`へ移した」時刻は、最後の`launched`または`→running`の`status`のうち新しいほうとする。人が`running`へ戻した場合も、検出時の記録から数え直す。
 `ready`から先の遷移（起動、確認を通らない場合、起動の失敗）は照合ではなく[起動](launch.md)の手順で決め、この表は使わない。
+判定の2行（`discovered`・`investigating`と`needs_decision`）は予定の回だけで使い、起動と報告の回では状態を変えない。
 
 headが更新されたときの例：
 
@@ -105,7 +107,7 @@ task-dispatchは、task-orchestrationと同じくworkerへ追加指示を送る�
 | --- | --- | --- |
 | stopped | `running`で、worker_threadの最新turnが人の判断を求めない最終回答で止まっている（CIの失敗での停止など） | なし |
 | review | [未対応のownerのレビュー](#ownerのレビュー)がある | レビューのID |
-| resume | `needs_decision`から再判定で`ready`になり、`worker_thread`に値がある（[起動](launch.md)の確認1） | 再判定のきっかけにしたコメントのID、またはIssueの更新時刻 |
+| resume | `needs_decision`から再判定で`ready`になり、`worker_thread`に値がある（[起動](launch.md#起動の確認)の確認1） | 再判定のきっかけにしたコメントのID、またはIssueの更新時刻 |
 
 送るかどうかは、`attempts`の`continue_sent`だけで決める。最後の「人が変更」の`status`記録より前の`continue_sent`は使わない。上から順に当てはめる。
 

@@ -27,7 +27,7 @@ limits:
   max_investigations_per_run: 2  # 1回の実行で調査する件数の上限
   run_minutes: 30              # 1回の実行の時間枠
   task_hours: 24               # 最後にrunningへ移してからreview_readyまでの時間枠
-  notice_minutes: 120          # 予定を書いてから起動・送信できるまでの最短の間
+  notice_minutes: 90           # 予定を書いてから起動・送信できるまでの最短の間
 ```
 
 - `repos`にないリポジトリのIssueは起動せず、`needs_decision`にする。
@@ -48,4 +48,4 @@ Scheduled Taskを3つ作り、どれも`~/agent-desk/`を作業ディレクト�
 | 平日 20:00 | `$task-dispatch 起動` | 予定どおりに起動・続行する |
 | 平日 6:00 | `$task-dispatch 報告` | 予定との違いを報告する |
 
-予定から起動までの間は、ユーザーが予定を読んで止める時間になる。`notice_minutes`より長く空け、予定を読める時刻に置く。手動で再実行するときも、同じ指示を使う。
+予定から起動までの間は、ユーザーが予定を読んで止める時間になる。`notice_minutes`と`run_minutes`の和より長く空け、予定を読める時刻に置く。手動で再実行するときも、同じ指示を使う。
