@@ -46,10 +46,10 @@ slack:
 - 起動の順は、`project`の優先度・期限と依存関係を先に適用し、同じ順位の中で`kind`の区分を使う。
 - `max_review_rounds`は人のレビューの回数で、worker内のCodexレビューの往復は数えない。
 - `max_continues`は、最後に`review_ready`へ移した後（なければ起動後）の送信を理由ごとに数える。上限に達した後の停止は、続行を送らず人の判断待ちにする。
-- 新規起動の数は`max_unreviewed_drafts`から決め、件数は固定しない。決め方は[量](launch.md#量)に書く。
+- 新規起動の数の決め方は[量](launch.md#量)に書く。
 - 上限と時刻の値は例。運用しながら人が調整する。
-- `calendar.enabled`がfalseなら、毎日`schedule.plan_at`に予定を作り、休みも読まない。
-- `slack.enabled`がfalseなら、予定は`runs/`の文書だけで伝え、OKはownerがIssueに`OK`とだけコメントして返す。見回りの回は登録せず、夜の起動の回がOKを読んで起動する。
+- `calendar.enabled`がfalseなら、Slackがオンでも退勤時刻は聞かず、毎日`schedule.plan_at`に予定を作る。休みも読まない。
+- `slack.enabled`がfalseなら、予定は`runs/`の文書だけで伝え、OKはownerがIssueに`OK`とだけコメントして返す。OKの取り消しはできない。見回りの回は登録せず、夜の起動の回がOKを読んで起動する。
 - Slackのbotは、会社で作成と承認を受けたアプリを使う。本人のアカウントから自分宛てに送ると通知が鳴らないため。DMの送信と返事の読み取りの権限（`chat:write`・`im:write`・`im:history`など）が要る。トークンはリポジトリ・`~/agent-desk/`に置かず、Scheduled Taskの実行環境で`token_env`の環境変数から読めるようにする。
 
 ## 実行の時刻
