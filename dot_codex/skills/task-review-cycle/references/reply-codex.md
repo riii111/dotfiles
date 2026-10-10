@@ -1,3 +1,3 @@
 レビュー完了後、codex_app__send_message_to_threadのthreadIdにworker Task IDを指定して結果を返してください。
-messageの先頭に $task-review-cycle を置き、対象SHA・判定・指摘・検証結果を続けてください。LGTMの場合はレビュー資料と、根拠で外した判断・lessons候補も含めてください。
+messageの先頭に $task-review-cycle を置き、対象SHA・判定・指摘・検証結果を続けてください。LGTMの場合はレビュー資料とlessons候補も含めてください。
 送信が受理されたことを確認したらreviewerのturnを終了してください。
