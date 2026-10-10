@@ -7,7 +7,8 @@ key: gh:org/repo#456
 source: org/repo#123           # umbrella issue。なければ空
 kind: issue                    # 発見元のkind
 status: discovered             # discovered / ready / investigating / running / needs_decision / review_ready / done
-next_action: ""                # 次にすること、または人に聞く問い。自分の言葉で書く
+next_action: ""                # 次にすること、または止まった位置。自分の言葉で書く
+question: ""                   # 夕方の予定で聞く問い。選択肢と推奨を付け、答えで判定し直したら空にする
 worker_thread: ""
 branch: ""
 pr: ""
@@ -60,7 +61,7 @@ attempts:
 | running・review_ready | PRがmergeされずにcloseされた | needs_decision | `status` |
 | running | `worker_thread`が空 | 下記「起動結果の確認」 | 下記 |
 | running | レビュー可能 | review_ready | `status`（noteにhead） |
-| running | worker_threadの最新turnが、人の判断を求める最終回答で止まっている | needs_decision | `status` |
+| running | worker_threadの最新turnが、大きな設計判断を求める最終回答で止まっている | needs_decision（問いを`question`に書く） | `status` |
 | running | worker_threadの最新turnが、それ以外の最終回答で止まっている | [続行の送信](#続行の送信)の理由`stopped`として予定の回で決める | なし |
 | running | 最後に`running`へ移してから`limits.task_hours`を過ぎた | needs_decision（止まった位置を`next_action`に書く） | `status` |
 | running | 上のどれでもない（turnが進行中、CIが実行中など） | running | なし |

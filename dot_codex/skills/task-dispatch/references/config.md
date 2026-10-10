@@ -25,6 +25,7 @@ limits:
   max_continues: 2             # 同じ理由でworkerへ続行を送る回数の上限
   max_launches_per_run: 2      # 1回の予定に載せる新規起動の上限
   max_investigations_per_run: 2  # 1回の実行で調査する件数の上限
+  max_questions_per_plan: 3    # 1回の予定で聞く問いの上限
   run_minutes: 30              # 1回の実行の時間枠
   task_hours: 24               # 最後にrunningへ移してからreview_readyまでの時間枠
   notice_minutes: 90           # 予定を書いてから起動・送信できるまでの最短の間
@@ -32,7 +33,7 @@ limits:
 
 - `repos`にないリポジトリのIssueは起動せず、`needs_decision`にする。
 - `sources[].query`は`gh search issues`にそのまま渡す。リポジトリ・ラベルに加えて作成者を`owner`に絞り、人が開始を許した範囲だけを書く。
-- `sources[].umbrella`を省略した発見元の項目は、予定と報告の「案件なし」にまとめる。
+- 予定と報告の案件の見出しは`sources[].name`で、`umbrella`の最上位の親Issueへリンクする。`umbrella`を省略した発見元はリンクなしの見出しにする。
 - 起動の順は、`project`の優先度・期限と依存関係を先に適用し、同じ順位の中で`kind`の区分を使う。
 - `max_review_rounds`は人のレビューの回数で、worker内のCodexレビューの往復は数えない。
 - `max_continues`は、最後に`review_ready`へ移した後（なければ起動後）の送信を理由ごとに数える。上限に達した後の停止は、続行を送らず人の判断待ちにする。
