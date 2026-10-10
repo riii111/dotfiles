@@ -69,8 +69,8 @@ attempts:
 | review_ready | 新しい`owner`のレビューで`review_round`が`limits.max_review_rounds`を超えた | needs_decision | `review_round`・`status` |
 | review_ready | `review_round`にない`owner`のレビューがある | review_ready | `review_round` |
 | review_ready | 上のどれでもない | review_ready（続行の理由があれば起動の回で[続行の送信](#続行の送信)を決める） | なし |
-| discovered・investigating | SKILLの判定 | ready・investigating・needs_decision | `status` |
-| needs_decision | SKILLの判定で再判定の条件を満たした | ready・investigating・needs_decision | `status` |
+| discovered・investigating | [判定](plan.md#判定) | ready・investigating・needs_decision | `status` |
+| needs_decision | [判定](plan.md#判定)の再判定条件を満たした | ready・investigating・needs_decision | `status` |
 
 `running`のturnは、`worker_thread`の最新1turnを出力なしで`read_thread`して確かめる。idleだけで停止と判断しない。
 「最後に`running`へ移した」時刻は、最後の`launched`または`→running`の`status`のうち新しいほうとする。人が`running`へ戻した場合も、検出時の記録から数え直す。
