@@ -20,7 +20,7 @@ Scheduled Taskは毎回新しいCodexスレッドで動き、通知はCodex App�
 
 ## 作業場所
 
-`~/agent-desk/`はローカルのgitリポジトリで、pushしない。Scheduled Taskはこのディレクトリを作業ディレクトリにして実行する。実行の時刻は[config](references/config.md#実行の時刻)に書く。
+`~/agent-desk/`はローカルの作業ディレクトリで、gitでは管理しない。Scheduled Taskはこのディレクトリを作業ディレクトリにして実行する。実行の時刻は[config](references/config.md#実行の時刻)に書く。
 
 - `config.yaml`：発見元・リポジトリの対応・上限・人のGitHubアカウント・Calendarの設定。書式は[config](references/config.md)。人だけが編集する。
 - `items/<file>.yaml`：1仕事1ファイルの台帳。書式と状態の遷移は[item](references/item.md)。
@@ -81,8 +81,8 @@ OKのある項目は、[OKの前提](references/launch.md#okの記録)が変わ�
 
 ### 記録
 
-各項目の`attempts`を更新し、`items/`・`requests/`・`days/`・`decisions/`・`runs/`・`lessons.md`だけをcommitする。commitできなければその回の予定か報告にその旨を書き、ファイルはそのまま残す。台帳の正しさはファイルの内容で保ち、commitは履歴のために使う。
-起動と返事の回は予定の本文を書き換えない。起動を止めた理由や失敗は`attempts`に残し、項目に結び付かないもの（lockの残り・commitの失敗・前提の不足・Scheduled Taskの失敗）は`runs/<日付>-plan.md`の`## そのほか`に追記して、朝の報告で伝える。ファイルや見出しがなければ作る。
+各項目の`attempts`を更新する。台帳の正しさはファイルの内容で保ち、履歴は`attempts`に残す。
+起動と返事の回は予定の本文を書き換えない。起動を止めた理由や失敗は`attempts`に残し、項目に結び付かないもの（lockの残り・前提の不足・Scheduled Taskの失敗）は`runs/<日付>-plan.md`の`## そのほか`に追記して、朝の報告で伝える。ファイルや見出しがなければ作る。
 最終回答は実行の種類に応じて返す。
 
 - 報告・予定：書いた本文だけ。予定にはOKの返し方を、退勤時刻を聞く報告にはその問いを添える。
@@ -91,7 +91,7 @@ OKのある項目は、[OKの前提](references/launch.md#okの記録)が変わ�
 
 ## 完了条件
 
-その回の手順を終え、commit（またはcommitできなかったことの記載）を済ませ、`.lock/`を消した時点で1回の実行（返事の回は1turn）を終える。予定のスレッドは、[載せた新規起動がすべて決着](references/schedule.md#スレッドの扱い)したら自分でアーカイブする。途中で止まる場合も、書けた範囲の記録とlockの削除を済ませる。
+その回の手順を終え、記録を書き、`.lock/`を消した時点で1回の実行（返事の回は1turn）を終える。予定のスレッドは、[載せた新規起動がすべて決着](references/schedule.md#スレッドの扱い)したら自分でアーカイブする。途中で止まる場合も、書けた範囲の記録とlockの削除を済ませる。
 
 ## 安全上の制約
 
