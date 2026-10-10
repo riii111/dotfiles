@@ -26,7 +26,7 @@ Claude workerのreviewerはCodexモデルに限られる。Claudeモデルを指
 
 ## LGTM後の資料
 
-LGTMの最終回答には[レビュー資料](references/packet.md)が含まれる。資料が無い・書式と違う場合は自分で補わず、PR本文にも貼らずに、その旨を完了報告に書く。
+LGTMの最終回答には[レビュー資料](references/packet.md)が含まれる。資料が無い・書式と違う場合は自分で補わず、その旨を完了報告に書く。資料はPR本文などGitHubに載せない。
 最終回答にlessons候補があれば、完了報告にそのまま載せる。`lessons.md`の「候補」欄への記録は呼び出し元が行う（ディスパッチ運用では`~/agent-desk/lessons.md`を想定）。
 
 ## 再開と基点更新

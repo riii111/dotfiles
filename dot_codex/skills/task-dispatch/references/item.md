@@ -44,7 +44,7 @@ attempts:
 
 - PRがopenである。
 - 現在のheadのcheckがすべて成功している。`config.yaml`の`repos`で`ci: false`としたリポジトリだけはcheckなしでよい。checkが1つもなければ、まだ登録されていないものとして満たさない。
-- PR本文の[レビュー資料](../../task-review-cycle/references/packet.md)の`head`が現在のheadと一致する。資料がない、または書式が違う場合は満たすものとし、朝刊で「資料なし」と示す。
+- workerの完了報告の[レビュー資料](../../task-review-cycle/references/packet.md)の`head`が現在のheadと一致する。資料がない、または書式が違う場合は満たすものとし、朝刊で「資料なし」と示す。
 
 ### 遷移表
 

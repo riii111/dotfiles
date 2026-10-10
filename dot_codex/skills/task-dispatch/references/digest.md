@@ -98,7 +98,7 @@ Issueの判断待ちを先に、PRの問いを後に置く。各問いは、問�
 
 ## レビュー資料の扱い
 
-レビュー資料は[packet](../../task-review-cycle/references/packet.md)の書式で、Draft PR本文の`## レビュー資料`から読む。資料の`head`がPRの現在のheadと違えば、その資料の項目は朝刊に使わない。資料がない、または書式が違えば「資料なし」として扱う。
+レビュー資料は[packet](../../task-review-cycle/references/packet.md)の書式で、`worker_thread`の最新の完了報告の`## レビュー資料`から読む。最新1turnを出力なしで`read_thread`し、turnが進行中なら前回までに読んだ資料を使う。資料の`head`がPRの現在のheadと違えば、その資料の項目は朝刊に使わない。資料がない、または書式が違えば「資料なし」として扱う。
 
 ## 説明
 

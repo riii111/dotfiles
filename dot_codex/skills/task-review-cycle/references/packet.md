@@ -1,6 +1,6 @@
 # レビュー資料
 
-人がPRを短時間で判断するための資料。LGTMを出すreviewerが作る。最終回答の末尾に`## レビュー資料`の見出しを置き、次のYAMLを`yaml`のコードブロックで続ける。該当があれば、その後に`### lessons候補`を置く。workerがPR本文に貼るのはYAMLだけとする。
+人がPRを短時間で判断するための資料。LGTMを出すreviewerが作る。最終回答の末尾に`## レビュー資料`の見出しを置き、次のYAMLを`yaml`のコードブロックで続ける。該当があれば、その後に`### lessons候補`を置く。workerは完了報告にYAMLを含める。資料は人に読ませるものではなく、ディスパッチの朝刊の材料にする。PR本文・PRのコメントなどGitHubには載せない。
 
 ```yaml
 head: ""                     # 資料の対象のcommit SHA
@@ -44,10 +44,10 @@ unresolved_findings: []
   - question・choice・alternatives: 判断ログの決めた点・選択・他の候補。
   - where: 判断が現れる差分の箇所（ファイルと確認版の行範囲）。人がその行へコメントして答えるために使う。複数あれば代表的な1箇所にし、差分に現れなければ空にする。
   - recommendation: reviewerが推す選択と短い理由。
-  - evidence: 判断の材料になる参照文書の箇所（パスと行・URL）。決め手にならない材料だけなら、それを書く。なければ空にする。
+  - evidence: 判断の材料になる参照文書の箇所（URL、またはリポジトリ内のパスと`head`時点の行）。決め手にならない材料だけなら、それを書く。なければ空にする。判断ログ・worktreeの絶対パス・確かめていないことは書かない。確かめていないことはrecommendationの理由に書く。
 - grounded_decisions: 照合で参照文書に根拠が見つかり、human_decisionsから外した判断。人は答えなくてよいが、違うと思えばPRにコメントする。
   - decision: 決めた点と選んだものを1文で書く（例：「バックオフは指数関数で、最大5回にした」）。
-  - reason・evidence: 根拠の要点と、参照文書の箇所（パスと行・URL）。
+  - reason・evidence: 根拠の要点と、参照文書の箇所。evidenceの書き方はhuman_decisionsと同じ。
 - review_targets: 人が実際に読むべき箇所。機械的条件に触れる箇所は必ず含め、human_decisionsに関わる箇所を次に優先し、合わせて5件程度までにする。linesは確認版の行範囲。
 - verification: GitHubから取得した結果だけを書き、workerの報告や手元の実行結果を使わない。
   - ci: PRのheadが`head`と一致する場合だけ、そのheadのcheck結果を「成功」「失敗: <job>」「実行中」で書く。PRが未作成またはheadが不一致なら「未取得」とし、理由を添える。
