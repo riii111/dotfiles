@@ -2,7 +2,7 @@
 
 `ready`の項目は、次の確認をすべて通ったものだけ起動する。通らなければ、書いたとおりの`status`にして`attempts`に`status`を記録し、次の項目へ進む。
 
-1. `worker_thread`が空である。値があれば起動せず、`needs_decision`にして`next_action`に「既存workerへの続行をAppで指示する」と書く。
+1. `worker_thread`が空である。値があれば起動せず、[続行の送信](item.md#続行の送信)の手順で理由`resume`を既存workerへ送る。送ったら`running`にし、送らなかった場合はその手順で決めた`status`にする。
 2. Issueに`owner`以外の担当者や、紐づく未mergeのPRがない。あれば`needs_decision`にする。
 3. `harnexus-task state`（`--request`なし）の記録に、同じIssueを指す別のlaunchがない。taskIdが別の書き方（`#456`・`456`など）のものと、documentRefsに同じIssueのURLを含むものを探す。あれば`needs_decision`にする。
 4. `codex_app__list_projects`を一度呼び、`config.yaml`の`repos.<owner/repo>.path`と一致するprojectを選ぶ。一致がない、または複数あれば`needs_decision`にする。

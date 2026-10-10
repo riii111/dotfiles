@@ -36,7 +36,7 @@ attempts:
 | review_ready | 現在のheadがレビュー可能。人のレビュー待ち |
 | done | Issueのclose、またはPRのmerge |
 
-`status`を変えるのはこの節の遷移表だけとする。人は判断を済ませたうえで、`needs_decision`の`status`を書き換えて戻してよい。`worker_thread`に値がある項目は、Appでworkerに続行を指示してから`running`に戻す。`worker_thread`を空にするのは、Appでworkerがないことを確かめた場合だけとする。
+`status`を変えるのはこの節の遷移表と[続行の送信](#続行の送信)だけとする。人は判断を済ませたうえで、`needs_decision`の`status`を書き換えて戻してよい。人の判断を求めて止まったworkerには、Appで答えてから`running`に戻すか、IssueかPRにコメントして次の実行の再判定に任せる。`worker_thread`を空にするのは、Appでworkerがないことを確かめた場合だけとする。
 
 ### レビュー可能
 
@@ -61,13 +61,13 @@ attempts:
 | running | `worker_thread`が空 | 下記「起動結果の確認」 | 下記 |
 | running | レビュー可能 | review_ready | `status`（noteにhead） |
 | running | worker_threadの最新turnが、人の判断を求める最終回答で止まっている | needs_decision | `status` |
-| running | worker_threadの最新turnが、それ以外の最終回答で止まっている | running（朝刊の「続行が必要」） | 最後の`running`以降で初回だけ`continue_listed` |
-| running | 最後に`running`へ移してから`limits.task_hours`を過ぎ、その後に`continue_listed`がない | needs_decision（止まった位置を`next_action`に書く） | `status` |
+| running | worker_threadの最新turnが、それ以外の最終回答で止まっている | [続行の送信](#続行の送信)で決める | 同左 |
+| running | 最後に`running`へ移してから`limits.task_hours`を過ぎた | needs_decision（止まった位置を`next_action`に書く） | `status` |
 | running | 上のどれでもない（turnが進行中、CIが実行中など） | running | なし |
 | review_ready | 現在のheadでレビュー可能でない | running | `status`（noteに理由：headの更新・CI実行中・CI失敗・資料が古い） |
 | review_ready | 新しい`owner`のレビューで`review_round`が`limits.max_review_rounds`を超えた | needs_decision | `review_round`・`status` |
 | review_ready | `review_round`にない`owner`のレビューがある | review_ready | `review_round` |
-| review_ready | 上のどれでもない | review_ready | なし |
+| review_ready | 上のどれでもない | review_ready（続行の理由があれば[続行の送信](#続行の送信)で決める） | なし |
 | discovered・investigating | SKILLの判定 | ready・investigating・needs_decision | `status` |
 | needs_decision | SKILLの判定で再判定の条件を満たした | ready・investigating・needs_decision | `status` |
 
@@ -81,7 +81,7 @@ headが更新されたときの例：
 | --- | --- |
 | headのCIが成功し、資料のheadも一致 | running → review_ready |
 | ownerのレビューを受けてworkerが修正をpush | review_ready → running（headの更新・CI実行中） |
-| 新しいheadのCIが失敗し、workerが止まった | runningのまま。朝刊の「続行が必要」に載せる |
+| 新しいheadのCIが失敗し、workerが止まった | runningのまま。workerへ続行を送る |
 | 新しいheadのCIが成功したが、資料はまだ古いhead | runningのまま。朝刊で「資料が古い」と示す |
 | 新しいheadのCIが成功し、資料も差し替わった | running → review_ready |
 
@@ -94,14 +94,35 @@ headが更新されたときの例：
 `owner`のpull request review（`COMMENTED`または`CHANGES_REQUESTED`）を、次の2つに分けて扱う。
 
 - 往復の回数：レビューのIDが`attempts`の`review_round`になければ、IDを`review_round`で記録する。回数は`review_round`の件数で数え、同じレビューを二度数えない。レビューに属するコメントは別に数えない。
-- 未対応の続行依頼：レビューのcommitがPRの現在のheadと同じで、そのIDが`handled_reviews`にないものは未対応とする。未対応のレビューがある項目は、照合のたびに朝刊の「続行が必要」に載せる。記録の有無や前回の掲載では外さない。
+- 未対応かどうか：レビューのcommitがPRの現在のheadと同じで、そのIDが`handled_reviews`になく、[問いへの回答](#問いへの回答)で`choice`どおりと答えただけのレビューでもないものを未対応とする。未対応のレビューへの対応は[続行の送信](#続行の送信)で送る。
 
 workerが修正をpushしてheadが変われば、そのレビューは対応済みになる。pushを伴わない対応で済んだ場合は、人がそのIDを`handled_reviews`に書く。
 
 ## 問いへの回答
 
-`head`が現在のheadと一致するレビュー資料の`human_decisions`について、その資料のheadのcommit以降に`owner`が書いたPRのコメントとレビューを読み、各問いに答えているかを確かめる。答えていれば`decision_answered`を記録し、同じheadの間は朝刊の問いに載せない。答えが変更を求める場合は、workerへの指示が要るため「続行が必要」に載せる。
+`head`が現在のheadと一致するレビュー資料の`human_decisions`について、その資料のheadのcommit以降に`owner`が書いたPRのコメントとレビューを読み、各問いに答えているかを確かめる。答えていれば`decision_answered`を記録し、同じheadの間は朝刊の問いに載せない。答えが`choice`と違う選択を求める場合は、[続行の送信](#続行の送信)で修正を送る。
 答えたかどうか判断できない問いは載せたままにする。`owner`以外の書き込みは回答として扱わない。
+
+## 続行の送信
+
+task-dispatchは、task-orchestrationと同じくworkerへ追加指示を送る。対象は、人の判断を待たずに続行するだけで進むものに限る。
+
+| 理由 | 条件 | ref |
+| --- | --- | --- |
+| stopped | `running`で、worker_threadの最新turnが人の判断を求めない最終回答で止まっている（CIの失敗での停止など） | なし |
+| review | [未対応のownerのレビュー](#ownerのレビュー)がある | レビューのID |
+| answer | [問いへの回答](#問いへの回答)が`choice`と違う選択を求めている | 問いの要約（自分の言葉） |
+| resume | `needs_decision`から再判定で`ready`になり、`worker_thread`に値がある（[起動](launch.md)の確認1） | 再判定のきっかけにしたコメントのID、またはIssueの更新時刻 |
+
+送るかどうかは、`attempts`の`continue_sent`だけで決める。最後の「人が変更」の`status`記録より前の`continue_sent`は使わない。上から順に当てはめる。
+
+1. workerの最新turnが進行中なら送らず、次回に持ち越す。
+2. 同じ理由・同じhead・同じrefの`continue_sent`があれば送らない。そのうえで、workerの最新turnがその送信より後に終わっていれば、送っても進まなかったものとして`needs_decision`にし、止まった位置と送った内容を`next_action`に書く。送信より後のturnがなければ、送信がworkerに届いていない可能性があるため`needs_decision`にし、Appで確かめる内容を`next_action`に書く。
+3. 同じ理由の`continue_sent`が、最後に`review_ready`へ移した後（なければ最後の`launched`の後）に`limits.max_continues`件あれば、送らずに`needs_decision`にし、繰り返し止まった位置を`next_action`に書く。
+4. `attempts`に`continue_sent`を追記してファイルへ書いてから、`codex_app__send_message_to_thread`の`threadId`に`worker_thread`を指定して送る。同じ項目に複数の理由があれば1通にまとめ、`continue_sent`は理由ごとに書く。
+5. 送信が受理されたことを確かめられなければ（エラー・タイムアウトを含む）再送しない。`failed`を記録して`needs_decision`にし、Appで送信の有無を確かめる内容を`next_action`に書く。
+
+messageの先頭に`$task-worker`を置き、PRのURL・head・理由・refを自分の言葉で書く。レビューや回答の文面は転記せず、workerがGitHubから読む。
 
 ## lessonsの読み取り
 
@@ -115,7 +136,7 @@ task-dispatchが行った操作と結果を古い順に追記する。`result`�
 - `launch_requested`：起動の直前。`ready`→`running`の記録を兼ねる。
 - `launched`：起動を確認した。`note`にthreadIdを書く。
 - `review_round`：`owner`のレビューを検出した。`note`にレビューのIDを書く。
-- `continue_listed`：`running`の項目を朝刊の「続行が必要」に初めて載せた。
+- `continue_sent`：workerへ続行を送った。`note`に「<理由> head=<先頭7桁> ref=<ref>」を書く。headはPRの現在のhead、PRがなければ`-`とする。
 - `decision_answered`：レビュー資料の問いに`owner`が答えていた。`note`にheadの先頭7桁と問いの要約を自分の言葉で書く。
 - `lessons_read`：workerの完了報告から`lessons候補`を読んだ。`note`にheadを書く。
 - `investigated`：読み取り専用の調査をした。`note`は確かめた点とその真偽、出典のファイル・行だけを書き、コードやコメントを引用しない。

@@ -22,6 +22,7 @@ sources:
 limits:
   max_unreviewed_drafts: 3     # 未レビューのDraft PRがこの件数以上なら新規起動しない
   max_review_rounds: 3         # ownerのレビューの往復回数の上限
+  max_continues: 2             # 同じ理由でworkerへ続行を送る回数の上限
   max_launches_per_run: 2      # 1回の実行で新規に起動する件数の上限
   max_investigations_per_run: 2  # 1回の実行で調査する件数の上限
   run_minutes: 30              # 1回の実行の時間枠
@@ -33,4 +34,5 @@ limits:
 - `sources[].umbrella`を省略した発見元の項目は、朝刊の「案件なし」にまとめる。
 - 起動の順は、`project`の優先度・期限と依存関係を先に適用し、同じ順位の中で`kind`の区分を使う。
 - `max_review_rounds`は人のレビューの回数で、worker内のCodexレビューの往復は数えない。
+- `max_continues`は、最後に`review_ready`へ移した後（なければ起動後）の送信を理由ごとに数える。上限に達した後の停止は、続行を送らず人の判断待ちにする。
 - 上限の値は例。運用しながら人が調整する。
