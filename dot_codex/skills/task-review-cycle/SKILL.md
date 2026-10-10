@@ -24,10 +24,6 @@ Claude workerのreviewerはCodexモデルに限られる。Claudeモデルを指
 
 結果不明・モデル不一致では再実行しても送信されない。ユーザーがAppで確認した結果だけを、承認を得て`harnexus-task resolve --request <JSON> --sent [--thread-id <ID>]`または`--not-sent`で記録する。
 
-## LGTM後の資料
-
-LGTMのとき、reviewerは[レビュー資料](references/packet.md)を`.reviewctl/packet.yaml`に書く。資料は人に見せないため、最終回答・完了報告・PRに内容を書かない。資料が無い・書式と違う場合は自分で補わない。`lessons.md`への記録はディスパッチが資料の`lessons`から行う。
-
 ## 再開と基点更新
 
 `harnexus-task state --request <JSON>`の出力は平らなJSONで、`reviewerThreadId`・`base`・`head`・`prompt`（最後に送ったもの）・`requested`/`actual`（reviewerのモデル）・`pending`・`pendingHead`・`pendingThreadId`を最上位から読む。
@@ -39,4 +35,5 @@ worker checkoutでレビューし、branchやcheckoutは変更しないでくだ
 受信メタデータにsource_thread_idがあればworkerのチャットIDと照合し、不一致は判定保留にしてください。
 ローカル固定SHA差分をレビューし、PRとCIはPRのheadが候補SHAと一致する場合だけ根拠にしてください。
 base branchが進んだことだけを理由にLGTMを保留しないでください。
-LGTMを出すときは、判断ログを照合して[レビュー資料](references/packet.md)（このSKILL.mdのディレクトリ基準）を作り、workerの作業ディレクトリの`.reviewctl/packet.yaml`に書いてください。資料の内容は最終回答やmessageに含めないでください。
+workerの作業ディレクトリに判断ログ（`.reviewctl/decisions.md`）があれば、1件ずつ参照文書（タスク・ADR・規約）と照合してください。ログに無くても、差分の中で[判断ログ](../task-worker/SKILL.md#判断ログ)（このSKILL.mdのディレクトリ基準）の記録対象に当たる選択は同じく扱ってください。
+参照文書に根拠がなく、人が答えないと決まらない判断は、決めた点・選んだもの・推奨を確認事項として結果に含めてください。確認事項だけを理由にLGTMを保留しないでください。
