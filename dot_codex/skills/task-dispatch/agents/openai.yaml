@@ -1,7 +1,7 @@
 interface:
   display_name: "Task Dispatch"
-  short_description: "台帳とGitHubを照合し、夕方に予定を書き、夜に起動し、朝に報告する。"
-  default_prompt: "$task-dispatchを使い、予定・起動・報告のうち指定した回を1回行ってください。"
+  short_description: "台帳とGitHubを照合し、退勤前に予定を書き、OKされた仕事から起動し、朝に報告する。"
+  default_prompt: "$task-dispatchを使い、報告・予定・見回り・起動のうち指定した回を1回行ってください。"
 
 policy:
   allow_implicit_invocation: false
