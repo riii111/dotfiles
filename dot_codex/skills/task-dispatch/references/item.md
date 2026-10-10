@@ -6,13 +6,11 @@
 
 ```yaml
 key: gh:org/repo#456
-source: org/repo#123           # umbrella issue。なければ空
-kind: issue                    # 発見元のkind（issue / improvement）
+source: example-epic           # 発見元の`sources[].name`。umbrellaはconfigから引く
 status: discovered             # discovered / ready / running / needs_decision / review_ready / done
 next_action: ""                # 次にすること、または止まった位置。自分の言葉で書く
 question: ""                   # 予定で聞く問い。選択肢と推奨を付け、答えで判定し直したら空にする
 worker_thread: ""
-branch: ""
 pr: ""
 attempts:
   - date: 2026-10-12T10:05:00+09:00   # 前後を比べるため時刻まで書く
@@ -47,17 +45,16 @@ Issueのkeyは`gh:<owner>/<repo>#<番号>`とする。
 
 - PRがopenである。
 - 現在のheadのcheckがすべて成功している。
-  `config.yaml`の`repos`で`ci: false`としたリポジトリだけはcheckなしでよい。
   checkが1つもなければ、まだ登録されていないものとして満たさない。
 - `worker_thread`の最新turnが、独立レビューのLGTMとCIの成功を伝える完了報告で終わっている。
   完了報告に人の判断が必要な点や確かめていないことがあっても、ここでは満たすものとし、朝の報告で伝える。
 - `harnexus-task state --request <作業ディレクトリ>/.reviewctl/request.json`の`head`（最後に独立レビューへ送ったhead）が現在のheadと一致する。
-  作業ディレクトリは、`config.yaml`の`repos.<owner/repo>.path`で`git worktree list --porcelain`を実行し、itemの`branch`と一致するものとする。見つからなければ満たさない。
+  作業ディレクトリは、`config.yaml`の`repos.<owner/repo>.path`で`git worktree list --porcelain`を実行し、PRのhead branchと一致するものとする。見つからなければ満たさない。
 
 ### 遷移表
 
 `done`以外の項目を照合し、表を上から当てはめて最初に当たった行に従う。
-表を当てはめる前に、`pr`が空の`running`は、Issueに紐づくPR（Developmentのリンク、本文で閉じるIssueに指定したPR）を探し、あれば`pr`・`branch`に書く。PRがなければレビュー可能ではない。
+表を当てはめる前に、`pr`が空の`running`は、Issueに紐づくPR（Developmentのリンク、本文で閉じるIssueに指定したPR）を探し、あれば`pr`に書く。PRがなければレビュー可能ではない。
 
 | 現在 | 条件 | 移る先 | 記録 |
 | --- | --- | --- | --- |

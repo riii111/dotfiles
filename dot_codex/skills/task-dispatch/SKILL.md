@@ -90,7 +90,7 @@ Scheduled Taskの作業ディレクトリは`~/agent-desk/`とし、gitでは管
 
 ### GitHubと台帳の状態を合わせる
 
-`items/`の全項目を読み、GitHubの状態と[遷移表](references/item.md#遷移表)から`status`・`pr`・`branch`を更新する。
+`items/`の全項目を読み、GitHubの状態と[遷移表](references/item.md#遷移表)から`status`・`pr`を更新する。
 `review_ready`も前回の判定を引き継がず、PRの現在のheadで確かめ直す。
 読めないitemは処理せず、その回の記録に載せる。
 照合では[続行の理由](references/continue.md)の確認だけを行う。

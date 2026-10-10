@@ -7,7 +7,6 @@ owner: your-github-login       # 承認・レビューとして扱うGitHubア�
 repos:                         # 起動してよいリポジトリ
   org/repo:
     path: /Users/you/src/org/repo  # Codex projectのローカルパス
-    ci: true                   # CIのないリポジトリだけfalse
 project:                       # 優先度・期限を読むGitHub Project。なければ省略
   owner: org
   number: 1
@@ -16,7 +15,6 @@ project:                       # 優先度・期限を読むGitHub Project。な
 sources:
   - name: example-epic         # 予定と報告の見出しに使う案件名
     umbrella: org/repo#123     # umbrella issue。省略可
-    kind: issue                # issue / improvement
     query: >-
       repo:org/repo is:issue is:open label:agent-ready author:your-github-login
 limits:
@@ -35,7 +33,7 @@ calendar:
 - `sources[].query`は`gh search issues`にそのまま渡す。
   リポジトリ・ラベルに加えて作成者を`owner`に絞り、人が開始を許した範囲だけを書く。
 - `sources[].name`と`umbrella`の表示方法は[予定と報告の書き方](digest.md#書き方)に従う。
-- `project`と`kind`による優先順は[今夜の予定を作成する](plan.md#今夜の予定を作成する)に従う。
+- `project`による優先順は[今夜の予定を作成する](plan.md#今夜の予定を作成する)に従う。
 - `max_continues`の数え方と上限到達時の扱いは[既存workerへの続行](continue.md)に従う。
 - 新規起動の数の決め方は[新規起動する件数](launch.md#新規起動する件数)に書く。
 - 上限と時刻の値は例。運用しながら人が調整する。
