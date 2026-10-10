@@ -17,17 +17,14 @@ project:                       # 優先度・期限を読むGitHub Project。な
 sources:
   - name: example-epic         # 予定と報告の見出しに使う案件名
     umbrella: org/repo#123     # umbrella issue。省略可
-    kind: issue                # issue / improvement / investigation
+    kind: issue                # issue / improvement
     query: >-
       repo:org/repo is:issue is:open label:agent-ready author:your-github-login
 limits:
   max_unreviewed_drafts: 3     # 未レビューのDraft PRがこの件数以上なら新規起動しない
-  max_review_rounds: 3         # ownerのレビューの往復回数の上限
   max_continues: 2             # 同じ理由でworkerへ続行を送る回数の上限
-  max_investigations_per_run: 2  # 1回の実行で調査する件数の上限
   max_questions_per_plan: 3    # 1回の予定で聞く問いの上限
   run_minutes: 30              # 1回の実行の時間枠
-  task_hours: 24               # 最後にrunningへ移してからreview_readyまでの時間枠
 schedule:
   plan_at: "17:00"             # Calendarがオフの日と、退勤時刻の返事がない日に予定を作る時刻
 calendar:
@@ -41,7 +38,6 @@ calendar:
 - 予定と報告の案件の見出しは`sources[].name`で、`umbrella`の最上位の親Issueへリンクする。
   `umbrella`を省略した発見元はリンクなしの見出しにする。
 - 起動の順は、`project`の優先度・期限と依存関係を先に適用し、同じ順位の中で`kind`の区分を使う。
-- `max_review_rounds`は人のレビューの回数で、worker内のCodexレビューの往復は数えない。
 - `max_continues`は、最後に`review_ready`へ移した後（なければ起動後）の送信を理由ごとに数える。
   上限に達した後の停止は、続行を送らず人の判断待ちにする。
 - 新規起動の数の決め方は[量](launch.md#量)に書く。

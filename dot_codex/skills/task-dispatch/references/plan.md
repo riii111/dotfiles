@@ -13,13 +13,11 @@ keyは[item](item.md#key)の規則で作り、既存項目との重複はファ�
 
 ## 判定
 
-`lessons.md`の「本採用」と各項目の`attempts`を読んでから、`discovered`・`investigating`・`needs_decision`の項目を判定する。
-「候補」は判定の規則として使わない。
+各項目の`attempts`を読んでから、`discovered`・`needs_decision`の項目を判定する。
 `needs_decision`は、Issue本文の編集、IssueまたはPRへの`owner`のコメント、決めたことのメモへの追記のどれかが、最後に`needs_decision`へ移した記録より新しい場合だけ判定し直す。
 判定したら、結果が同じでも`status`を記録する。
 
-次の2点を両方満たせば`ready`、調査で解消できそうなら`investigating`、それ以外は`needs_decision`にする。
-`kind: investigation`の項目は`ready`にせず、`investigating`として扱う。
+次の2点を両方満たせば`ready`、それ以外は`needs_decision`にする。
 
 - ゴールと受け入れ条件が、Issue本文とそこからリンクされた文書から読み取れる。
 - 大きな設計判断に未承認のものが残っていない。
@@ -27,12 +25,6 @@ keyは[item](item.md#key)の規則で作り、既存項目との重複はファ�
 大きな設計判断とは、仕様・公開インターフェース・互換性・担当範囲など、後から変えるコストが大きい判断を指す。
 承認として扱うのは、`owner`が書いたIssue本文・コメント・リンク先の文書と、決めたことのメモにある決定だけとする。
 その他の未決事項は、workerが暫定で決めて完了報告に書き、朝の報告で確かめるため、ここでは問わない。
-
-調査で解消できるのは、既存コードの挙動や影響範囲のような事実の確認だけとする。
-大きな設計判断は調査で埋めず、`needs_decision`にする。
-`investigating`の調査は、GitHub上のリポジトリの内容を読み取り専用で読み、1回の実行で`limits.max_investigations_per_run`件までとする。
-結果を`attempts`に書き、解消すれば`ready`にする。
-`kind: investigation`の項目は調査を終えたら`needs_decision`にし、確かめた事実を`next_action`に要約し、起動につなげるかを`question`で聞く。
 
 大きな設計判断で`needs_decision`にした項目は、`question`に人に聞く問いを1つ、選択肢と推奨を付けて自分の言葉で書く。
 答えが来て判定し直すまで、毎回の予定で聞き続ける。
@@ -53,15 +45,13 @@ AIはビジネス上の優先順位を決めない。
 | 2 | 実行途中の仕事 | 既存workerへの続行 |
 | 3 | 合意済みのIssue（`kind: issue`） | 新規起動 |
 | 4 | 定常改善（`kind: improvement`） | 新規起動 |
-| 5 | 新規調査（`kind: investigation`） | 判定の調査 |
 
-続行は[続行の送信](item.md#続行の送信)の手順1〜3を通るものを見込みとして載せる。
+続行は[続行の送信](item.md#続行の送信)の表で行5に当たるものを見込みとして載せる。
 OKは不要で、`planned`も記録しない。
 新規起動は`ready`で[起動の確認](launch.md#起動の確認)を通ったものを載せる。
 依存が未完了の項目は載せず、`next_action`に依存先を書く。
 
 新規起動は[量](launch.md#量)の枠まで載せる。
 枠が0で新規起動を載せなかったときは、予定の`## そのほか`に1文で書く。
-`owner`のレビューの往復が`limits.max_review_rounds`を超えた項目は、遷移表に従って`needs_decision`にする。
 予定を書いたら、`days/<日付>.yaml`に自分のスレッドを書き、[Scheduled Taskの扱い](schedule.md#scheduled-taskの扱い)に従って自分のScheduled Taskを消す。
 最終回答には[予定のスレッド](digest.md#スレッドでのやりとり)の書き方で予定とOKの返し方を書き、ユーザーの返事を待つ。
