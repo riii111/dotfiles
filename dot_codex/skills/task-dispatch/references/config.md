@@ -28,16 +28,10 @@ limits:
   run_minutes: 30              # 1回の実行の時間枠
   task_hours: 24               # 最後にrunningへ移してからreview_readyまでの時間枠
 schedule:
-  plan_at: "17:30"             # 退勤予定が分からない日に予定を作る時刻
-  poll_minutes: 10             # 見回りの間隔
-  watch_hours: 3               # 退勤予定から見回りを続ける時間
+  plan_at: "17:30"             # Calendarがオフの日に予定を作る時刻
 calendar:
   enabled: false               # trueで、朝に今日の予定から退勤予定と不在を読む
   leave_title: 退勤             # 退勤予定とみなす予定の名前
-slack:
-  enabled: false               # trueで、botのDMで知らせてOKを受け取る
-  token_env: DISPATCH_SLACK_BOT_TOKEN  # botのトークンを入れた環境変数の名前。値は書かない
-  owner_user_id: U0123456789   # 返事を受け付けるSlackユーザーのID
 ```
 
 - `repos`にないリポジトリのIssueは起動せず、`needs_decision`にする。
@@ -48,9 +42,7 @@ slack:
 - `max_continues`は、最後に`review_ready`へ移した後（なければ起動後）の送信を理由ごとに数える。上限に達した後の停止は、続行を送らず人の判断待ちにする。
 - 新規起動の数の決め方は[量](launch.md#量)に書く。
 - 上限と時刻の値は例。運用しながら人が調整する。
-- `calendar.enabled`がfalseなら、Slackがオンでも退勤時刻は聞かず、毎日`schedule.plan_at`に予定を作る。休みも読まない。
-- `slack.enabled`がfalseなら、予定は`runs/`の文書だけで伝え、OKはownerがIssueに`OK`とだけコメントして返す。OKの取り消しはできない。見回りの回は登録せず、夜の起動の回がOKを読んで起動する。
-- Slackのbotは、会社で作成と承認を受けたアプリを使う。本人のアカウントから自分宛てに送ると通知が鳴らないため。DMの送信と返事の読み取りの権限（`chat:write`・`im:write`・`im:history`など）が要る。トークンはリポジトリ・`~/agent-desk/`に置かず、Scheduled Taskの実行環境で`token_env`の環境変数から読めるようにする。
+- `calendar.enabled`がfalseなら、退勤時刻を聞かず、毎日`schedule.plan_at`に予定を作る。休みも読まない。
 
 ## 実行の時刻
 
@@ -61,13 +53,14 @@ slack:
 | 平日 6:00 | `$task-dispatch 報告` | 予定との違いを報告し、今日の予定の回を登録する |
 | 平日 22:00 | `$task-dispatch 起動` | 続行を送り、OK済みで残った項目を起動する |
 
-予定の回（`$task-dispatch 予定`）と見回りの回（`$task-dispatch 見回り`）は、task-dispatchが[1日の段取り](launch.md#1日の段取り)で登録し、使い終えたら消す。手動で再実行するときも、同じ指示を使う。
+予定の回（`$task-dispatch 予定`）は、task-dispatchが[1日の段取り](launch.md#1日の段取り)で登録し、使い終えたら消す。どの回もScheduled Taskが毎回新しいスレッドを作り、通知はCodex Appに任せる。予定の回は退勤の1時間前で、ユーザーが在席してスレッドに返事をできる時刻とする。手動で再実行するときも、同じ指示を使う。
 
 ## 試運転で確かめること
 
-会社のMacで在席中に動かし、次を確かめてから`calendar.enabled`・`slack.enabled`をtrueにし、無人の時刻へ移す。
+会社のMacで在席中に動かし、次を確かめてから`calendar.enabled`をtrueにし、無人の時刻へ移す。
 
 1. Calendarのプラグインで、退勤予定と不在（outOfOffice）を読めるか。
-2. botでDMを送れるか。ownerの返事（DMへの直接の返事とスレッドの返事）を読めるか。
-3. 予定の回から`automation_update`でScheduled Taskを作れるか、消せるか。
-4. `auto_review`のもとで、サンドボックス外の実行（`harnexus-task`やSlackへの通信など）が無人でも止まらないか。
+2. Scheduled Taskから毎回新しいスレッドを作って動かせるか。そのスレッドへの返事で続きが動くか。
+3. スレッドが自分をアーカイブできるか。
+4. 実行から`automation_update`でScheduled Taskを作成・更新・削除できるか。
+5. `auto_review`のもとで、サンドボックス外の実行（`harnexus-task`など）が無人でも止まらないか。

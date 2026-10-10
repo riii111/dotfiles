@@ -75,7 +75,7 @@ attempts:
 `running`のturnは、`worker_thread`の最新1turnを出力なしで`read_thread`して確かめる。idleだけで停止と判断しない。
 「最後に`running`へ移した」時刻は、最後の`launched`または`→running`の`status`のうち新しいほうとする。人が`running`へ戻した場合も、検出時の記録から数え直す。
 `ready`から先の遷移（起動、確認を通らない場合、起動の失敗）は照合ではなく[起動](launch.md)の手順で決め、この表は使わない。
-判定の2行（`discovered`・`investigating`と`needs_decision`）は予定と見回りの回だけで使い、起動と報告の回では状態を変えない。
+判定の2行（`discovered`・`investigating`と`needs_decision`）は予定の回だけで使い、ほかの回では状態を変えない。
 
 headが更新されたときの例：
 
@@ -127,9 +127,9 @@ task-dispatchが行った操作と結果を古い順に追記する。`result`�
 
 - `status`：`status`を変えた。`note`に「<前>→<後>: <理由>」を書く。
 - `planned`：予定か追加分に新規起動として載せた。`note`に`launch`、追加分なら`launch 追加分`を書く。後に`launch_requested`・`plan_cancelled`・`failed`のどれもなければ、まだ使われていない。
-- `plan_cancelled`：`planned`を起動せずに閉じた。`note`に理由（DMで取り消し・再計画・持ち越し・予定から変わった点）を書く。
-- `approved`：ownerのOKを受けた。`note`に「<DM|Issueのコメント> body=<Issue本文の最終編集時刻> deps=<依存先の番号。なければ->」を書く。
-- `approval_revoked`：OKを取り消した。`note`に理由（DMで取り消し・前提の変化）を書く。
+- `plan_cancelled`：`planned`を起動せずに閉じた。`note`に理由（返事で取り消し・再計画・持ち越し・予定から変わった点）を書く。
+- `approved`：ownerのOKを受けた。`note`に「body=<Issue本文の最終編集時刻> deps=<依存先の番号。なければ->」を書く。
+- `approval_revoked`：OKを取り消した。`note`に理由（返事で取り消し・前提の変化）を書く。
 - `launch_requested`：起動の直前。`ready`→`running`の記録を兼ねる。
 - `launched`：起動を確認した。`note`にthreadIdを書く。
 - `review_round`：`owner`のレビューを検出した。`note`にレビューのIDを書く。
