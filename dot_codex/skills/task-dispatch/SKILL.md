@@ -8,8 +8,7 @@ description: |
 
 # Task Dispatch
 
-起動時の指示にある`報告`・`予定`・`起動`に従って1回実行する。
-指定がなければ何もせず終了する。
+起動時の指示にある`報告`・`予定`・`起動`に従って1回実行する。指定がなければ何もせず終了する。
 起動・実装・レビューには既存のtask-session-launch・task-worker・task-review-cycleを使い、workerの完了は待たない。
 各文書内のリンクは、その文書のディレクトリを基準に解決する。
 
@@ -33,12 +32,10 @@ Scheduled Taskはこのディレクトリを作業ディレクトリにして実
 実行の時刻は[config](references/config.md#実行の時刻)に書く。
 
 - `config.yaml`：発見元・リポジトリの対応・上限・人のGitHubアカウント・Calendarの設定。
-  書式は[config](references/config.md)。
-  人だけが編集する。
+  書式は[config](references/config.md)。人だけが編集する。
 - `items/<file>.yaml`：1仕事1ファイルの台帳。
   書式と状態の遷移は[item](references/item.md)。
-- `requests/<file>.json`：task-session-launchへ渡す起動依頼JSON。
-  itemと同じファイル名にする。
+- `requests/<file>.json`：task-session-launchへ渡す起動依頼JSON。itemと同じファイル名にする。
 - `days/<日付>.yaml`：その日の退勤予定と、登録したScheduled Task・予定のスレッド。
   書式は[1日の段取り](references/schedule.md#1日の段取り)。
 - `decisions/<itemのファイル名>.md`：予定のスレッドでownerが答えた大きな判断のメモ。
@@ -49,8 +46,7 @@ Scheduled Taskはこのディレクトリを作業ディレクトリにして実
 ## 開始時の確認
 
 `config.yaml`がない、または`harnexus-task`が未導入なら、その回の予定か報告に理由を書いて終了する（起動の回は[記録](#記録)の書き方に従う）。
-次に`.lock/`をmkdirで作り、`.lock/started_at`に現在時刻を書く。
-全実行で同じlockを使う。
+次に`.lock/`をmkdirで作り、`.lock/started_at`に現在時刻を書く。全実行で同じlockを使う。
 作れなければ待たずに、次に従う。
 
 - `started_at`から`limits.run_minutes`の2倍を過ぎている：lockを作り直す。
@@ -94,13 +90,11 @@ OKと量を受けたら、同じturnで起動へ進む。
 
 返事と起動の回で、[起動の手順](references/launch.md#起動の手順)に従い、有効なOKのある`planned`を量の枠まで起動する。
 退勤時刻の返事がなかった日の起動の回は、[OKのない項目も予定どおり始める](references/launch.md#返事がなかった日)。
-起動の回は、そのあと照合で確かめた続行の理由を、[続行の送信](references/item.md#続行の送信)に従って送る。
-続行は返事の回では送らない。
+起動の回は、そのあと照合で確かめた続行の理由を、[続行の送信](references/item.md#続行の送信)に従って送る。続行は返事の回では送らない。
 
 ### 段取り
 
-報告の回は、報告を書く前に[1日の段取り](references/schedule.md#1日の段取り)でその日の予定の時刻を決め、Scheduled Taskを登録する。
-結果は報告の冒頭に書く。
+報告の回は、報告を書く前に[1日の段取り](references/schedule.md#1日の段取り)でその日の予定の時刻を決め、Scheduled Taskを登録する。結果は報告の冒頭に書く。
 
 ### 報告
 
@@ -112,8 +106,7 @@ OKと量を受けたら、同じturnで起動へ進む。
 各項目の`attempts`を更新する。
 台帳の正しさはファイルの内容で保ち、履歴は`attempts`に残す。
 起動と返事の回は予定の本文を書き換えない。
-起動を止めた理由や失敗は`attempts`に残し、項目に結び付かないもの（lockの残り・前提の不足・Scheduled Taskの失敗）は`runs/<日付>-plan.md`の`## そのほか`に追記して、朝の報告で伝える。
-ファイルや見出しがなければ作る。
+起動を止めた理由や失敗は`attempts`に残し、項目に結び付かないもの（lockの残り・前提の不足・Scheduled Taskの失敗）は`runs/<日付>-plan.md`の`## そのほか`に追記して、朝の報告で伝える。ファイルや見出しがなければ作る。
 最終回答は実行の種類に応じて返す。
 
 - 報告・予定：書いた本文だけ。
@@ -135,5 +128,4 @@ OKと量を受けたら、同じturnで起動へ進む。
   過去の予定と報告は判定に使わない（朝の報告で比べる直前の予定だけを読む）。
 - `harnexus-task`の結果不明・モデル不一致・起動失敗、受理を確かめられなかった続行の送信、結果の分からないScheduled Taskの作成は、やり直さずに`needs_decision`にする。
 - `config.yaml`は人が作成・編集し、自分では編集しない。
-- GitHubとCalendarには書き込まない。
-  PRはworkerがDraftで作る。
+- GitHubとCalendarには書き込まない。PRはworkerがDraftで作る。

@@ -44,8 +44,7 @@ GitHubのIssueは`gh:<owner>/<repo>#<番号>`とする。
 
 ### レビュー可能
 
-照合のたびに、PRの現在のheadについて次をすべて確かめる。
-前回の結果は引き継がない。
+照合のたびに、PRの現在のheadについて次をすべて確かめる。前回の結果は引き継がない。
 
 - PRがopenである。
 - 現在のheadのcheckがすべて成功している。
@@ -54,16 +53,14 @@ GitHubのIssueは`gh:<owner>/<repo>#<番号>`とする。
 - `worker_thread`の最新turnが、独立レビューのLGTMとCIの成功を伝える完了報告で終わっている。
   完了報告に人の判断が必要な点や確かめていないことがあっても、ここでは満たすものとし、朝の報告で伝える。
 - `harnexus-task state --request <作業ディレクトリ>/.reviewctl/request.json`の`head`（最後に独立レビューへ送ったhead）が現在のheadと一致する。
-  作業ディレクトリは、`config.yaml`の`repos.<owner/repo>.path`で`git worktree list --porcelain`を実行し、itemの`branch`と一致するものとする。
-  見つからなければ満たさない。
+  作業ディレクトリは、`config.yaml`の`repos.<owner/repo>.path`で`git worktree list --porcelain`を実行し、itemの`branch`と一致するものとする。見つからなければ満たさない。
 
 ### 遷移表
 
 照合で使う。
 上の行から順に当てはめ、最初に当たった行だけを使う。
 `done`の項目は照合しない。
-表を当てはめる前に、`pr`が空の`running`は、Issueに紐づくPR（Developmentのリンク、本文で閉じるIssueに指定したPR）を探し、あれば`pr`・`branch`に書く。
-PRがなければレビュー可能ではない。
+表を当てはめる前に、`pr`が空の`running`は、Issueに紐づくPR（Developmentのリンク、本文で閉じるIssueに指定したPR）を探し、あれば`pr`・`branch`に書く。PRがなければレビュー可能ではない。
 
 | 現在 | 条件 | 移る先 | 記録 |
 | --- | --- | --- | --- |
@@ -80,8 +77,7 @@ PRがなければレビュー可能ではない。
 | discovered | [判定](plan.md#判定) | ready・needs_decision | `status` |
 | needs_decision | [判定](plan.md#判定)の再判定条件を満たした | ready・needs_decision | `status` |
 
-`running`のturnは、`worker_thread`の最新1turnを出力なしで`read_thread`して確かめる。
-idleだけで停止と判断しない。
+`running`のturnは、`worker_thread`の最新1turnを出力なしで`read_thread`して確かめる。idleだけで停止と判断しない。
 `ready`から先の遷移（起動、確認を通らない場合、起動の失敗）は照合ではなく[起動](launch.md)の手順で決め、この表は使わない。
 判定の2行（`discovered`と判定による`needs_decision`）は予定の回だけで使い、ほかの回では状態を変えない。
 
@@ -99,8 +95,7 @@ headが更新されたときの例：
 
 `running`で`worker_thread`が空なら、起動結果を記録する前に止まった項目として`harnexus-task state --request requests/<file>.json`を見る。
 `workerThreadId`があれば書いて`launched`を追記する。
-`pending`があれば`needs_decision`にし、Appで確認する内容を`next_action`に書く。
-どちらもなければ`ready`に戻す。
+`pending`があれば`needs_decision`にし、Appで確認する内容を`next_action`に書く。どちらもなければ`ready`に戻す。
 状態を変えたら`status`を記録する。
 
 ## ownerのレビュー
@@ -146,8 +141,7 @@ messageの先頭に`$task-worker`を置き、PRのURL・head・理由・refを�
 ## attempts
 
 task-dispatchが行った操作と結果を古い順に追記する。
-`note`は1行で、自分の操作と結果だけを書く。
-Issueやコメントの文章は写さない。
+`note`は1行で、自分の操作と結果だけを書く。Issueやコメントの文章は写さない。
 
 | result | 書くとき | note |
 | --- | --- | --- |

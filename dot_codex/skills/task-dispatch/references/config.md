@@ -41,15 +41,12 @@ calendar:
 - `max_continues`は、最後に`review_ready`へ移した後（なければ起動後）の送信を理由ごとに数える。
   上限に達した後の停止は、続行を送らず人の判断待ちにする。
 - 新規起動の数の決め方は[量](launch.md#量)に書く。
-- 上限と時刻の値は例。
-  運用しながら人が調整する。
-- `calendar.enabled`がfalseなら、退勤時刻を聞かず、毎日`schedule.plan_at`に予定を作る。
-  休みも読まない。
+- 上限と時刻の値は例。運用しながら人が調整する。
+- `calendar.enabled`がfalseなら、退勤時刻を聞かず、毎日`schedule.plan_at`に予定を作る。休みも読まない。
 
 ## 実行の時刻
 
-人が作るScheduled Taskは2つで、どちらも`~/agent-desk/`を作業ディレクトリにする。
-時刻は例。
+人が作るScheduled Taskは2つで、どちらも`~/agent-desk/`を作業ディレクトリにする。時刻は例。
 
 | 時刻 | 指示 | すること |
 | --- | --- | --- |
@@ -66,8 +63,7 @@ calendar:
 会社のMacで在席中に動かし、次を確かめてから`calendar.enabled`をtrueにし、無人の時刻へ移す。
 
 1. Calendarのプラグインで、退勤予定と不在（outOfOffice）を読めるか。
-2. Scheduled Taskから毎回新しいスレッドを作って動かせるか。
-   そのスレッドへの返事で続きが動くか。
+2. Scheduled Taskから毎回新しいスレッドを作って動かせるか。そのスレッドへの返事で続きが動くか。
 3. スレッドが自分をアーカイブできるか。
 4. 実行から`automation_update`でScheduled Taskを作成・更新・削除できるか。
 5. workerを起動したスレッドとは別のスレッドから続行を送り、workerが進むか。

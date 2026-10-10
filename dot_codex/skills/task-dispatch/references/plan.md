@@ -35,8 +35,7 @@ keyは[item](item.md#key)の規則で作り、既存項目との重複はファ�
 新規起動の項目ごとに`attempts`へ`planned`を追記する。
 前回までの`planned`のうち使われていないものには、先に`plan_cancelled`（note：再計画）を追記する。
 
-優先順は、GitHub Projectの優先度・期限とIssueの依存関係（blocked by）を先に適用し、同じ順位の中で次の区分を使う。
-AIはビジネス上の優先順位を決めない。
+優先順は、GitHub Projectの優先度・期限とIssueの依存関係（blocked by）を先に適用し、同じ順位の中で次の区分を使う。AIはビジネス上の優先順位を決めない。
 順位が付かない項目どうしは、Issueの作成日が古い順にする。
 
 | 順位 | 対象 | 扱い |
