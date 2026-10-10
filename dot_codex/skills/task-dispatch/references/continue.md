@@ -13,7 +13,7 @@
 
 | 行 | 状況 | 扱い |
 | --- | --- | --- |
-| 1 | workerの最新turnが進行中 | 送らず、次の起動の回に持ち越す |
+| 1 | workerの最新turnが進行中 | 送らず、次の夜の実行に持ち越す |
 | 2 | 同じ理由・同じhead・同じrefの`continue_sent`があり、その送信より後にworkerのturnが終わっている | 送らない。送っても進まなかったものとして`needs_decision`にし、止まった位置と送った内容を`next_action`に書く |
 | 3 | 同じ理由・同じhead・同じrefの`continue_sent`があり、その送信より後のturnがない | 送らない。届いていない可能性があるため`needs_decision`にし、Appで確かめる内容を`next_action`に書く |
 | 4 | 同じ理由の`continue_sent`が、最後に`review_ready`へ移した後（なければ最後の`launched`の後）に`limits.max_continues`件ある | 送らずに`needs_decision`にし、繰り返し止まった位置を`next_action`に書く |

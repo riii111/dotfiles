@@ -66,17 +66,17 @@ Issueのkeyは`gh:<owner>/<repo>#<番号>`とする。
 | running | `worker_thread`が空 | 下記「起動結果の確認」 | 下記 |
 | running | レビュー可能 | review_ready | `status`（noteにhead） |
 | running | worker_threadの最新turnが、大きな設計判断を求める最終回答で止まっている | needs_decision（問いを`question`に書く） | `status` |
-| running | worker_threadの最新turnが、それ以外の最終回答で止まっている | [続行の送信](continue.md)の理由`stopped`として起動の回で決める | なし |
+| running | worker_threadの最新turnが、それ以外の最終回答で止まっている | [続行の送信](continue.md)の理由`stopped`として夜の実行で決める | なし |
 | running | 上のどれでもない（turnが進行中、CIが実行中など） | running | なし |
 | review_ready | 現在のheadでレビュー可能でない | running | `status`（noteに理由：headの更新・CI実行中・CI失敗・レビュー未了） |
-| review_ready | 上のどれでもない | review_ready（続行の理由があれば起動の回で[続行の送信](continue.md)を決める） | なし |
+| review_ready | 上のどれでもない | review_ready（続行の理由があれば夜の実行で[続行の送信](continue.md)を決める） | なし |
 | needs_decision | `worker_thread`の最新turnが、最後に`needs_decision`へ移した後に始まっている（人がAppで答えて再開した） | running | `status` |
 | discovered | [着手できるか判断する](plan.md#着手できるか判断する) | ready・needs_decision | `status` |
 | needs_decision | [着手できるか判断する](plan.md#着手できるか判断する)の再判定条件を満たした | ready・needs_decision | `status` |
 
 `running`のturnは、`worker_thread`の最新1turnを出力なしで`read_thread`して確かめる。idleだけで停止と判断しない。
 `ready`から先の遷移（起動、確認を通らない場合、起動の失敗）は照合ではなく[起動](launch.md)の手順で決め、この表は使わない。
-判定の2行（`discovered`と判定による`needs_decision`）は予定の回だけで使い、ほかの回では状態を変えない。
+判定の2行（`discovered`と判定による`needs_decision`）は予定作成の実行だけで使い、ほかの回では状態を変えない。
 
 ### 起動結果の確認
 
