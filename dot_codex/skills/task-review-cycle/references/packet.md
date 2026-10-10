@@ -1,6 +1,6 @@
 # レビュー資料
 
-人がPRを短時間で判断するための資料。LGTMを出すreviewerが作る。最終回答の末尾に`## レビュー資料`の見出しを置き、次のYAMLを`yaml`のコードブロックで続ける。該当があれば、その後に`### lessons候補`を置く。workerは完了報告にYAMLを含める。資料は人に読ませるものではなく、ディスパッチの朝刊の材料にする。PR本文・PRのコメントなどGitHubには載せない。
+ディスパッチが朝刊を作るための材料で、人には見せない。LGTMを出すreviewerが、workerの作業ディレクトリの`.reviewctl/packet.yaml`に次のYAMLを書く。資料の内容は、最終回答・workerへのmessage・workerの完了報告・PR本文・PRのコメントのどれにも書かない。
 
 ```yaml
 head: ""                     # 資料の対象のcommit SHA
@@ -29,6 +29,7 @@ verification:
   ci_url: ""
   unconfirmed: []
 unresolved_findings: []
+lessons: []
 ```
 
 ## 各項目
@@ -65,7 +66,7 @@ unresolved_findings: []
 2. 参照文書に根拠がある判断は、機械的条件に触れていてもhuman_decisionsから外し、grounded_decisionsに書く。機械的条件に触れる箇所は、risk_reasonsとreview_targetsに残す。
 3. 根拠が無く、人が答えないと決まらない判断だけをhuman_decisionsに残す。
 4. 残した判断が3件を超えたら、影響の大きい3件を載せ、残りはunresolved_findingsに「判断未掲載: <決めた点>」で加える。
-5. 残した判断が1件以上あれば、`### lessons候補`に次の1行を書く。件数は載せきれなかった分も含める。
+5. 残した判断が1件以上あれば、`lessons`に次の1行を加える。件数は載せきれなかった分も含める。
 
 ```text
 <taskId>: 根拠のない判断が<件数>件残った（<主な判断の要約>）。

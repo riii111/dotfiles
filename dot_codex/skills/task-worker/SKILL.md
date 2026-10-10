@@ -34,7 +34,7 @@ description: |
 
 そのheadを通常のpushで公開し、create-pr SKILL、なければPR templateと直近の慣例に従ってDraft PRを作成・更新する。
 PRタイトルは、タイトルだけで変更が分かるように「誰が何をすると何が変わるか」を具体的に書く（例：「決済APIが5xxを返したら指数バックオフで再送する」）。「安定性を高める」のような効能だけの表現にしない。本文の冒頭も同じ書き方で、変更前後の挙動の違いを1〜3文で書く。接頭辞などの形式はcreate-pr SKILLや慣例に従い、文章は[japanese-tech-writing](../japanese-tech-writing/SKILL.md)に従う。ディスパッチの朝刊はタイトルを言い換えずに載せる。
-[レビュー資料](../task-review-cycle/references/packet.md)は、PR本文・PRのコメントなどGitHubに載せない。そのheadでLGTMを出した最終回答の資料のYAMLを、完了報告の末尾に`## レビュー資料`として`yaml`のコードブロックで含める。含める前に、PRのheadと資料の`head`が一致することを確かめ、そのheadのcheck結果をGitHubから取り直して`ci`（「未取得」の理由も含む）・`ci_url`と、`unconfirmed`のうちCI jobの分を書き換える。一致しなければ`ci`を「未取得: PRのheadが資料と不一致」、`ci_url`を空にする。新しいheadをpushしても、そのheadでLGTMを受けるまで資料の`head`は書き換えない。
+reviewerが`.reviewctl/packet.yaml`に書く[レビュー資料](../task-review-cycle/references/packet.md)は人に見せない材料なので、完了報告・PR本文・PRのコメントに内容を書かない。Draft PRを作った後、PRのheadと資料の`head`が一致することを確かめ、そのheadのcheck結果をGitHubから取り直して`ci`（「未取得」の理由も含む）・`ci_url`と、`unconfirmed`のうちCI jobの分をファイル上で書き換える。一致しなければ`ci`を「未取得: PRのheadが資料と不一致」、`ci_url`を空にする。新しいheadをpushしても、そのheadでLGTMを受けるまで資料の`head`は書き換えない。
 完了条件はPR headとreview済みheadの一致、そのheadの必須検証・独立LGTM・CI成功とする。
 完了報告のGit・PR・CI状態は直近の確認結果に基づき、未追跡・失敗などを未確認のまま断言しない。
 Ready化・mergeは別途依頼された場合だけ行い、その直前に現在のbaseとのmerge可否と意味的な競合を確認する。

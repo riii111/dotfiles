@@ -98,7 +98,7 @@ Issueの判断待ちを先に、PRの問いを後に置く。各問いは、問�
 
 ## レビュー資料の扱い
 
-レビュー資料は[packet](../../task-review-cycle/references/packet.md)の書式で、`worker_thread`の最新の完了報告の`## レビュー資料`から読む。最新1turnを出力なしで`read_thread`し、turnが進行中なら前回までに読んだ資料を使う。資料の`head`がPRの現在のheadと違えば、その資料の項目は朝刊に使わない。資料がない、または書式が違えば「資料なし」として扱う。
+レビュー資料は[packet](../../task-review-cycle/references/packet.md)の書式で、workerの作業ディレクトリの`.reviewctl/packet.yaml`から読む。作業ディレクトリは、`config.yaml`の`repos.<owner/repo>.path`で`git worktree list --porcelain`を実行し、itemの`branch`と一致するものとする。資料の`head`がPRの現在のheadと違えば、その資料の項目は朝刊に使わない。資料がない、または書式が違えば「資料なし」として扱う。
 
 ## 説明
 
@@ -123,5 +123,5 @@ Issueの判断待ちを先に、PRの問いを後に置く。各問いは、問�
 ```
 
 - 候補には、自分の実行結果から読み取れたことを、日付とkeyを付けて1行で書く。原因や、事前に止めるべきだったかの評価は書かない。
-- workerの完了報告の`lessons候補`は、[レビュー資料](../../task-review-cycle/references/packet.md#判断ログの照合)の定型「<taskId>: 根拠のない判断が<件数>件残った（…）。」に一致する行だけを受け付ける。件数だけを使い、括弧内の要約は捨てて上の例の形で書く。一致しない行は使わず、朝刊に件数だけ書く。
+- レビュー資料の`lessons`は、[レビュー資料](../../task-review-cycle/references/packet.md#判断ログの照合)の定型「<taskId>: 根拠のない判断が<件数>件残った（…）。」に一致する行だけを受け付ける。件数だけを使い、括弧内の要約は捨てて上の例の形で書く。一致しない行は使わず、朝刊に件数だけ書く。
 - 候補が20行を超えたら、古いものから消す。本採用は消さない。
