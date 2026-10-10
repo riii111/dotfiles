@@ -21,7 +21,7 @@ sources:
       repo:org/repo is:issue is:open label:agent-ready author:your-github-login
 limits:
   max_unreviewed_drafts: 3     # 未レビューのDraft PRがこの件数以上なら新規起動しない
-  max_review_rounds: 3         # ownerのレビューで続行が必要になった回数の上限
+  max_review_rounds: 3         # ownerのレビューの往復回数の上限
   max_launches_per_run: 2      # 1回の実行で新規に起動する件数の上限
   max_investigations_per_run: 2  # 1回の実行で調査する件数の上限
   run_minutes: 30              # 1回の実行の時間枠

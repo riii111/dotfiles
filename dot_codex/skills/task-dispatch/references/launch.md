@@ -1,6 +1,6 @@
 # 起動
 
-`ready`の項目は、次の確認をすべて通ったものだけ起動する。通らなければ、書いたとおりの`status`にして次の項目へ進む。
+`ready`の項目は、次の確認をすべて通ったものだけ起動する。通らなければ、書いたとおりの`status`にして`attempts`に`status`を記録し、次の項目へ進む。
 
 1. `worker_thread`が空である。値があれば起動せず、`needs_decision`にして`next_action`に「既存workerへの続行をAppで指示する」と書く。
 2. Issueに`owner`以外の担当者や、紐づく未mergeのPRがない。あれば`needs_decision`にする。
