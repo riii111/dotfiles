@@ -4,7 +4,7 @@
 
 ```yaml
 project:                       # 優先度・期限を読むGitHub Project。なければ省略
-  owner: org
+  org: org                    # GitHub Projectを持つ組織
   number: 1
   priority_field: Priority     # 単一選択。選択肢の定義順を高い順とする
   due_field: Due               # 日付。近い順
