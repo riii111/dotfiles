@@ -9,6 +9,7 @@ description: |
 # Task Dispatch
 
 起動・実装・レビューにはtask-session-launch・task-worker・task-review-cycleを使う。workerの完了は待たない。
+各文書内のリンクは、その文書のディレクトリを基準に解決する。
 
 ## 1日の流れ
 

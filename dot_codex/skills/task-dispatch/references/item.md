@@ -76,7 +76,7 @@ Issueのkeyは`gh:<owner>/<repo>#<番号>`とする。
 
 `running`のturnは、`worker_thread`の最新1turnを出力なしで`read_thread`して確かめる。idleだけで停止と判断しない。
 `ready`から先の遷移（起動、確認を通らない場合、起動の失敗）は照合ではなく[起動](launch.md)の手順で決め、この表は使わない。
-判定の2行（`discovered`と判定による`needs_decision`）は予定作成の実行だけで使い、ほかの回では状態を変えない。
+判定の2行（`discovered`と判定による`needs_decision`）は予定作成の実行だけで使い、ほかの実行では状態を変えない。
 
 ### 起動結果の確認
 
