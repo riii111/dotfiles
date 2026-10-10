@@ -43,18 +43,7 @@ Scheduled Taskは毎回新しいCodexスレッドで動き、通知はCodex App�
 Scheduled Taskの作業ディレクトリは`~/agent-desk/`とし、gitでは管理しない。
 設定と実行時刻は[config](references/config.md)を参照する。
 
-```text
-~/agent-desk/
-├── config.yaml                 # 発見元・リポジトリ・上限・owner・Calendarの設定
-├── items/<file>.yaml           # 1仕事1ファイルの台帳
-├── requests/<file>.json        # itemと同じファイル名の起動依頼
-├── days/<日付>.yaml            # 退勤予定・Scheduled Task・予定スレッドの情報
-├── decisions/<itemのファイル名>.md  # ownerが答えた大きな判断のメモ
-├── runs/
-│   ├── <日付>-plan.md           # 今夜の予定
-│   └── <日付>-report.md         # 朝の報告
-└── .lock/started_at            # 実行の重複を防ぐlockと開始時刻
-```
+起動依頼のファイル名はitemと揃える。ファイルの配置と役割は[README](README.md)を参照する。
 
 ## 開始時の確認
 
