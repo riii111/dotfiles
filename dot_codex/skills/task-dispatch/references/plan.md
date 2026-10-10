@@ -1,35 +1,51 @@
 # 発見・判定・予定
 
-予定の回で、照合の後に順に行う。予定で聞いた問いへの返事で再判定するときは、[判定](#判定)を使う。
+予定の回で、照合の後に順に行う。
+予定で聞いた問いへの返事で再判定するときは、[判定](#判定)を使う。
 
 ## 発見
 
-`config.yaml`の`sources`のクエリを`gh search issues --limit 100`で実行し、台帳にないkeyを`discovered`で追加する。keyは[item](item.md#key)の規則で作り、既存項目との重複はファイル名ではなく`key`の値で確かめる。結果が100件に達したら予定に書く。
-読めないitemがある実行では、新しい項目を追加しない。`sources`にないリポジトリやクエリは調べない。
+`config.yaml`の`sources`のクエリを`gh search issues --limit 100`で実行し、台帳にないkeyを`discovered`で追加する。
+keyは[item](item.md#key)の規則で作り、既存項目との重複はファイル名ではなく`key`の値で確かめる。
+結果が100件に達したら予定に書く。
+読めないitemがある実行では、新しい項目を追加しない。
+`sources`にないリポジトリやクエリは調べない。
 
 ## 判定
 
-`lessons.md`の「本採用」と各項目の`attempts`を読んでから、`discovered`・`investigating`・`needs_decision`の項目を判定する。「候補」は判定の規則として使わない。
-`needs_decision`は、Issue本文の編集、IssueまたはPRへの`owner`のコメント、決めたことのメモへの追記のどれかが、最後に`needs_decision`へ移した記録より新しい場合だけ判定し直す。判定したら、結果が同じでも`status`を記録する。
+`lessons.md`の「本採用」と各項目の`attempts`を読んでから、`discovered`・`investigating`・`needs_decision`の項目を判定する。
+「候補」は判定の規則として使わない。
+`needs_decision`は、Issue本文の編集、IssueまたはPRへの`owner`のコメント、決めたことのメモへの追記のどれかが、最後に`needs_decision`へ移した記録より新しい場合だけ判定し直す。
+判定したら、結果が同じでも`status`を記録する。
 
-次の2点を両方満たせば`ready`、調査で解消できそうなら`investigating`、それ以外は`needs_decision`にする。`kind: investigation`の項目は`ready`にせず、`investigating`として扱う。
+次の2点を両方満たせば`ready`、調査で解消できそうなら`investigating`、それ以外は`needs_decision`にする。
+`kind: investigation`の項目は`ready`にせず、`investigating`として扱う。
 
 - ゴールと受け入れ条件が、Issue本文とそこからリンクされた文書から読み取れる。
 - 大きな設計判断に未承認のものが残っていない。
 
-大きな設計判断とは、仕様・公開インターフェース・互換性・担当範囲など、後から変えるコストが大きい判断を指す。承認として扱うのは、`owner`が書いたIssue本文・コメント・リンク先の文書と、決めたことのメモにある決定だけとする。
+大きな設計判断とは、仕様・公開インターフェース・互換性・担当範囲など、後から変えるコストが大きい判断を指す。
+承認として扱うのは、`owner`が書いたIssue本文・コメント・リンク先の文書と、決めたことのメモにある決定だけとする。
 その他の未決事項は、workerが暫定で決めて完了報告に書き、朝の報告で確かめるため、ここでは問わない。
 
-調査で解消できるのは、既存コードの挙動や影響範囲のような事実の確認だけとする。大きな設計判断は調査で埋めず、`needs_decision`にする。
-`investigating`の調査は、GitHub上のリポジトリの内容を読み取り専用で読み、1回の実行で`limits.max_investigations_per_run`件までとする。結果を`attempts`に書き、解消すれば`ready`にする。`kind: investigation`の項目は調査を終えたら`needs_decision`にし、確かめた事実を`next_action`に要約し、起動につなげるかを`question`で聞く。
+調査で解消できるのは、既存コードの挙動や影響範囲のような事実の確認だけとする。
+大きな設計判断は調査で埋めず、`needs_decision`にする。
+`investigating`の調査は、GitHub上のリポジトリの内容を読み取り専用で読み、1回の実行で`limits.max_investigations_per_run`件までとする。
+結果を`attempts`に書き、解消すれば`ready`にする。
+`kind: investigation`の項目は調査を終えたら`needs_decision`にし、確かめた事実を`next_action`に要約し、起動につなげるかを`question`で聞く。
 
-大きな設計判断で`needs_decision`にした項目は、`question`に人に聞く問いを1つ、選択肢と推奨を付けて自分の言葉で書く。答えが来て判定し直すまで、毎回の予定で聞き続ける。
+大きな設計判断で`needs_decision`にした項目は、`question`に人に聞く問いを1つ、選択肢と推奨を付けて自分の言葉で書く。
+答えが来て判定し直すまで、毎回の予定で聞き続ける。
 
 ## 予定
 
-今夜始める項目と聞く問いを選び、[予定の書き方](digest.md#今夜の予定)で`runs/<日付>-plan.md`に書く。新規起動の項目ごとに`attempts`へ`planned`を追記する。前回までの`planned`のうち使われていないものには、先に`plan_cancelled`（note：再計画）を追記する。
+今夜始める項目と聞く問いを選び、[予定の書き方](digest.md#今夜の予定)で`runs/<日付>-plan.md`に書く。
+新規起動の項目ごとに`attempts`へ`planned`を追記する。
+前回までの`planned`のうち使われていないものには、先に`plan_cancelled`（note：再計画）を追記する。
 
-優先順は、GitHub Projectの優先度・期限とIssueの依存関係（blocked by）を先に適用し、同じ順位の中で次の区分を使う。AIはビジネス上の優先順位を決めない。順位が付かない項目どうしは、Issueの作成日が古い順にする。
+優先順は、GitHub Projectの優先度・期限とIssueの依存関係（blocked by）を先に適用し、同じ順位の中で次の区分を使う。
+AIはビジネス上の優先順位を決めない。
+順位が付かない項目どうしは、Issueの作成日が古い順にする。
 
 | 順位 | 対象 | 扱い |
 | --- | --- | --- |
@@ -39,8 +55,13 @@
 | 4 | 定常改善（`kind: improvement`） | 新規起動 |
 | 5 | 新規調査（`kind: investigation`） | 判定の調査 |
 
-続行は[続行の送信](item.md#続行の送信)の手順1〜3を通るものを見込みとして載せる。OKは不要で、`planned`も記録しない。新規起動は`ready`で[起動の確認](launch.md#起動の確認)を通ったものを載せる。
+続行は[続行の送信](item.md#続行の送信)の手順1〜3を通るものを見込みとして載せる。
+OKは不要で、`planned`も記録しない。
+新規起動は`ready`で[起動の確認](launch.md#起動の確認)を通ったものを載せる。
 依存が未完了の項目は載せず、`next_action`に依存先を書く。
 
-新規起動は[量](launch.md#量)の枠まで載せる。枠が0で新規起動を載せなかったときは、予定の`## そのほか`に1文で書く。`owner`のレビューの往復が`limits.max_review_rounds`を超えた項目は、遷移表に従って`needs_decision`にする。
-予定を書いたら、`days/<日付>.yaml`に自分のスレッドを書き、[Scheduled Taskの扱い](schedule.md#scheduled-taskの扱い)に従って自分のScheduled Taskを消す。最終回答には[予定のスレッド](digest.md#スレッドでのやりとり)の書き方で予定とOKの返し方を書き、ユーザーの返事を待つ。
+新規起動は[量](launch.md#量)の枠まで載せる。
+枠が0で新規起動を載せなかったときは、予定の`## そのほか`に1文で書く。
+`owner`のレビューの往復が`limits.max_review_rounds`を超えた項目は、遷移表に従って`needs_decision`にする。
+予定を書いたら、`days/<日付>.yaml`に自分のスレッドを書き、[Scheduled Taskの扱い](schedule.md#scheduled-taskの扱い)に従って自分のScheduled Taskを消す。
+最終回答には[予定のスレッド](digest.md#スレッドでのやりとり)の書き方で予定とOKの返し方を書き、ユーザーの返事を待つ。
