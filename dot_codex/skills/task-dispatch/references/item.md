@@ -44,7 +44,7 @@ attempts:
 
 - PRがopenである。
 - 現在のheadのcheckがすべて成功している。`config.yaml`の`repos`で`ci: false`としたリポジトリだけはcheckなしでよい。checkが1つもなければ、まだ登録されていないものとして満たさない。
-- workerの完了報告の[レビュー資料](../../task-review-cycle/references/packet.md)の`head`が現在のheadと一致する。資料がない、または書式が違う場合は満たすものとし、朝刊で「資料なし」と示す。
+- workerの作業ディレクトリの[レビュー資料](../../task-review-cycle/references/packet.md)（`.reviewctl/packet.yaml`）の`head`が現在のheadと一致する。資料がない、または書式が違う場合は満たすものとし、朝刊で「資料なし」と示す。
 
 ### 遷移表
 
@@ -126,7 +126,7 @@ messageの先頭に`$task-worker`を置き、PRのURL・head・理由・refを�
 
 ## lessonsの読み取り
 
-`review_ready`で、現在のheadについての`lessons_read`がなければ、`worker_thread`の最新1turnを出力なしで`read_thread`する。turnが終わっていれば完了報告の`lessons候補`を取り、`lessons_read`をhead付きで追記する。進行中なら次回に持ち越す。
+`review_ready`で、現在のheadについての`lessons_read`がなければ、レビュー資料の`lessons`を取り、`lessons_read`をhead付きで追記する。
 
 ## attempts
 
@@ -138,7 +138,7 @@ task-dispatchが行った操作と結果を古い順に追記する。`result`�
 - `review_round`：`owner`のレビューを検出した。`note`にレビューのIDを書く。
 - `continue_sent`：workerへ続行を送った。`note`に「<理由> head=<先頭7桁> ref=<ref>」を書く。headはPRの現在のhead、PRがなければ`-`とする。
 - `decision_answered`：レビュー資料の問いに`owner`が答えていた。`note`にheadの先頭7桁と問いの要約を自分の言葉で書く。
-- `lessons_read`：workerの完了報告から`lessons候補`を読んだ。`note`にheadを書く。
+- `lessons_read`：レビュー資料の`lessons`を読んだ。`note`にheadを書く。
 - `investigated`：読み取り専用の調査をした。`note`は確かめた点とその真偽、出典のファイル・行だけを書き、コードやコメントを引用しない。
 - `failed`：起動や照合が失敗した。`note`に理由を書く。
 
