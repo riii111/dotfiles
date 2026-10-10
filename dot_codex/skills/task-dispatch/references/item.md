@@ -49,7 +49,7 @@ Issueのkeyは`gh:<owner>/<repo>#<番号>`とする。
 - `worker_thread`の最新turnが、独立レビューのLGTMとCIの成功を伝える完了報告で終わっている。
   完了報告に人の判断が必要な点や確かめていないことがあっても、ここでは満たすものとし、朝の報告で伝える。
 - `harnexus-task state --request <作業ディレクトリ>/.reviewctl/request.json`の`head`（最後に独立レビューへ送ったhead）が現在のheadと一致する。
-  作業ディレクトリは、`config.yaml`の`repos.<owner/repo>.path`で`git worktree list --porcelain`を実行し、PRのhead branchと一致するものとする。見つからなければ満たさない。
+  作業ディレクトリは、Issueのリポジトリに対応するCodex project（[起動の確認](launch.md#起動の確認)の5と同じ方法で選ぶ）のパスで`git worktree list --porcelain`を実行し、PRのhead branchと一致するものとする。見つからなければ満たさない。
 
 ### 遷移表
 

@@ -45,9 +45,9 @@ OKは予定の一覧ではなく、Issueごとに`attempts`の`approved`で記�
 
 ### 新規起動する件数
 
-新規起動の枠は、`limits.max_unreviewed_drafts`から次の件数を引き、0未満なら0とする。
+新規起動の枠は、`limits.max_waiting_reviews`から次の件数を引き、0未満なら0とする。
 
-- 未レビューのDraft PR：`review_ready`でPRがDraft、かつ[未対応のownerのレビュー](item.md#ownerのレビュー)がない項目。
+- レビュー待ちのPR：`review_ready`でPRがDraft、かつ[未対応のownerのレビュー](item.md#ownerのレビュー)がない項目。
 - `running`の項目。
 
 件数の指定は今夜の枠より優先し、決まった読み替えをせず、その言葉どおりに扱う。
@@ -82,7 +82,7 @@ OK済みの起動待ちは夜に起動する。翌朝までOKのない項目は[
 | 2. Issueに`owner`以外の担当者や、紐づく未mergeのPRがない | `needs_decision` |
 | 3. `harnexus-task state`（`--request`なし）の記録に、同じIssueを指す別のlaunchがない。taskIdが別の書き方（`#456`・`456`など）のものと、documentRefsに同じIssueのURLを含むものも探す | `needs_decision` |
 | 4. 依存先（blocked by）がすべて完了し、Issueが今も`sources`のクエリに当たる | 依存先が未完了なら`ready`のまま`next_action`に依存先を書く。クエリに当たらなければ`needs_decision` |
-| 5. `codex_app__list_projects`を一度呼び、`config.yaml`の`repos.<owner/repo>.path`と一致するprojectが1つだけある | `needs_decision` |
+| 5. `codex_app__list_projects`を一度呼び、パスの`git remote get-url origin`がIssueのリポジトリと一致するprojectが1つだけある | `needs_decision` |
 
 ## 起動の手順
 

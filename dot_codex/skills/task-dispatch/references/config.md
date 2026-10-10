@@ -3,10 +3,6 @@
 人が作成・編集し、task-dispatchは読み取り専用とする。
 
 ```yaml
-owner: your-github-login       # 承認・レビューとして扱うGitHubアカウント
-repos:                         # 起動してよいリポジトリ
-  org/repo:
-    path: /Users/you/src/org/repo  # Codex projectのローカルパス
 project:                       # 優先度・期限を読むGitHub Project。なければ省略
   owner: org
   number: 1
@@ -18,7 +14,7 @@ sources:
     query: >-
       repo:org/repo is:issue is:open label:agent-ready author:your-github-login
 limits:
-  max_unreviewed_drafts: 3     # 未レビューのDraft PRがこの件数以上なら新規起動しない
+  max_waiting_reviews: 3       # レビュー待ちのPRがこの数以上なら新しく始めない
   max_continues: 2             # 同じ理由でworkerへ続行を送る回数の上限
   max_questions_per_plan: 3    # 1回の予定で聞く問いの上限
   run_minutes: 30              # 1回の実行の時間枠
@@ -29,9 +25,8 @@ calendar:
   leave_title: 退勤             # 退勤予定とみなす予定の名前
 ```
 
-- `repos`にないリポジトリのIssueは起動せず、`needs_decision`にする。
 - `sources[].query`は`gh search issues`にそのまま渡す。
-  リポジトリ・ラベルに加えて作成者を`owner`に絞り、人が開始を許した範囲だけを書く。
+  リポジトリ・ラベルに加えて作成者を自分のアカウントに絞り、人が開始を許した範囲だけを書く。
 - `sources[].name`と`umbrella`の表示方法は[予定と報告の書き方](digest.md#書き方)に従う。
 - `project`による優先順は[今夜の予定を作成する](plan.md#今夜の予定を作成する)に従う。
 - `max_continues`の数え方と上限到達時の扱いは[既存workerへの続行](continue.md)に従う。

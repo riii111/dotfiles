@@ -58,6 +58,8 @@ Scheduled Taskの作業ディレクトリは`~/agent-desk/`とし、gitでは管
   返事への対応では、少し後に再度返事するようスレッドで伝える。
   予定作成の実行は[Scheduled Taskの扱い](references/schedule.md#scheduled-taskの扱い)に従う。
 
+`owner`は、`gh`でログイン中のGitHubアカウントとする。
+
 1回の実行は`limits.run_minutes`分までとし、時間を過ぎたら新しい項目に手を付けず、記録へ進む。
 
 ## 実行別の手順

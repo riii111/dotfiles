@@ -31,7 +31,7 @@ task-dispatch/
 
 ```text
 ~/agent-desk/
-├── config.yaml                 # 発見元・リポジトリ・上限・owner・Calendarの設定
+├── config.yaml                 # 発見元・上限・Calendarの設定
 ├── items/<file>.yaml           # 1仕事1ファイルの台帳
 ├── requests/<file>.json        # itemと同じファイル名の起動依頼
 ├── days/<日付>.yaml            # 退勤予定・Scheduled Task・予定スレッドの情報
