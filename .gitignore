@@ -13,3 +13,7 @@ result
 
 # Neovim headless logs
 nvim.log
+
+# Local Andon triage skill and Codex symlink
+/dot_claude/skills/andon-triage/
+/dot_agents/skills/symlink_andon-triage
