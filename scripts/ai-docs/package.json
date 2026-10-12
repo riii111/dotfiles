@@ -24,6 +24,10 @@
     "sentence-splitter": "5.0.1",
     "textlint": "15.8.0",
     "textlint-rule-ja-no-redundant-expression": "4.0.1",
+    "textlint-rule-max-ten": "5.0.0",
+    "textlint-rule-no-double-negative-ja": "2.0.1",
+    "textlint-rule-no-doubled-conjunctive-particle-ga": "3.0.0",
+    "textlint-rule-no-doubled-joshi": "5.1.1",
     "textlint-rule-sentence-length": "5.2.1",
     "unified-engine": "11.2.2"
   },
