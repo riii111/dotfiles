@@ -61,7 +61,8 @@ git -c merge.conflictStyle=zdiff3 merge --no-commit <target>
 ```
 
 すでに競合状態ならマージを再実行しない。
-各未解決ファイルはindex stageから読む。`:2`は現在checkoutしているブランチ、`:3`はmerge引数側である。
+各未解決ファイルはindex stageから読む。
+`:2`は現在checkoutしているブランチ、`:3`はmerge引数側である。
 
 ```bash
 git diff --name-only --diff-filter=U
@@ -111,7 +112,8 @@ scripts/check-patch-survival.sh \
 ## まとめブランチ
 
 1. target branchをまとめブランチへ取り込んだ全マージを特定し、解消対象または修正対象のマージコミットを選ぶ。
-2. 通常、first parentはマージ前にcheckoutしていたまとめブランチ、second parentは取り込んだtargetである。`git show --format=raw <merge>`と各parentの履歴で親順を確認する。
+2. 通常、first parentはマージ前にcheckoutしていたまとめブランチ、second parentは取り込んだtargetである。
+   `git show --format=raw <merge>`と各parentの履歴で親順を確認する。
 3. `merge-tree`と周辺実装を基に競合を解消し、マージコミットを作成またはamendする。
    元のマージで競合マーカーが出たファイルだけでなく、main側の変更と重複する全ファイルを統合対象にする。
 4. マージコミットに`git show --remerge-diff`を実行する。
@@ -127,7 +129,8 @@ scripts/check-patch-survival.sh \
 ```
 
 各`<target-commit>`に対して繰り返す。
-出力を基に各ファイルパッチを、完全一致・target内で置換済み・ブランチで適応・未分類に分ける。`exact`以外はすべて3-way比較で調べる。
+出力を基に各ファイルパッチを、完全一致・target内で置換済み・ブランチで適応・未分類に分ける。
+`exact`以外はすべて3-way比較で調べる。
 
 同じtargetを複数回取り込んだブランチ全体を保証する場合は、各マージコミットについて手順4〜7を繰り返す。
 各マージのtarget増分を最終HEADに対して検査し、最新の取り込みだけで結論を出さない。
