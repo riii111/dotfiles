@@ -10,7 +10,7 @@ description: macOS の不要データと容量不足を調査・解消する。N
 
 ## 調査
 
-まず読み取り専用の収集を実行する。
+まず読み取り専用のスクリプトで情報を収集する。
 引数は調べる Rust worktree の親ディレクトリで、省略時はカレントディレクトリを調べる。
 
 ```sh
@@ -23,9 +23,13 @@ scripts/inspect.sh <worktree-root> > storage.tsv
 scripts/inspect.sh --with-deep-sizes --with-nix-dry-run <worktree-root> > storage.tsv
 ```
 
-TSV の `status` は `observed`、`absent`、`rebuildable_needs_confirmation`、`running_hold`、`persistent_hold`、`unverified` を使う。`unverified` は権限不足、コマンド不在、調査失敗、意図的な未実行を表す。容量ゼロとして扱わない。長いコマンド出力は元のバイト数、先頭、末尾を明示して記録する。
+TSV の `status` は `observed`、`absent`、`rebuildable_needs_confirmation`、`running_hold`、`persistent_hold`、`unverified` を使う。
+`unverified` は権限不足、コマンド不在、調査失敗、意図的な未実行を表す。容量ゼロとして扱わない。
+長いコマンド出力は元のバイト数、先頭、末尾を明示して記録する。
 
-`--with-deep-sizes` は `/nix/store`、アプリデータ、キャッシュの全走査を有効にする。`--with-nix-dry-run` は時間のかかる user profile の Nix dry-run を有効にする。system profile の dry-run は `sudo` が必要なため、スクリプトでは未確認として記録する。
+`--with-deep-sizes` は `/nix/store`、アプリデータ、キャッシュの全走査を有効にする。
+`--with-nix-dry-run` は時間のかかる user profile の Nix dry-run を有効にする。
+system profile の dry-run は `sudo` が必要なため、スクリプトでは未確認として記録する。
 
 ### 容量と Rust
 
@@ -46,13 +50,16 @@ sccache --show-stats
 Rust プロセスの PID と cwd を worktree に照合し、照合不能なら `running_hold` として残す。
 時刻はビルド時刻ではなくディレクトリの更新時刻として扱う。
 
-Rust toolchain を消すときは、`rust-toolchain.toml` と override を調べ、残す版を決め、先に `rustup default <残すtoolchain>` を実行する。
+Rust toolchain を消すときは、`rust-toolchain.toml` と override を調べて残す版を決める。
+先に `rustup default <残すtoolchain>` を実行する。
 その後に active/default でない版だけを削除する。
-検証は `rustup toolchain list`、`rustup override list`、`rustup run <残すtoolchain> rustc --version` に留め、`cargo check` のような再取得を起こしうる操作をしない。
+検証は `rustup toolchain list`、`rustup override list`、`rustup run <残すtoolchain> rustc --version` に留める。
+`cargo check` のような再取得を起こしうる操作をしない。
 
 ### Nix
 
-Nix の結果はマシン全体の候補であり、特定の worktree やプロジェクトの容量ではない。世代削除はロールバックを放棄する。
+Nix の結果はマシン全体の候補であり、特定の worktree やプロジェクトの容量ではない。
+世代削除はロールバックを放棄する。
 dry-run の容量は見込みで、コマンドが失敗した場合は容量を確定値として報告しない。
 
 ```sh
@@ -61,7 +68,8 @@ sudo nix-collect-garbage --delete-older-than 30d --dry-run
 nix store gc --dry-run
 ```
 
-上から user profile、system profile、世代を残したままの store GC を調べる。`nix-collect-garbage --delete-older-than` は世代削除と GC を一括で行う。
+上から user profile、system profile、世代を残したままの store GC を調べる。
+`nix-collect-garbage --delete-older-than` は世代削除と GC を一括で行う。
 
 ### Docker、Colima、Homebrew
 
@@ -73,9 +81,14 @@ brew autoremove --dry-run
 brew --cache
 ```
 
-Docker は `docker image prune` を先に使う。`-a` は対象一覧と再取得可否を確認してからにする。Colima の prune 後は `du -sh ~/.colima ~/.config/colima` でホスト側を再測定し、縮まなければ `colima ssh -- sudo fstrim -a` を試す。仮想ディスクの初期化は最後の手段にする。
+Docker は `docker image prune` を先に使う。
+`-a` は対象一覧と再取得可否を確認してからにする。
+Colima の prune 後は `du -sh ~/.colima ~/.config/colima` でホスト側を再測定する。
+縮まなければ `colima ssh -- sudo fstrim -a` を試す。
+仮想ディスクの初期化は最後の手段にする。
 
-Homebrew は dry-run の候補、autoremove 候補、download cache を独立して報告する。`brew` がない場合は `unverified` とする。
+Homebrew は dry-run の候補、autoremove 候補、download cache を独立して報告する。
+`brew` がない場合は `unverified` とする。
 
 ## 分類と対処
 
@@ -93,7 +106,9 @@ Homebrew は dry-run の候補、autoremove 候補、download cache を独立し
 
 ### APFS ローカルスナップショット
 
-削除後も空き容量が増えない場合だけ確認する。`tmutil thinlocalsnapshots` は Time Machine のローカル復元ポイントを失わせるため、この skill では実行しない。影響を説明してコマンドを提示し、利用者に実行してもらう。
+削除後も空き容量が増えない場合だけ確認する。
+`tmutil thinlocalsnapshots` は Time Machine のローカル復元ポイントを失わせるため、この skill では実行しない。
+影響を説明してコマンドを提示し、利用者に実行してもらう。
 
 ```sh
 tmutil listlocalsnapshots /
