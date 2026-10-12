@@ -14,7 +14,8 @@
 }
 ```
 
-workerAIはCodexまたはClaudeで、reviewerの返却方法を決める。taskIdは管理元内の対象識別子。
+workerAIはCodexまたはClaudeで、reviewerの返却方法を決める。
+taskIdは管理元内の対象識別子。
 documentRefsは管理元を先頭に置く絶対パス・HTTPS URLの配列で、合意・規約・判断記録も文書として参照する。資料本文や補足文をJSONへ入れない。
 workerのチャットIDはharnexus-taskが`CODEX_THREAD_ID`から取得する。
 checkoutは`~/.codex/worktrees/`配下のworker worktreeに限る。

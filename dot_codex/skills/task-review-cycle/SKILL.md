@@ -26,7 +26,8 @@ worktreeに`*`だけの`.gitignore`を置いた`.reviewctl/`を作り、[依頼J
    Codexはturnを終了し、reviewerの返信で次turnを始める。
    Claudeはharnexusの`wait_threads` / `read_thread`で待つ。
 4. 最終回答のbase/headが`harnexus-task state --request <JSON>`の`base`・`head`と一致することを確認する。
-   修正後は同じJSONのPR URL・参照文書を必要に応じて更新し、手順1から繰り返す。判定保留なら不足を解消する。
+   修正後は同じJSONのPR URL・参照文書を必要に応じて更新し、手順1から繰り返す。
+   判定保留なら不足を解消する。
 
 Claudeはwait_threadsのtimeoutMsを60000以下にし、cursorを次のafterCursorへ渡す。
 正常timeoutでは待機を続け、対象別errors・失敗・中断は理由を確認する。
@@ -35,11 +36,19 @@ Claude workerのreviewerはCodexモデルに限られる。
 Claudeモデルを指定された場合は、対応するモデルの指定を求める。
 
 結果不明・モデル不一致では再実行しても送信されない。
-ユーザーがAppで確認した結果だけを、承認を得て`harnexus-task resolve --request <JSON> --sent [--thread-id <ID>]`または`--not-sent`で記録する。
+ユーザーがAppで確認した結果だけを、承認を得て記録する。
+送信済みなら`harnexus-task resolve --request <JSON> --sent [--thread-id <ID>]`、未送信なら`--not-sent`で記録する。
 
 ## 再開と基点更新
 
-`harnexus-task state --request <JSON>`の出力は平らなJSONで、`reviewerThreadId`・`base`・`head`・`prompt`（最後に送ったもの）・`requested`/`actual`（reviewerのモデル）・`pending`・`pendingHead`・`pendingThreadId`を最上位から読む。
+`harnexus-task state --request <JSON>`の出力は平らなJSONで、次のキーを最上位から読む。
+
+- `reviewerThreadId`
+- `base`・`head`
+- `prompt`：最後に送ったもの
+- `requested`/`actual`：reviewerのモデル
+- `pending`・`pendingHead`・`pendingThreadId`
+
 競合解消などで上流を取り込んで基点を更新する場合だけ`--update-base`を付ける。
 
 ## レビュー時の確認事項
