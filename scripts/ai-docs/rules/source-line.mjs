@@ -3,7 +3,10 @@ import { hasJapanese, paragraphs } from "../prose.mjs";
 
 function reporter(context) {
   const { RuleError, report, fixer, getSource } = context;
-  return paragraphs(context, (node, text) => {
+  // A footnote is one aside, so its sentences may stay on one line.
+  let footnotes = 0;
+  const handlers = paragraphs(context, (node, text) => {
+    if (footnotes) return;
     let offset = 0;
     const raw = getSource(node);
     const ancestors = [];
@@ -86,6 +89,15 @@ function reporter(context) {
       offset += line.length + 1;
     }
   });
+  return {
+    ...handlers,
+    footnoteDefinition() {
+      footnotes++;
+    },
+    "footnoteDefinition:exit"() {
+      footnotes--;
+    },
+  };
 }
 
 export default { linter: reporter, fixer: reporter };

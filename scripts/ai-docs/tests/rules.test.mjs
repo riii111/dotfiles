@@ -242,12 +242,13 @@ describe("formatText", () => {
   for (const { name, source, expected } of [
     {
       name: "a footnote definition",
-      source: "本文。[^1]\n\n[^1]: 脚注。追加の文。\n",
+      source: "本文。[^1]\n\n[^1]:\n    脚注。\n    追加の文。\n",
       expected: "本文。[^1]\n\n[^1]: 脚注。\n    追加の文。\n",
     },
     {
       name: "a CRLF footnote definition in a list",
-      source: "- 項目。[^1]\r\n\r\n  [^1]: 脚注。追加の文。\r\n",
+      source:
+        "- 項目。[^1]\r\n\r\n  [^1]:\r\n      脚注。\r\n      追加の文。\r\n",
       expected: "- 項目。[^1]\r\n\r\n  [^1]: 脚注。\r\n      追加の文。\r\n",
     },
     {
@@ -256,13 +257,23 @@ describe("formatText", () => {
       expected: "```md\n[^1]:\n    コード。\n```\n",
     },
   ]) {
-    test(`keeps the first line after the label in ${name}`, async () => {
+    test(`moves the first line back after the label in ${name}`, async () => {
       const output = await formatText(source, "example.md");
 
       assert.equal(output, expected);
       assert.equal(await formatText(output, "example.md"), output);
     });
   }
+
+  test("keeps sentences in a footnote definition on one line", async () => {
+    const source = "本文。[^1]\n\n[^1]: 脚注。追加の文。\n";
+
+    const result = await lintRule("source-line", source);
+    const output = await formatText(source, "example.md");
+
+    assert.deepEqual(result.messages, []);
+    assert.equal(output, source);
+  });
 
   test("keeps a sentence that would become a heading on the same line", async () => {
     const output = await formatText("最初。補足。# 三つ目。", "example.md");
