@@ -36,7 +36,8 @@ prompt / skill を自己再読ではなく、実行結果から調整する。
    - subagent自己申告から、不明瞭点・裁量補完・再試行を集める。
    - 成果物から、checklistを `○` / `×` / `partial` で採点する。
    - `[critical]` が全て `○` の場合だけ成功とする。
-   - 定性的な曖昧さを主信号にする。時間やtool countは補助扱いにする。
+   - 定性的な曖昧さを主信号にする。
+     時間やtool countは補助扱いにする。
 
 5. 1テーマだけ直す
    - 新しく出た曖昧さを潰す最小修正を入れる。
@@ -76,6 +77,7 @@ prompt / skill を自己再読ではなく、実行結果から調整する。
 ## Reporting
 
 iterationごとに次をまとめる:
+
 - 変更したprompt/skill箇所
 - scenarioごとの結果とchecklist score
 - 新しく出た不明瞭点
