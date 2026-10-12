@@ -7,7 +7,7 @@ import { formatText, makeLinter, repoRoot } from "./linter.mjs";
 import remarkConfig from "./remark.config.mjs";
 
 const usage =
-  "Usage: npm --prefix scripts/ai-docs run <lint|fmt|links> -- [--json|--strict|--check] [file.md ...]";
+  "Usage: npm --prefix scripts/ai-docs run <lint|fmt|links> -- [--all|--json|--strict|--check] [file.md ...]";
 
 async function main() {
   const [command, ...args] = process.argv.slice(2);
@@ -19,17 +19,22 @@ async function main() {
   if (!["lint", "fmt", "links"].includes(command)) throw new Error(usage);
   const allowed =
     command === "lint"
-      ? ["--json", "--strict"]
+      ? ["--json", "--strict", "--all"]
       : command === "fmt"
-        ? ["--check"]
-        : [];
+        ? ["--check", "--all"]
+        : ["--all"];
   const flags = args.filter((arg) => arg.startsWith("--"));
   if (flags.some((flag) => !allowed.includes(flag))) throw new Error(usage);
 
   let files = args.filter((arg) => !arg.startsWith("--"));
+  if (flags.includes("--all") && files.length)
+    throw new Error("--allとファイル指定は同時に使えません。");
+
   if (!files.length) {
-    if (command === "fmt")
-      throw new Error("fmtには変更対象のMarkdownファイルを指定してください。");
+    if (command === "fmt" && !flags.includes("--all"))
+      throw new Error(
+        "fmtには変更対象のMarkdownファイルを指定するか、--allを付けてください。",
+      );
     files = execFileSync(
       "git",
       ["ls-files", "-z", "--", "dot_codex/skills", "dot_claude/skills"],
