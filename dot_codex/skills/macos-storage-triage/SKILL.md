@@ -5,11 +5,13 @@ description: macOS の不要データと容量不足を調査・解消する。N
 
 # macOS ストレージ整理
 
-容量を大きい順に測定し、対象を「再生成可能」「稼働中」「永続データ」「未確認」に分ける。削除は利用者が対象・概算容量・再生成の有無を確認した後だけにする。
+容量を大きい順に測定し、対象を「再生成可能」「稼働中」「永続データ」「未確認」に分ける。
+削除は利用者が対象・概算容量・再生成の有無を確認した後だけにする。
 
 ## 調査
 
-まず読み取り専用の収集を実行する。引数は調べる Rust worktree の親ディレクトリで、省略時はカレントディレクトリを調べる。
+まず読み取り専用の収集を実行する。
+引数は調べる Rust worktree の親ディレクトリで、省略時はカレントディレクトリを調べる。
 
 ```sh
 scripts/inspect.sh <worktree-root> > storage.tsv
@@ -40,13 +42,18 @@ rustup show active-toolchain
 sccache --show-stats
 ```
 
-`target` と `.nvim/target` は、`Cargo.toml` がある Git worktree 内の候補だけを扱う。Rust プロセスの PID と cwd を worktree に照合し、照合不能なら `running_hold` として残す。時刻はビルド時刻ではなくディレクトリの更新時刻として扱う。
+`target` と `.nvim/target` は、`Cargo.toml` がある Git worktree 内の候補だけを扱う。
+Rust プロセスの PID と cwd を worktree に照合し、照合不能なら `running_hold` として残す。
+時刻はビルド時刻ではなくディレクトリの更新時刻として扱う。
 
-Rust toolchain を消すときは、`rust-toolchain.toml` と override を調べ、残す版を決め、先に `rustup default <残すtoolchain>` を実行する。その後に active/default でない版だけを削除する。検証は `rustup toolchain list`、`rustup override list`、`rustup run <残すtoolchain> rustc --version` に留め、`cargo check` のような再取得を起こしうる操作をしない。
+Rust toolchain を消すときは、`rust-toolchain.toml` と override を調べ、残す版を決め、先に `rustup default <残すtoolchain>` を実行する。
+その後に active/default でない版だけを削除する。
+検証は `rustup toolchain list`、`rustup override list`、`rustup run <残すtoolchain> rustc --version` に留め、`cargo check` のような再取得を起こしうる操作をしない。
 
 ### Nix
 
-Nix の結果はマシン全体の候補であり、特定の worktree やプロジェクトの容量ではない。世代削除はロールバックを放棄する。dry-run の容量は見込みで、コマンドが失敗した場合は容量を確定値として報告しない。
+Nix の結果はマシン全体の候補であり、特定の worktree やプロジェクトの容量ではない。世代削除はロールバックを放棄する。
+dry-run の容量は見込みで、コマンドが失敗した場合は容量を確定値として報告しない。
 
 ```sh
 nix-collect-garbage --delete-older-than 30d --dry-run
@@ -72,17 +79,17 @@ Homebrew は dry-run の候補、autoremove 候補、download cache を独立し
 
 ## 分類と対処
 
-| 対象 | 分類 | 対処 |
-| --- | --- | --- |
-| Nix の GC 候補 | 再生成可能だが確認が必要 | `nix store gc` を使う |
-| Nix の古い世代 | ロールバック不能 | 保持期間を確認してから `nix-collect-garbage --delete-older-than <期間>` を使う |
-| 停止中 worktree の `target` | 再生成可能だが確認が必要 | worktree 単位で削除する |
-| 稼働中の `target`、`.nvim/target` | 稼働中のため保留 | 原則残す |
-| 古い Rust toolchain | 再生成可能だが確認が必要 | default/override/active を確認してから `rustup toolchain uninstall <toolchain>` を使う |
-| sccache、Cargo registry、Homebrew cache | 再生成可能だが確認が必要 | 使用中プロセスを止め、対象を限定して削除する |
-| 未使用 Docker イメージ | 再生成可能だが確認が必要 | dangling image を先に削除する |
-| Colima の仮想ディスク、アプリの VM bundle、データベース、チャット履歴 | 永続データのため保留 | 用途と再生成コストを確認する |
-| 権限不足・コマンド不在・調査失敗 | 未確認 | 容量を推測せず、必要な権限または代替手段を報告する |
+| 対象                                                                  | 分類                     | 対処                                                                                   |
+| --------------------------------------------------------------------- | ------------------------ | -------------------------------------------------------------------------------------- |
+| Nix の GC 候補                                                        | 再生成可能だが確認が必要 | `nix store gc` を使う                                                                  |
+| Nix の古い世代                                                        | ロールバック不能         | 保持期間を確認してから `nix-collect-garbage --delete-older-than <期間>` を使う         |
+| 停止中 worktree の `target`                                           | 再生成可能だが確認が必要 | worktree 単位で削除する                                                                |
+| 稼働中の `target`、`.nvim/target`                                     | 稼働中のため保留         | 原則残す                                                                               |
+| 古い Rust toolchain                                                   | 再生成可能だが確認が必要 | default/override/active を確認してから `rustup toolchain uninstall <toolchain>` を使う |
+| sccache、Cargo registry、Homebrew cache                               | 再生成可能だが確認が必要 | 使用中プロセスを止め、対象を限定して削除する                                           |
+| 未使用 Docker イメージ                                                | 再生成可能だが確認が必要 | dangling image を先に削除する                                                          |
+| Colima の仮想ディスク、アプリの VM bundle、データベース、チャット履歴 | 永続データのため保留     | 用途と再生成コストを確認する                                                           |
+| 権限不足・コマンド不在・調査失敗                                      | 未確認                   | 容量を推測せず、必要な権限または代替手段を報告する                                     |
 
 ### APFS ローカルスナップショット
 
@@ -95,6 +102,11 @@ tmutil thinlocalsnapshots / <bytes> 4
 
 ## 報告と再発防止
 
-調査、分類、削除候補の提示、利用者確認、対象限定削除、空き容量の再測定、再発防止提案の順に進める。最終提示では `bytes` が数値の行を容量の大きい順に並べ、容量なしの行と `unverified` は別に報告する。報告には空き容量の前後、大きかった場所と解放量、残したものと理由、未確認領域、自動化すべき再発原因を含める。
+調査、分類、削除候補の提示、利用者確認、対象限定削除、空き容量の再測定、再発防止提案の順に進める。
+最終提示では `bytes` が数値の行を容量の大きい順に並べ、容量なしの行と `unverified` は別に報告する。
+報告には空き容量の前後、大きかった場所と解放量、残したものと理由、未確認領域、自動化すべき再発原因を含める。
 
-Nix が大きな原因なら、nix-darwin の自動 GC と store 最適化、保持期間を見直す。worktree は削除時に対応する `target` と隠しエディタ用成果物を残さない。sccache は容量上限を開発環境に合わせて設定する。その他の候補として npm/pnpm/uv のキャッシュ、ゴミ箱、Xcode の開発データも確認する。
+Nix が大きな原因なら、nix-darwin の自動 GC と store 最適化、保持期間を見直す。
+worktree は削除時に対応する `target` と隠しエディタ用成果物を残さない。
+sccache は容量上限を開発環境に合わせて設定する。
+その他の候補として npm/pnpm/uv のキャッシュ、ゴミ箱、Xcode の開発データも確認する。
