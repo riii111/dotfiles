@@ -7,16 +7,16 @@ import rules from "../rules.mjs";
 describe("source-line", () => {
   for (const { name, source } of [
     {
-      name: "a short second sentence",
-      source: "OKが効くのは新規起動だけとする。続行には効かない。",
+      name: "a single sentence",
+      source: "OKが効くのは新規起動だけとする。",
     },
     {
       name: "sentence marks inside quotes",
-      source: "引用「最初。次。最後。」を使う。短い補足。",
+      source: "引用「最初。次。最後。」を使う。",
     },
     {
       name: "sentence marks inside code",
-      source: "`a.b。c。d。`を使う。短い補足。",
+      source: "`a.b。c。d。`を使う。",
     },
     {
       name: "English-only sentences",
@@ -30,17 +30,17 @@ describe("source-line", () => {
     });
   }
 
-  test("moves a third sentence to a new line while keeping a short supplement", async () => {
+  test("moves every sentence after the first to its own line", async () => {
     const source = "最初の決まり。短い補足。三つ目の決まり。";
 
     const result = await lintRule("source-line", source);
-    const output = await fixSourceLines(source);
+    const output = await formatText(source, "example.md");
 
     assert.equal(result.messages.length, 1);
-    assert.equal(output, "最初の決まり。短い補足。\n三つ目の決まり。");
+    assert.equal(output, "最初の決まり。\n短い補足。\n三つ目の決まり。\n");
   });
 
-  const long = "これは二十字を超える長い二つ目の決まりなので別の行にする。";
+  const long = "短い補足。";
   for (const { name, source, expected } of [
     {
       name: "a numbered list",
@@ -176,7 +176,7 @@ describe("formatText", () => {
 
     const output = await formatText(source, "example.md");
 
-    assert.match(output, /最初の決まり。補足。\n {2}三つ目の決まり。/u);
+    assert.match(output, /最初の決まり。\n {2}補足。\n {2}三つ目の決まり。/u);
     assert.match(output, /\{"keep": {4}"spacing"\}/u);
     assert.deepEqual(semanticTree(output), semanticTree(source));
   });
@@ -203,8 +203,8 @@ function ruleLinter(ruleId) {
   return makeLinter(rules.filter((rule) => rule.ruleId === ruleId));
 }
 
-function lintRule(ruleId, source) {
-  return ruleLinter(ruleId).lintText(source, "example.md");
+function lintRule(ruleId, source, file = "example.md") {
+  return ruleLinter(ruleId).lintText(source, file);
 }
 
 async function fixSourceLines(source) {

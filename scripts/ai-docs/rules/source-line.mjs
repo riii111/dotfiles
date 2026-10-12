@@ -1,9 +1,8 @@
 import { split } from "sentence-splitter";
 import { hasJapanese, paragraphs } from "../prose.mjs";
 
-function reporter(context, options = {}) {
+function reporter(context) {
   const { RuleError, report, fixer, getSource } = context;
-  const maxSupplementLength = options.maxSupplementLength ?? 20;
   return paragraphs(context, (node, text) => {
     let offset = 0;
     const raw = getSource(node);
@@ -31,15 +30,9 @@ function reporter(context, options = {}) {
           (part) => part.type === "Sentence" && part.raw.trim(),
         );
 
-        if (
-          sentences.length > 2 ||
-          (sentences.length === 2 &&
-            [...sentences[1].raw.trim()].length > maxSupplementLength)
-        ) {
-          const nextIndex =
-            [...sentences[1].raw.trim()].length > maxSupplementLength ? 1 : 2;
-          const next = sentences[nextIndex];
-          const boundary = offset + sentences[nextIndex - 1].range[1];
+        if (sentences.length > 1) {
+          const next = sentences[1];
+          const boundary = offset + sentences[0].range[1];
           const nextStart = offset + next.range[0];
           // Delimiters of inline markup that opens the next sentence are blank
           // in the prose text. HTML and footnote references must stay in place.
@@ -67,18 +60,15 @@ function reporter(context, options = {}) {
 
           report(
             node,
-            new RuleError(
-              `1行は2文まで、2文目は${maxSupplementLength}字以内にする。補足かどうかは書き手が判断する。`,
-              {
-                padding: context.locator.at(nextStart),
-                fix: fixable
-                  ? fixer.replaceTextRange(
-                      [boundary, boundary + gap[1].length],
-                      `${newline}${indent}`,
-                    )
-                  : undefined,
-              },
-            ),
+            new RuleError("1行に1文だけを書く。", {
+              padding: context.locator.at(nextStart),
+              fix: fixable
+                ? fixer.replaceTextRange(
+                    [boundary, boundary + gap[1].length],
+                    `${newline}${indent}`,
+                  )
+                : undefined,
+            }),
           );
         }
       }

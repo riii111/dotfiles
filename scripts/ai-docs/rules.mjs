@@ -6,7 +6,7 @@ import longParentheses from "./rules/long-parentheses.mjs";
 import sourceLine from "./rules/source-line.mjs";
 
 export default [
-  ["source-line", sourceLine, { maxSupplementLength: 20 }],
+  ["source-line", sourceLine],
   ["long-parentheses", longParentheses, { maxLength: 40 }],
   [
     "sentence-length",
