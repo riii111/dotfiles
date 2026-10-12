@@ -76,27 +76,28 @@ async function main() {
     return;
   }
 
-  const linter = makeLinter();
   if (command === "fmt") {
-    let changed = 0;
+    const changes = [];
     for (const file of files) {
       const source = await readFile(file, "utf8");
-      const output = await formatText(linter, source, file);
+      const output = await formatText(source, file);
 
-      if (output !== source) {
-        changed++;
-        console.log(path.relative(repoRoot, file));
-        if (!flags.includes("--check")) await writeFile(file, output);
-      }
+      if (output !== source) changes.push({ file, output });
+    }
+
+    for (const { file, output } of changes) {
+      console.log(path.relative(repoRoot, file));
+      if (!flags.includes("--check")) await writeFile(file, output);
     }
 
     console.log(
-      `${files.length} files, ${changed} ${flags.includes("--check") ? "would change" : "changed"}`,
+      `${files.length} files, ${changes.length} ${flags.includes("--check") ? "would change" : "changed"}`,
     );
-    if (flags.includes("--check") && changed) process.exitCode = 1;
+    if (flags.includes("--check") && changes.length) process.exitCode = 1;
     return;
   }
 
+  const linter = makeLinter();
   const results = [];
   for (const file of files) {
     const source = await readFile(file, "utf8");

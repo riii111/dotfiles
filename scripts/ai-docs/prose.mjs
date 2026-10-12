@@ -1,10 +1,8 @@
-export function prose(context, node, { skipLinks = false } = {}) {
+export function prose(context, node) {
   const source = context.getSource(node);
   const chars = source.split("").map((char) => (/\s/u.test(char) ? char : " "));
 
   function copy(child) {
-    if (skipLinks && child.type === context.Syntax.Link) return;
-
     const start = child.range[0] - node.range[0];
     if (child.type === context.Syntax.Str) {
       const raw = context.getSource(child);
@@ -25,7 +23,7 @@ export function prose(context, node, { skipLinks = false } = {}) {
   return chars.join("");
 }
 
-export function paragraphs(context, inspect, options) {
+export function paragraphs(context, inspect) {
   let quoted = 0;
   return {
     [context.Syntax.BlockQuote]() {
@@ -35,7 +33,7 @@ export function paragraphs(context, inspect, options) {
       quoted--;
     },
     [context.Syntax.Paragraph](node) {
-      if (!quoted) inspect(node, prose(context, node, options));
+      if (!quoted) inspect(node, prose(context, node));
     },
   };
 }

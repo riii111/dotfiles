@@ -92,7 +92,7 @@ describe("source-line", () => {
   }
 });
 
-for (const ruleId of ["source-line", "label-list", "long-parentheses"]) {
+for (const ruleId of ["source-line", "long-parentheses"]) {
   describe(`${ruleId} outside prose`, () => {
     for (const { name, source } of excludedExamples()) {
       test(`ignores ${name}`, async () => {
@@ -103,37 +103,6 @@ for (const ruleId of ["source-line", "label-list", "long-parentheses"]) {
     }
   });
 }
-
-describe("label-list", () => {
-  for (const { name, source, expected } of [
-    {
-      name: "two labels on one line",
-      source: "依頼：作業 変化：差分",
-      expected: 1,
-    },
-    {
-      name: "labels on separate lines",
-      source: "依頼：作業\n変化：差分",
-      expected: 0,
-    },
-    {
-      name: "a colon inside a link label",
-      source: "場所: [ファイル名:行番号](URL)",
-      expected: 0,
-    },
-    {
-      name: "colons inside code",
-      source: "`依頼：作業 変化：差分`の形式を示す。",
-      expected: 0,
-    },
-  ]) {
-    test(`reports ${expected} ${expected === 1 ? "warning" : "warnings"} for ${name}`, async () => {
-      const result = await lintRule("label-list", source);
-
-      assert.equal(result.messages.length, expected);
-    });
-  }
-});
 
 describe("long-parentheses", () => {
   for (const { name, source, expected } of [
@@ -170,11 +139,7 @@ describe("formatText", () => {
   test("adds line breaks without changing Markdown structure or code contents", async () => {
     const source = formattingExample();
 
-    const output = await formatText(
-      ruleLinter("source-line"),
-      source,
-      "example.md",
-    );
+    const output = await formatText(source, "example.md");
 
     assert.match(output, /最初の決まり。補足。\n {2}三つ目の決まり。/u);
     assert.match(output, /\{"keep": {4}"spacing"\}/u);
@@ -182,23 +147,18 @@ describe("formatText", () => {
   });
 
   test("produces no further changes after an initial formatting pass", async () => {
-    const linter = ruleLinter("source-line");
     const source = formattingExample();
-    const formatted = await formatText(linter, source, "example.md");
+    const formatted = await formatText(source, "example.md");
     assert.notEqual(formatted, source);
 
-    const output = await formatText(linter, formatted, "example.md");
+    const output = await formatText(formatted, "example.md");
 
     assert.equal(output, formatted);
   });
 
   test("rejects a line break that would turn prose into a heading", async () => {
     await assert.rejects(
-      formatText(
-        ruleLinter("source-line"),
-        "最初。補足。# 三つ目。",
-        "example.md",
-      ),
+      formatText("最初。補足。# 三つ目。", "example.md"),
       /構造や内容が変わる/u,
     );
   });
@@ -217,7 +177,7 @@ async function fixSourceLines(source) {
 }
 
 function excludedExamples() {
-  const noisy = `依頼：作業 変化：差分。補足。三つ目。（${"長い条件".repeat(15)}）`;
+  const noisy = `最初の決まり。補足。三つ目。（${"長い条件".repeat(15)}）`;
   return [
     { name: "YAML frontmatter", source: `---\ndescription: ${noisy}\n---\n` },
     { name: "a fenced example", source: `\`\`\`markdown\n${noisy}\n\`\`\`\n` },

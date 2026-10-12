@@ -26,7 +26,10 @@ export function makeLinter(selectedRules = rules) {
   return createLinter({ descriptor, cwd: repoRoot });
 }
 
-export async function formatText(linter, source, filePath) {
+export async function formatText(source, filePath) {
+  const linter = makeLinter(
+    rules.filter((rule) => rule.ruleId === "source-line"),
+  );
   let output = source;
   for (;;) {
     const fixed = await linter.fixText(output, filePath);

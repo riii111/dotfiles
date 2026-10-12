@@ -2,13 +2,11 @@
 
 import redundantExpression from "textlint-rule-ja-no-redundant-expression";
 import sentenceLength from "textlint-rule-sentence-length";
-import labelList from "./rules/label-list.mjs";
 import longParentheses from "./rules/long-parentheses.mjs";
 import sourceLine from "./rules/source-line.mjs";
 
 export default [
   ["source-line", sourceLine, { maxSupplementLength: 20 }],
-  ["label-list", labelList],
   ["long-parentheses", longParentheses, { maxLength: 40 }],
   [
     "sentence-length",
