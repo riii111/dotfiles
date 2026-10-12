@@ -27,7 +27,7 @@ for (const file of files) {
   for (const message of before.messages) {
     counts.before[message.ruleId] = (counts.before[message.ruleId] ?? 0) + 1;
     if (message.ruleId === "source-line")
-      sourceLines.push(`${file}:${message.line}`);
+      sourceLines.push(`${file}:${message.loc.start.line}`);
   }
 
   try {

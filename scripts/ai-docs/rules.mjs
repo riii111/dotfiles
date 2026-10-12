@@ -1,3 +1,5 @@
+/// <reference path="./vendor-rules.d.ts" />
+
 import redundantExpression from "textlint-rule-ja-no-redundant-expression";
 import sentenceLength from "textlint-rule-sentence-length";
 import labelList from "./rules/label-list.mjs";

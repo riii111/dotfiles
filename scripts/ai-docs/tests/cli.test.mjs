@@ -42,9 +42,23 @@ describe("lint command", () => {
     assert.equal(result.status, 0, result.stderr);
     const [message] = JSON.parse(result.stdout)[0].messages;
     assert.deepEqual(
-      { ruleId: message.ruleId, line: message.line, column: message.column },
-      { ruleId: "label-list", line: 2, column: 6 },
+      {
+        ruleId: message.ruleId,
+        start: message.loc.start,
+        line: message.line,
+        column: message.column,
+      },
+      {
+        ruleId: "label-list",
+        start: { line: 2, column: 6 },
+        line: 2,
+        column: 6,
+      },
     );
+
+    const text = run("lint", file);
+    assert.equal(text.status, 0, text.stderr);
+    assert.match(text.stdout, /example\.md:2:6 label-list:/u);
   });
 
   test("fails when the requested Markdown file does not exist", async (context) => {

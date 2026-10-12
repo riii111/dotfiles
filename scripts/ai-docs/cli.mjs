@@ -71,7 +71,7 @@ async function main() {
     return;
   }
 
-  const linter = await makeLinter();
+  const linter = makeLinter();
   if (command === "fmt") {
     let changed = 0;
     for (const file of files) {
@@ -98,7 +98,7 @@ async function main() {
     const result = await linter.lintText(source, file);
 
     // Older third-party rules can report a column relative to the whole node.
-    for (const message of result.messages) {
+    result.messages = result.messages.map((message) => {
       const locate = (index) => {
         const prefix = source.slice(0, index);
         return {
@@ -106,13 +106,17 @@ async function main() {
           column: prefix.length - prefix.lastIndexOf("\n"),
         };
       };
-      message.loc = {
+      const loc = {
         start: locate(message.range[0]),
         end: locate(message.range[1]),
       };
-      message.line = message.loc.start.line;
-      message.column = message.loc.start.column;
-    }
+      return {
+        ...message,
+        loc,
+        line: loc.start.line,
+        column: loc.start.column,
+      };
+    });
     results.push(result);
   }
 
@@ -122,7 +126,7 @@ async function main() {
     for (const result of results) {
       for (const message of result.messages) {
         console.log(
-          `${path.relative(repoRoot, result.filePath)}:${message.line}:${message.column} ${message.ruleId}: ${message.message}`,
+          `${path.relative(repoRoot, result.filePath)}:${message.loc.start.line}:${message.loc.start.column} ${message.ruleId}: ${message.message}`,
         );
       }
     }

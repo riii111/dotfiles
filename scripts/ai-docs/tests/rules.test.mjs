@@ -72,7 +72,7 @@ describe("source-line", () => {
     );
 
     assert.equal(result.messages.length, 1);
-    assert.equal(result.messages[0].line, 2);
+    assert.equal(result.messages[0].loc.start.line, 2);
   });
 
   for (const { name, source } of [
