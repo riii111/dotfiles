@@ -22,7 +22,10 @@ description: |
    失敗時は理由を報告して停止し、create_threadを直接呼ばない。
 
 同じprojectIdとtaskIdの再実行は既存workerを返し、新規作成しない。
-結果不明・モデル不一致は`harnexus-task state --request <JSON>`の最上位の`workerThreadId`・`pending`・`pendingThreadId`・`requested`/`actual`で確認し、ユーザーがAppで確認した結果だけを、承認を得て`harnexus-task resolve --request <JSON> --sent [--thread-id <ID>]`または`--not-sent`で記録する。
+結果不明・モデル不一致は`harnexus-task state --request <JSON>`で確認する。
+最上位の`workerThreadId`・`pending`・`pendingThreadId`・`requested`/`actual`を見る。
+ユーザーがAppで確認した結果だけを、承認を得て記録する。
+送信済みなら`harnexus-task resolve --request <JSON> --sent [--thread-id <ID>]`、未送信なら`--not-sent`で記録する。
 
 ## 参照文書
 
