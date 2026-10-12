@@ -18,7 +18,8 @@ workerは既定Claude、reviewerはCodexとし、統括役の選択から変更�
 中間報告で停止しない。
 
 開始済みか完了済みかはタスク管理元、既存のCodex Task、GitHubのPRを見て判断する。
-harnexus内のClaudeは`mcp__codex_link__wait_threads`・`read_thread`・`send_message_to_thread`を使い、自分が起動したworkerを追う。
+harnexus内のClaudeは、自分が起動したworkerを追う。
+追うには`mcp__codex_link__wait_threads`・`read_thread`・`send_message_to_thread`を使う。
 進捗はwait_threadsの最新snapshotとcursorで追い、履歴が必要な場合だけread_threadで最新1turn・出力なしから読む。不足する履歴や出力だけ追加取得する。
 追加指示は最新の最終回答・明示エラー・履歴の進行に基づき、不足に限定する。
 idleやtimeoutだけで停止と判断せず、worker/reviewerの結果受取方式を変更しない。
