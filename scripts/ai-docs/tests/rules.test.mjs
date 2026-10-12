@@ -105,6 +105,26 @@ describe("source-line", () => {
       assert.equal(output, source);
     });
   }
+
+  for (const { name, source } of [
+    { name: "block HTML", source: `最初の決まり。<div>${long}` },
+    {
+      name: "an inline HTML closing tag",
+      source: `<span>最初の決まり。</span>${long}`,
+    },
+    {
+      name: "a footnote reference",
+      source: `最初の決まり。[^1]${long}\n\n[^1]: 注。`,
+    },
+  ]) {
+    test(`warns without moving ${name} to the next line`, async () => {
+      const result = await lintRule("source-line", source);
+      const output = await fixSourceLines(source);
+
+      assert.equal(result.messages.length, 1);
+      assert.equal(output, source);
+    });
+  }
 });
 
 for (const ruleId of ["source-line", "long-parentheses"]) {

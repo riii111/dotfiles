@@ -8,9 +8,18 @@ function reporter(context, options = {}) {
     let offset = 0;
     const raw = getSource(node);
     const ancestors = [];
+    const openers = [];
+    const openable = new Set([
+      context.Syntax.Code,
+      context.Syntax.Strong,
+      context.Syntax.Emphasis,
+      context.Syntax.Link,
+      context.Syntax.Image,
+    ]);
 
     function collect(child) {
       if (child.type !== context.Syntax.Str) ancestors.push(child.range);
+      if (openable.has(child.type)) openers.push(child.range[0]);
       for (const nested of child.children ?? []) collect(nested);
     }
 
@@ -32,17 +41,20 @@ function reporter(context, options = {}) {
           const next = sentences[nextIndex];
           const boundary = offset + sentences[nextIndex - 1].range[1];
           const nextStart = offset + next.range[0];
-          // Markup that opens the next sentence (`code`, **bold**, [link]) is
-          // blank in the prose text, so the gap may end with its delimiters.
-          const gap = raw.slice(boundary, nextStart).match(/^([ \t]*)\S*$/u);
+          // Delimiters of inline markup that opens the next sentence are blank
+          // in the prose text. HTML and footnote references must stay in place.
+          const gap = raw.slice(boundary, nextStart).match(/^([ \t]*)(\S*)$/u);
           const absolute = node.range[0] + boundary;
           const insideMarkup = ancestors.some(
             ([start, end]) => start < absolute && absolute < end,
           );
+          const opensNext =
+            gap !== null &&
+            (gap[2] === "" || openers.includes(absolute + gap[1].length));
 
           const before = raw.slice(0, boundary);
           const fixable =
-            !insideMarkup && gap !== null && /[。！？!?]$/u.test(before);
+            !insideMarkup && opensNext && /[。！？!?]$/u.test(before);
 
           const sourceLine =
             node.loc.start.line + raw.slice(0, offset).split("\n").length - 1;
