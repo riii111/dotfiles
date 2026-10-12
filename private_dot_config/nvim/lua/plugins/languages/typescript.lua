@@ -2,8 +2,6 @@ return {
 	{
 		"neovim/nvim-lspconfig",
 		init = function()
-			local filetypes = { "typescript", "typescriptreact", "javascript", "javascriptreact" }
-
 			vim.lsp.config("ts_ls", {
 				cmd = { vim.fn.stdpath("data") .. "/mason/bin/typescript-language-server", "--stdio" },
 				root_markers = { "package.json", "tsconfig.json", "jsconfig.json", ".git" },
@@ -55,31 +53,6 @@ return {
 				filetypes = { "typescript", "typescriptreact", "javascript", "javascriptreact", "json", "jsonc" },
 			})
 			vim.lsp.enable("biome")
-
-			local function start_ts_ls(bufnr)
-				if
-					not vim.tbl_contains(filetypes, vim.bo[bufnr].filetype)
-					or #vim.lsp.get_clients({ bufnr = bufnr, name = "ts_ls" }) > 0
-				then
-					return
-				end
-
-				local config = vim.deepcopy(vim.lsp.config.ts_ls)
-				vim.lsp.start(config, {
-					bufnr = bufnr,
-					reuse_client = config.reuse_client,
-					_root_markers = config.root_markers,
-				})
-			end
-
-			start_ts_ls(0)
-			vim.api.nvim_create_autocmd("FileType", {
-				group = vim.api.nvim_create_augroup("typescript_lsp", { clear = true }),
-				pattern = filetypes,
-				callback = function(event)
-					start_ts_ls(event.buf)
-				end,
-			})
 		end,
 		config = function()
 			-- Keymaps (IntelliJ-like actions)
