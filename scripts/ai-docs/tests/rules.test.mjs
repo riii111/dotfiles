@@ -175,6 +175,67 @@ describe("long-parentheses", () => {
   }
 });
 
+for (const { ruleId, accepted, reported, exceptions } of [
+  {
+    ruleId: "no-doubled-joshi",
+    accepted: "材料を混ぜて焼く。",
+    reported: "同格挿入でその場で特定する。",
+    exceptions: [
+      { name: "a repeated に", source: "最初に当たった行に従う。" },
+      { name: "parallel も", source: "OKも取り消しもない項目。" },
+    ],
+  },
+  {
+    ruleId: "no-doubled-conjunctive-particle-ga",
+    accepted: "雨が降ったが、試合は続いた。",
+    reported:
+      "今日は早朝から出発したが、首尾よく目的地に着いたが、天候が悪かった。",
+    exceptions: [],
+  },
+  {
+    ruleId: "no-double-negative-ja",
+    accepted: "それが事件の発端だった。",
+    reported: "それが事件の発端だったといえなくもない。",
+    exceptions: [],
+  },
+  {
+    ruleId: "max-ten",
+    accepted: "今日は、雨が降ったので、外に出ず、本を読んだ。",
+    reported: "今日は、雨が降ったので、外に出ず、本を読み、昼寝をした。",
+    exceptions: [
+      {
+        name: "commas between nouns",
+        source: "りんご、みかん、ぶどう、もも、なしを買った。",
+      },
+    ],
+  },
+]) {
+  describe(ruleId, () => {
+    for (const { name, source, expected } of [
+      { name: "natural prose", source: accepted, expected: 0 },
+      { name: "a violation", source: reported, expected: 1 },
+      {
+        name: "a violation in a fenced example",
+        source: `\`\`\`text\n${reported}\n\`\`\`\n`,
+        expected: 0,
+      },
+      ...exceptions.map((exception) => ({ ...exception, expected: 0 })),
+    ]) {
+      test(`reports ${expected} ${expected === 1 ? "warning" : "warnings"} for ${name}`, async () => {
+        const result = await lintRule(ruleId, source);
+
+        assert.equal(result.messages.length, expected);
+      });
+    }
+
+    test("leaves a violation unchanged when formatting", async () => {
+      const output = await formatText(reported, "example.md");
+
+      assert.equal(output, `${reported}\n`);
+    });
+  });
+}
+
 describe("prose-lines", () => {
   const prose = (count) =>
     Array.from({ length: count }, () => "文。").join("\n");
