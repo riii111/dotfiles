@@ -9,7 +9,8 @@ Claude Code で実際に出た権限確認と auto モードの拒否、サン�
 ## 手順
 
 1. `python3 ~/.claude/scripts/permission-report.py --days <日数>` を実行する。日数は指定がなければ 7。
-   確認と拒否は `log-permission-event` フックの記録（`~/.local/state/claude/permission-events.jsonl`）から、サンドボックスの失敗は会話記録から集計される。
+   確認と拒否は `log-permission-event` フックの記録（`~/.local/state/claude/permission-events.jsonl`）から集計される。
+   サンドボックスの失敗は会話記録から集計される。
 2. 設定の管理元（`chezmoi source-path ~/.claude/settings.json`）の `permissions`、`autoMode`、`sandbox` を読む。
 3. 優先順位を付ける。
    利用者が不満の具体例を挙げていれば、それを最優先で調べる。
@@ -40,7 +41,8 @@ Claude Code で実際に出た権限確認と auto モードの拒否、サン�
 ## 変更するとき
 
 利用者が候補を選んだら、管理元の `settings.json.tmpl` を編集する。
-管理元リポジトリの AGENTS.md に従ってテストとコミットを行い、`chezmoi apply ~/.claude/settings.json` で適用し、`chezmoi diff ~/.claude/settings.json` が空であることを確かめる。
+管理元リポジトリの AGENTS.md に従ってテストし、コミットする。
+`chezmoi apply ~/.claude/settings.json` で適用し、`chezmoi diff ~/.claude/settings.json` が空であることを確かめる。
 
 ## 出力
 
