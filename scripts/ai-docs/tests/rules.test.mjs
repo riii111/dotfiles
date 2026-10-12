@@ -183,6 +183,7 @@ for (const { ruleId, accepted, reported, exceptions } of [
     exceptions: [
       { name: "a repeated に", source: "最初に当たった行に従う。" },
       { name: "parallel も", source: "OKも取り消しもない項目。" },
+      { name: "a repeated が", source: "雨が降り、風が強いことが分かった。" },
     ],
   },
   {
@@ -190,13 +191,13 @@ for (const { ruleId, accepted, reported, exceptions } of [
     accepted: "雨が降ったが、試合は続いた。",
     reported:
       "今日は早朝から出発したが、首尾よく目的地に着いたが、天候が悪かった。",
-    exceptions: [],
+    exceptions: [{ name: "case particles", source: "雨が降り、風が吹いた。" }],
   },
   {
     ruleId: "no-double-negative-ja",
     accepted: "それが事件の発端だった。",
     reported: "それが事件の発端だったといえなくもない。",
-    exceptions: [],
+    exceptions: [{ name: "a single negation", source: "できないことがある。" }],
   },
   {
     ruleId: "max-ten",
