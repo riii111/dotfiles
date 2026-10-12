@@ -1,8 +1,8 @@
-import sourceLine from "./rules/source-line.mjs";
+import redundantExpression from "textlint-rule-ja-no-redundant-expression";
+import sentenceLength from "textlint-rule-sentence-length";
 import labelList from "./rules/label-list.mjs";
 import longParentheses from "./rules/long-parentheses.mjs";
-import sentenceLength from "textlint-rule-sentence-length";
-import redundantExpression from "textlint-rule-ja-no-redundant-expression";
+import sourceLine from "./rules/source-line.mjs";
 
 export default [
   ["source-line", sourceLine, { maxSupplementLength: 20 }],

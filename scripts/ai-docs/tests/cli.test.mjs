@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import test from "node:test";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
-import path from "node:path";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
+import path from "node:path";
+import test from "node:test";
 import { repoRoot, toolDir } from "../linter.mjs";
 
 const run = (...args) =>

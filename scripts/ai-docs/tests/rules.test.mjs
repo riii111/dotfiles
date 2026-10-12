@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { formatText, makeLinter } from "../linter.mjs";
 import { semanticTree } from "../markdown.mjs";
 import rules from "../rules.mjs";
-import { makeLinter, formatText } from "../linter.mjs";
 
 const only = (id) => makeLinter(rules.filter((rule) => rule.ruleId === id));
 const lint = (id, text) => only(id).lintText(text, "example.md");
@@ -120,8 +120,8 @@ test("fmt preserves Markdown structure and code, and is idempotent", async () =>
   const source = `---\nname: example\ndescription: 例\n---\n\n- 最初の決まり。補足。三つ目の決まり。\n\n\`\`\`json\n{"keep":    "spacing"}\n\`\`\`\n\n| 名前 | 値 |\n| --- | --- |\n| 例 | 1 |\n`;
   const linter = only("source-line");
   const output = await formatText(linter, source, "example.md");
-  assert.match(output, /最初の決まり。補足。\n  三つ目の決まり。/u);
-  assert.match(output, /\{"keep":    "spacing"\}/u);
+  assert.match(output, /最初の決まり。補足。\n {2}三つ目の決まり。/u);
+  assert.match(output, /\{"keep": {4}"spacing"\}/u);
   assert.deepEqual(semanticTree(output), semanticTree(source));
   assert.equal(await formatText(linter, output, "example.md"), output);
 });

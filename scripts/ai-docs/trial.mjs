@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { makeLinter, formatText, repoRoot } from "./linter.mjs";
+import { formatText, makeLinter, repoRoot } from "./linter.mjs";
 
 const files = execFileSync(
   "git",

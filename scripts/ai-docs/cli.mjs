@@ -1,10 +1,10 @@
 import { execFileSync } from "node:child_process";
-import { engine } from "unified-engine";
-import { remark } from "remark";
-import remarkConfig from "./remark.config.mjs";
-import { readFile, writeFile, lstat } from "node:fs/promises";
+import { lstat, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { makeLinter, formatText, repoRoot, toolDir } from "./linter.mjs";
+import { remark } from "remark";
+import { engine } from "unified-engine";
+import { formatText, makeLinter, repoRoot } from "./linter.mjs";
+import remarkConfig from "./remark.config.mjs";
 
 const usage =
   "Usage: npm --prefix scripts/ai-docs run <lint|fmt|links> -- [--json|--strict|--check] [file.md ...]";

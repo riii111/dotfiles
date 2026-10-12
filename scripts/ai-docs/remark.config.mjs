@@ -1,7 +1,7 @@
+import { fileURLToPath } from "node:url";
 import frontmatter from "remark-frontmatter";
 import gfm from "remark-gfm";
 import validateLinks from "remark-validate-links";
-import { fileURLToPath } from "node:url";
 
 export default {
   plugins: [

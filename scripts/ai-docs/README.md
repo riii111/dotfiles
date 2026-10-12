@@ -66,8 +66,11 @@ SKILLのメタデータ検証も別途必要。
 ```sh
 npm --prefix scripts/ai-docs test
 npm --prefix scripts/ai-docs run check
+npm --prefix scripts/ai-docs run format:code
 npm --prefix scripts/ai-docs run trial
 ```
 
 `trial`は既存SKILLを読み、整形前後の警告数と再整形の差分を確認する。ファイルは変更しない。
-CIはルールのテスト、ツール自身の書式、リンク切れを検証する。既存文章の警告は確認用に出力する。
+`check`はBiomeでJavaScriptとJSONの検査・整形済み確認を行い、PrettierでこのディレクトリのMarkdownの書式を確認する。
+`format:code`はBiomeの整形と安全な修正をJavaScriptとJSONに適用する。`package-lock.json`は対象外。
+CIはルールのテスト、ツール自身の検査と書式、リンク切れを検証する。既存文章の警告は確認用に出力する。

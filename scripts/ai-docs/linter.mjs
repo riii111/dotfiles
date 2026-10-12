@@ -1,12 +1,12 @@
-import { createLinter } from "textlint";
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { isDeepStrictEqual } from "node:util";
 import { TextlintKernelDescriptor } from "@textlint/kernel";
 import markdown from "@textlint/textlint-plugin-markdown";
-import rules from "./rules.mjs";
-import { isDeepStrictEqual } from "node:util";
-import { semanticTree } from "./markdown.mjs";
-import { fileURLToPath } from "node:url";
-import { readFile } from "node:fs/promises";
 import * as prettier from "prettier";
+import { createLinter } from "textlint";
+import { semanticTree } from "./markdown.mjs";
+import rules from "./rules.mjs";
 
 export const toolDir = fileURLToPath(new URL(".", import.meta.url));
 export const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
