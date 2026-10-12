@@ -21,7 +21,8 @@
 | 4   | 同じ理由の`continue_sent`が、最後に`review_ready`へ移した後（なければ最後の`launched`の後）に`limits.max_continues`件ある | 送らずに`needs_decision`にし、繰り返し止まった位置を`next_action`に書く                                     |
 | 5   | 上のどれでもない                                                                                                          | 送る                                                                                                        |
 
-送るときは、`attempts`に`continue_sent`を追記してファイルへ書いてから、`codex_app__send_message_to_thread`の`threadId`に`worker_thread`を指定して送る。
+送るときは、先に`attempts`に`continue_sent`を追記してファイルへ書く。
+その後、`codex_app__send_message_to_thread`の`threadId`に`worker_thread`を指定して送る。
 同じ項目に複数の理由があれば1通にまとめ、`continue_sent`は理由ごとに書く。
 送信が受理されたことを確かめられなければ（エラー・タイムアウトを含む）再送しない。
 `failed`を記録して`needs_decision`にし、Appで送信の有無を確かめる内容を`next_action`に書く。

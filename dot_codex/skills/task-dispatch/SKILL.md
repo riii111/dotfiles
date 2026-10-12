@@ -8,7 +8,8 @@ description: |
 
 # Task Dispatch
 
-起動・実装・レビューにはtask-session-launch・task-worker・task-review-cycleを使う。workerの完了は待たない。
+起動・実装・レビューにはtask-session-launch・task-worker・task-review-cycleを使う。
+workerの完了は待たない。
 各文書内のリンクは、その文書のディレクトリを基準に解決する。
 
 ## 1日の流れ
@@ -108,7 +109,8 @@ Scheduled Taskの作業ディレクトリは`~/agent-desk/`とし、gitでは管
 各項目の`attempts`を更新する。
 台帳の正しさはファイルの内容で保ち、履歴は`attempts`に残す。
 夜の実行と返事への対応は予定の本文を書き換えない。
-起動を止めた理由や失敗は`attempts`に残し、項目に結び付かないもの（lockの残り・前提の不足・Scheduled Taskの失敗）は`runs/<日付>-plan.md`の`## そのほか`に追記して、朝の報告で伝える。ファイルや見出しがなければ作る。
+起動を止めた理由や失敗は`attempts`に残す。
+項目に結び付かないもの（lockの残り・前提の不足・Scheduled Taskの失敗）は`runs/<日付>-plan.md`の`## そのほか`に追記して、朝の報告で伝える。ファイルや見出しがなければ作る。
 最終回答は実行の種類に応じて返す。
 
 - 朝の実行・予定作成の実行：書いた本文だけ。
