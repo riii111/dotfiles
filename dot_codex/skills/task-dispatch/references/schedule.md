@@ -50,7 +50,8 @@ amount: ""            # 量について言われた内容を短く。なけれ�
 
 ### Scheduled Taskの扱い
 
-Scheduled Taskは、Codexスレッドで使える`automation_update`で作成・更新・削除し、`~/agent-desk/`を作業ディレクトリにする。
+Scheduled Taskの作成・更新・削除には、Codexスレッドで使える`automation_update`を使う。
+作業ディレクトリは`~/agent-desk/`にする。
 
 - 作る前に`plan_task`を見て、IDがあれば作らずに時刻を更新する。
   作ったらすぐIDを書く。
