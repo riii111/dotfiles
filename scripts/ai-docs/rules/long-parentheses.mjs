@@ -7,6 +7,7 @@ export default function reporter(context, options = {}) {
     for (let i = 0; i < text.length; i++) {
       if (text[i] === "（" || text[i] === "(")
         stack.push({ start: i, close: text[i] === "（" ? "）" : ")" });
+
       if (text[i] === stack.at(-1)?.close) {
         const { start } = stack.pop();
         const content = text.slice(start + 1, i);

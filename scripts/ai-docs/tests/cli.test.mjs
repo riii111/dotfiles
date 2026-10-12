@@ -81,6 +81,7 @@ describe("fmt command", () => {
       await readFile(file, "utf8"),
       "最初の文。補足。\n三つ目の文。\n",
     );
+
     const checked = run("fmt", "--check", file);
     assert.equal(checked.status, 0, checked.stderr);
   });

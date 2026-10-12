@@ -8,16 +8,20 @@ function reporter(context, options = {}) {
     let offset = 0;
     const raw = getSource(node);
     const ancestors = [];
+
     function collect(child) {
       if (child.type !== context.Syntax.Str) ancestors.push(child.range);
       for (const nested of child.children ?? []) collect(nested);
     }
+
     for (const child of node.children ?? []) collect(child);
+
     for (const line of text.split("\n")) {
       if (hasJapanese(line)) {
         const sentences = split(line).filter(
           (part) => part.type === "Sentence" && part.raw.trim(),
         );
+
         if (
           sentences.length > 2 ||
           (sentences.length === 2 &&
@@ -33,11 +37,13 @@ function reporter(context, options = {}) {
           const insideMarkup = ancestors.some(
             ([start, end]) => start < absolute && absolute < end,
           );
+
           const before = raw.slice(0, boundary);
           const fixable =
             !insideMarkup &&
             /^[ \t]*$/u.test(gap) &&
             /[。！？!?]$/u.test(before);
+
           const sourceLine =
             node.loc.start.line + raw.slice(0, offset).split("\n").length - 1;
           const fullLine = context.getSource().split("\n")[sourceLine - 1];
@@ -46,6 +52,7 @@ function reporter(context, options = {}) {
           )[0];
           const indent = " ".repeat(prefix.length);
           const newline = context.getSource().includes("\r\n") ? "\r\n" : "\n";
+
           report(
             node,
             new RuleError(

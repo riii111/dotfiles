@@ -11,6 +11,7 @@ export default function reporter(context) {
             /(?:^|[\s、。；;])([\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}ー]{1,12})[：:]/gu,
           ),
         ];
+
         if (labels.length >= 2) {
           context.report(
             node,

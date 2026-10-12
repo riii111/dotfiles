@@ -1,8 +1,10 @@
 export function prose(context, node, { skipLinks = false } = {}) {
   const source = context.getSource(node);
   const chars = source.split("").map((char) => (/\s/u.test(char) ? char : " "));
+
   function copy(child) {
     if (skipLinks && child.type === context.Syntax.Link) return;
+
     const start = child.range[0] - node.range[0];
     if (child.type === context.Syntax.Str) {
       const raw = context.getSource(child);
@@ -18,6 +20,7 @@ export function prose(context, node, { skipLinks = false } = {}) {
       for (const nested of child.children ?? []) copy(nested);
     }
   }
+
   for (const child of node.children ?? []) copy(child);
   return chars.join("");
 }

@@ -11,27 +11,32 @@ const files = execFileSync(
   .split("\0")
   .filter((file) => file.endsWith(".md"))
   .sort();
+
 const linter = makeLinter();
 const counts = { before: {}, after: {} };
 const sourceLines = [];
 let changed = 0;
 let idempotent = 0;
 const failures = [];
+
 for (const file of files) {
   const filePath = path.join(repoRoot, file);
   const source = await readFile(filePath, "utf8");
   const before = await linter.lintText(source, filePath);
+
   for (const message of before.messages) {
     counts.before[message.ruleId] = (counts.before[message.ruleId] ?? 0) + 1;
     if (message.ruleId === "source-line")
       sourceLines.push(`${file}:${message.line}`);
   }
+
   try {
     const formatted = await formatText(linter, source, filePath);
     if (formatted !== source) changed++;
     if (formatted === (await formatText(linter, formatted, filePath)))
       idempotent++;
     else failures.push({ file, error: "再整形で差分が発生" });
+
     const after = await linter.lintText(formatted, filePath);
     for (const message of after.messages)
       counts.after[message.ruleId] = (counts.after[message.ruleId] ?? 0) + 1;
@@ -39,6 +44,7 @@ for (const file of files) {
     failures.push({ file, error: error.message });
   }
 }
+
 const sampleSize = Math.min(40, sourceLines.length);
 const reviewedSourceLines = Array.from(
   { length: sampleSize },
@@ -47,6 +53,7 @@ const reviewedSourceLines = Array.from(
       Math.round((i * (sourceLines.length - 1)) / Math.max(1, sampleSize - 1))
     ],
 );
+
 console.log(
   JSON.stringify(
     {

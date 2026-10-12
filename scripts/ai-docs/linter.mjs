@@ -33,15 +33,18 @@ export async function formatText(linter, source, filePath) {
     if (fixed.output === output) break;
     output = fixed.output;
   }
+
   const options = JSON.parse(await readFile(`${toolDir}prettier.json`, "utf8"));
   const formatted = await prettier.format(output, {
     ...options,
     parser: "markdown",
   });
+
   if (!isDeepStrictEqual(semanticTree(source), semanticTree(formatted))) {
     throw new Error(
       `Markdownの構造や内容が変わるため整形を中止しました: ${filePath}`,
     );
   }
+
   return formatted;
 }

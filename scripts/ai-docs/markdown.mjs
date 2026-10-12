@@ -8,6 +8,7 @@ export function semanticTree(source) {
   function clean(node) {
     if (Array.isArray(node)) return node.map(clean);
     if (!node || typeof node !== "object") return node;
+
     return Object.fromEntries(
       Object.entries(node)
         .filter(([key]) => !["loc", "range", "raw"].includes(key))
@@ -19,5 +20,6 @@ export function semanticTree(source) {
         ]),
     );
   }
+
   return clean(processor.preProcess(source));
 }
