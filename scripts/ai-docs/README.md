@@ -1,0 +1,49 @@
+# Markdownの検査と整形
+
+日本語の文章とSKILLの参照を検査し、文の区切りとMarkdownの書式を整える。
+
+## 検査する観点
+
+- **1行に1つの決まりを書く**
+  - 理由：AIは複数の決まりを1行にまとめがち。ソースと差分を追いにくくなる。
+  - 基準：日本語を含む行は2文まで、2文目は20字以内。
+    前の文の理由・例外・条件を補う短い文は、同じ行に残す。何の補足か分かりやすくなる。
+
+- **1文を長くしない**
+  - 理由：AIは条件・理由・操作を1文につなげがち。
+    読み終えるまで多くの情報を覚えておく必要があり、どの条件がどの操作にかかるか分かりにくい。
+  - 基準：日本語を含む文が100字を超える。
+
+- **括弧に説明を詰め込まない**
+  - 理由：AIは条件や例外を括弧に押し込みがち。
+    補足が長いと本文との往復が増え、主張や操作の流れを追いにくい。
+  - 基準：日本語を含む括弧内が40字を超える。
+
+- **冗長な表現を減らす**
+  - 理由：AIは「確認を行う」のように表現を膨らませがち。
+    情報が増えないまま文が長くなり、読む負担が増える。
+  - 基準：既存のtextlintルールで冗長な表現を検出する。
+
+- **参照をたどれるようにする**
+  - 理由：AIはファイルや見出しを変更しても、参照元の更新を漏らしがち。
+    リンクが切れると、手順を実行するときに必要な情報へたどり着けない。
+  - 基準：ローカルのリンク先ファイルとアンカーが存在する。
+
+数値は見直す箇所を拾う目安とし、文の分け方や補足の置き方は書き手が判断する。
+
+整形では文の区切りで改行し、表・箇条書き・字下げをそろえる。
+文章とコードの内容、Markdownの構造を保つ。
+
+## コマンド
+
+Node.js 22以上を使い、リポジトリのルートで実行する。
+
+```sh
+npm --prefix scripts/ai-docs ci --ignore-scripts
+npm --prefix scripts/ai-docs run lint -- --all
+npm --prefix scripts/ai-docs run links -- --all
+npm --prefix scripts/ai-docs run fmt -- --all --check
+npm --prefix scripts/ai-docs run fmt -- --all
+npm --prefix scripts/ai-docs run lint -- --strict dot_codex/skills/task-dispatch/SKILL.md
+npm --prefix scripts/ai-docs run fmt -- dot_codex/skills/task-dispatch/SKILL.md
+```

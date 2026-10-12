@@ -8,6 +8,28 @@ on:
       - main
 
 jobs:
+  ai-docs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: scripts/ai-docs
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "22"
+
+      - run: npm ci --ignore-scripts --no-fund --no-audit
+      - run: npm test
+      - run: npm run check
+      - run: npm run links
+      - run: npm run lint
+
   test:
     runs-on: macos-latest
     steps:
