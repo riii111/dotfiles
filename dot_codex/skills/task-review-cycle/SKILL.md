@@ -20,7 +20,8 @@ worktreeに`*`だけの`.gitignore`を置いた`.reviewctl/`を作り、[依頼J
    Codexは`sandbox_permissions: require_escalated`を付け、Claudeはそのまま実行する（サンドボックス対象外）。
    パイプ・リダイレクト・`cd`などを付けず単独で実行する（付けると対象外にならない）。
    ユーザーがモデル設定を指定した場合だけ`--model`・`--thinking`を渡す。
-2. harnexus-taskがbase/head SHAを固定し、初回はreviewerを作成、以後は同じreviewerへ送る。同じheadは再送しない。
+2. harnexus-taskがbase/head SHAを固定し、初回はreviewerを作成、以後は同じreviewerへ送る。
+   同じheadは再送しない。
    失敗時は出力の理由を報告し、create_thread・send_message_to_threadを直接呼ばない。
 3. 結果を受け取る。
    Codexはturnを終了し、reviewerの返信で次turnを始める。

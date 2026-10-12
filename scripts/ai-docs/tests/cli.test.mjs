@@ -53,7 +53,7 @@ describe("lint command", () => {
     assert.match(result.stdout, /source-line/u);
   });
 
-  test("reports the third sentence's exact position on a continuation line", async (context) => {
+  test("reports the second sentence's exact position on a continuation line", async (context) => {
     const dir = await scratch(context);
     const file = await writeMarkdown(
       dir,
@@ -73,15 +73,15 @@ describe("lint command", () => {
       },
       {
         ruleId: "source-line",
-        start: { line: 2, column: 8 },
+        start: { line: 2, column: 5 },
         line: 2,
-        column: 8,
+        column: 5,
       },
     );
 
     const text = run("lint", file);
     assert.equal(text.status, 0, text.stderr);
-    assert.match(text.stdout, /example\.md:2:8 source-line:/u);
+    assert.match(text.stdout, /example\.md:2:5 source-line:/u);
   });
 
   test("fails when the requested Markdown file does not exist", async (context) => {
@@ -107,13 +107,13 @@ describe("fmt command", () => {
     assert.equal(result.status, 0, result.stderr);
     assert.equal(
       await readFile(file, "utf8"),
-      "これは使用することができる。補足。\n三つ目の文。\n",
+      "これは使用することができる。\n補足。\n三つ目の文。\n",
     );
   });
 
   test("preserves all files when a later file would change Markdown structure", async (context) => {
     const { checkout, files, source } = await skillRepository(context);
-    const invalid = "最初。補足。# 三つ目。\n";
+    const invalid = "- 項目\n続きの行。\n";
     await writeFile(path.join(checkout, files[1]), invalid);
 
     const result = runInRepository(checkout, "fmt", "--all");
@@ -145,7 +145,7 @@ describe("fmt command", () => {
     for (const file of files)
       assert.equal(
         await readFile(path.join(checkout, file), "utf8"),
-        "最初の文。補足。\n三つ目の文。\n",
+        "最初の文。\n補足。\n三つ目の文。\n",
       );
     for (const file of excluded)
       assert.equal(await readFile(path.join(checkout, file), "utf8"), source);
@@ -187,7 +187,7 @@ describe("fmt command", () => {
     assert.equal(written.status, 0, written.stderr);
     assert.equal(
       await readFile(file, "utf8"),
-      "最初の文。補足。\n三つ目の文。\n",
+      "最初の文。\n補足。\n三つ目の文。\n",
     );
 
     const checked = run("fmt", "--check", file);

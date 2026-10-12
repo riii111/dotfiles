@@ -8,7 +8,8 @@ Claude Code で実際に出た権限確認と auto モードの拒否、サン�
 
 ## 手順
 
-1. `python3 ~/.claude/scripts/permission-report.py --days <日数>` を実行する。日数は指定がなければ 7。
+1. `python3 ~/.claude/scripts/permission-report.py --days <日数>` を実行する。
+   日数は指定がなければ 7。
    確認と拒否は `log-permission-event` フックの記録（`~/.local/state/claude/permission-events.jsonl`）から集計される。
    サンドボックスの失敗は会話記録から集計される。
 2. 設定の管理元（`chezmoi source-path ~/.claude/settings.json`）の `permissions`、`autoMode`、`sandbox` を読む。
@@ -48,6 +49,7 @@ Claude Code で実際に出た権限確認と auto モードの拒否、サン�
 
 日本語で短く書く。
 
-- 改善候補：1 行ずつ「追加先キー / 値 / 根拠（回数と、取得できる場合はセッション数）」。無ければ「候補なし」。
+- 改善候補：1 行ずつ「追加先キー / 値 / 根拠（回数と、取得できる場合はセッション数）」。
+  無ければ「候補なし」。
 - 見送ったもの：多かったが設定では解消しないもの（あれば 1〜3 行）。
 - 集計の誤検出が目立つ場合だけ、`chezmoi source-path ~/.claude/scripts/permission-report.py` の直すべき点を 1 行で添える。

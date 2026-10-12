@@ -7,16 +7,16 @@ import rules from "../rules.mjs";
 describe("source-line", () => {
   for (const { name, source } of [
     {
-      name: "a short second sentence",
-      source: "OKが効くのは新規起動だけとする。続行には効かない。",
+      name: "a single sentence",
+      source: "OKが効くのは新規起動だけとする。",
     },
     {
       name: "sentence marks inside quotes",
-      source: "引用「最初。次。最後。」を使う。短い補足。",
+      source: "引用「最初。次。最後。」を使う。",
     },
     {
       name: "sentence marks inside code",
-      source: "`a.b。c。d。`を使う。短い補足。",
+      source: "`a.b。c。d。`を使う。",
     },
     {
       name: "English-only sentences",
@@ -30,17 +30,17 @@ describe("source-line", () => {
     });
   }
 
-  test("moves a third sentence to a new line while keeping a short supplement", async () => {
+  test("moves every sentence after the first to its own line", async () => {
     const source = "最初の決まり。短い補足。三つ目の決まり。";
 
     const result = await lintRule("source-line", source);
-    const output = await fixSourceLines(source);
+    const output = await formatText(source, "example.md");
 
     assert.equal(result.messages.length, 1);
-    assert.equal(output, "最初の決まり。短い補足。\n三つ目の決まり。");
+    assert.equal(output, "最初の決まり。\n短い補足。\n三つ目の決まり。\n");
   });
 
-  const long = "これは二十字を超える長い二つ目の決まりなので別の行にする。";
+  const long = "短い補足。";
   for (const { name, source, expected } of [
     {
       name: "a numbered list",
@@ -107,6 +107,11 @@ describe("source-line", () => {
   }
 
   for (const { name, source } of [
+    { name: "a heading marker", source: "最初。# 見出しに見える文。" },
+    { name: "a list marker", source: "これは文。- 開く。" },
+    { name: "an ordered list marker", source: "値は2。3. 次の値。" },
+    { name: "a quote marker", source: "これは文。> 引用に見える文。" },
+    { name: "a thematic break", source: "これは文。---" },
     { name: "block HTML", source: `最初の決まり。<div>${long}` },
     {
       name: "an inline HTML closing tag",
@@ -170,13 +175,56 @@ describe("long-parentheses", () => {
   }
 });
 
+describe("prose-lines", () => {
+  const prose = (count) =>
+    Array.from({ length: count }, () => "文。").join("\n");
+  for (const { name, file, source, expected } of [
+    {
+      name: "80 lines in SKILL.md",
+      file: "SKILL.md",
+      source: prose(80),
+      expected: 0,
+    },
+    {
+      name: "81 lines in SKILL.md",
+      file: "SKILL.md",
+      source: prose(81),
+      expected: 1,
+    },
+    {
+      name: "100 lines in a reference",
+      file: "guide.md",
+      source: prose(100),
+      expected: 0,
+    },
+    {
+      name: "101 lines in a reference",
+      file: "guide.md",
+      source: prose(101),
+      expected: 1,
+    },
+    {
+      name: "code blocks, tables, and HTML in SKILL.md",
+      file: "SKILL.md",
+      source: `${prose(80)}\n\n\`\`\`text\n${prose(10)}\n\`\`\`\n\n| 例 |\n| --- |\n| 文。 |\n\n<div>\n${prose(10)}\n</div>\n`,
+      expected: 0,
+    },
+  ]) {
+    test(`reports ${expected} ${expected === 1 ? "warning" : "warnings"} for ${name}`, async () => {
+      const result = await lintRule("prose-lines", source, file);
+
+      assert.equal(result.messages.length, expected);
+    });
+  }
+});
+
 describe("formatText", () => {
   test("adds line breaks without changing Markdown structure or code contents", async () => {
     const source = formattingExample();
 
     const output = await formatText(source, "example.md");
 
-    assert.match(output, /最初の決まり。補足。\n {2}三つ目の決まり。/u);
+    assert.match(output, /最初の決まり。\n {2}補足。\n {2}三つ目の決まり。/u);
     assert.match(output, /\{"keep": {4}"spacing"\}/u);
     assert.deepEqual(semanticTree(output), semanticTree(source));
   });
@@ -191,11 +239,46 @@ describe("formatText", () => {
     assert.equal(output, formatted);
   });
 
-  test("rejects a line break that would turn prose into a heading", async () => {
-    await assert.rejects(
-      formatText("最初。補足。# 三つ目。", "example.md"),
-      /構造や内容が変わる/u,
-    );
+  for (const { name, source, expected } of [
+    {
+      name: "a footnote definition",
+      source: "本文。[^1]\n\n[^1]:\n    脚注。\n    追加の文。\n",
+      expected: "本文。[^1]\n\n[^1]: 脚注。\n    追加の文。\n",
+    },
+    {
+      name: "a CRLF footnote definition in a list",
+      source:
+        "- 項目。[^1]\r\n\r\n  [^1]:\r\n      脚注。\r\n      追加の文。\r\n",
+      expected: "- 項目。[^1]\r\n\r\n  [^1]: 脚注。\r\n      追加の文。\r\n",
+    },
+    {
+      name: "a footnote-like line in a code block",
+      source: "```md\n[^1]:\n    コード。\n```\n",
+      expected: "```md\n[^1]:\n    コード。\n```\n",
+    },
+  ]) {
+    test(`moves the first line back after the label in ${name}`, async () => {
+      const output = await formatText(source, "example.md");
+
+      assert.equal(output, expected);
+      assert.equal(await formatText(output, "example.md"), output);
+    });
+  }
+
+  test("keeps sentences in a footnote definition on one line", async () => {
+    const source = "本文。[^1]\n\n[^1]: 脚注。追加の文。\n";
+
+    const result = await lintRule("source-line", source);
+    const output = await formatText(source, "example.md");
+
+    assert.deepEqual(result.messages, []);
+    assert.equal(output, source);
+  });
+
+  test("keeps a sentence that would become a heading on the same line", async () => {
+    const output = await formatText("最初。補足。# 三つ目。", "example.md");
+
+    assert.equal(output, "最初。\n補足。# 三つ目。\n");
   });
 });
 
@@ -203,8 +286,8 @@ function ruleLinter(ruleId) {
   return makeLinter(rules.filter((rule) => rule.ruleId === ruleId));
 }
 
-function lintRule(ruleId, source) {
-  return ruleLinter(ruleId).lintText(source, "example.md");
+function lintRule(ruleId, source, file = "example.md") {
+  return ruleLinter(ruleId).lintText(source, file);
 }
 
 async function fixSourceLines(source) {

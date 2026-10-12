@@ -24,7 +24,8 @@ scripts/inspect.sh --with-deep-sizes --with-nix-dry-run <worktree-root> > storag
 ```
 
 TSV の `status` は `observed`、`absent`、`rebuildable_needs_confirmation`、`running_hold`、`persistent_hold`、`unverified` を使う。
-`unverified` は権限不足、コマンド不在、調査失敗、意図的な未実行を表す。容量ゼロとして扱わない。
+`unverified` は権限不足、コマンド不在、調査失敗、意図的な未実行を表す。
+容量ゼロとして扱わない。
 長いコマンド出力は元のバイト数、先頭、末尾を明示して記録する。
 
 `--with-deep-sizes` は `/nix/store`、アプリデータ、キャッシュの全走査を有効にする。

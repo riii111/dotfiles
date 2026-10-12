@@ -3,11 +3,13 @@
 import redundantExpression from "textlint-rule-ja-no-redundant-expression";
 import sentenceLength from "textlint-rule-sentence-length";
 import longParentheses from "./rules/long-parentheses.mjs";
+import proseLines from "./rules/prose-lines.mjs";
 import sourceLine from "./rules/source-line.mjs";
 
 export default [
-  ["source-line", sourceLine, { maxSupplementLength: 20 }],
+  ["source-line", sourceLine],
   ["long-parentheses", longParentheses, { maxLength: 40 }],
+  ["prose-lines", proseLines, { skillMax: 80, max: 100 }],
   [
     "sentence-length",
     sentenceLength,
