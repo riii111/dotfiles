@@ -57,6 +57,21 @@ describe("source-line", () => {
       source: `- 親\n  - 子の決まり。${long}\n`,
       expected: `- 親\n  - 子の決まり。\n    ${long}\n`,
     },
+    {
+      name: "a sentence that starts with inline code",
+      source: `最初の決まり。\`code\`${long}\n`,
+      expected: `最初の決まり。\n\`code\`${long}\n`,
+    },
+    {
+      name: "a sentence that starts with bold text",
+      source: `- 最初の決まり。 **太字**${long}\n`,
+      expected: `- 最初の決まり。\n  **太字**${long}\n`,
+    },
+    {
+      name: "a sentence that starts with a link",
+      source: `最初の決まり。[リンク](https://example.com)${long}\n`,
+      expected: `最初の決まり。\n[リンク](https://example.com)${long}\n`,
+    },
   ]) {
     test(`preserves the continuation prefix when splitting ${name}`, async () => {
       const output = await fixSourceLines(source);

@@ -32,7 +32,9 @@ function reporter(context, options = {}) {
           const next = sentences[nextIndex];
           const boundary = offset + sentences[nextIndex - 1].range[1];
           const nextStart = offset + next.range[0];
-          const gap = raw.slice(boundary, nextStart);
+          // Markup that opens the next sentence (`code`, **bold**, [link]) is
+          // blank in the prose text, so the gap may end with its delimiters.
+          const gap = raw.slice(boundary, nextStart).match(/^([ \t]*)\S*$/u);
           const absolute = node.range[0] + boundary;
           const insideMarkup = ancestors.some(
             ([start, end]) => start < absolute && absolute < end,
@@ -40,9 +42,7 @@ function reporter(context, options = {}) {
 
           const before = raw.slice(0, boundary);
           const fixable =
-            !insideMarkup &&
-            /^[ \t]*$/u.test(gap) &&
-            /[。！？!?]$/u.test(before);
+            !insideMarkup && gap !== null && /[。！？!?]$/u.test(before);
 
           const sourceLine =
             node.loc.start.line + raw.slice(0, offset).split("\n").length - 1;
@@ -61,7 +61,7 @@ function reporter(context, options = {}) {
                 padding: context.locator.at(nextStart),
                 fix: fixable
                   ? fixer.replaceTextRange(
-                      [boundary, nextStart],
+                      [boundary, boundary + gap[1].length],
                       `${newline}${indent}`,
                     )
                   : undefined,
