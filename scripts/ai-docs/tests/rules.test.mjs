@@ -170,6 +170,49 @@ describe("long-parentheses", () => {
   }
 });
 
+describe("prose-lines", () => {
+  const prose = (count) =>
+    Array.from({ length: count }, () => "文。").join("\n");
+  for (const { name, file, source, expected } of [
+    {
+      name: "80 lines in SKILL.md",
+      file: "SKILL.md",
+      source: prose(80),
+      expected: 0,
+    },
+    {
+      name: "81 lines in SKILL.md",
+      file: "SKILL.md",
+      source: prose(81),
+      expected: 1,
+    },
+    {
+      name: "100 lines in a reference",
+      file: "guide.md",
+      source: prose(100),
+      expected: 0,
+    },
+    {
+      name: "101 lines in a reference",
+      file: "guide.md",
+      source: prose(101),
+      expected: 1,
+    },
+    {
+      name: "code blocks, tables, and HTML in SKILL.md",
+      file: "SKILL.md",
+      source: `${prose(80)}\n\n\`\`\`text\n${prose(10)}\n\`\`\`\n\n| 例 |\n| --- |\n| 文。 |\n\n<div>\n${prose(10)}\n</div>\n`,
+      expected: 0,
+    },
+  ]) {
+    test(`reports ${expected} ${expected === 1 ? "warning" : "warnings"} for ${name}`, async () => {
+      const result = await lintRule("prose-lines", source, file);
+
+      assert.equal(result.messages.length, expected);
+    });
+  }
+});
+
 describe("formatText", () => {
   test("adds line breaks without changing Markdown structure or code contents", async () => {
     const source = formattingExample();
