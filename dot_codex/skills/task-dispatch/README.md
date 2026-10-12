@@ -1,6 +1,7 @@
 # Task Dispatchのファイル構成
 
-[SKILL.md](SKILL.md)が実行の入口。1日の流れ・実行別の手順・共通制約を持ち、各手順から必要な詳細を`references/`で参照する。
+[SKILL.md](SKILL.md)が実行の入口。
+1日の流れ・実行別の手順・共通制約を持ち、各手順から必要な詳細を`references/`で参照する。
 
 ## スキルの文書
 
@@ -22,7 +23,8 @@ task-dispatch/
 ## 文書の関係
 
 - [config.md](references/config.md)の設定を使い、[schedule.md](references/schedule.md)が予定作成の時刻を決める。
-- [plan.md](references/plan.md)で選んだ仕事を、承認後に[launch.md](references/launch.md)で起動する。既存workerへの追加指示は[continue.md](references/continue.md)が扱う。
+- [plan.md](references/plan.md)で選んだ仕事を、承認後に[launch.md](references/launch.md)で起動する。
+  既存workerへの追加指示は[continue.md](references/continue.md)が扱う。
 - 各処理の状態と履歴は[item.md](references/item.md)の形式で記録し、利用者への出力は[digest.md](references/digest.md)の書式でまとめる。
 
 ## 作業データ

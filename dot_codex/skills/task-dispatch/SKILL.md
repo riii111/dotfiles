@@ -44,7 +44,8 @@ Scheduled Taskは毎回新しいCodexスレッドで動き、通知はCodex App�
 Scheduled Taskの作業ディレクトリは`~/agent-desk/`とし、gitでは管理しない。
 設定と実行時刻は[config](references/config.md)を参照する。
 
-起動依頼のファイル名はitemと揃える。ファイルの配置と役割は[README](README.md)を参照する。
+起動依頼のファイル名はitemと揃える。
+ファイルの配置と役割は[README](README.md)を参照する。
 
 ## 開始時の確認
 
@@ -64,13 +65,16 @@ Scheduled Taskの作業ディレクトリは`~/agent-desk/`とし、gitでは管
 
 ## 実行別の手順
 
-開始時の確認を済ませ、該当する手順だけを行う。最後に[記録と終了](#記録と終了)へ進む。
+開始時の確認を済ませ、該当する手順だけを行う。
+最後に[記録と終了](#記録と終了)へ進む。
 
 ### 朝の実行（`報告`）
 
 1. [GitHubと台帳の状態を合わせる](#githubと台帳の状態を合わせる)。
 2. [前日以前の後始末と今日の予定登録](references/schedule.md#前日以前の後始末と今日の予定登録)。
-3. 前回の報告（なければ比較対象の予定）より後の`attempts`、GitHubの状態、workerの最新の最終回答から、[朝の報告](references/digest.md#朝の報告)を書く。比較対象は、今日より前の日付で最新の`runs/<日付>-plan.md`とする。出力先は`runs/<日付>-report.md`。
+3. 前回の報告（なければ比較対象の予定）より後の`attempts`、GitHubの状態、workerの最新の最終回答から、[朝の報告](references/digest.md#朝の報告)を書く。
+   比較対象は、今日より前の日付で最新の`runs/<日付>-plan.md`とする。
+   出力先は`runs/<日付>-report.md`。
 
 ### 予定作成の実行（`予定`）
 
@@ -82,12 +86,14 @@ Scheduled Taskの作業ディレクトリは`~/agent-desk/`とし、gitでは管
 ### 返事への対応
 
 - 朝の報告への返事：[報告のスレッドへの返事](references/schedule.md#報告のスレッドへの返事)に従う。
-- 予定への返事：[承認](references/launch.md#承認)に従って処理する。OKと件数の指定を受けたら、同じturnで[起動の手順](references/launch.md#起動の手順)へ進む。
+- 予定への返事：[承認](references/launch.md#承認)に従って処理する。
+  OKと件数の指定を受けたら、同じturnで[起動の手順](references/launch.md#起動の手順)へ進む。
 
 ### 夜の実行（`起動`）
 
 1. [GitHubと台帳の状態を合わせる](#githubと台帳の状態を合わせる)。
-2. [起動の手順](references/launch.md#起動の手順)を行う。退勤時刻の返事がなかった日は、先に[返事がなかった日](references/launch.md#返事がなかった日)の承認を記録する。
+2. [起動の手順](references/launch.md#起動の手順)を行う。
+   退勤時刻の返事がなかった日は、先に[返事がなかった日](references/launch.md#返事がなかった日)の承認を記録する。
 3. 状態の照合で確かめた続行の理由を、[既存workerへの続行](references/continue.md)に従って送る。
 
 ### GitHubと台帳の状態を合わせる
