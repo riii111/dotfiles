@@ -44,3 +44,9 @@ bin/lib/dot/handoff.py
 .git_hook_templates/pre_commit_rs.zsh
 .git_hook_templates/pre_commit_rs_sql.zsh
 .git_hook_templates/pre_commit_rs_sql_nextjs.zsh
+.claude/skills/ask
+.claude/skills/learn
+.claude/skills/premortem
+.claude/skills/promote
+.claude/skills/recall
+.claude/skills/pr-review
