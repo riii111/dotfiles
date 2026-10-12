@@ -37,6 +37,9 @@ nix develop
 nix develop -c ./bin/executable_dotctl test
 ```
 
+Japanese Markdown and skill references can be checked and formatted with
+[the Markdown tools](scripts/ai-docs/README.md).
+
 ## Optional integrations
 
 ### Work tools

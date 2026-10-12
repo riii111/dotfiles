@@ -1,0 +1,152 @@
+import { execFileSync } from "node:child_process";
+import { lstat, readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { remark } from "remark";
+import { engine } from "unified-engine";
+import { formatText, makeLinter, repoRoot } from "./linter.mjs";
+import remarkConfig from "./remark.config.mjs";
+
+const usage =
+  "Usage: npm --prefix scripts/ai-docs run <lint|fmt|links> -- [--all|--json|--strict|--check] [file.md ...]";
+
+async function main() {
+  const [command, ...args] = process.argv.slice(2);
+  if (!command || args.includes("--help")) {
+    console.log(usage);
+    return;
+  }
+
+  if (!["lint", "fmt", "links"].includes(command)) throw new Error(usage);
+  const allowed =
+    command === "lint"
+      ? ["--json", "--strict", "--all"]
+      : command === "fmt"
+        ? ["--check", "--all"]
+        : ["--all"];
+  const flags = args.filter((arg) => arg.startsWith("--"));
+  if (flags.some((flag) => !allowed.includes(flag))) throw new Error(usage);
+
+  let files = args.filter((arg) => !arg.startsWith("--"));
+  if (flags.includes("--all") && files.length)
+    throw new Error("--allとファイル指定は同時に使えません。");
+
+  if (!files.length) {
+    if (command === "fmt" && !flags.includes("--all"))
+      throw new Error(
+        "fmtには変更対象のMarkdownファイルを指定するか、--allを付けてください。",
+      );
+    files = execFileSync(
+      "git",
+      ["ls-files", "-z", "--", "dot_codex/skills", "dot_claude/skills"],
+      { cwd: repoRoot, encoding: "utf8" },
+    )
+      .split("\0")
+      .filter((file) => file.endsWith(".md"));
+  }
+  files = [
+    ...new Set(files.map((file) => path.resolve(repoRoot, file))),
+  ].sort();
+
+  if (!files.length) throw new Error("対象のMarkdownファイルがありません。");
+  for (const file of files) {
+    if (!file.endsWith(".md") || !(await lstat(file)).isFile())
+      throw new Error(`通常のMarkdownファイルを指定してください: ${file}`);
+  }
+
+  if (command === "links") {
+    process.exitCode = await new Promise((resolve, reject) => {
+      engine(
+        {
+          processor: remark,
+          plugins: remarkConfig.plugins,
+          cwd: repoRoot,
+          files,
+          extensions: ["md"],
+          detectConfig: false,
+          detectIgnore: false,
+          output: false,
+          out: false,
+          frail: true,
+          quiet: true,
+        },
+        (error, status) => (error ? reject(error) : resolve(status)),
+      );
+    });
+    console.log(`${files.length} files, links checked`);
+    return;
+  }
+
+  if (command === "fmt") {
+    const changes = [];
+    for (const file of files) {
+      const source = await readFile(file, "utf8");
+      const output = await formatText(source, file);
+
+      if (output !== source) changes.push({ file, output });
+    }
+
+    for (const { file, output } of changes) {
+      console.log(path.relative(repoRoot, file));
+      if (!flags.includes("--check")) await writeFile(file, output);
+    }
+
+    console.log(
+      `${files.length} files, ${changes.length} ${flags.includes("--check") ? "would change" : "changed"}`,
+    );
+    if (flags.includes("--check") && changes.length) process.exitCode = 1;
+    return;
+  }
+
+  const linter = makeLinter();
+  const results = [];
+  for (const file of files) {
+    const source = await readFile(file, "utf8");
+    const result = await linter.lintText(source, file);
+
+    // Older third-party rules can report a column relative to the whole node.
+    result.messages = result.messages.map((message) => {
+      const locate = (index) => {
+        const prefix = source.slice(0, index);
+        return {
+          line: prefix.split("\n").length,
+          column: prefix.length - prefix.lastIndexOf("\n"),
+        };
+      };
+      const loc = {
+        start: locate(message.range[0]),
+        end: locate(message.range[1]),
+      };
+      return {
+        ...message,
+        loc,
+        line: loc.start.line,
+        column: loc.start.column,
+      };
+    });
+    results.push(result);
+  }
+
+  const messages = results.flatMap((result) => result.messages);
+  if (flags.includes("--json")) console.log(JSON.stringify(results, null, 2));
+  else {
+    for (const result of results) {
+      for (const message of result.messages) {
+        console.log(
+          `${path.relative(repoRoot, result.filePath)}:${message.loc.start.line}:${message.loc.start.column} ${message.ruleId}: ${message.message}`,
+        );
+      }
+    }
+    console.log(`${files.length} files, ${messages.length} warnings`);
+  }
+
+  if (
+    messages.some((message) => message.severity === 2) ||
+    (flags.includes("--strict") && messages.length)
+  )
+    process.exitCode = 1;
+}
+
+main().catch((error) => {
+  console.error(error.message);
+  process.exitCode = 1;
+});
