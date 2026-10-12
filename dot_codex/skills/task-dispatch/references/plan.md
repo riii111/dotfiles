@@ -14,7 +14,8 @@ keyの作成と重複の確認は[itemの規則](item.md#key)に従う。
 ## 着手できるか判断する
 
 各項目の`attempts`を読んでから、`discovered`・`needs_decision`の項目を判定する。
-`needs_decision`は、Issue本文の編集、IssueまたはPRへの`owner`のコメント、決めたことのメモへの追記のどれかが、最後に`needs_decision`へ移した記録より新しい場合だけ判定し直す。
+`needs_decision`は、最後に`needs_decision`へ移した記録より新しい変更がある場合だけ判定し直す。
+対象の変更は、Issue本文の編集、IssueまたはPRへの`owner`のコメント、決めたことのメモへの追記とする。
 判定したら、結果が同じでも`status`を記録する。
 
 次の2点を両方満たせば`ready`、それ以外は`needs_decision`にする。
@@ -35,14 +36,15 @@ keyの作成と重複の確認は[itemの規則](item.md#key)に従う。
 新規起動の項目ごとに`attempts`へ`planned`を追記する。
 前回までの`planned`のうち使われていないものには、先に`plan_cancelled`（note：再計画）を追記する。
 
-優先順は、GitHub Projectの優先度・期限とIssueの依存関係（blocked by）を先に適用し、同じ順位の中で次の区分を使う。AIはビジネス上の優先順位を決めない。
+優先順は、GitHub Projectの優先度・期限とIssueの依存関係（blocked by）を先に適用し、同じ順位の中で次の区分を使う。
+AIはビジネス上の優先順位を決めない。
 順位が付かない項目どうしは、Issueの作成日が古い順にする。
 
-| 順位 | 対象 | 扱い |
-| --- | --- | --- |
-| 1 | レビュー指摘への対応 | 既存workerへの続行 |
-| 2 | 実行途中の仕事 | 既存workerへの続行 |
-| 3 | 新しいIssue | 新規起動 |
+| 順位 | 対象                 | 扱い               |
+| ---- | -------------------- | ------------------ |
+| 1    | レビュー指摘への対応 | 既存workerへの続行 |
+| 2    | 実行途中の仕事       | 既存workerへの続行 |
+| 3    | 新しいIssue          | 新規起動           |
 
 続行は[続行の送信](continue.md)の表で「送る」に当たるものを見込みとして載せる。
 OKは不要で、`planned`も記録しない。
