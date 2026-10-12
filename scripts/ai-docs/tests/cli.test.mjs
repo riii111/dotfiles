@@ -113,7 +113,7 @@ describe("fmt command", () => {
 
   test("preserves all files when a later file would change Markdown structure", async (context) => {
     const { checkout, files, source } = await skillRepository(context);
-    const invalid = "最初。補足。# 三つ目。\n";
+    const invalid = "- 項目\n続きの行。\n";
     await writeFile(path.join(checkout, files[1]), invalid);
 
     const result = runInRepository(checkout, "fmt", "--all");

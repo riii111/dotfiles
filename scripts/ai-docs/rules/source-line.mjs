@@ -45,9 +45,20 @@ function reporter(context) {
             gap !== null &&
             (gap[2] === "" || openers.includes(absolute + gap[1].length));
 
+          // A sentence that starts with block syntax would become a heading,
+          // list, quote, or thematic break at the start of a line.
+          const blockLike =
+            gap !== null &&
+            /^(?:#{1,6}(?:[ \t]|$)|>|`{3,}|~{3,}|[-+*](?:[ \t]|$)|\d+[.)](?:[ \t]|$)|(?:[-*_][ \t]*){3,}$|=+[ \t]*$)/u.test(
+              raw.slice(boundary + gap[1].length).split("\n")[0],
+            );
+
           const before = raw.slice(0, boundary);
           const fixable =
-            !insideMarkup && opensNext && /[。！？!?]$/u.test(before);
+            !insideMarkup &&
+            opensNext &&
+            !blockLike &&
+            /[。！？!?]$/u.test(before);
 
           const sourceLine =
             node.loc.start.line + raw.slice(0, offset).split("\n").length - 1;

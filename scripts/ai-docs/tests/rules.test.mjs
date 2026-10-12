@@ -107,6 +107,11 @@ describe("source-line", () => {
   }
 
   for (const { name, source } of [
+    { name: "a heading marker", source: "最初。# 見出しに見える文。" },
+    { name: "a list marker", source: "これは文。- 開く。" },
+    { name: "an ordered list marker", source: "値は2。3. 次の値。" },
+    { name: "a quote marker", source: "これは文。> 引用に見える文。" },
+    { name: "a thematic break", source: "これは文。---" },
     { name: "block HTML", source: `最初の決まり。<div>${long}` },
     {
       name: "an inline HTML closing tag",
@@ -234,11 +239,10 @@ describe("formatText", () => {
     assert.equal(output, formatted);
   });
 
-  test("rejects a line break that would turn prose into a heading", async () => {
-    await assert.rejects(
-      formatText("最初。補足。# 三つ目。", "example.md"),
-      /構造や内容が変わる/u,
-    );
+  test("keeps a sentence that would become a heading on the same line", async () => {
+    const output = await formatText("最初。補足。# 三つ目。", "example.md");
+
+    assert.equal(output, "最初。\n補足。# 三つ目。\n");
   });
 });
 
