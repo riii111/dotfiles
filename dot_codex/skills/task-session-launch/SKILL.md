@@ -29,5 +29,7 @@ description: |
 
 ## 参照文書
 
-合意・制約・依存成果・担当境界は文書へ記録し、worktreeへ入らない資料や規約もdocumentRefsで渡す。先頭はタスク管理元とする。
-harnexus-taskが[起動依頼](references/worker.md)とtask-workerの実在するリンクから定型文を作り、そのまま送る。未導入なら停止して不足を報告する。
+合意・制約・依存成果・担当境界は文書へ記録し、worktreeへ入らない資料や規約もdocumentRefsで渡す。
+先頭はタスク管理元とする。
+harnexus-taskが[起動依頼](references/worker.md)とtask-workerの実在するリンクから定型文を作り、そのまま送る。
+未導入なら停止して不足を報告する。
