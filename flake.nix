@@ -47,21 +47,6 @@
             done
           '';
           mkVersionEntry = name: value: { inherit name value; };
-          mdfriedKitty = pkgs.rustPlatform.buildRustPackage {
-            inherit (pkgs.mdfried)
-              pname
-              version
-              src
-              cargoDeps
-              meta
-              ;
-            buildNoDefaultFeatures = true;
-            buildFeatures = [
-              "svg"
-              "mermaid"
-            ];
-            buildInputs = pkgs.lib.optionals pkgs.stdenv.hostPlatform.isDarwin [ pkgs.libiconv ];
-          };
           dailyCliPackages = with pkgs; [
             # Editor-integrated tooling that should exist in the normal shell too.
             _1password-cli
@@ -99,7 +84,6 @@
             jq
             lazygit
             lefthook
-            mdfriedKitty
             neovim
             nix-direnv
             nodejs
