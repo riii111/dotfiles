@@ -21,6 +21,7 @@
 .config/nvim/lua/plugins/dial.lua
 .config/nvim/lua/plugins/flash.lua
 .config/nvim/lua/plugins/noice.lua
+.config/nvim/lua/utils/mdfried.lua
 bin/gh-pr-comments
 bin/gh-read
 .claude/hooks/notify-impl-review.sh

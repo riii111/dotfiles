@@ -246,12 +246,6 @@ local function setup_keymaps()
 				end,
 				desc = "Markdown preview toggle",
 			},
-			["<Leader>mm"] = {
-				function()
-					require("utils.mdfried").open()
-				end,
-				desc = "Markdown viewer (mdfried)",
-			},
 
 			-- Oil.nvim file explorer
 			["<Leader>o"] = {
@@ -465,7 +459,6 @@ return {
 				{ "<leader>r", group = "+replace" },
 				{ "<leader>R", group = "+replace global" },
 				{ "<leader>m", group = "+markdown" },
-				{ "<leader>mm", desc = "Markdown viewer (mdfried)" },
 				{ "<C-g>", group = "+grep/search" },
 				{ "<F6>", group = "+files" },
 				{ "<C-S-f>", group = "+search" },
