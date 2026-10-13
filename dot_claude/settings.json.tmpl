@@ -267,7 +267,7 @@
       "allowUnixSockets": ["/nix/var/nix/daemon-socket/socket"]
     },
     "filesystem": {
-      "allowWrite": ["~/.cache/nix"]
+      "allowWrite": ["~/.cache/nix", "~/.codex/worktrees"]
     },
     "excludedCommands": [
       "cargo nextest *",
@@ -284,7 +284,8 @@
       "bq *",
       "terraform *",
       "docker *",
-      "docker-compose *"
+      "docker-compose *",
+      "pnpm install --frozen-lockfile*"
     ]
   },
   "extraKnownMarketplaces": {
