@@ -1,0 +1,5 @@
+{{ template "agents-common.md" . }}
+## Codex操作
+
+review Taskからworker Taskへ結果を返すときは、`codex_app__send_message_to_thread`の`threadId`にworker Task IDを指定する。
+返却が受理されたことを確認する。
