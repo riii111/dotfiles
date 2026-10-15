@@ -21,6 +21,7 @@ attempts:
 ## key
 
 Issueのkeyは`gh:<owner>/<repo>#<番号>`とする。
+Issueに結び付かない依頼のkeyは`manual:<英小文字・数字・-の名前>`とする（例：`manual:andon-triage-2026-10-16`）。
 ファイル名はkeyの英数字・`.`・`-`以外を`_`に置き換えたもの（例：`gh_org_repo_456.yaml`）。
 重複の判定はファイル名ではなく`key`の値で行う。
 

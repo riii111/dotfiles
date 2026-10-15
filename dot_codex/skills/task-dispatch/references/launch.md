@@ -104,6 +104,8 @@ OKのない`planned`は起動せず、そのまま残す。
 
 1. `requests/<file>.json`を[起動依頼JSON](../../task-session-launch/references/request.md)の書式で作る。
    - `taskId`：keyから`gh:`を除いた値（例：`org/repo#456`）。
+     `manual:`のkeyは`:`を`/`に置き換える（例：`manual/andon-triage-2026-10-16`）。
+     `harnexus-task`は`:`を含むtaskIdを受け付けない。
    - `documentRefs`：子IssueのURL、umbrella IssueのURLの順。
      umbrellaがなければ子IssueのURLだけ。
      [決めたことのメモ](#決めたことのメモ)があれば、末尾にその絶対パスを加える。
