@@ -12,7 +12,11 @@ sources:
   - name: example-epic         # 予定と報告の見出しに使う案件名
     umbrella: org/repo#123     # umbrella issue。省略可
     query: >-
-      repo:org/repo is:issue is:open label:agent-ready author:your-github-login
+      repo:org/repo is:issue is:open assignee:@me
+    add:                       # クエリに当たらなくても候補にするIssue。省略可
+      - org/repo#456
+    exclude:                   # クエリに当たっても候補にしないIssue。省略可
+      - org/repo#789
 limits:
   max_waiting_reviews: 3       # レビュー待ちのPRがこの数以上なら新しく始めない
   max_continues: 2             # 同じ理由でworkerへ続行を送る回数の上限
@@ -26,7 +30,8 @@ calendar:
 ```
 
 - `sources[].query`は`gh search issues`にそのまま渡す。
-  リポジトリ・ラベルに加えて作成者を自分のアカウントに絞り、人が開始を許した範囲だけを書く。
+  リポジトリと担当者で絞り、GitHubに目印を付けずに候補を決める。
+  個別の出し入れは`add`・`exclude`に`<owner>/<repo>#<番号>`で書く。
 - `sources[].name`と`umbrella`の表示方法は[予定と報告の書き方](digest.md#書き方)に従う。
 - `project`による優先順は[今夜の予定を作成する](plan.md#今夜の予定を作成する)に従う。
 - `max_continues`の数え方と上限到達時の扱いは[既存workerへの続行](continue.md)に従う。

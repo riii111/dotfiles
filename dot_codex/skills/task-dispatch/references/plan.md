@@ -5,7 +5,8 @@
 
 ## 候補を台帳に追加する
 
-`config.yaml`の`sources`のクエリを`gh search issues --limit 100`で実行し、台帳にないkeyを`discovered`で追加する。
+`config.yaml`の`sources`のクエリを`gh search issues --limit 100`で実行し、結果に`add`のIssueを加え、`exclude`のIssueを除く。
+そのうち台帳にないkeyを`discovered`で追加する。
 keyの作成と重複の確認は[itemの規則](item.md#key)に従う。
 結果が100件に達したら予定に書く。
 読めないitemがある実行では、新しい項目を追加しない。
