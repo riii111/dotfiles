@@ -39,7 +39,7 @@ task-dispatch/
 ├── days/<日付>.yaml            # 退勤予定・Scheduled Task・予定スレッドの情報
 ├── decisions/<itemのファイル名>.md  # ownerが答えた大きな判断のメモ
 ├── runs/
-│   ├── <日付>-plan.md           # 今夜の予定
+│   ├── <日付>-plan.md           # 明日の予定
 │   └── <日付>-report.md         # 朝の報告
 └── .lock/started_at            # 実行の重複を防ぐlockと開始時刻
 ```
