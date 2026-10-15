@@ -5,7 +5,8 @@
 
 ## 候補を台帳に追加する
 
-`config.yaml`の`sources`のクエリを`gh search issues --limit 100`で実行し、結果に`add`のIssueを加え、`exclude`のIssueを除く。
+`config.yaml`の`sources`のクエリを`gh search issues --sort created --order desc --limit 100`で実行する。
+結果に`add`のIssueを加え、`exclude`のIssueを除く。
 そのうち台帳にないkeyを`discovered`で追加する。
 keyの作成と重複の確認は[itemの規則](item.md#key)に従う。
 結果が100件に達したら予定に書く。
@@ -39,7 +40,9 @@ keyの作成と重複の確認は[itemの規則](item.md#key)に従う。
 
 優先順は、GitHub Projectの優先度・期限とIssueの依存関係（blocked by）を先に適用し、同じ順位の中で次の区分を使う。
 AIはビジネス上の優先順位を決めない。
-順位が付かない項目どうしは、Issueの作成日が古い順にする。
+順位が付かない項目どうしは、Issueの作成日が新しい順にする。
+新規起動は、最初に選んだ項目と親Issue・リンク先・ラベルが同じ項目を先に載せ、1回の予定で案件や方針が散らばらないようにする。
+関連する項目が枠に足りなければ、残りは作成日の新しい順で埋める。
 
 | 順位 | 対象                 | 扱い               |
 | ---- | -------------------- | ------------------ |
