@@ -1,0 +1,7 @@
+interface:
+  display_name: "LT Builder"
+  short_description: "LT・技術発表をフェーズごとに対話で作る。"
+  default_prompt: "$lt-builderを使って、このLTの準備を枠の確認から進めてください。"
+
+policy:
+  allow_implicit_invocation: true
