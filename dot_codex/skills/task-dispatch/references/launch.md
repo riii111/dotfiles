@@ -81,13 +81,13 @@ OK済みの起動待ちは夜に起動する。
 予定作成の実行で`ready`の項目を新規起動として予定に載せる前と、起動する直前に、次をすべて確かめる。
 通らなければ表の扱いにし、`status`を変えたら`attempts`に記録して、次の項目へ進む。
 
-| 確認                                                                                                                                                                                | 通らないとき                                                                                       |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| 1. `worker_thread`が空である                                                                                                                                                        | 新規起動にせず、[続行の送信](continue.md)の理由`resume`で既存workerへの続行として扱う              |
-| 2. Issueに`owner`以外の担当者や、紐づく未mergeのPRがない                                                                                                                            | `needs_decision`                                                                                   |
-| 3. `harnexus-task state`（`--request`なし）の記録に、同じIssueを指す別のlaunchがない。taskIdが別の書き方（`#456`・`456`など）のものと、documentRefsに同じIssueのURLを含むものも探す | `needs_decision`                                                                                   |
-| 4. 依存先（blocked by）がすべて完了し、Issueが今も`sources`のクエリか`add`に当たり、`exclude`にない                                                                                 | 依存先が未完了なら`ready`のまま`next_action`に依存先を書く。候補から外れていれば`needs_decision`   |
-| 5. `codex_app__list_projects`を一度呼び、パスの`git remote get-url origin`がIssueのリポジトリと一致するprojectが1つだけある                                                         | `needs_decision`                                                                                   |
+| 確認                                                                                                                                                                                | 通らないとき                                                                                     |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| 1. `worker_thread`が空である                                                                                                                                                        | 新規起動にせず、[続行の送信](continue.md)の理由`resume`で既存workerへの続行として扱う            |
+| 2. Issueに`owner`以外の担当者や、紐づく未mergeのPRがない                                                                                                                            | `needs_decision`                                                                                 |
+| 3. `harnexus-task state`（`--request`なし）の記録に、同じIssueを指す別のlaunchがない。taskIdが別の書き方（`#456`・`456`など）のものと、documentRefsに同じIssueのURLを含むものも探す | `needs_decision`                                                                                 |
+| 4. 依存先（blocked by）がすべて完了し、Issueが今も`sources`のクエリか`add`に当たり、`exclude`にない                                                                                 | 依存先が未完了なら`ready`のまま`next_action`に依存先を書く。候補から外れていれば`needs_decision` |
+| 5. `codex_app__list_projects`を一度呼び、パスの`git remote get-url origin`がIssueのリポジトリと一致するprojectが1つだけある                                                         | `needs_decision`                                                                                 |
 
 ## 起動の手順
 
