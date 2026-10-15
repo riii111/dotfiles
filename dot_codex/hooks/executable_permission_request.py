@@ -163,6 +163,21 @@ def is_safe_auth_status(command: str) -> bool:
         return False
 
 
+# Unattended task-dispatch runs must release their lock without anyone to approve.
+def is_task_dispatch_lock_release(command: str) -> bool:
+    if has_shell_syntax(command):
+        return False
+    try:
+        argv = tuple(shlex.split(command))
+    except ValueError:
+        return False
+    lock = Path.home() / "agent-desk" / ".lock"
+    return argv in {
+        ("rm", str(lock / "started_at")),
+        ("rmdir", str(lock)),
+    }
+
+
 def is_safe_git_permission_request(command: str, cwd: str) -> bool:
     executable, args = direct_command(command)
     if executable != "git":
@@ -648,7 +663,7 @@ def compound_denial_reason(command: str, cwd: str | None = None) -> str | None:
         return "Hard reset is forbidden."
     if re.search(r"\bgit(?:\s+[^;&|]*)?\s+add\s+[^;&|]*\s-f(?:\s'\"]|$)", command):
         return "Force-add is forbidden."
-    if re.search(r"\brm\s+[^;&|]*-[^;&|]*r", command):
+    if re.search(r"\brm\s+(?:[^;&|]*\s)?(?:-[A-Za-z]*[rR]|--recursive)", command):
         return "Recursive file deletion is forbidden."
     if any(token.startswith("GIT_EXTERNAL_DIFF=") for token in shell_tokens(command)):
         return "External Git diff helpers are forbidden."
@@ -802,6 +817,7 @@ def main() -> int:
         return 0
     if (
         not is_safe_auth_status(command)
+        and not is_task_dispatch_lock_release(command)
         and not is_safe_git_permission_request(command, cwd)
         and not is_safe_push(command, cwd)
     ):

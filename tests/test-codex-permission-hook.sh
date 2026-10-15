@@ -202,6 +202,16 @@ pre_tool_use 'git -c core.pager=cat log' | jq -e '.hookSpecificOutput.permission
 expect_silent pre_tool_use 'rm file'
 pre_tool_use '/usr/bin/git reset --hard' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
 pre_tool_use '/bin/rm -rf build' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
+expect_silent pre_tool_use 'rm agent-desk/started_at'
+pre_tool_use 'rm a --recursive' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
+
+# task-dispatch releases only its own lock without approval.
+lock_dir="$test_home/agent-desk/.lock"
+permission_request "rm $lock_dir/started_at" | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
+permission_request "rmdir $lock_dir" | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
+expect_silent permission_request "rmdir $test_home/agent-desk"
+expect_silent permission_request "rm $lock_dir/started_at $test_home/other"
+permission_request "rm -rf $lock_dir" | jq -e '.hookSpecificOutput.decision.behavior == "deny"' >/dev/null
 
 # Indirection and compound shell syntax must not bypass the deny checks.
 for command in \

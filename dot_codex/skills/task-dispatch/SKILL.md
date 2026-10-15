@@ -132,6 +132,8 @@ Scheduled Taskの作業ディレクトリは`~/agent-desk/`とし、gitでは管
 - 返事への対応：したことを短く。
 
 その回の手順を終え、記録を書き、`.lock/`を消した時点で1回の実行（返事への対応は1turn）を終える。
+lockは`rm ~/agent-desk/.lock/started_at`と`rmdir ~/agent-desk/.lock`を別々に、`~`を展開した絶対パスで実行して消す。
+無人でも承認されるのはこの形だけとする。
 予定のスレッドは、[次の朝の実行](references/schedule.md#スレッドの扱い)がアーカイブする。
 途中で止まる場合も、書けた範囲の記録とlockの削除を済ませる。
 
