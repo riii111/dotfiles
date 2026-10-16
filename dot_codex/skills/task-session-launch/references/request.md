@@ -23,6 +23,10 @@
 - startingBranch: 任意。
   ユーザーが開始branchを明示した場合だけ指定する。
   省略時はprojectのdefault branchから作る。
+- displayName: 任意。
+  スレッド一覧で仕事が分かる一行の名前で、Issueのタイトルなどを使う。
+  指定するとスレッド名は`Impl｜<displayName>`、省略時は`Impl <taskId>`になる。
+  表示だけに使い、既存workerの判定には使わない。
 
 補足や資料本文は参照文書へ記録する。
 JSONは上記の項目だけを使う。

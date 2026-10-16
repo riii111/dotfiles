@@ -111,6 +111,7 @@ OKのない`planned`は起動せず、そのまま残す。
      [決めたことのメモ](#決めたことのメモ)があれば、末尾にその絶対パスを加える。
    - `completionTarget`：`draft_pr`に固定する。
    - `projectId`：確認5で選んだもの。
+   - `displayName`：子Issueのタイトル。
 2. 台帳を`running`にし、`attempts`に`launch_requested`を追記してファイルへ書く。
 3. [task-session-launch](../../task-session-launch/SKILL.md)の手順3・4で`harnexus-task launch`を実行する。
    同じprojectIdとtaskIdなら既存workerが返るため、同じkeyは同じworkerになる。
