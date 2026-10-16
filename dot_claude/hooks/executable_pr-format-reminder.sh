@@ -16,11 +16,11 @@ else
 	exit 0
 fi
 
-# Marker lives outside the repo so the reminder fires once per session regardless of cwd
+# Marker lives outside the repo so the reminder fires once per session regardless of cwd.
+# mkdir is atomic, so only one of concurrent hook processes returns the reminder.
 marker_dir="${TMPDIR:-/tmp}/claude-pr-format-reminder"
-marker="$marker_dir/$session_id"
-[[ -e "$marker" ]] && exit 0
-mkdir -p "$marker_dir" && touch "$marker" || exit 0
+mkdir -p "$marker_dir" || exit 0
+mkdir "$marker_dir/$session_id" 2>/dev/null || exit 0
 
 # shellcheck disable=SC2016 # backticks are literal Markdown
 reason='PR作成前の確認: タイトルと本文が次の形になっているか見直し、直してから同じコマンドを再実行してください（この確認はこのセッションで1回だけです）。リポジトリのPRテンプレートよりこちらを優先します。
