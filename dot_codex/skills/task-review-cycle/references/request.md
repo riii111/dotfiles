@@ -30,6 +30,10 @@ prUrlはPRのURL。
 未作成ならnullまたは項目省略。
 PRのheadと候補SHAの一致はreviewerが確認する。
 
+displayNameは任意で、スレッド一覧で仕事が分かる一行の名前。
+起動依頼のdisplayNameやIssueのタイトルを使う。
+指定するとreviewerのスレッド名は`Review｜<displayName>`、省略時は`Review <taskId>`になる。
+
 stateはharnexus-taskが`~/.local/state/taskctl/`に保存する。
 reviewctlの`.reviewctl/state.json`に確定済みreviewerがあれば読み取り、同じreviewerで再開する。
 作成待ちのまま残った旧stateは拒否されるため、Appで確認してreviewerがなければ削除する。
