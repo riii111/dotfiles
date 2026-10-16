@@ -263,7 +263,12 @@
     "enabled": true,
     "autoAllowBashIfSandboxed": true,
     "network": {
-      "allowedDomains": ["github.com"],
+      "allowedDomains": [
+        "github.com",
+        "api.github.com",
+        "registry.npmjs.org",
+        "chatgpt.com"
+      ],
       "allowUnixSockets": ["/nix/var/nix/daemon-socket/socket"]
     },
     "filesystem": {
@@ -285,7 +290,8 @@
       "terraform *",
       "docker *",
       "docker-compose *",
-      "pnpm install --frozen-lockfile*"
+      "pnpm install --frozen-lockfile*",
+      "nix develop -c ./bin/executable_dotctl test"
     ]
   },
   "extraKnownMarketplaces": {
