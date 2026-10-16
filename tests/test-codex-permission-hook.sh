@@ -10,7 +10,9 @@ export GIT_PAGER=cat
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 hook="$repo_root/dot_codex/hooks/executable_permission_request.py"
 hooks_config="$repo_root/dot_codex/hooks.json"
-test_root="$(mktemp -d "${TMPDIR:-/tmp}/codex-permission-hook-test.XXXXXX")"
+# macOS TMPDIR ends with "/", and the hook compares paths normalized by pathlib.
+tmp_base="${TMPDIR:-/tmp}"
+test_root="$(mktemp -d "${tmp_base%/}/codex-permission-hook-test.XXXXXX")"
 test_home="$test_root/home"
 tmpdir="$test_home/ghq/github.com/riii111/test"
 trap 'rm -rf "$test_root"' EXIT
