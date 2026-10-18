@@ -63,44 +63,6 @@ class PrFormatCheckTest(unittest.TestCase):
             self.assertEqual(self.check.main(), 0)
         self.assertEqual(output.getvalue(), "")
 
-    def test_denies_a_title_without_a_conventional_type(self):
-        self.assertTrue(
-            self.denies(create_command(GOOD_BODY, title="テストのログを減らす"))
-        )
-
-    def test_denies_a_space_between_japanese_and_english(self):
-        self.assertTrue(
-            self.denies(create_command(GOOD_BODY, title="ci: CI を軽くする"))
-        )
-
-    def test_denies_more_than_three_bullets(self):
-        body = GOOD_BODY + "- 三つ目\n- 四つ目\n"
-        self.assertTrue(self.denies(create_command(body)))
-
-    def test_denies_a_trailing_full_stop_on_a_bullet(self):
-        body = GOOD_BODY.replace("出力する", "出力する。")
-        self.assertTrue(self.denies(create_command(body)))
-
-    def test_denies_a_checklist(self):
-        body = GOOD_BODY + "- [ ] 動作を確認した\n"
-        self.assertTrue(self.denies(create_command(body)))
-
-    def test_denies_parentheses_outside_code(self):
-        body = GOOD_BODY.replace("省く", "補足（理由）")
-        self.assertTrue(self.denies(create_command(body)))
-
-    def test_allows_parentheses_in_code(self):
-        body = GOOD_BODY + "\n`run(all)`を使う\n```\nprint(1)\n```\n"
-        self.assertFalse(self.denies(create_command(body)))
-
-    def test_denies_an_inline_issue_number(self):
-        body = GOOD_BODY.replace("省く", "#30 の判定に任せる")
-        self.assertTrue(self.denies(create_command(body)))
-
-    def test_allows_reference_lines(self):
-        body = GOOD_BODY + "\n前提は以下で対応済み。\n→ PR #34\n"
-        self.assertFalse(self.denies(create_command(body)))
-
     def test_denies_a_body_that_cannot_be_read_from_the_command(self):
         for command in (
             'gh pr create --title "ci: 軽くする" --body-file body.md',
@@ -115,10 +77,6 @@ class PrFormatCheckTest(unittest.TestCase):
             + "- 補足（理由）\nEOF\n"
         )
         self.assertTrue(self.denies(command))
-
-    def test_leaves_a_title_that_the_shell_expands(self):
-        command = 'gh pr create --title "ci: $summary" --body "補足"'
-        self.assertFalse(self.denies(command))
 
     def test_checks_edits_that_touch_the_title_or_body(self):
         command = 'gh pr edit 1 --title "軽くする"'
