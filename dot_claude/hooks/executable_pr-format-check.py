@@ -56,9 +56,13 @@ def unquote(value: str) -> str:
     return value
 
 
+def is_expanded_by_shell(value: str) -> bool:
+    return not value.startswith("'") and bool(DYNAMIC_VALUE.search(value))
+
+
 def read_title(command: str) -> str | None:
     match = TITLE_FLAG.search(command)
-    if not match or DYNAMIC_VALUE.search(match.group(1)):
+    if not match or is_expanded_by_shell(match.group(1)):
         return None
     return unquote(match.group(1))
 
@@ -68,7 +72,7 @@ def read_body(command: str) -> str | None:
     if heredoc:
         return heredoc.group(3)
     match = BODY_FLAG.search(command)
-    if match and not DYNAMIC_VALUE.search(match.group(1)):
+    if match and not is_expanded_by_shell(match.group(1)):
         return unquote(match.group(1))
     return None
 

@@ -147,6 +147,10 @@ class PrFormatCheckTest(unittest.TestCase):
             command = f'gh pr create --title "{title}" --body "補足"'
             self.assertIsNone(self.run_hook(command), title)
 
+    def test_reads_single_quoted_values_with_code_spans(self):
+        command = "gh pr create --title 'ci: `CI`を軽くする' --body '補足（理由）`CI`'"
+        self.assertIn("カッコ", self.run_hook(command))
+
     def test_checks_every_list_marker(self):
         for marker in ("*", "+", "1."):
             body = "close #12\n\n背景を述べる\n\n" + "".join(
