@@ -28,6 +28,7 @@ bin/gh-read
 .claude/skills/pr-review/scripts/pr-review-setup.sh
 .claude/README.md
 .claude/hooks/ask-push-on-protected-branch.sh
+.claude/hooks/pr-format-reminder.sh
 .claude/skills/sandbox-review
 .claude/scripts/sandbox-report.py
 .codex/skills/sandbox-review

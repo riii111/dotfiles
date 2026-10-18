@@ -39,8 +39,8 @@ class PrFormatCheckTest(unittest.TestCase):
     def setUp(self):
         self.check = load_check()
 
-    def run_hook(self, command, cwd="."):
-        event = json.dumps({"tool_input": {"command": command}, "cwd": cwd})
+    def run_hook(self, command):
+        event = json.dumps({"tool_input": {"command": command}})
         output = io.StringIO()
         with mock.patch("sys.stdin", io.StringIO(event)), redirect_stdout(output):
             self.assertEqual(self.check.main(), 0)
