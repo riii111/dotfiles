@@ -36,6 +36,9 @@
     ];
   };
 
+  # ~/.zshrc runs a cached compinit; the global one would run it a second time.
+  programs.zsh.enableGlobalCompInit = false;
+
   system.keyboard = {
     enableKeyMapping = true;
     remapCapsLockToControl = true;
