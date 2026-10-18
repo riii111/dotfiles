@@ -123,8 +123,8 @@ def check_body(body: str) -> list[str]:
         for line in lines
     ):
         problems.append(
-            "IssueやPRの番号を文中に埋め込まない。先頭の `close #N` か、"
-            "独立した `→ PR #N` の行に書く"
+            "IssueやPRの番号を文中に埋め込まない。"
+            "Issueは先頭の `close #N` の行に書き、PRの番号は書かない"
         )
     if any(MIXED_SPACE.search(line) for line in lines):
         problems.append("本文の日本語と英語の間にスペースを入れない")
