@@ -21,6 +21,12 @@
             "command": "python3 ~/.codex/hooks/permission_request.py",
             "timeout": 5,
             "statusMessage": "Checking forbidden commands"
+          },
+          {
+            "type": "command",
+            "command": "python3 ~/.codex/hooks/pr-format-check.py",
+            "timeout": 5,
+            "statusMessage": "Checking PR format"
           }
         ]
       }
