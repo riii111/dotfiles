@@ -8,7 +8,6 @@ flake.lock
 tests
 scripts
 config/pi
-.config/wezterm/tests
 
 # Python runtime artifacts
 **/__pycache__/**

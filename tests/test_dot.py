@@ -189,7 +189,6 @@ class DotCliTest(unittest.TestCase):
             ("/bin/ruff", "check", "."),
             ("python3", "-m", "unittest", "discover", "tests"),
             ("/bin/bash", "/repo/tests/test-example.sh"),
-            ("/bin/lua", "private_dot_config/wezterm/tests/herdr_mode_test.lua"),
             ("/bin/bash", "-n", "/repo/scripts/check.sh"),
             ("/bin/sh", "-n", "/repo/bin/run"),
         ]

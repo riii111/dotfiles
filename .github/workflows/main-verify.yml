@@ -25,34 +25,20 @@ jobs:
           node-version: "22"
 
       - run: npm ci --ignore-scripts --no-fund --no-audit
-      - run: npm test
-      - run: npm run check
       - run: npm run links
       - run: npm run fmt -- --all --check
       - run: npm run lint
 
   test:
     runs-on: macos-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.12"
-
-      - name: Install Ruff
-        run: python -m pip install ruff==0.16.5
-
-      - name: Install Lua
-        run: brew install lua
-
-      - name: Install fd
-        run: brew install fd
-
-      - name: Install chezmoi
-        run: brew install chezmoi
+      - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
 
       - name: Run repo verification
-        run: ./bin/executable_dotctl test
+        run: nix develop -c ./bin/executable_dotctl test

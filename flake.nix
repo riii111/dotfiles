@@ -108,9 +108,6 @@
             uv
             herdr
           ];
-          devShellOnlyPackages = with pkgs; [
-            lua5_4
-          ];
           directToolVersions = nixpkgs.lib.concatMap (
             package:
             let
@@ -126,7 +123,7 @@
               [ ]
             else
               [ (mkVersionEntry name (package.version or "unknown")) ]
-          ) (dailyCliPackages ++ devShellOnlyPackages);
+          ) dailyCliPackages;
           toolVersions = builtins.listToAttrs (
             directToolVersions
             ++ [
@@ -149,7 +146,6 @@
             pkgs
             toolVersions
             dailyCliPackages
-            devShellOnlyPackages
             cliProfile
             ;
         };
@@ -173,7 +169,7 @@
         in
         {
           default = cli.pkgs.mkShell {
-            packages = cli.devShellOnlyPackages ++ cli.dailyCliPackages;
+            packages = cli.dailyCliPackages;
 
             shellHook = ''
               echo "Entered the dotfiles Nix shell."
