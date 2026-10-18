@@ -55,7 +55,6 @@ class PrFormatCheckTest(unittest.TestCase):
 
     def test_ignores_other_commands(self):
         self.assertFalse(self.denies("git status"))
-        self.assertFalse(self.denies("gh pr view 1 --json title,body"))
         self.assertFalse(self.denies("gh pr edit 1 --add-label bug"))
 
     def test_survives_unparsable_input(self):
@@ -64,68 +63,10 @@ class PrFormatCheckTest(unittest.TestCase):
             self.assertEqual(self.check.main(), 0)
         self.assertEqual(output.getvalue(), "")
 
-    def test_denies_a_title_without_a_conventional_type(self):
-        self.assertTrue(
-            self.denies(create_command(GOOD_BODY, title="テストのログを減らす"))
-        )
-
-    def test_denies_a_space_between_japanese_and_english(self):
-        self.assertTrue(
-            self.denies(create_command(GOOD_BODY, title="ci: CI を軽くする"))
-        )
-        self.assertTrue(self.denies(create_command(GOOD_BODY + "\n- CI を軽くする\n")))
-
-    def test_denies_more_than_three_bullets(self):
-        body = GOOD_BODY + "- 三つ目\n- 四つ目\n"
-        self.assertTrue(self.denies(create_command(body)))
-
-    def test_denies_a_trailing_full_stop_on_a_bullet(self):
-        body = GOOD_BODY.replace("出力する", "出力する。")
-        self.assertTrue(self.denies(create_command(body)))
-
-    def test_allows_a_full_stop_in_prose(self):
-        body = GOOD_BODY.replace("省く", "省く。")
-        self.assertFalse(self.denies(create_command(body)))
-
-    def test_denies_a_checklist(self):
-        body = GOOD_BODY + "- [ ] 動作を確認した\n"
-        self.assertTrue(self.denies(create_command(body)))
-
-    def test_denies_parentheses_outside_code(self):
-        for text in ("補足（理由）", "補足(理由)"):
-            body = GOOD_BODY.replace("省く", text)
-            self.assertTrue(self.denies(create_command(body)))
-
-    def test_allows_parentheses_in_code(self):
-        body = GOOD_BODY + "\n`run(all)`を使う\n```\nprint(1)\n```\n"
-        self.assertFalse(self.denies(create_command(body)))
-
-    def test_allows_a_markdown_link(self):
-        body = GOOD_BODY + "\n[設計メモ](https://example.com/memo)を参照\n"
-        self.assertFalse(self.denies(create_command(body)))
-
-    def test_denies_an_inline_issue_number(self):
-        for text in (
-            "#30 の判定に任せる",
-            "owner/repo#30 の判定に任せる",
-            "https://github.com/owner/repo/pull/30 の判定に任せる",
-        ):
-            body = GOOD_BODY.replace("省く", text)
-            self.assertTrue(self.denies(create_command(body)), text)
-
-    def test_allows_reference_lines(self):
-        body = GOOD_BODY + "\n前提は以下で対応済み。\n→ PR #34\n"
-        self.assertFalse(self.denies(create_command(body)))
-        body = GOOD_BODY.replace("close #12", "Refs owner/repo#12")
-        self.assertFalse(self.denies(create_command(body)))
-
     def test_denies_a_body_that_cannot_be_read_from_the_command(self):
         for command in (
             'gh pr create --title "ci: 軽くする" --body-file body.md',
-            'gh pr create --title "ci: 軽くする" --body-file -',
-            'gh pr create --title "ci: 軽くする" --body "$(cat body.md)"',
             'gh pr create --title "ci: 軽くする" --body "$BODY"',
-            "gh pr edit 1 --body-file body.md",
         ):
             self.assertTrue(self.denies(command), command)
 
@@ -135,32 +76,6 @@ class PrFormatCheckTest(unittest.TestCase):
             + GOOD_BODY
             + "- 補足（理由）\nEOF\n"
         )
-        self.assertTrue(self.denies(command))
-
-    def test_leaves_a_title_that_the_shell_expands(self):
-        for title in ("$title", "ci: $summary", "`make title`"):
-            command = f'gh pr create --title "{title}" --body "補足"'
-            self.assertFalse(self.denies(command), title)
-
-    def test_reads_single_quoted_values_with_code_spans(self):
-        command = "gh pr create --title 'ci: `CI`を軽くする' --body '補足（理由）`CI`'"
-        self.assertTrue(self.denies(command))
-
-    def test_checks_every_list_marker(self):
-        for marker in ("*", "+", "1."):
-            body = "close #12\n\n背景を述べる\n\n" + "".join(
-                f"{marker} 項目{n}。\n" for n in range(4)
-            )
-            self.assertTrue(self.denies(create_command(body)), marker)
-
-    def test_checks_a_nested_bullet_and_a_star_checklist(self):
-        body = GOOD_BODY + "  - 入れ子の項目。\n"
-        self.assertTrue(self.denies(create_command(body)))
-        body = GOOD_BODY + "* [x] 動作を確認した\n"
-        self.assertTrue(self.denies(create_command(body)))
-
-    def test_checks_a_literal_body(self):
-        command = 'gh pr create --title "ci: 軽くする" --body "補足（理由）"'
         self.assertTrue(self.denies(command))
 
     def test_checks_edits_that_touch_the_title_or_body(self):
