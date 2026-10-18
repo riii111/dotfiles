@@ -61,6 +61,8 @@ amount: ""            # 量について言われた内容を短く。なけれ�
 
 Scheduled Taskの作成・更新・削除には、Codexスレッドで使える`automation_update`を使う。
 作業ディレクトリは`~/agent-desk/`にする。
+予定作成の実行は、登録元のモデルによらず`model: claude-opus-5-5`で作る。
+時刻を更新するときも、モデルは変えない。
 
 - 作る前に`plan_task`を見て、IDがあれば作らずに時刻を更新する。
   作ったらすぐIDを書く。
