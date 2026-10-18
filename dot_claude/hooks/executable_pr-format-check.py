@@ -2,7 +2,9 @@
 """Deny gh pr create/edit when the PR title or body breaks the mechanical format rules.
 
 Rules that need judgment (restated title, mergeable bullets) belong to the prompt
-hook in settings.json. A failure to parse the command never blocks it.
+hook in settings.json, which only sees the command text. The body therefore has to be
+written inside the command, as a heredoc or a literal. An exception while parsing the
+command never blocks it.
 """
 
 from __future__ import annotations
@@ -10,7 +12,6 @@ from __future__ import annotations
 import json
 import re
 import sys
-from pathlib import Path
 
 PR_COMMAND = re.compile(r"\bgh\s+pr\s+(create|edit)\b")
 EDIT_FLAGS = re.compile(r"(--title|--body|--body-file|\s-t\s|\s-b\s|\s-F\s)")
@@ -21,6 +22,7 @@ BODY_FILE_FLAG = re.compile(r"(?<![\w-])(?:--body-file|-F)(?:\s+|=)" + QUOTED)
 HEREDOC = re.compile(
     r"<<-?\s*(['\"]?)(\w+)\1[^\n]*\n(.*?)^[ \t]*\2[ \t]*$", re.DOTALL | re.MULTILINE
 )
+DYNAMIC_VALUE = re.compile(r"\$[\w{(]|`")
 
 TITLE_FORMAT = re.compile(
     r"^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)"
@@ -30,8 +32,10 @@ MAX_BULLETS = 3
 FENCE = re.compile(r"^\s*```")
 CODE_SPAN = re.compile(r"`[^`\n]*`")
 LINK_TARGET = re.compile(r"\]\([^)\s]*\)")
-BULLET = re.compile(r"^- (?!\[[ xX]\])")
-CHECKLIST = re.compile(r"^\s*- \[[ xX]\]")
+LIST_MARKER = r"(?:[-*+]|\d+[.)])"
+TOP_LEVEL_BULLET = re.compile(rf"^ {{0,3}}{LIST_MARKER} (?!\[[ xX]\])")
+ANY_BULLET = re.compile(rf"^\s*{LIST_MARKER} (?!\[[ xX]\])")
+CHECKLIST = re.compile(r"^\s*[-*+] \[[ xX]\]")
 PARENTHESIS = re.compile(r"[（）()]")
 REFERENCE_LINE = re.compile(
     r"^(?:(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?|refs?)\s+.*#\d+|→\s)", re.IGNORECASE
@@ -54,26 +58,23 @@ def unquote(value: str) -> str:
 
 def read_title(command: str) -> str | None:
     match = TITLE_FLAG.search(command)
-    return unquote(match.group(1)) if match else None
+    if not match or DYNAMIC_VALUE.search(match.group(1)):
+        return None
+    return unquote(match.group(1))
 
 
-def read_body(command: str, cwd: str) -> str | None:
+def read_body(command: str) -> str | None:
     heredoc = HEREDOC.search(command)
     if heredoc:
         return heredoc.group(3)
-    match = BODY_FILE_FLAG.search(command)
-    if match:
-        path = unquote(match.group(1))
-        if path == "-":
-            return None
-        try:
-            return (Path(cwd) / path).expanduser().read_text(encoding="utf-8")
-        except OSError:
-            return None
     match = BODY_FLAG.search(command)
-    if match and "$(" not in match.group(1):
+    if match and not DYNAMIC_VALUE.search(match.group(1)):
         return unquote(match.group(1))
     return None
+
+
+def has_body_flag(command: str) -> bool:
+    return bool(BODY_FLAG.search(command) or BODY_FILE_FLAG.search(command))
 
 
 def prose_lines(body: str) -> list[str]:
@@ -102,12 +103,12 @@ def check_body(body: str) -> list[str]:
     lines = prose_lines(body)
     problems = []
 
-    bullets = [line for line in lines if BULLET.match(line)]
-    if len(bullets) > MAX_BULLETS:
+    top_level = [line for line in lines if TOP_LEVEL_BULLET.match(line)]
+    if len(top_level) > MAX_BULLETS:
         problems.append(
-            f"箇条書きが{len(bullets)}個ある。{MAX_BULLETS}個以内に統合する"
+            f"箇条書きが{len(top_level)}個ある。{MAX_BULLETS}個以内に統合する"
         )
-    if any(line.rstrip().endswith("。") for line in bullets):
+    if any(ANY_BULLET.match(line) and line.rstrip().endswith("。") for line in lines):
         problems.append("箇条書きの文末に句点を付けない")
     if any(CHECKLIST.match(line) for line in lines):
         problems.append("確認チェックリストを書かない")
@@ -160,9 +161,14 @@ def main() -> int:
         title = read_title(command)
         if title is not None:
             problems += check_title(title)
-        body = read_body(command, event.get("cwd") or ".")
+        body = read_body(command)
         if body is not None:
             problems += check_body(body)
+        elif has_body_flag(command):
+            problems.append(
+                "本文をコマンド内に直接書く。`--body \"$(cat <<'EOF' ... EOF)\"` の形にする。"
+                "ファイルや変数を経由すると本文を検査できない"
+            )
         if problems:
             deny(problems)
     except Exception:

@@ -2,7 +2,6 @@ import importlib.machinery
 import importlib.util
 import io
 import json
-import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -125,19 +124,43 @@ class PrFormatCheckTest(unittest.TestCase):
         for expected in ("箇条書きが4個", "句点", "カッコ"):
             self.assertIn(expected, reason)
 
-    def test_reads_a_body_file_relative_to_the_cwd(self):
-        with tempfile.TemporaryDirectory() as directory:
-            Path(directory, "body.md").write_text(
-                GOOD_BODY + "- 補足（理由）\n", encoding="utf-8"
-            )
-            command = 'gh pr create --title "ci: 軽くする" --body-file body.md'
-            self.assertIn("カッコ", self.run_hook(command, cwd=directory))
+    def test_denies_a_body_that_cannot_be_read_from_the_command(self):
+        for command in (
+            'gh pr create --title "ci: 軽くする" --body-file body.md',
+            'gh pr create --title "ci: 軽くする" --body-file -',
+            'gh pr create --title "ci: 軽くする" --body "$(cat body.md)"',
+            'gh pr create --title "ci: 軽くする" --body "$BODY"',
+            "gh pr edit 1 --body-file body.md",
+        ):
+            self.assertIn("コマンド内に直接", self.run_hook(command), command)
 
-    def test_skips_a_body_it_cannot_read(self):
-        command = 'gh pr create --title "ci: 軽くする" --body-file missing.md'
-        self.assertIsNone(self.run_hook(command))
-        command = 'gh pr create --title "ci: 軽くする" --body "$(cat body.md)"'
-        self.assertIsNone(self.run_hook(command))
+    def test_reads_a_heredoc_passed_to_the_body_file_flag(self):
+        command = (
+            "gh pr create --title \"ci: 軽くする\" --body-file - <<'EOF'\n"
+            + GOOD_BODY
+            + "- 補足（理由）\nEOF\n"
+        )
+        self.assertIn("カッコ", self.run_hook(command))
+
+    def test_leaves_a_title_that_the_shell_expands(self):
+        for title in ("$title", "ci: $summary", "`make title`"):
+            command = f'gh pr create --title "{title}" --body "補足"'
+            self.assertIsNone(self.run_hook(command), title)
+
+    def test_checks_every_list_marker(self):
+        for marker in ("*", "+", "1."):
+            body = "close #12\n\n背景を述べる\n\n" + "".join(
+                f"{marker} 項目{n}。\n" for n in range(4)
+            )
+            reason = self.run_hook(create_command(body))
+            self.assertIn("箇条書きが4個", reason, marker)
+            self.assertIn("句点", reason, marker)
+
+    def test_checks_a_nested_bullet_and_a_star_checklist(self):
+        body = GOOD_BODY + "  - 入れ子の項目。\n"
+        self.assertIn("句点", self.run_hook(create_command(body)))
+        body = GOOD_BODY + "* [x] 動作を確認した\n"
+        self.assertIn("チェックリスト", self.run_hook(create_command(body)))
 
     def test_checks_a_literal_body(self):
         command = 'gh pr create --title "ci: 軽くする" --body "補足（理由）"'
