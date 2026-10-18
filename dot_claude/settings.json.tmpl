@@ -318,7 +318,22 @@
           },
           {
             "type": "command",
-            "command": "{{ .chezmoi.homeDir }}/.claude/hooks/pr-format-reminder.sh"
+            "command": "python3 {{ .chezmoi.homeDir }}/.claude/hooks/pr-format-check.py",
+            "timeout": 5
+          },
+          {
+            "type": "prompt",
+            "if": "Bash(gh pr create *)",
+            "prompt": {{ includeTemplate "pr-format-judge.txt" . | toJson }},
+            "continueOnBlock": true,
+            "statusMessage": "PRのタイトルと本文を確認しています"
+          },
+          {
+            "type": "prompt",
+            "if": "Bash(gh pr edit *)",
+            "prompt": {{ includeTemplate "pr-format-judge.txt" . | toJson }},
+            "continueOnBlock": true,
+            "statusMessage": "PRのタイトルと本文を確認しています"
           }
         ]
       }
