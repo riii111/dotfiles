@@ -8,10 +8,7 @@
   "scripts": {
     "lint": "node cli.mjs lint",
     "fmt": "node cli.mjs fmt",
-    "links": "node cli.mjs links",
-    "test": "node --test tests/*.test.mjs",
-    "check": "biome ci . && prettier --check '*.md'",
-    "format:code": "biome check --write ."
+    "links": "node cli.mjs links"
   },
   "dependencies": {
     "@textlint/kernel": "15.8.0",
@@ -30,8 +27,5 @@
     "textlint-rule-no-doubled-joshi": "5.1.1",
     "textlint-rule-sentence-length": "5.2.1",
     "unified-engine": "11.2.2"
-  },
-  "devDependencies": {
-    "@biomejs/biome": "2.5.15"
   }
 }
