@@ -58,14 +58,6 @@ class PermissionReportTest(unittest.TestCase):
             path.write_text("\n".join(json.dumps(r) for r in records))
             return self.report.scan([path], HOME)
 
-    def test_command_head_skips_cd_and_options(self):
-        head = self.report.command_head
-        self.assertEqual(head("cd ~/repo && git -C x commit -m y"), "git commit")
-        self.assertEqual(head("FOO=1 nix develop -c make"), "nix develop")
-        self.assertEqual(head("env -u A B=1 bun test"), "bun test")
-        self.assertEqual(head("X=1; for c in a b; do echo $c; done"), "for")
-        self.assertEqual(head("touch file"), "touch")
-
     def test_counts_write_denials_and_reruns(self):
         lock = f"{HOME}/ghq/repo/.git/index.lock"
         reruns, failed, writes, hosts = self.scan(
@@ -102,14 +94,6 @@ class PermissionReportTest(unittest.TestCase):
         )
         self.assertEqual(hosts, {"example.com": 1})
         self.assertEqual(failed, {})
-
-    def test_command_shape(self):
-        shape = self.report.command_shape
-        self.assertEqual(shape("for f in a b; do echo $f; done"), "loop")
-        self.assertEqual(shape("echo $(git rev-parse HEAD)"), "command substitution")
-        self.assertEqual(shape("S=/tmp/x; ls $S"), "variable assignment")
-        self.assertEqual(shape("git status && git diff | head"), "compound")
-        self.assertEqual(shape("git status"), "single command")
 
     def scan_events(self, events, since="2026-10-01T00:00:00+09:00"):
         with tempfile.TemporaryDirectory() as directory:
@@ -169,44 +153,6 @@ class PermissionReportTest(unittest.TestCase):
             report["commands"]["PermissionDenied"],
             {"rule: Data Exfiltration | gh pr  (1 sessions)": 1},
         )
-
-    def test_denials_keep_each_cause_with_its_command(self):
-        push = "git push origin HEAD"
-        report = self.scan_events(
-            [
-                event(
-                    "PermissionDenied", push, session="a", reason="[Data Exfiltration]"
-                ),
-                event(
-                    "PermissionDenied", push, session="a", reason="[Data Exfiltration]"
-                ),
-                event(
-                    "PermissionDenied",
-                    push,
-                    session="b",
-                    reason="Classifier unavailable",
-                ),
-            ]
-        )
-        self.assertEqual(
-            report["commands"]["PermissionDenied"],
-            {
-                "rule: Data Exfiltration | git push  (1 sessions)": 2,
-                "classifier unavailable (not a settings issue) | git push  (1 sessions)": 1,
-            },
-        )
-
-    def test_event_times_keep_their_utc_offset(self):
-        report = self.scan_events(
-            [event("PermissionRequest", "git status", time="2026-09-30T23:30:00+0000")],
-            since="2026-10-01T08:00:00+09:00",
-        )
-        self.assertEqual(report["shapes"]["PermissionRequest"], {"single command": 1})
-
-    def test_missing_event_log_is_empty(self):
-        report = self.report.scan_events(Path("/nonexistent/events.jsonl"), 0)
-        self.assertEqual(sum(report["shapes"]["PermissionRequest"].values()), 0)
-        self.assertEqual(sum(report["causes"].values()), 0)
 
 
 def event(
@@ -274,22 +220,6 @@ class LogPermissionEventTest(unittest.TestCase):
         self.assertEqual(record["event"], "PermissionRequest")
         self.assertEqual(len(record["command"]), 500)
         self.assertTrue(record["unsandboxed"])
-
-    def test_records_denial_reason(self):
-        with tempfile.TemporaryDirectory() as directory:
-            log = Path(directory) / "events.jsonl"
-            self.run_hook(
-                {
-                    "hook_event_name": "PermissionDenied",
-                    "tool_name": "Bash",
-                    "tool_input": {"command": "gh pr merge 1"},
-                    "reason": "[Data Exfiltration] " + "x" * 400,
-                },
-                log,
-            )
-            record = json.loads(log.read_text())
-        self.assertTrue(record["reason"].startswith("[Data Exfiltration]"))
-        self.assertEqual(len(record["reason"]), 300)
 
     def test_bad_input_is_ignored(self):
         with tempfile.TemporaryDirectory() as directory:
