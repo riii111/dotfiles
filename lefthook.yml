@@ -11,6 +11,10 @@ pre-commit:
       glob: "*.lua"
       stage_fixed: true
       run: stylua {staged_files}
+    ai-docs-format:
+      glob: "dot_{codex,claude}/skills/**/*.md"
+      stage_fixed: true
+      run: node scripts/ai-docs/cli.mjs fmt {staged_files}
 
 post-merge:
   commands:
