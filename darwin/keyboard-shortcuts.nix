@@ -1,13 +1,27 @@
 { config, lib, ... }:
 
 let
-  inherit (lib) concatStringsSep escapeShellArg mkAfter;
+  inherit (lib) concatMapStrings concatStringsSep escapeShellArg mkAfter splitString;
 
   user = escapeShellArg config.system.primaryUser;
+  asUser = ''launchctl asuser "$(id -u -- ${user})" sudo --user=${user} --'';
 
-  writeShortcut = id: enabled: parameters: ''
-    launchctl asuser "$(id -u -- ${user})" sudo --user=${user} -- defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add ${id} ${escapeShellArg "{ enabled = ${enabled}; value = { parameters = (${parameters}); type = standard; }; }"}
-  '';
+  # Match the bool and integer types System Settings writes; the old-style plist syntax would store strings.
+  # Rewriting an entry, even with the same value, disables Spotlight's Show Apps until the next login, so only changed entries are written.
+  writeShortcut =
+    id: enabled: parameters:
+    let
+      enabledXml = if enabled == "1" then "<true/>" else "<false/>";
+      parametersXml = concatMapStrings (p: "<integer>${p}</integer>") (splitString ", " parameters);
+      entry = "<dict><key>enabled</key>${enabledXml}<key>value</key><dict><key>parameters</key><array>${parametersXml}</array><key>type</key><string>standard</string></dict></dict>";
+      wanted = ''<?xml version="1.0" encoding="UTF-8"?><plist version="1.0">${entry}</plist>'';
+    in
+    ''
+      if [ "$(plutil -extract AppleSymbolicHotKeys.${id} xml1 -o - "$hotkeys" 2>/dev/null)" != "$(printf '%s' ${escapeShellArg wanted} | plutil -convert xml1 -o - -)" ]; then
+        ${asUser} defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add ${id} ${escapeShellArg entry}
+        hotkeysChanged=1
+      fi
+    '';
 
   shortcuts = [
     # Function-row shortcuts when F1-F12 are standard keys.
@@ -59,7 +73,14 @@ in
 
   system.activationScripts.postActivation.text = mkAfter ''
     echo >&2 "keyboard shortcuts..."
+    hotkeys=$(mktemp)
+    hotkeysChanged=
+    ${asUser} defaults export com.apple.symbolichotkeys - > "$hotkeys"
     ${concatStringsSep "\n" shortcuts}
-    /System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings -u
+    rm -f "$hotkeys"
+    if [ -n "$hotkeysChanged" ]; then
+      /System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings -u
+      echo >&2 "keyboard shortcuts changed; restart the Mac to apply them"
+    fi
   '';
 }
