@@ -39,6 +39,8 @@
   # ~/.zshrc runs a cached compinit; the global one would run it a second time.
   programs.zsh.enableGlobalCompInit = false;
 
+  security.pam.services.sudo_local.enable = false;
+
   system.keyboard = {
     enableKeyMapping = true;
     remapCapsLockToControl = true;
@@ -74,7 +76,7 @@
 
   homebrew = {
     enable = true;
-    onActivation.cleanup = "check";
+    onActivation.cleanup = "none";
     # Under sudo, brew would read ~/.homebrew/trust.json instead of the shell's trust file.
     onActivation.extraEnv.XDG_CONFIG_HOME = "/Users/${config.system.primaryUser}/.config";
     casks = [
