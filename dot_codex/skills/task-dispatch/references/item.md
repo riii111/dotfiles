@@ -33,7 +33,7 @@ Issueに結び付かない依頼のkeyは`manual:<英小文字・数字・-の�
 | ready          | 起動できる                      |
 | running        | worker起動済みで、PRはまだない  |
 | needs_decision | 人の判断待ち                    |
-| review_ready   | PRがある。ownerの確認と判断待ち |
+| review_ready   | PRがある。自動では進めない      |
 | done           | Issueのclose、またはPRのmerge   |
 
 `status`を変えるのは、この節の遷移表・[起動](launch.md)・[続行の送信](continue.md)・[報告のスレッドへの返事](schedule.md#報告のスレッドへの返事)だけとする。
@@ -42,9 +42,10 @@ Issueに結び付かない依頼のkeyは`manual:<英小文字・数字・-の�
 
 ### PRのある項目
 
-openのPR（Draftを含む）ができた項目は、ownerの確認と判断だけが残るものとして`review_ready`にする。
+openのPR（Draftを含む）ができた項目は`review_ready`にする。
+PRのないIssueに着手するほうが成果になるため、候補の優先度を最も低くする。
 workerへの続行・Appでの確認依頼・レビュー状態の検証はせず、PRのmerge・closeだけを追う。
-既存のPRを仕上げ直す起動や続行は、ownerの確認とトークンを無駄にするため行わない。
+予定での扱いは[明日の予定を作成する](plan.md#明日の予定を作成する)に従う。
 
 ### 遷移表
 
@@ -77,12 +78,6 @@ idleだけで停止と判断しない。
 `pending`があれば`needs_decision`にし、Appで確認する内容を`next_action`に書く。
 どちらもなければ`ready`に戻す。
 状態を変えたら`status`を記録する。
-
-## ownerのレビュー
-
-`owner`のpull request review（`COMMENTED`または`CHANGES_REQUESTED`）のうち、レビューのcommitがPRの現在のheadと同じものを未対応とする。
-未対応のレビューへの対応はownerがworkerに直接頼むため、task-dispatchは送らない。
-この定義は[新規起動する件数](launch.md#新規起動する件数)の数え方だけに使う。
 
 ## attempts
 

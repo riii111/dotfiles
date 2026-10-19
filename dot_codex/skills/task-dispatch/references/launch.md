@@ -47,10 +47,8 @@ OKは予定の一覧ではなく、Issueごとに`attempts`の`approved`で記�
 
 ### 新規起動する件数
 
-新規起動の枠は、`limits.max_waiting_reviews`から次の件数を引き、0未満なら0とする。
-
-- レビュー待ちのPR：`review_ready`でPRがDraft、かつ[未対応のownerのレビュー](item.md#ownerのレビュー)がない項目。
-- `running`の項目。
+新規起動の枠は、`limits.max_waiting_reviews`から`running`の項目数を引き、0未満なら0とする。
+[PRのある項目](item.md#prのある項目)は枠を使わない。
 
 件数の指定は枠より優先し、決まった読み替えをせず、その言葉どおりに扱う。
 件数が分からなければスレッドで聞き返し、分かるまで`amount`に書かない。
