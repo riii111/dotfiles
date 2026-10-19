@@ -27,14 +27,14 @@ Issueに結び付かない依頼のkeyは`manual:<英小文字・数字・-の�
 
 ## status
 
-| status         | 意味                            |
-| -------------- | ------------------------------- |
-| discovered     | 発見しただけで未判定            |
-| ready          | 起動できる                      |
-| running        | worker起動済みで、PRはまだない  |
-| needs_decision | 人の判断待ち                    |
-| review_ready   | PRがある。自動では進めない      |
-| done           | Issueのclose、またはPRのmerge   |
+| status         | 意味                           |
+| -------------- | ------------------------------ |
+| discovered     | 発見しただけで未判定           |
+| ready          | 起動できる                     |
+| running        | worker起動済みで、PRはまだない |
+| needs_decision | 人の判断待ち                   |
+| review_ready   | PRがある。自動では進めない     |
+| done           | Issueのclose、またはPRのmerge  |
 
 `status`を変えるのは、この節の遷移表・[起動](launch.md)・[続行の送信](continue.md)・[報告のスレッドへの返事](schedule.md#報告のスレッドへの返事)だけとする。
 人の判断を求めて止まったworkerには、人がAppでworkerに直接答えるか、IssueかPRへのコメントか予定のスレッドで答える。
