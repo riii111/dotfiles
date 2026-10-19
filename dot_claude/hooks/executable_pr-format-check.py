@@ -5,12 +5,18 @@ Rules that need judgment (restated title, mergeable bullets) belong to the promp
 hook in settings.json, which only sees the command text. The body therefore has to be
 written inside the command, as a heredoc or a literal. An exception while parsing the
 command never blocks it.
+
+The language comes from `git config pr.language` (ja or en) in the session's working
+directory. It is set per repository by the user, so an unset value blocks the PR
+instead of being guessed.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import re
+import subprocess
 import sys
 
 PR_COMMAND = re.compile(r"\bgh\s+pr\s+(create|edit)\b")
@@ -47,6 +53,8 @@ REFERENCE = re.compile(
 JAPANESE = r"[\u3040-\u30ff\u3400-\u9fff]"
 ASCII_WORD = r"[A-Za-z0-9]"
 MIXED_SPACE = re.compile(rf"{JAPANESE}[ \t]+{ASCII_WORD}|{ASCII_WORD}[ \t]+{JAPANESE}")
+HAS_JAPANESE = re.compile(JAPANESE)
+LANGUAGES = {"ja": "日本語", "en": "英語"}
 
 
 def unquote(value: str) -> str:
@@ -90,6 +98,33 @@ def prose_lines(body: str) -> list[str]:
         elif not in_fence:
             lines.append(LINK_TARGET.sub("]", CODE_SPAN.sub("", line)))
     return lines
+
+
+def read_language(cwd: str) -> str | None:
+    result = subprocess.run(
+        ["git", "-C", cwd, "config", "--get", "pr.language"],
+        capture_output=True,
+        text=True,
+        timeout=3,
+    )
+    return result.stdout.strip() or None
+
+
+def check_language(language: str, title: str | None, body: str | None) -> list[str]:
+    prose = [
+        line
+        for line in prose_lines(body or "")
+        if line.strip() and not REFERENCE_LINE.match(line.strip())
+    ]
+    if language == "ja":
+        mismatched = (title is not None and not HAS_JAPANESE.search(title)) or (
+            bool(prose) and not any(HAS_JAPANESE.search(line) for line in prose)
+        )
+    else:
+        mismatched = any(HAS_JAPANESE.search(text) for text in [title or "", *prose])
+    if mismatched:
+        return [f"このリポジトリのPRは{LANGUAGES[language]}で書く"]
+    return []
 
 
 def check_title(title: str) -> list[str]:
@@ -173,6 +208,16 @@ def main() -> int:
                 "本文をコマンド内に直接書く。`--body \"$(cat <<'EOF' ... EOF)\"` の形にする。"
                 "ファイルや変数を経由すると本文を検査できない"
             )
+        if title is not None or body is not None:
+            language = read_language(event.get("cwd") or os.getcwd())
+            if language in LANGUAGES:
+                problems += check_language(language, title, body)
+            else:
+                problems.append(
+                    "このリポジトリのPRの言語が未設定か不正。"
+                    "ユーザーに英語か日本語かを確認し、"
+                    "`git config pr.language en` か `git config pr.language ja` を設定する"
+                )
         if problems:
             deny(problems)
     except Exception:

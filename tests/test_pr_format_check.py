@@ -38,6 +38,12 @@ def create_command(body, title="ci: テストのログを減らす"):
 class PrFormatCheckTest(unittest.TestCase):
     def setUp(self):
         self.check = load_check()
+        self.use_language("ja")
+
+    def use_language(self, language):
+        patcher = mock.patch.object(self.check, "read_language", return_value=language)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def denies(self, command):
         event = json.dumps({"tool_input": {"command": command}})
@@ -87,6 +93,22 @@ class PrFormatCheckTest(unittest.TestCase):
             GOOD_BODY + "- 補足（理由）\n"
         )
         self.assertTrue(self.denies(command))
+
+    def test_denies_when_the_language_is_not_configured(self):
+        for language in (None, "fr"):
+            self.use_language(language)
+            self.assertTrue(self.denies(create_command(GOOD_BODY)), language)
+
+    def test_denies_a_pr_in_the_other_language(self):
+        english_title = "ci: trim test logs"
+        self.assertTrue(self.denies(create_command(GOOD_BODY, title=english_title)))
+        self.use_language("en")
+        self.assertTrue(self.denies(create_command(GOOD_BODY)))
+
+    def test_accepts_an_english_pr_when_configured(self):
+        self.use_language("en")
+        body = "close #12\n\nPassing tests flood the log and hide failures.\n"
+        self.assertFalse(self.denies(create_command(body, title="ci: trim test logs")))
 
 
 if __name__ == "__main__":
