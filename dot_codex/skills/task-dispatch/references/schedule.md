@@ -59,8 +59,12 @@ amount: ""            # 量について言われた内容を短く。なけれ�
 
 ### Scheduled Taskの扱い
 
-Scheduled Taskの作成・更新・削除には、Codexスレッドで使える`automation_update`を使う。
-作業ディレクトリは`~/agent-desk/`にする。
+Claudeのスレッドの`automation_update`は、毎回新しいスレッドを作るScheduled Taskを扱えない。
+そのため作成・更新・削除は、`create_thread`で`model`を省略して（Appの既定のCodexモデルで）補助のスレッドを作り、頼む。
+補助のスレッドの作業ディレクトリと、作るScheduled Taskの作業ディレクトリは`~/agent-desk/`にする。
+頼むときは、操作・ID・時刻・モデル・指示を書き、`automation_update`で行ってIDと結果だけを返すよう伝える。
+`wait_threads`で完了を待ち、`read_thread`で結果を確かめる。
+結果が分からなければ、作成の結果が分からないときと同じに扱う。
 予定作成の実行は、登録元のモデルによらず`model: claude-opus-5-5`で作る。
 時刻を更新するときも、モデルは変えない。
 
