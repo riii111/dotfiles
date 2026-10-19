@@ -1,4 +1,4 @@
-{ ... }:
+{ config, ... }:
 
 {
   imports = [
@@ -75,6 +75,8 @@
   homebrew = {
     enable = true;
     onActivation.cleanup = "check";
+    # Under sudo, brew would read ~/.homebrew/trust.json instead of the shell's trust file.
+    onActivation.extraEnv.XDG_CONFIG_HOME = "/Users/${config.system.primaryUser}/.config";
     casks = [
       "arc"
       "codex"
