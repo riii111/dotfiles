@@ -175,6 +175,18 @@
               echo "Entered the dotfiles Nix shell."
             '';
           };
+
+          # Only what `dotctl test` runs; the daily shell builds unfree tools like terraform from source in CI.
+          ci = cli.pkgs.mkShell {
+            packages = with cli.pkgs; [
+              bashInteractive
+              chezmoi
+              git
+              jq
+              python3
+              ruff
+            ];
+          };
         }
       );
 
