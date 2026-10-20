@@ -42,6 +42,13 @@ function M.insert(pos, text)
 	return after
 end
 
+-- Replaces the text between two positions, leaves the cursor after the new text and returns that position.
+function M.replace(from, to, text)
+	M.delete(from, to)
+	from = vim.api.nvim_win_get_cursor(0)
+	return M.insert({ from[1] - 1, from[2] }, text)
+end
+
 function M.set_cursor(pos)
 	set_cursor(pos)
 end

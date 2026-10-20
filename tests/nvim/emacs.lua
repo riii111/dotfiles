@@ -45,6 +45,13 @@ local keys = {
 	"<M-h>",
 	"<C-Space>",
 	"<C-@>",
+	"<M-t>",
+	"<M-u>",
+	"<M-l>",
+	"<M-c>",
+	"<M-Bslash>",
+	"<M-Space>",
+	"<M-z>",
 }
 
 -- "abc|def\nxyz": the lines, with the cursor where "|" is
@@ -395,6 +402,40 @@ cases["the region from the mark is killed, copied or dropped"] = function()
 	assert(ok, err)
 end
 
+cases["words are swapped, cased and spaced"] = function()
+	check("foo |bar baz", "<M-t>", "bar foo| baz")
+	check("foo |bar baz", "<M-t><M-t>", "bar baz foo|")
+	check("fo|o, bar", "<M-t>", "bar, foo|")
+	check("|foo bar", "<M-t>", "bar foo|")
+	check("one|\ntwo", "<M-t>", "two\none|")
+	check("foo bar|", "<M-t>", "foo bar|")
+	check("a|", "<M-t>", "a|")
+
+	check("fo|o bar", "<M-u>", "foO| bar")
+	check("|foo bar", "<M-u><M-u>", "FOO BAR|")
+	check("|FOO Bar", "<M-l>", "foo| Bar")
+	check("|hELLO, wORLD", "<M-c><M-c>", "Hello, World|")
+	check("|\u{e9}lan", "<M-u>", "\u{c9}LAN|")
+	check("|日本語 abc", "<M-u><M-u>", "日本語 ABC|")
+	check("x|", "<M-u>", "x|")
+
+	check("a  | \tb", "<M-Bslash>", "a|b")
+	check("ab|", "<M-Bslash>", "ab|")
+	check("a  | \tb", "<M-Space>", "a |b")
+	check("a|b", "<M-Space>", "a |b")
+	check("a |b", "<M-Space>", "a |b")
+end
+
+cases["M-z kills up to and with the typed character"] = function()
+	check("a|bc,de", "<M-z>,", "a|de", "bc,")
+	check("a|b\nc,d", "<M-z>,", "a|d", "b\nc,")
+	check("|あいう、え", "<M-z>、", "|え", "あいう、")
+	check("a|,b,c", "<M-z>,", "a|b,c", ",")
+	edit.store("kept", "replace")
+	check("a|bc", "<M-z>,", "a|bc", "kept")
+	check("a|bc", "<M-z><Esc>", "a|bc", "kept")
+end
+
 cases["kills in a row join in text order"] = function()
 	check("one two thr|ee", "<M-BS><M-BS>", "one |ee", "two thr")
 	check("one t|wo three", "<M-d><M-d>", "one t|", "wo three")
@@ -459,7 +500,21 @@ end
 cases["every edit is one undo step of its own"] = function()
 	edit.store("Y", "replace")
 	-- <Del> and <C-h> run the same commands as <C-d> and <BS>, which the deletion case checks
-	for _, input in ipairs({ "<C-d>", "<BS>", "<C-u>", "<C-k>", "<M-d>", "<M-BS>", "<C-y>", "<C-w>" }) do
+	for _, input in ipairs({
+		"<C-d>",
+		"<BS>",
+		"<C-u>",
+		"<C-k>",
+		"<M-d>",
+		"<M-BS>",
+		"<C-y>",
+		"<C-w>",
+		"<M-t>",
+		"<M-u>",
+		"<M-c>",
+		"<M-Space>",
+		"<M-z>z",
+	}) do
 		undo_steps("foo b|ar\nbaz", input)
 	end
 	undo_steps("foo bar|\nbaz", "<C-k>")
