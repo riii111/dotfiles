@@ -2,6 +2,7 @@
 -- until Insert mode ends. Plain Insert mode and other buffers are left alone.
 local motion = require("emacs.motion")
 local edit = require("emacs.edit")
+local region = require("emacs.region")
 
 local M = {}
 
@@ -36,10 +37,18 @@ local keys = {
 	["<M-r>"] = "move_to_window_line",
 	["<M-{>"] = "backward_paragraph",
 	["<M-}>"] = "forward_paragraph",
+	["<C-w>"] = "kill_region",
+	["<M-w>"] = "copy_region",
+	["<C-g>"] = "keyboard_quit",
+	["<M-h>"] = "mark_paragraph",
 	-- terminals send CTRL-/ as CTRL-_
 	["<C-/>"] = "undo",
 	["<C-_>"] = "undo",
 }
+
+-- C-SPC reaches Neovim as <C-@> from terminals that send it as NUL; macOS may take it for the input source
+local DEFAULT_SET_MARK = { "<C-Space>", "<C-@>" }
+local set_mark_keys = DEFAULT_SET_MARK
 
 -- pending: `e` was pressed and Insert mode is about to start; active: the mode is on in this buffer and window
 local state = { pending = nil, active = nil }
@@ -53,11 +62,18 @@ local last_yank
 -- the step C-l or M-r took last; pressed again right after, they go on to the next step
 local last_cycle
 
+local function cursor()
+	local pos = vim.api.nvim_win_get_cursor(0)
+	return { pos[1] - 1, pos[2] }
+end
+
 -- defined below, in the order the mode goes through them
 local editable, on_mode_changed, activate, restore, commands, close_completion
 
-function M.setup()
+-- opts.set_mark: the keys that set the mark, replacing C-SPC and C-@
+function M.setup(opts)
 	M.teardown()
+	set_mark_keys = opts and opts.set_mark or DEFAULT_SET_MARK
 	vim.keymap.set("n", "e", function()
 		return editable(0) and "<Cmd>lua require('emacs').start()<CR>" or "e"
 	end, { expr = true, desc = DESC })
@@ -67,6 +83,23 @@ function M.setup()
 		callback = function()
 			if state.active then
 				M.stop()
+			end
+		end,
+	})
+	-- typed text and other changes end the region; moves of other keys, such as the arrow keys, stretch it
+	vim.api.nvim_create_autocmd("TextChangedI", {
+		group = group,
+		callback = function(args)
+			if state.active and region.changed(args.buf) then
+				region.clear()
+			end
+		end,
+	})
+	vim.api.nvim_create_autocmd("CursorMovedI", {
+		group = group,
+		callback = function(args)
+			if state.active then
+				region.draw(args.buf, cursor())
 			end
 		end,
 	})
@@ -101,11 +134,6 @@ function M.is_active()
 	return state.active ~= nil
 end
 
-local function cursor()
-	local pos = vim.api.nvim_win_get_cursor(0)
-	return { pos[1] - 1, pos[2] }
-end
-
 function M.run(name)
 	local active = state.active
 	if not (active and active.buf == vim.api.nvim_get_current_buf()) then
@@ -119,6 +147,12 @@ function M.run(name)
 		vertical_goal = nil
 	end
 	command.run(active.buf, cursor())
+	-- moves stretch the region; anything else ends it
+	if command.keeps_region then
+		region.draw(active.buf, cursor())
+	else
+		region.clear()
+	end
 end
 
 function M.close_completion()
@@ -136,6 +170,7 @@ function M.stop()
 	vertical_goal = nil
 	last_yank = nil
 	last_cycle = nil
+	region.clear()
 	restore(active)
 	vim.cmd.redrawstatus()
 end
@@ -201,10 +236,20 @@ end
 local function install(buf)
 	local saved = {}
 	vim.api.nvim_buf_call(buf, function()
-		for lhs, name in pairs(keys) do
+		local function map(lhs, name)
+			-- a key given twice would save the mode's own mapping and put it back when the mode ends
+			if saved[lhs] ~= nil then
+				return
+			end
 			local mapping = vim.fn.maparg(lhs, "i", false, true)
 			saved[lhs] = mapping.buffer == 1 and mapping or false
 			vim.keymap.set("i", lhs, rhs(name), { buffer = buf, nowait = true, silent = true, desc = DESC })
+		end
+		for lhs, name in pairs(keys) do
+			map(lhs, name)
+		end
+		for _, lhs in ipairs(set_mark_keys) do
+			map(lhs, "set_mark")
 		end
 	end)
 	return saved
@@ -271,6 +316,7 @@ end
 
 local function moving(target)
 	return {
+		keeps_region = true,
 		run = function(buf, pos)
 			local to = target(buf, pos)
 			if to then
@@ -295,12 +341,13 @@ local function here(_, pos)
 	return pos
 end
 
--- kills the text between the cursor and target; backward when target is before the cursor
-local function killing(target, backward)
+-- kills the text between the cursor and target; a kill in a row adds backward kills in front
+local function killing(target)
 	return {
 		kind = "kill",
 		run = function(buf, pos)
 			local to = target(buf, pos)
+			local backward = to and (to[1] < pos[1] or (to[1] == pos[1] and to[2] < pos[2]))
 			local continued = last_kill
 				and last_kill.buf == buf
 				and last_kill.tick == vim.b.changedtick
@@ -347,6 +394,7 @@ end
 local function screen_line(direction)
 	return {
 		kind = "vertical",
+		keeps_region = true,
 		run = function(_, pos)
 			local win = vim.api.nvim_get_current_win()
 			local curswant = normal("g" .. direction, function()
@@ -362,6 +410,7 @@ end
 
 local function normal_command(keys)
 	return {
+		keeps_region = true,
 		run = function()
 			normal(keys)
 		end,
@@ -370,7 +419,7 @@ end
 
 -- Like Emacs' recenter-positions: the middle of the window first, then the top and the bottom.
 local function cycling(steps)
-	local command = {}
+	local command = { keeps_region = true }
 	function command.run()
 		local cycle = last_cycle
 		local step = 1
@@ -396,10 +445,10 @@ commands = {
 	buffer_end = moving(motion.buffer_end),
 	delete_char = deleting(here, motion.forward_char),
 	delete_backward_char = deleting(motion.backward_char, here),
-	kill_line_start = killing(motion.line_start, true),
-	kill_line_end = killing(motion.kill_line_end, false),
-	kill_word = killing(motion.forward_word, false),
-	backward_kill_word = killing(motion.backward_word, true),
+	kill_line_start = killing(motion.line_start),
+	kill_line_end = killing(motion.kill_line_end),
+	kill_word = killing(motion.forward_word),
+	backward_kill_word = killing(motion.backward_word),
 	yank = {
 		run = function(buf, pos)
 			local text = edit.to_yank()
@@ -435,6 +484,39 @@ commands = {
 	move_to_window_line = cycling({ "M0", "H0", "L0" }),
 	backward_paragraph = moving(motion.backward_paragraph),
 	forward_paragraph = moving(motion.forward_paragraph),
+	set_mark = {
+		keeps_region = true,
+		run = function(buf, pos)
+			region.set_mark(buf, pos)
+		end,
+	},
+	-- without a region, C-w kills the word before the cursor as in Readline and Vim
+	kill_region = killing(function(buf, pos)
+		local mark = region.mark(buf)
+		if mark then
+			return not vim.deep_equal(mark, pos) and mark or nil
+		end
+		return motion.backward_word(buf, pos)
+	end),
+	copy_region = {
+		run = function(buf, pos)
+			local mark = region.mark(buf)
+			if mark and not vim.deep_equal(mark, pos) then
+				edit.store(edit.text(mark, pos), "replace")
+			end
+		end,
+	},
+	-- ends the region and nothing else
+	keyboard_quit = { run = function() end },
+	-- the region from the separating line before the paragraph to the one after it, as Emacs marks it
+	mark_paragraph = {
+		keeps_region = true,
+		run = function(buf, pos)
+			local to = motion.forward_paragraph(buf, pos) or pos
+			region.set_mark(buf, to)
+			edit.set_cursor(motion.backward_paragraph(buf, to) or to)
+		end,
+	},
 	undo = {
 		run = function()
 			vim.cmd("silent! undo")
