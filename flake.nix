@@ -182,6 +182,7 @@
               bashInteractive
               chezmoi
               git
+              go
               jq
               python3
               ruff

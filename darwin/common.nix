@@ -79,6 +79,9 @@
     onActivation.cleanup = "none";
     # Under sudo, brew would read ~/.homebrew/trust.json instead of the shell's trust file.
     onActivation.extraEnv.XDG_CONFIG_HOME = "/Users/${config.system.primaryUser}/.config";
+    taps = [ "vjeantet/tap" ];
+    # Notifications with an action menu for tools/review-notifier.
+    brews = [ "vjeantet/tap/alerter" ];
     casks = [
       "arc"
       "codex"
