@@ -131,6 +131,7 @@ M.lualine = {
 	mode_visual = "#c678dd", -- purple
 	mode_replace = "#f7768e", -- coral red
 	mode_command = "#e0af68", -- warm yellow
+	mode_emacs = "#c065db", -- GitHub Linguist's Emacs Lisp
 
 	-- Git colors
 	git = {

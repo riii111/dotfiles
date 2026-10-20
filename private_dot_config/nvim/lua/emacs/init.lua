@@ -123,7 +123,7 @@ function M.stop()
 	state.active = nil
 	last_kill = nil
 	vertical_goal = nil
-	restore(active.buf, active.saved)
+	restore(active)
 	vim.cmd.redrawstatus()
 end
 
@@ -197,8 +197,19 @@ local function install(buf)
 	return saved
 end
 
+-- A block cursor like Normal mode and Emacs, set in 'guicursor' after what is there so the rest stays
+local function block_cursor()
+	local guicursor = vim.o.guicursor
+	if guicursor == "" then
+		return nil
+	end
+	local block = guicursor .. ",i-ci:block"
+	vim.o.guicursor = block
+	return { saved = guicursor, set = block }
+end
+
 function activate(buf, win)
-	state.active = { buf = buf, win = win, saved = install(buf) }
+	state.active = { buf = buf, win = win, saved = install(buf), cursor = block_cursor() }
 	vim.cmd.redrawstatus()
 end
 
@@ -206,13 +217,18 @@ local function ours(mapping)
 	return mapping.buffer == 1 and mapping.desc == DESC
 end
 
--- Puts back what was mapped before, unless something replaced the mode's mapping in the meantime.
-function restore(buf, saved)
+-- Puts back the cursor and what was mapped before, unless something changed them in the meantime.
+function restore(active)
+	local cursor_shape = active.cursor
+	if cursor_shape and vim.o.guicursor == cursor_shape.set then
+		vim.o.guicursor = cursor_shape.saved
+	end
+	local buf = active.buf
 	if not vim.api.nvim_buf_is_valid(buf) then
 		return
 	end
 	vim.api.nvim_buf_call(buf, function()
-		for lhs, mapping in pairs(saved) do
+		for lhs, mapping in pairs(active.saved) do
 			if ours(vim.fn.maparg(lhs, "i", false, true)) then
 				vim.api.nvim_buf_del_keymap(buf, "i", lhs)
 				if mapping then
