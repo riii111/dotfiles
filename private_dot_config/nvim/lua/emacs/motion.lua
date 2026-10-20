@@ -151,6 +151,112 @@ function M.backward_paragraph(buf, pos)
 	return moved(pos, row, 0)
 end
 
+-- Sentences end at 。！？ (and the full-width period) or at . ! ? before a blank or the end of the line, with
+-- the closing quotes and brackets after them, as with Emacs' sentence-end-double-space off. A paragraph
+-- ends its last sentence. Abbreviations such as "Mr." end a sentence too.
+local ENDS = { ["。"] = true, ["！"] = true, ["？"] = true, ["．"] = true }
+local ASCII_ENDS = { ["."] = true, ["!"] = true, ["?"] = true }
+local CLOSERS = {}
+for _, closer in ipairs({ '"', "'", ")", "]", "」", "』", "）", "】", "”", "’" }) do
+	CLOSERS[closer] = true
+end
+
+local function char_at(text, col)
+	local stop = next_boundary(text, col)
+	return text:sub(col + 1, stop), stop
+end
+
+-- the gap after the end of the sentence the cursor is in, or of the next one
+function M.forward_sentence(buf, pos)
+	local last = last_row(buf)
+	local row, col = pos[1], pos[2]
+	local text = line(buf, row)
+	local seen = false
+	while true do
+		if col >= #text then
+			if row == last or (seen and blank(buf, row + 1)) then
+				return moved(pos, row, #text)
+			end
+			row, col = row + 1, 0
+			text = line(buf, row)
+		else
+			local char, stop = char_at(text, col)
+			seen = seen or not char:find("^[ \t]$")
+			if ENDS[char] or ASCII_ENDS[char] then
+				-- 「本当！？」 ends once, after the closer
+				local after = stop
+				while after < #text do
+					local next_char, next_stop = char_at(text, after)
+					if not (CLOSERS[next_char] or ENDS[next_char] or ASCII_ENDS[next_char]) then
+						break
+					end
+					after = next_stop
+				end
+				local rest = text:sub(after + 1)
+				if ENDS[char] or rest == "" or rest:find("^[ \t]") or rest:find("^\u{3000}") then
+					return moved(pos, row, after)
+				end
+			end
+			col = stop
+		end
+	end
+end
+
+local function before(a, b)
+	return a[1] < b[1] or (a[1] == b[1] and a[2] < b[2])
+end
+
+-- past blanks and line breaks, up to the end of the buffer
+local function skip_blanks(buf, pos)
+	local last = last_row(buf)
+	local row, col = pos[1], pos[2]
+	local text = line(buf, row)
+	while true do
+		if col >= #text then
+			if row == last then
+				return { row, col }
+			end
+			row, col = row + 1, 0
+			text = line(buf, row)
+		elseif text:sub(col + 1, col + 1):find("[ \t]") then
+			col = col + 1
+		else
+			return { row, col }
+		end
+	end
+end
+
+-- the start of the sentence the cursor is in, or of the previous one when the cursor is at a start already
+function M.backward_sentence(buf, pos)
+	local row = pos[1]
+	if not blank(buf, row) then
+		while row > 0 and not blank(buf, row - 1) do
+			row = row - 1
+		end
+		local start, found = skip_blanks(buf, { row, 0 }), nil
+		while before(start, pos) do
+			found = start
+			local stop = M.forward_sentence(buf, start)
+			if not (stop and before(stop, pos)) then
+				break
+			end
+			start = skip_blanks(buf, stop)
+		end
+		if found then
+			return moved(pos, found[1], found[2])
+		end
+	end
+	-- the last sentence of the paragraph before
+	row = row - 1
+	while row >= 0 and blank(buf, row) do
+		row = row - 1
+	end
+	if row < 0 then
+		return M.buffer_start(buf, pos)
+	end
+	return M.backward_sentence(buf, { row, #line(buf, row) })
+end
+
 -- the blanks around the cursor on its line, as { from, to }
 function M.blanks_around(buf, pos)
 	local text = line(buf, pos[1])
