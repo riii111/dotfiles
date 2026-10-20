@@ -128,7 +128,7 @@ M.lualine = {
 	-- Mode colors (refreshed)
 	mode_normal = "#7aa2f7", -- calm blue
 	mode_insert = "#73daca", -- teal green
-	mode_visual = "#c678dd", -- purple
+	mode_visual = "#9ece6a", -- green, kept apart from the Emacs mode's purple
 	mode_replace = "#f7768e", -- coral red
 	mode_command = "#e0af68", -- warm yellow
 	mode_emacs = "#c065db", -- GitHub Linguist's Emacs Lisp
