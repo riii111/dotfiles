@@ -151,6 +151,32 @@ function M.backward_paragraph(buf, pos)
 	return moved(pos, row, 0)
 end
 
+-- the blanks around the cursor on its line, as { from, to }
+function M.blanks_around(buf, pos)
+	local text = line(buf, pos[1])
+	local from, to = pos[2], pos[2]
+	while from > 0 and text:sub(from, from):find("[ \t]") do
+		from = from - 1
+	end
+	while to < #text and text:sub(to + 1, to + 1):find("[ \t]") do
+		to = to + 1
+	end
+	return { pos[1], from }, { pos[1], to }
+end
+
+-- the gap after the next char at or after the cursor, over line breaks; nil when there is none
+function M.after_next(buf, pos, char)
+	local last = last_row(buf)
+	local col = pos[2]
+	for row = pos[1], last do
+		local found = line(buf, row):find(char, col + 1, true)
+		if found then
+			return { row, found - 1 + #char }
+		end
+		col = 0
+	end
+end
+
 -- Up to the line break, or the line break itself when only blanks are left before it.
 function M.kill_line_end(buf, pos)
 	local text = line(buf, pos[1])

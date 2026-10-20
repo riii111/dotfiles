@@ -41,6 +41,13 @@ local keys = {
 	["<M-w>"] = "copy_region",
 	["<C-g>"] = "keyboard_quit",
 	["<M-h>"] = "mark_paragraph",
+	["<M-t>"] = "transpose_words",
+	["<M-u>"] = "upcase_word",
+	["<M-l>"] = "downcase_word",
+	["<M-c>"] = "capitalize_word",
+	["<M-Bslash>"] = "delete_horizontal_space",
+	["<M-Space>"] = "just_one_space",
+	["<M-z>"] = "zap_to_char",
 	-- terminals send CTRL-/ as CTRL-_
 	["<C-/>"] = "undo",
 	["<C-_>"] = "undo",
@@ -227,10 +234,12 @@ function on_mode_changed()
 end
 
 -- <C-g>u on both sides makes every command its own undo step without joining the text typed around it
+-- A command that reads a key would read the rest of the mapping instead, so it gets the last <C-g>u itself.
 local function rhs(name)
-	return ("<Cmd>lua require('emacs').close_completion()<CR><C-g>u<Cmd>lua require('emacs').run(%q)<CR><C-g>u"):format(
+	local run = ("<Cmd>lua require('emacs').close_completion()<CR><C-g>u<Cmd>lua require('emacs').run(%q)<CR>"):format(
 		name
 	)
+	return commands[name].reads_key and run or run .. "<C-g>u"
 end
 
 local function install(buf)
@@ -346,13 +355,14 @@ local function killing(target)
 	return {
 		kind = "kill",
 		run = function(buf, pos)
-			local to = target(buf, pos)
-			local backward = to and (to[1] < pos[1] or (to[1] == pos[1] and to[2] < pos[2]))
+			-- before target(), which may read a key of its own (M-z)
 			local continued = last_kill
 				and last_kill.buf == buf
 				and last_kill.tick == vim.b.changedtick
 				and vim.deep_equal(last_kill.pos, pos)
 				and last_kill.key_sequence == key_sequence - 1
+			local to = target(buf, pos)
+			local backward = to and (to[1] < pos[1] or (to[1] == pos[1] and to[2] < pos[2]))
 			if to then
 				edit.store(edit.delete(pos, to), continued and (backward and "prepend" or "append") or "replace")
 			elseif not continued then
@@ -430,6 +440,22 @@ local function cycling(steps)
 		last_cycle = { command = command, step = step, key_sequence = key_sequence }
 	end
 	return command
+end
+
+local function before(a, b)
+	return a[1] < b[1] or (a[1] == b[1] and a[2] < b[2])
+end
+
+-- Changes the next word with convert(text) and moves after it, as M-u, M-l and M-c do.
+local function converting(convert)
+	return {
+		run = function(buf, pos)
+			local to = motion.forward_word(buf, pos)
+			if to then
+				edit.replace(pos, to, convert(edit.text(pos, to)))
+			end
+		end,
+	}
 end
 
 commands = {
@@ -517,6 +543,50 @@ commands = {
 			edit.set_cursor(motion.backward_paragraph(buf, to) or to)
 		end,
 	},
+	-- the word at or before the cursor and the word after it; the cursor ends after both, as in Emacs
+	transpose_words = {
+		run = function(buf, pos)
+			-- backward_word stops at the start of the buffer even before blanks or punctuation, so the start of the
+			-- first word is found back from its end
+			local end1 = motion.forward_word(buf, motion.backward_word(buf, pos) or pos)
+			local start1 = end1 and motion.backward_word(buf, end1)
+			local end2 = end1 and motion.forward_word(buf, end1)
+			local start2 = end2 and motion.backward_word(buf, end2)
+			if not (start2 and not before(start2, end1)) then
+				return
+			end
+			local first, between, second = edit.text(start1, end1), edit.text(end1, start2), edit.text(start2, end2)
+			edit.replace(start1, end2, second .. between .. first)
+		end,
+	},
+	upcase_word = converting(vim.fn.toupper),
+	downcase_word = converting(vim.fn.tolower),
+	capitalize_word = converting(function(text)
+		return vim.fn.substitute(vim.fn.tolower(text), [[\k]], [[\u&]], "")
+	end),
+	delete_horizontal_space = deleting(function(buf, pos)
+		return (motion.blanks_around(buf, pos))
+	end, function(buf, pos)
+		return select(2, motion.blanks_around(buf, pos))
+	end),
+	just_one_space = {
+		run = function(buf, pos)
+			local from, to = motion.blanks_around(buf, pos)
+			if edit.text(from, to) ~= " " then
+				edit.replace(from, to, " ")
+			end
+		end,
+	},
+	-- kills up to and with the next typed character, which is read after the key
+	zap_to_char = vim.tbl_extend(
+		"force",
+		killing(function(buf, pos)
+			local ok, char = pcall(vim.fn.getcharstr)
+			vim.api.nvim_feedkeys(vim.keycode("<C-g>u"), "ni", false)
+			return ok and char ~= "" and motion.after_next(buf, pos, char) or nil
+		end),
+		{ reads_key = true }
+	),
 	undo = {
 		run = function()
 			vim.cmd("silent! undo")
