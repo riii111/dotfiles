@@ -13,7 +13,12 @@ from urllib.parse import parse_qs, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = (
-    ROOT / "dot_codex" / "skills" / "suggested-issue" / "scripts" / "executable_issue-url.py"
+    ROOT
+    / "dot_codex"
+    / "skills"
+    / "suggested-issue"
+    / "scripts"
+    / "executable_issue-url.py"
 )
 
 TRICKY_BODY = """## 背景
@@ -40,26 +45,6 @@ def decode(url):
     parts = urlsplit(url)
     query = parse_qs(parts.query, keep_blank_values=True, strict_parsing=True)
     return parts, {key: values[0] for key, values in query.items()}
-
-
-class BuildUrlTest(unittest.TestCase):
-    def setUp(self):
-        self.mod = load_module()
-
-    def test_round_trip_preserves_title_and_body(self):
-        title = "検索で & と # を含むと失敗する"
-        url = self.mod.build_url("owner/repo", title, TRICKY_BODY)
-        parts, query = decode(url)
-        self.assertEqual(parts.path, "/owner/repo/issues/new")
-        self.assertEqual(query, {"title": title, "body": TRICKY_BODY})
-
-    def test_reserved_characters_are_encoded(self):
-        url = self.mod.build_url("owner/repo", "a&b", "x#y\nz+w")
-        query = urlsplit(url).query
-        self.assertNotIn("#", url)
-        self.assertNotIn("\n", url)
-        self.assertEqual(query.count("&"), 1)
-        self.assertNotIn("+", query)
 
 
 class ParseRemoteTest(unittest.TestCase):
@@ -96,14 +81,21 @@ class MainTest(unittest.TestCase):
             code = self.mod.main(["--body-file", str(self.body_path), *args])
         return code, stdout.getvalue(), stderr.getvalue()
 
-    def test_url_matches_final_body_file(self):
-        code, out, _ = self.run_main("--title", "題名", "--repo", "owner/repo")
+    def test_url_round_trips_final_title_and_body(self):
+        title = "検索で a=1&b=2 と #frag を含むと失敗する"
+        code, out, _ = self.run_main("--title", title, "--repo", "owner/repo")
         self.assertEqual(code, 0)
         result = json.loads(out)
         self.assertEqual(result["repo"], "owner/repo")
         self.assertFalse(result["too_long"])
-        _, query = decode(result["url"])
-        self.assertEqual(query["body"], self.body_path.read_text(encoding="utf-8"))
+        parts, query = decode(result["url"])
+        self.assertEqual((parts.scheme, parts.netloc), ("https", "github.com"))
+        self.assertEqual(parts.path, "/owner/repo/issues/new")
+        self.assertEqual(parts.fragment, "")
+        self.assertEqual(
+            query,
+            {"title": title, "body": self.body_path.read_text(encoding="utf-8")},
+        )
 
     def test_too_long_withholds_url(self):
         code, out, _ = self.run_main(
