@@ -110,6 +110,21 @@ class PrFormatCheckTest(unittest.TestCase):
         body = "close #12\n\nPassing tests flood the log and hide failures.\n"
         self.assertFalse(self.denies(create_command(body, title="ci: trim test logs")))
 
+    def test_denies_broken_japanese_sentences(self):
+        for tail in (
+            "省く。守る対象は保存期間とバケット名。",
+            "省くので、集約すれば、確認は不要になる。",
+        ):
+            body = GOOD_BODY.replace("省く", tail)
+            self.assertTrue(self.denies(create_command(body)), tail)
+
+    def test_accepts_short_japanese_sentences_and_english(self):
+        body = GOOD_BODY.replace("省く", "省く。確認は不要になる。")
+        self.assertFalse(self.denies(create_command(body)))
+        self.use_language("en")
+        body = "close #12\n\nThe log is noisy. Trimming it makes failures visible.\n"
+        self.assertFalse(self.denies(create_command(body, title="ci: trim logs")))
+
 
 if __name__ == "__main__":
     unittest.main()

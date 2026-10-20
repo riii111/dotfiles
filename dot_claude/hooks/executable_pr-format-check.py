@@ -55,6 +55,10 @@ ASCII_WORD = r"[A-Za-z0-9]"
 MIXED_SPACE = re.compile(rf"{JAPANESE}[ \t]+{ASCII_WORD}|{ASCII_WORD}[ \t]+{JAPANESE}")
 HAS_JAPANESE = re.compile(JAPANESE)
 LANGUAGES = {"ja": "日本語", "en": "英語"}
+NOUN_ENDING = re.compile(r"[\u3400-\u9fff\u30a0-\u30ffA-Za-z0-9]$")
+SENTENCE_CLOSERS = "」』）) "
+REASON_CLAUSE = re.compile(r"(?:ので|ため|ことから|から)、")
+CONDITION_CLAUSE = re.compile(r"(?:れば|たら|なら|場合)、")
 
 
 def unquote(value: str) -> str:
@@ -127,6 +131,28 @@ def check_language(language: str, title: str | None, body: str | None) -> list[s
     return []
 
 
+def japanese_sentences(lines: list[str]) -> tuple[list[str], list[str]]:
+    """Return the Japanese sentences of the prose lines and those ended by a full stop."""
+    every, terminated = [], []
+    for line in lines:
+        if ANY_BULLET.match(line):
+            continue
+        parts = line.split("。")
+        every += [part for part in parts if HAS_JAPANESE.search(part)]
+        terminated += [part for part in parts[:-1] if HAS_JAPANESE.search(part)]
+    return every, terminated
+
+
+def check_sentences(lines: list[str]) -> list[str]:
+    every, terminated = japanese_sentences(lines)
+    problems = []
+    if any(NOUN_ENDING.search(s.rstrip(SENTENCE_CLOSERS)) for s in terminated):
+        problems.append("文末を述語で終える。名詞や数字で終わる文がある")
+    if any(REASON_CLAUSE.search(s) and CONDITION_CLAUSE.search(s) for s in every):
+        problems.append("1文に理由と条件を重ねない。文を分ける")
+    return problems
+
+
 def check_title(title: str) -> list[str]:
     problems = []
     if not TITLE_FORMAT.match(title):
@@ -163,6 +189,7 @@ def check_body(body: str) -> list[str]:
         )
     if any(MIXED_SPACE.search(line) for line in lines):
         problems.append("本文の日本語と英語の間にスペースを入れない")
+    problems += check_sentences(lines)
     return problems
 
 
