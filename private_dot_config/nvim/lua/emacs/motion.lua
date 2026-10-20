@@ -183,11 +183,17 @@ function M.forward_sentence(buf, pos)
 			local char, stop = char_at(text, col)
 			seen = seen or not char:find("^[ \t]$")
 			if ENDS[char] or ASCII_ENDS[char] then
+				-- 「本当！？」 ends once, after the closer
 				local after = stop
-				while after < #text and CLOSERS[(char_at(text, after))] do
-					after = select(2, char_at(text, after))
+				while after < #text do
+					local next_char, next_stop = char_at(text, after)
+					if not (CLOSERS[next_char] or ENDS[next_char] or ASCII_ENDS[next_char]) then
+						break
+					end
+					after = next_stop
 				end
-				if ENDS[char] or after == #text or text:sub(after + 1, after + 1):find("[ \t]") then
+				local rest = text:sub(after + 1)
+				if ENDS[char] or rest == "" or rest:find("^[ \t]") or rest:find("^\u{3000}") then
 					return moved(pos, row, after)
 				end
 			end

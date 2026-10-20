@@ -468,6 +468,11 @@ cases["sentences end at 。！？ and at . ! ? before a blank"] = function()
 	)
 	check("|「行く。」と言った。次", "<M-e>", "「行く。」|と言った。次")
 	check("|v1.2 is out. Yes", "<M-e>", "v1.2 is out.| Yes")
+	check("|本当！？次。", "<M-e>", "本当！？|次。")
+	check("本当！？次|。", "<M-a>", "本当！？|次。")
+	check("|「本当？！」次", "<M-e>", "「本当？！」|次")
+	check("|Yes.\u{3000}No.", "<M-e>", "Yes.|\u{3000}No.")
+	check("|Really?! Yes", "<M-e>", "Really?!| Yes")
 
 	-- a line break inside a paragraph is like a blank, and a paragraph ends its last sentence
 	check("first line\nsecond. Th|ird", "<M-a><M-a>", "|first line\nsecond. Third")
