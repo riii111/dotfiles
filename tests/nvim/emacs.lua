@@ -5,6 +5,7 @@
 --   nvim --clean --headless --cmd 'set rtp^=private_dot_config/nvim' -c 'lua dofile("tests/nvim/emacs.lua")({ exit = true })'
 local emacs = require("emacs")
 local edit = require("emacs.edit")
+local region = require("emacs.region")
 
 local T = { snaps = {} }
 _G.emacs_test = T
@@ -38,6 +39,12 @@ local keys = {
 	"<M-r>",
 	"<M-{>",
 	"<M-}>",
+	"<C-w>",
+	"<M-w>",
+	"<C-g>",
+	"<M-h>",
+	"<C-Space>",
+	"<C-@>",
 }
 
 -- "abc|def\nxyz": the lines, with the cursor where "|" is
@@ -65,6 +72,15 @@ local function text()
 	return table.concat(vim.api.nvim_buf_get_lines(0, 0, -1, true), "\n")
 end
 
+-- the highlighted region as { row, col, end_row, end_col }
+local function highlighted()
+	for _, extmark in ipairs(vim.api.nvim_buf_get_extmarks(0, region.namespace, 0, -1, { details = true })) do
+		if extmark[4].hl_group then
+			return { extmark[2], extmark[3], extmark[4].end_row, extmark[4].end_col }
+		end
+	end
+end
+
 function T.snap(label)
 	T.snaps[label] = {
 		text = render(),
@@ -75,6 +91,7 @@ function T.snap(label)
 		screen_row = vim.fn.winline(),
 		top = vim.fn.line("w0"),
 		pos = vim.api.nvim_win_get_cursor(0),
+		region = highlighted(),
 	}
 end
 
@@ -324,6 +341,51 @@ cases["M-y goes back through older kills"] = function()
 	eq("xb", (T.snaps.undone.text:gsub("|", "")), "undo of M-y")
 end
 
+cases["the region from the mark is killed, copied or dropped"] = function()
+	check("ab|cdef", "<C-Space><C-f><C-f><C-w>", "ab|ef", "cd")
+	check("abcd|ef", "<C-Space><C-b><C-b><C-w>", "ab|ef", "cd")
+	check("ab|c\ndef", "<C-Space><C-n><C-w>", "ab|f", "c\nde")
+	check("ab|cd", "<C-@><C-e><C-w>", "ab|", "cd")
+	check("ab|cd", "<C-Space><C-e><M-w><C-y>", "abcdcd|", "cd")
+	-- the mark set right after typing stays: the change came before it
+	check("|", "abc<C-Space><C-b><C-b><C-w>", "a|", "bc")
+	-- a C-w right after another joins the kill in text order
+	check("foo ab|cd", "<C-Space><C-b><C-b><C-w><C-w>", "|cd", "foo ab")
+
+	session("ab|cdef", "<C-Space><C-f><C-f>" .. snap("on") .. "<C-g>" .. snap("quit"))
+	eq({ 0, 2, 0, 4 }, T.snaps.on.region, "highlighted region")
+	eq({ nil, true, "abcd|ef" }, { T.snaps.quit.region, T.snaps.quit.active, T.snaps.quit.text }, "after C-g")
+
+	-- Neovim fires these when it waits for a key, which it does not while the test's keys are queued
+	local idle = "<Cmd>doautocmd CursorMovedI<CR><Cmd>doautocmd TextChangedI<CR>"
+	session("ab|cd", "<C-Space><Right><Right>" .. idle .. snap("arrows") .. "X" .. idle .. snap("typed"))
+	eq({ 0, 2, 0, 4 }, T.snaps.arrows.region, "region stretched by the arrow keys")
+	eq({ nil, "abcdX|" }, { T.snaps.typed.region, T.snaps.typed.text }, "typing ends the region and replaces nothing")
+	session("ab|cd", "<C-Space><C-f>")
+	eq({}, vim.api.nvim_buf_get_extmarks(0, region.namespace, 0, -1, {}), "region after the mode")
+
+	edit.store("kept", "replace")
+	check("ab|cd", "<C-Space><C-w>", "ab|cd", "kept")
+	-- C-y ends the region, so C-w kills the word
+	check("ab|cd", "<C-Space><C-y><C-b><C-w>", "|tcd", "abkep")
+	-- without a region C-w kills the word before the cursor
+	check("foo bar|", "<C-w>", "foo |", "bar")
+
+	check("a\n\nb|1\nb2\n\nc", "<M-h><C-w>", "a\n|\nc", "\nb1\nb2\n")
+	check("a\n\nb|1\nb2", "<M-h><C-w>", "a\n|", "\nb1\nb2")
+
+	-- other keys can set the mark
+	local ok, err = pcall(function()
+		emacs.setup({ set_mark = { "<C-]>" } })
+		check("ab|cd", "<C-]><C-e><C-w>", "ab|", "cd")
+		open("ab|cd")
+		feed("e<Cmd>lua emacs_test.mark_map = vim.fn.maparg('<lt>C-Space>', 'i', false, true).desc<CR><Esc>")
+		assert(T.mark_map ~= "Emacs mode", "C-Space is still mapped after another key was set")
+	end)
+	emacs.setup()
+	assert(ok, err)
+end
+
 cases["kills in a row join in text order"] = function()
 	check("one two thr|ee", "<M-BS><M-BS>", "one |ee", "two thr")
 	check("one t|wo three", "<M-d><M-d>", "one t|", "wo three")
@@ -388,7 +450,7 @@ end
 cases["every edit is one undo step of its own"] = function()
 	edit.store("Y", "replace")
 	-- <Del> and <C-h> run the same commands as <C-d> and <BS>, which the deletion case checks
-	for _, input in ipairs({ "<C-d>", "<BS>", "<C-u>", "<C-k>", "<M-d>", "<M-BS>", "<C-y>" }) do
+	for _, input in ipairs({ "<C-d>", "<BS>", "<C-u>", "<C-k>", "<M-d>", "<M-BS>", "<C-y>", "<C-w>" }) do
 		undo_steps("foo b|ar\nbaz", input)
 	end
 	undo_steps("foo bar|\nbaz", "<C-k>")

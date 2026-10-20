@@ -11,15 +11,26 @@ local function set_cursor(pos)
 	vim.api.nvim_win_set_cursor(0, { pos[1] + 1, pos[2] })
 end
 
+local function ordered(from, to)
+	if from[1] > to[1] or (from[1] == to[1] and from[2] > to[2]) then
+		return to, from
+	end
+	return from, to
+end
+
+-- the text between two positions, in either order
+function M.text(from, to)
+	from, to = ordered(from, to)
+	return table.concat(vim.api.nvim_buf_get_text(0, from[1], from[2], to[1], to[2], {}), "\n")
+end
+
 -- Deletes the text between two positions (in either order), leaves the cursor there and returns the text.
 function M.delete(from, to)
-	if from[1] > to[1] or (from[1] == to[1] and from[2] > to[2]) then
-		from, to = to, from
-	end
-	local lines = vim.api.nvim_buf_get_text(0, from[1], from[2], to[1], to[2], {})
+	local text = M.text(from, to)
+	from, to = ordered(from, to)
 	vim.api.nvim_buf_set_text(0, from[1], from[2], to[1], to[2], {})
 	set_cursor(from)
-	return table.concat(lines, "\n")
+	return text
 end
 
 -- Inserts text at a position, leaves the cursor after it and returns that position.
