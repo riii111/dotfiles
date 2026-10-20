@@ -167,6 +167,26 @@ end
 -- UI component functions
 -- ============================================================================
 
+local function mode()
+	return {
+		"mode",
+		fmt = function(str)
+			return require("emacs").is_active() and "EMACS" or str
+		end,
+		color = function()
+			if require("emacs").is_active() then
+				local colors = get_colors()
+				return {
+					fg = colors and colors.normal_a or "#1a1e29",
+					bg = colors and colors.mode_emacs or "#c065db",
+					gui = "bold",
+				}
+			end
+		end,
+		separator = { left = "", right = "" },
+	}
+end
+
 local function git()
 	local colors = get_colors()
 	local component = {
@@ -635,13 +655,7 @@ return {
 			},
 			sections = {
 				lualine_a = {
-					{
-						"mode",
-						fmt = function(str)
-							return require("emacs").is_active() and "EMACS" or str
-						end,
-						separator = { left = "", right = "" },
-					},
+					mode(),
 				},
 				lualine_b = {
 					git(),
@@ -688,13 +702,7 @@ return {
 					},
 					sections = {
 						lualine_a = {
-							{
-								"mode",
-								fmt = function(str)
-									return require("emacs").is_active() and "EMACS" or str
-								end,
-								separator = { left = "", right = "" },
-							},
+							mode(),
 						},
 						lualine_b = {
 							git(),

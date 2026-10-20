@@ -148,6 +148,19 @@ cases["e starts the mode at the cursor and Esc or CTRL-C ends it"] = function()
 	check("|ab", "e", "e|ab")
 end
 
+cases["the cursor is a block while the mode is on"] = function()
+	local guicursor = vim.o.guicursor
+	open("ab|c")
+	feed("e<Cmd>lua emacs_test.guicursor = vim.o.guicursor<CR><Esc>")
+	eq(guicursor .. ",i-ci:block", T.guicursor, "'guicursor' in the mode")
+	eq(guicursor, vim.o.guicursor, "'guicursor' after the mode")
+
+	-- a value set while the mode was on stays
+	feed("e<Cmd>set guicursor=a:hor20<CR><Esc>")
+	eq("a:hor20", vim.o.guicursor)
+	vim.o.guicursor = guicursor
+end
+
 cases["plain Insert mode and the e motion are unchanged"] = function()
 	open("|abc\nxyz")
 	feed("i<C-e><C-k>a:<Esc>")
@@ -648,12 +661,28 @@ local function completion()
 	eq("blink.cmp", vim.fn.maparg("<C-n>", "i", false, true).desc)
 end
 
+-- the label of the mode in the statusline and the background of its highlight
+function T.mode_label()
+	local status = vim.api.nvim_eval_statusline(vim.o.statusline, { highlights = true })
+	local at = status.str:find("EMACS", 1, true)
+	if not at then
+		return nil
+	end
+	local group
+	for _, highlight in ipairs(status.highlights) do
+		if highlight.start < at then
+			group = highlight.group
+		end
+	end
+	return { "EMACS", vim.api.nvim_get_hl(0, { name = group, link = false }).bg }
+end
+
 local function statusline()
 	open("ab|c")
 	feed(
-		"e<Cmd>lua emacs_test.status = vim.wait(1000, function() return vim.api.nvim_eval_statusline(vim.o.statusline, {}).str:find('EMACS') ~= nil end)<CR><Esc>"
+		"e<Cmd>lua vim.wait(1000, function() return emacs_test.mode_label() ~= nil end); emacs_test.status = emacs_test.mode_label()<CR><Esc>"
 	)
-	eq(true, T.status, "EMACS in the statusline")
+	eq({ "EMACS", 0xc065db }, T.status, "EMACS in the statusline")
 	assert(
 		vim.wait(1000, function()
 			return not vim.api.nvim_eval_statusline(vim.o.statusline, {}).str:find("EMACS")
