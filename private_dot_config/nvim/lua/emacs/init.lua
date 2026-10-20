@@ -355,13 +355,14 @@ local function killing(target)
 	return {
 		kind = "kill",
 		run = function(buf, pos)
-			local to = target(buf, pos)
-			local backward = to and (to[1] < pos[1] or (to[1] == pos[1] and to[2] < pos[2]))
+			-- before target(), which may read a key of its own (M-z)
 			local continued = last_kill
 				and last_kill.buf == buf
 				and last_kill.tick == vim.b.changedtick
 				and vim.deep_equal(last_kill.pos, pos)
 				and last_kill.key_sequence == key_sequence - 1
+			local to = target(buf, pos)
+			local backward = to and (to[1] < pos[1] or (to[1] == pos[1] and to[2] < pos[2]))
 			if to then
 				edit.store(edit.delete(pos, to), continued and (backward and "prepend" or "append") or "replace")
 			elseif not continued then
@@ -545,8 +546,10 @@ commands = {
 	-- the word at or before the cursor and the word after it; the cursor ends after both, as in Emacs
 	transpose_words = {
 		run = function(buf, pos)
-			local start1 = motion.backward_word(buf, pos) or pos
-			local end1 = motion.forward_word(buf, start1)
+			-- backward_word stops at the start of the buffer even before blanks or punctuation, so the start of the
+			-- first word is found back from its end
+			local end1 = motion.forward_word(buf, motion.backward_word(buf, pos) or pos)
+			local start1 = end1 and motion.backward_word(buf, end1)
 			local end2 = end1 and motion.forward_word(buf, end1)
 			local start2 = end2 and motion.backward_word(buf, end2)
 			if not (start2 and not before(start2, end1)) then
