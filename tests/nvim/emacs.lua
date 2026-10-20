@@ -31,6 +31,12 @@ local keys = {
 	"<C-y>",
 	"<C-/>",
 	"<C-_>",
+	"<C-v>",
+	"<M-v>",
+	"<C-l>",
+	"<M-r>",
+	"<M-{>",
+	"<M-}>",
 }
 
 -- "abc|def\nxyz": the lines, with the cursor where "|" is
@@ -66,6 +72,8 @@ function T.snap(label)
 		killed = edit.killed(),
 		buf = vim.api.nvim_get_current_buf(),
 		screen_row = vim.fn.winline(),
+		top = vim.fn.line("w0"),
+		pos = vim.api.nvim_win_get_cursor(0),
 	}
 end
 
@@ -507,6 +515,85 @@ cases["C-n and C-p move by screen lines and keep the column"] = function()
 	check("abc|def\nxy\nabcdef", "<C-e><C-n><C-n>", "abcdef\nxy\nabcdef|")
 	check("abcdef\nx|y\nabcdef", "<C-n>ZZ<C-p><C-p>", "abc|def\nxy\naZZbcdef")
 	check("abc\n|", "<C-n><C-p><C-p>", "|abc\n")
+end
+
+cases["paragraphs are separated by blank lines"] = function()
+	check("a\nb|b\n\nc\nd", "<M-}>", "a\nbb\n|\nc\nd")
+	check("a\nbb\n|\nc\nd\n\n\ne", "<M-}>", "a\nbb\n\nc\nd\n|\n\ne")
+	check("a\nbb\n\nc\nd\n\n|\ne", "<M-}>", "a\nbb\n\nc\nd\n\n\ne|")
+	check("a\nbb\n\nc\nd|", "<M-}>", "a\nbb\n\nc\nd|")
+	check("a\nbb\n \t\nc|c\nd", "<M-{>", "a\nbb\n| \t\ncc\nd")
+	check("a\nbb\n\n|cc", "<M-{>", "a\nbb\n|\ncc")
+	check("a\nbb\n|\ncc", "<M-{>", "|a\nbb\n\ncc")
+	check("a\nb|b\n\ncc", "<M-}><M-}><M-{><M-{>", "|a\nbb\n\ncc")
+end
+
+cases["C-v, M-v, C-l and M-r work on the window"] = function()
+	vim.cmd.new()
+	vim.cmd.resize(10)
+	vim.wo.scrolloff = 0
+	vim.wo.wrap = false
+	local lines = {}
+	for i = 1, 100 do
+		lines[i] = "line " .. i
+	end
+	local spec = table.concat(lines, "\n"):gsub("line 50", "lin|e 50", 1)
+	local function at(label)
+		local snapshot = T.snaps[label]
+		return { snapshot.top, snapshot.pos[1], snapshot.pos[2], snapshot.screen_row, snapshot.active }
+	end
+
+	session(
+		"|" .. table.concat(lines, "\n"),
+		"<C-v>" .. snap("down") .. "<C-v>" .. snap("down2") .. "<M-v><M-v>" .. snap("up")
+	)
+	-- a window of 10 lines scrolls by 8, keeping 2 lines on the screen
+	eq({ 9, 9, 0, 1, true }, at("down"), "C-v")
+	eq({ 17, 17, 0, 1, true }, at("down2"), "C-v again")
+	eq(1, T.snaps.up.top, "M-v")
+
+	-- the state after every command, since a snapshot between them would be a key that ends the cycle
+	local function after_each(input)
+		local run = emacs.run
+		local states = {}
+		emacs.run = function(name)
+			run(name)
+			T.snap("command")
+			table.insert(states, T.snaps.command)
+		end
+		local ok, err = pcall(session, spec, input)
+		emacs.run = run
+		assert(ok, err)
+		return vim.tbl_map(function(state)
+			return { state.top, state.pos[1], state.pos[2], state.screen_row }
+		end, states)
+	end
+	eq(
+		{ 5, 1, 10, 5 },
+		vim.tbl_map(function(state)
+			return state[4]
+		end, after_each("<C-l><C-l><C-l><C-l>")),
+		"screen row of the cursor after C-l"
+	)
+	eq(
+		{ 5, 1, 1, 5 },
+		vim.tbl_map(function(state)
+			return state[4]
+		end, after_each("<C-l><C-l><C-f><C-l>")),
+		"C-l after another key"
+	)
+	local states = after_each("<C-l><C-l><C-l><C-l>")
+	eq({ 50, 3 }, { states[4][2], states[4][3] }, "C-l moves no cursor")
+
+	eq(
+		{ { 46, 50, 3, 5 }, { 46, 50, 0, 5 }, { 46, 46, 0, 1 }, { 46, 55, 0, 10 } },
+		after_each("<C-l><M-r><M-r><M-r>"),
+		"M-r"
+	)
+	vim.cmd.close()
+
+	-- the cursor after the end of the line stays there
+	check("ab\nabc|", "<C-l>", "ab\nabc|")
 end
 
 cases["CTRL-O keeps the mode; leaving the buffer or window ends it for good"] = function()

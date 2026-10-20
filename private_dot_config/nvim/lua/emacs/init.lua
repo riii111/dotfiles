@@ -29,6 +29,12 @@ local keys = {
 	["<M-d>"] = "kill_word",
 	["<M-BS>"] = "backward_kill_word",
 	["<C-y>"] = "yank",
+	["<C-v>"] = "scroll_down",
+	["<M-v>"] = "scroll_up",
+	["<C-l>"] = "recenter",
+	["<M-r>"] = "move_to_window_line",
+	["<M-{>"] = "backward_paragraph",
+	["<M-}>"] = "forward_paragraph",
 	-- terminals send CTRL-/ as CTRL-_
 	["<C-/>"] = "undo",
 	["<C-_>"] = "undo",
@@ -41,6 +47,8 @@ local key_sequence = 0
 local last_kill
 -- the column C-n and C-p aim at, kept while they move the cursor one after another
 local vertical_goal
+-- the step C-l or M-r took last; pressed again right after, they go on to the next step
+local last_cycle
 
 -- defined below, in the order the mode goes through them
 local editable, on_mode_changed, activate, restore, commands, close_completion
@@ -123,6 +131,7 @@ function M.stop()
 	state.active = nil
 	last_kill = nil
 	vertical_goal = nil
+	last_cycle = nil
 	restore(active)
 	vim.cmd.redrawstatus()
 end
@@ -304,38 +313,70 @@ local function killing(target, backward)
 	}
 end
 
+-- Runs a Normal mode command from Insert mode and returns 'curswant'. Normal mode commands cannot put the cursor
+-- after the last character without 'virtualedit'. Setting it recomputes 'curswant', so prepare() runs after it
+-- is set and 'curswant' is read before it is restored.
+local function normal(keys, prepare)
+	local win = vim.api.nvim_get_current_win()
+	local virtualedit = vim.api.nvim_get_option_value("virtualedit", { scope = "local", win = win })
+	local function set_virtualedit(value)
+		vim.api.nvim_cmd({ cmd = "setlocal", args = { "virtualedit=" .. value }, mods = { noautocmd = true } }, {})
+	end
+	set_virtualedit("onemore")
+	if prepare then
+		prepare()
+	end
+	-- without autocommands, Normal mode here is not taken for the end of Insert mode
+	local ok, err = pcall(vim.api.nvim_cmd, {
+		cmd = "normal",
+		args = { vim.keycode(keys) },
+		bang = true,
+		mods = { noautocmd = true },
+	}, {})
+	local curswant = vim.fn.winsaveview().curswant
+	set_virtualedit(virtualedit)
+	assert(ok, err)
+	return curswant
+end
+
 -- gj and gk keep the target column in 'curswant', which Insert mode resets after every command
 local function screen_line(direction)
 	return {
 		kind = "vertical",
 		run = function(_, pos)
 			local win = vim.api.nvim_get_current_win()
-			-- Normal mode commands cannot put the cursor after the last character without 'virtualedit'. Setting
-			-- it recomputes 'curswant', so the column is put back after it is set and read before it is restored.
-			local virtualedit = vim.api.nvim_get_option_value("virtualedit", { scope = "local", win = win })
-			local function set_virtualedit(value)
-				vim.api.nvim_cmd(
-					{ cmd = "setlocal", args = { "virtualedit=" .. value }, mods = { noautocmd = true } },
-					{}
-				)
-			end
-			set_virtualedit("onemore")
-			local goal = vertical_goal
-			if goal and goal.win == win and goal.tick == vim.b.changedtick and vim.deep_equal(goal.pos, pos) then
-				vim.fn.winrestview({ curswant = goal.curswant })
-			end
-			local ok, err = pcall(vim.api.nvim_cmd, {
-				cmd = "normal",
-				args = { "g" .. direction },
-				bang = true,
-				mods = { noautocmd = true },
-			}, {})
-			local curswant = vim.fn.winsaveview().curswant
-			set_virtualedit(virtualedit)
-			assert(ok, err)
+			local curswant = normal("g" .. direction, function()
+				local goal = vertical_goal
+				if goal and goal.win == win and goal.tick == vim.b.changedtick and vim.deep_equal(goal.pos, pos) then
+					vim.fn.winrestview({ curswant = goal.curswant })
+				end
+			end)
 			vertical_goal = { win = win, tick = vim.b.changedtick, pos = cursor(), curswant = curswant }
 		end,
 	}
+end
+
+local function normal_command(keys)
+	return {
+		run = function()
+			normal(keys)
+		end,
+	}
+end
+
+-- Like Emacs' recenter-positions: the middle of the window first, then the top and the bottom.
+local function cycling(steps)
+	local command = {}
+	function command.run()
+		local cycle = last_cycle
+		local step = 1
+		if cycle and cycle.command == command and cycle.key_sequence == key_sequence - 1 then
+			step = cycle.step % #steps + 1
+		end
+		normal(steps[step])
+		last_cycle = { command = command, step = step, key_sequence = key_sequence }
+	end
+	return command
 end
 
 commands = {
@@ -363,6 +404,13 @@ commands = {
 			end
 		end,
 	},
+	scroll_down = normal_command("<C-f>"),
+	scroll_up = normal_command("<C-b>"),
+	recenter = cycling({ "zz", "zt", "zb" }),
+	-- Emacs puts the cursor at the start of the line
+	move_to_window_line = cycling({ "M0", "H0", "L0" }),
+	backward_paragraph = moving(motion.backward_paragraph),
+	forward_paragraph = moving(motion.forward_paragraph),
 	undo = {
 		run = function()
 			vim.cmd("silent! undo")

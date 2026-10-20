@@ -117,6 +117,40 @@ function M.backward_word(buf, pos)
 	return moved(pos, row, col)
 end
 
+local function blank(buf, row)
+	return line(buf, row):find("^[ \t]*$") ~= nil
+end
+
+-- Paragraphs are separated by lines with nothing but blanks, as in Emacs; both stop at the separating line.
+function M.forward_paragraph(buf, pos)
+	local last = last_row(buf)
+	local row = pos[1]
+	while row <= last and blank(buf, row) do
+		row = row + 1
+	end
+	while row <= last and not blank(buf, row) do
+		row = row + 1
+	end
+	if row > last then
+		return M.buffer_end(buf, pos)
+	end
+	return moved(pos, row, 0)
+end
+
+function M.backward_paragraph(buf, pos)
+	local row = pos[1]
+	while row >= 0 and blank(buf, row) do
+		row = row - 1
+	end
+	while row >= 0 and not blank(buf, row) do
+		row = row - 1
+	end
+	if row < 0 then
+		return M.buffer_start(buf, pos)
+	end
+	return moved(pos, row, 0)
+end
+
 -- Up to the line break, or the line break itself when only blanks are left before it.
 function M.kill_line_end(buf, pos)
 	local text = line(buf, pos[1])
