@@ -237,6 +237,10 @@ local function install(buf)
 	local saved = {}
 	vim.api.nvim_buf_call(buf, function()
 		local function map(lhs, name)
+			-- a key given twice would save the mode's own mapping and put it back when the mode ends
+			if saved[lhs] ~= nil then
+				return
+			end
 			local mapping = vim.fn.maparg(lhs, "i", false, true)
 			saved[lhs] = mapping.buffer == 1 and mapping or false
 			vim.keymap.set("i", lhs, rhs(name), { buffer = buf, nowait = true, silent = true, desc = DESC })

@@ -347,8 +347,6 @@ cases["the region from the mark is killed, copied or dropped"] = function()
 	check("ab|c\ndef", "<C-Space><C-n><C-w>", "ab|f", "c\nde")
 	check("ab|cd", "<C-@><C-e><C-w>", "ab|", "cd")
 	check("ab|cd", "<C-Space><C-e><M-w><C-y>", "abcdcd|", "cd")
-	-- the mark set right after typing stays: the change came before it
-	check("|", "abc<C-Space><C-b><C-b><C-w>", "a|", "bc")
 	-- a C-w right after another joins the kill in text order
 	check("foo ab|cd", "<C-Space><C-b><C-b><C-w><C-w>", "|cd", "foo ab")
 
@@ -363,6 +361,17 @@ cases["the region from the mark is killed, copied or dropped"] = function()
 	eq({ nil, "abcdX|" }, { T.snaps.typed.region, T.snaps.typed.text }, "typing ends the region and replaces nothing")
 	session("ab|cd", "<C-Space><C-f>")
 	eq({}, vim.api.nvim_buf_get_extmarks(0, region.namespace, 0, -1, {}), "region after the mode")
+
+	-- the mark set right after typing stays: the change came before it
+	check("|", "abc<C-Space>" .. idle .. "<C-b><C-b>" .. idle .. "<C-w>", "a|", "bc")
+	-- a key given twice is mapped once and comes back unmapped
+	local ok, err = pcall(function()
+		emacs.setup({ set_mark = { "<C-Space>", "<C-Space>", "<C-g>" } })
+		check("ab|cd", "<C-Space><C-e><C-w>", "ab|", "cd")
+		eq({}, buffer_maps(0), "mappings left after a key given twice")
+	end)
+	emacs.setup()
+	assert(ok, err)
 
 	edit.store("kept", "replace")
 	check("ab|cd", "<C-Space><C-w>", "ab|cd", "kept")
