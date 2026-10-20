@@ -1,8 +1,11 @@
 -- Text changes through the buffer API, so no register, mark or 'clipboard' setting is involved.
 local M = {}
 
--- the last killed text, shared by all buffers and kept after the mode ends
-local killed
+-- Killed texts, the latest first, shared by all buffers and kept after the mode ends. C-y puts back the one
+-- at the yank pointer, which a kill puts back on the latest and M-y moves to older ones.
+local MAX_KILLS = 60
+local kills = {}
+local pointer = 1
 
 local function set_cursor(pos)
 	vim.api.nvim_win_set_cursor(0, { pos[1] + 1, pos[2] })
@@ -19,12 +22,13 @@ function M.delete(from, to)
 	return table.concat(lines, "\n")
 end
 
--- Inserts text at a position and leaves the cursor after it.
+-- Inserts text at a position, leaves the cursor after it and returns that position.
 function M.insert(pos, text)
 	local lines = vim.split(text, "\n", { plain = true })
 	vim.api.nvim_buf_set_text(0, pos[1], pos[2], pos[1], pos[2], lines)
-	local row = pos[1] + #lines - 1
-	set_cursor({ row, (#lines == 1 and pos[2] or 0) + #lines[#lines] })
+	local after = { pos[1] + #lines - 1, (#lines == 1 and pos[2] or 0) + #lines[#lines] }
+	set_cursor(after)
+	return after
 end
 
 function M.set_cursor(pos)
@@ -33,17 +37,34 @@ end
 
 -- how: "replace" starts over, "append" and "prepend" join a kill that continues the previous one
 function M.store(text, how)
-	if how == "append" then
-		killed = (killed or "") .. text
-	elseif how == "prepend" then
-		killed = text .. (killed or "")
+	if how == "append" and kills[1] then
+		kills[1] = kills[1] .. text
+	elseif how == "prepend" and kills[1] then
+		kills[1] = text .. kills[1]
 	else
-		killed = text
+		table.insert(kills, 1, text)
+		kills[MAX_KILLS + 1] = nil
 	end
+	pointer = 1
 end
 
+-- the latest kill
 function M.killed()
-	return killed
+	return kills[1]
+end
+
+-- the kill C-y puts back
+function M.to_yank()
+	return kills[pointer]
+end
+
+-- Moves the yank pointer to the next older kill, around to the latest after the oldest, and returns that kill.
+function M.rotate()
+	if #kills == 0 then
+		return nil
+	end
+	pointer = pointer % #kills + 1
+	return kills[pointer]
 end
 
 return M
