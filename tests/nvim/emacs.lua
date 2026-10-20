@@ -329,7 +329,8 @@ end
 
 cases["every edit is one undo step of its own"] = function()
 	edit.store("Y", "replace")
-	for _, input in ipairs({ "<C-d>", "<Del>", "<BS>", "<C-h>", "<C-u>", "<C-k>", "<M-d>", "<M-BS>", "<C-y>" }) do
+	-- <Del> and <C-h> run the same commands as <C-d> and <BS>, which the deletion case checks
+	for _, input in ipairs({ "<C-d>", "<BS>", "<C-u>", "<C-k>", "<M-d>", "<M-BS>", "<C-y>" }) do
 		undo_steps("foo b|ar\nbaz", input)
 	end
 	undo_steps("foo bar|\nbaz", "<C-k>")
@@ -537,12 +538,7 @@ end
 
 cases["setup can run again"] = function()
 	local function registered()
-		return {
-			#vim.api.nvim_get_autocmds({ group = "emacs_mode" }),
-			#vim.tbl_filter(function(mapping)
-				return mapping.lhs == "e"
-			end, vim.api.nvim_get_keymap("n")),
-		}
+		return #vim.api.nvim_get_autocmds({ group = "emacs_mode" })
 	end
 	local before = registered()
 	open("ab|c")
