@@ -1,0 +1,7 @@
+interface:
+  display_name: "Suggested Issue"
+  short_description: "別件の改善案をIssue下書きにし、投稿前の作成リンクを渡す"
+  default_prompt: "$suggested-issue を使って、この改善案のIssue下書きと作成リンクを用意してください。"
+
+policy:
+  allow_implicit_invocation: true
