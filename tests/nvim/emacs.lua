@@ -29,6 +29,7 @@ local keys = {
 	"<M-d>",
 	"<M-BS>",
 	"<C-y>",
+	"<M-y>",
 	"<C-/>",
 	"<C-_>",
 	"<C-v>",
@@ -285,6 +286,40 @@ cases["C-y puts back the last kill, also in other buffers and after the mode"] =
 	check("x|y", "<C-y>", "xc\nde|y")
 	check("x|y", "<C-y><C-y>", "xc\ndec\nde|y")
 	check("a|b", "<C-u><C-y><C-y>", "aa|b", "a")
+end
+
+cases["M-y goes back through older kills"] = function()
+	-- a kill puts the yank pointer back on the latest kill; 60 kills are kept, so the oldest of these 61 is gone
+	local function kills(...)
+		for _, text in ipairs({ ... }) do
+			edit.store(text, "replace")
+		end
+	end
+	local sixty_one = {}
+	for i = 0, 60 do
+		table.insert(sixty_one, "k" .. i)
+	end
+	for count, expected in pairs({ [0] = "xk60|", [2] = "xk58|", [59] = "xk1|", [60] = "xk60|" }) do
+		kills(unpack(sixty_one))
+		check("x|", "<C-y>" .. string.rep("<M-y>", count), expected)
+	end
+
+	-- only right after C-y or M-y
+	kills("a", "b")
+	check("x|", "<M-y>", "x|")
+	check("x|", "<C-y>Z<M-y>", "xbZ|")
+	check("x|", "<C-y><C-b><C-f><M-y>", "xb|")
+
+	-- C-y puts back the kill M-y went to, until the next kill
+	check("x|", "<C-y><M-y> <C-y>", "xa a|")
+	check("x|y", "<C-k><C-y>", "xy|", "y")
+
+	kills("l1\nl2", "s")
+	check("x|y", "<C-y><M-y>", "xl1\nl2|y")
+
+	kills("a", "b")
+	session("x|", "<C-y><M-y><C-/>" .. snap("undone"))
+	eq("xb", (T.snaps.undone.text:gsub("|", "")), "undo of M-y")
 end
 
 cases["kills in a row join in text order"] = function()

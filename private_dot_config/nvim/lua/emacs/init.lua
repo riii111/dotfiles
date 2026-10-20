@@ -29,6 +29,7 @@ local keys = {
 	["<M-d>"] = "kill_word",
 	["<M-BS>"] = "backward_kill_word",
 	["<C-y>"] = "yank",
+	["<M-y>"] = "yank_pop",
 	["<C-v>"] = "scroll_down",
 	["<M-v>"] = "scroll_up",
 	["<C-l>"] = "recenter",
@@ -47,6 +48,8 @@ local key_sequence = 0
 local last_kill
 -- the column C-n and C-p aim at, kept while they move the cursor one after another
 local vertical_goal
+-- where C-y or M-y put the text last; M-y replaces it when it comes right after them
+local last_yank
 -- the step C-l or M-r took last; pressed again right after, they go on to the next step
 local last_cycle
 
@@ -131,6 +134,7 @@ function M.stop()
 	state.active = nil
 	last_kill = nil
 	vertical_goal = nil
+	last_yank = nil
 	last_cycle = nil
 	restore(active)
 	vim.cmd.redrawstatus()
@@ -397,11 +401,31 @@ commands = {
 	kill_word = killing(motion.forward_word, false),
 	backward_kill_word = killing(motion.backward_word, true),
 	yank = {
-		run = function(_, pos)
-			local text = edit.killed()
+		run = function(buf, pos)
+			local text = edit.to_yank()
 			if text then
-				edit.insert(pos, text)
+				local to = edit.insert(pos, text)
+				last_yank = { buf = buf, from = pos, to = to, tick = vim.b.changedtick, key_sequence = key_sequence }
 			end
+		end,
+	},
+	-- does nothing unless it comes right after C-y or M-y, as Emacs refuses to
+	yank_pop = {
+		run = function(buf, pos)
+			local yank = last_yank
+			if
+				not yank
+				or yank.buf ~= buf
+				or yank.tick ~= vim.b.changedtick
+				or not vim.deep_equal(yank.to, pos)
+				or yank.key_sequence ~= key_sequence - 1
+			then
+				return
+			end
+			local text = edit.rotate()
+			edit.delete(yank.from, yank.to)
+			local to = edit.insert(yank.from, text)
+			last_yank = { buf = buf, from = yank.from, to = to, tick = vim.b.changedtick, key_sequence = key_sequence }
 		end,
 	},
 	scroll_down = normal_command("<C-f>"),
