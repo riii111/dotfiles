@@ -638,7 +638,7 @@ return {
 					{
 						"mode",
 						fmt = function(str)
-							return str
+							return require("emacs").is_active() and "EMACS" or str
 						end,
 						separator = { left = "", right = "" },
 					},
@@ -691,7 +691,7 @@ return {
 							{
 								"mode",
 								fmt = function(str)
-									return str
+									return require("emacs").is_active() and "EMACS" or str
 								end,
 								separator = { left = "", right = "" },
 							},
