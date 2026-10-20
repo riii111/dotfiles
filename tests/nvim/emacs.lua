@@ -52,6 +52,11 @@ local keys = {
 	"<M-Bslash>",
 	"<M-Space>",
 	"<M-z>",
+	"<M-a>",
+	"<M-e>",
+	"<M-k>",
+	"<C-s>",
+	"<C-r>",
 }
 
 -- "abc|def\nxyz": the lines, with the cursor where "|" is
@@ -440,6 +445,47 @@ cases["M-z kills up to and with the typed character"] = function()
 	edit.store("kept", "replace")
 	check("a|bc", "<M-z>,", "a|bc", "kept")
 	check("a|bc", "<M-z><Esc>", "a|bc", "kept")
+end
+
+cases["sentences end at 。！？ and at . ! ? before a blank"] = function()
+	local text = "Hello world. Next one! Last?"
+	check("|" .. text, "<M-e>", "Hello world.| Next one! Last?")
+	check("|" .. text, "<M-e><M-e>", "Hello world. Next one!| Last?")
+	check("|" .. text, "<M-e><M-e><M-e><M-e>", text .. "|")
+	check("Hello world. Ne|xt one!", "<M-a>", "Hello world. |Next one!")
+	check("Hello world. |Next one!", "<M-a>", "|Hello world. Next one!")
+	check("|x", "<M-a>", "|x")
+
+	check(
+		"|今日は晴れ。明日は雨！あさっては？",
+		"<M-e><M-e>",
+		"今日は晴れ。明日は雨！|あさっては？"
+	)
+	check(
+		"今日は晴れ。明日は雨！あさ|っては？",
+		"<M-a>",
+		"今日は晴れ。明日は雨！|あさっては？"
+	)
+	check("|「行く。」と言った。次", "<M-e>", "「行く。」|と言った。次")
+	check("|v1.2 is out. Yes", "<M-e>", "v1.2 is out.| Yes")
+
+	-- a line break inside a paragraph is like a blank, and a paragraph ends its last sentence
+	check("first line\nsecond. Th|ird", "<M-a><M-a>", "|first line\nsecond. Third")
+	check("|no end here\nstill\n\nnext.", "<M-e>", "no end here\nstill|\n\nnext.")
+	check("one. two\n\n|three", "<M-a>", "one. |two\n\nthree")
+
+	check("Hello |world. Next.", "<M-k>", "Hello | Next.", "world.")
+	check("Hello |world. Next.", "<M-k><M-k>", "Hello |", "world. Next.")
+end
+
+cases["C-s and C-r search with Vim's search and stay in the mode"] = function()
+	check("ab|c foo bar foo", "<C-s>foo<CR>", "abc |foo bar foo")
+	check("ab|c foo bar foo", "<C-s>foo<CR><C-s><CR>", "abc foo bar |foo")
+	check("foo bar foo|", "<C-r>foo<CR>", "foo bar |foo")
+	check("foo bar foo|", "<C-r>foo<CR><C-r><CR>", "|foo bar foo")
+	check("abc|\nfoo", "<C-s>foo<CR>", "abc\n|foo")
+	check("ab|c foo", "<C-s>fo<Esc>", "ab|c foo")
+	check("ab|c foo", "<C-s>foo<CR>X", "abc X|foo")
 end
 
 cases["kills in a row join in text order"] = function()

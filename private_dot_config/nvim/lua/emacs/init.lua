@@ -48,6 +48,11 @@ local keys = {
 	["<M-Bslash>"] = "delete_horizontal_space",
 	["<M-Space>"] = "just_one_space",
 	["<M-z>"] = "zap_to_char",
+	["<M-a>"] = "backward_sentence",
+	["<M-e>"] = "forward_sentence",
+	["<M-k>"] = "kill_sentence",
+	["<C-s>"] = "search_forward",
+	["<C-r>"] = "search_backward",
 	-- terminals send CTRL-/ as CTRL-_
 	["<C-/>"] = "undo",
 	["<C-_>"] = "undo",
@@ -235,7 +240,12 @@ end
 
 -- <C-g>u on both sides makes every command its own undo step without joining the text typed around it
 -- A command that reads a key would read the rest of the mapping instead, so it gets the last <C-g>u itself.
+-- A command with keys of its own runs them instead.
 local function rhs(name)
+	local own_keys = commands[name].keys
+	if own_keys then
+		return "<Cmd>lua require('emacs').close_completion()<CR><C-g>u" .. own_keys
+	end
 	local run = ("<Cmd>lua require('emacs').close_completion()<CR><C-g>u<Cmd>lua require('emacs').run(%q)<CR>"):format(
 		name
 	)
@@ -587,6 +597,12 @@ commands = {
 		end),
 		{ reads_key = true }
 	),
+	backward_sentence = moving(motion.backward_sentence),
+	forward_sentence = moving(motion.forward_sentence),
+	kill_sentence = killing(motion.forward_sentence),
+	-- Vim's search from i_CTRL-O shows the matches while typing and comes back to the mode at the match
+	search_forward = { keys = "<C-o>/" },
+	search_backward = { keys = "<C-o>?" },
 	undo = {
 		run = function()
 			vim.cmd("silent! undo")
