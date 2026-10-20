@@ -19,6 +19,7 @@
     │   ├── devicons.lua
     │   ├── lazy.lua
     │   └── theme.lua
+    ├── emacs                  # Emacs editing mode entered with `e` (see emacs/README.md; tests/nvim/emacs.lua)
     ├── plugins                # plugin specs (LSP core, UI, tooling)
     │   ├── keymaps.lua        # plugin-dependent keymaps (Telescope, Oil, etc.)
     │   ├── lsp.lua            # lspconfig, none-ls, cmp, symbol-usage

@@ -308,6 +308,7 @@ local function smoke()
 		"Oil did not open the directory"
 	)
 	languages()
+	dofile(vim.env.DOTFILES_NVIM_TESTS .. "/emacs.lua")()
 	healthy()
 end
 
