@@ -316,6 +316,8 @@ cases["M-y goes back through older kills"] = function()
 
 	kills("l1\nl2", "s")
 	check("x|y", "<C-y><M-y>", "xl1\nl2|y")
+	kills("s", "l1\nl2")
+	check("x|y", "<C-y><M-y>", "xs|y")
 
 	kills("a", "b")
 	session("x|", "<C-y><M-y><C-/>" .. snap("undone"))
