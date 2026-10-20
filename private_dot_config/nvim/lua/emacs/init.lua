@@ -218,26 +218,15 @@ function smooth_scrolling()
 	return scroll ~= nil and scroll.scrolling
 end
 
--- Ends the mode once Neovim is still in Normal mode after the command or the animation that went through it.
-local waiting_to_stop
+-- Ends the mode if Neovim is still in Normal mode once the command that went there is over. A step of
+-- neoscroll's animation comes back to Insert mode before anything scheduled runs, so Normal mode then means
+-- the mode was left.
 function stop_when_left(active)
-	if waiting_to_stop == active then
-		return
-	end
-	waiting_to_stop = active
-	local function check()
-		if state.active ~= active then
-			return
-		elseif smooth_scrolling() then
-			vim.defer_fn(check, 10)
-			return
-		end
-		waiting_to_stop = nil
-		if in_normal_mode(vim.api.nvim_get_mode().mode) then
+	vim.schedule(function()
+		if state.active == active and in_normal_mode(vim.api.nvim_get_mode().mode) then
 			M.stop()
 		end
-	end
-	vim.schedule(check)
+	end)
 end
 
 function on_mode_changed()
@@ -326,8 +315,12 @@ end
 -- Puts back the cursor and what was mapped before, unless something changed them in the meantime.
 function restore(active)
 	local cursor_shape = active.cursor
+	local scroll = package.loaded["neoscroll.scroll"]
 	if cursor_shape and vim.o.guicursor == cursor_shape.set then
 		vim.o.guicursor = cursor_shape.saved
+	elseif cursor_shape and scroll and scroll.scrolling and scroll.guicursor == cursor_shape.set then
+		-- neoscroll hides the cursor while it scrolls and puts back what it saved when it is done
+		scroll.guicursor = cursor_shape.saved
 	end
 	local buf = active.buf
 	if not vim.api.nvim_buf_is_valid(buf) then

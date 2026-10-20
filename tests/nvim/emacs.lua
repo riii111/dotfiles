@@ -800,8 +800,8 @@ cases["C-v, M-v, C-l and M-r work on the window"] = function()
 	eq(1, T.snaps.up.top, "M-v")
 
 	if smooth then
-		-- the animation passes through Normal mode without ending the mode, and Esc during it ends the mode
-		-- once the animation is over, with the cursor shape put back
+		-- the animation passes through Normal mode without ending the mode, and Esc during it ends the mode with
+		-- the cursor shape put back once neoscroll stops hiding the cursor
 		local guicursor = vim.o.guicursor
 		open(spec)
 		feed("e<C-v>" .. snap("scrolled") .. "<C-v><Esc>")
@@ -814,6 +814,33 @@ cases["C-v, M-v, C-l and M-r work on the window"] = function()
 		)
 		settle()
 		eq({ guicursor, {} }, { vim.o.guicursor, buffer_maps(0) }, "after Esc during the animation")
+
+		-- the mode ends right after Esc, before the animation is over, so that Insert mode entered again during
+		-- the animation is plain Insert mode
+		open(spec)
+		feed("e<C-v><Esc>")
+		local scrolling_then
+		assert(
+			vim.wait(2000, function()
+				scrolling_then = require("neoscroll.scroll").scrolling
+				return not emacs.is_active()
+			end, 1),
+			"the mode stays on after Esc during the animation"
+		)
+		eq(true, scrolling_then, "the mode ended only after the animation")
+		settle()
+
+		-- leaving the buffer during the animation puts the cursor shape back after neoscroll shows it again
+		open(spec)
+		feed("e<C-v><C-o>:enew<CR>")
+		table.insert(buffers, vim.api.nvim_get_current_buf())
+		settle()
+		feed("<Esc>")
+		eq(
+			{ false, guicursor },
+			{ emacs.is_active(), vim.o.guicursor },
+			"after leaving the buffer during the animation"
+		)
 	end
 
 	-- the state after every command, since a snapshot between them would be a key that ends the cycle
