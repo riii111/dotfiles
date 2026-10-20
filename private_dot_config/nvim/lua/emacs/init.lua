@@ -21,6 +21,9 @@ local keys = {
 	["<M-b>"] = "backward_word",
 	["<M-lt>"] = "buffer_start",
 	["<M->>"] = "buffer_end",
+	-- with the kitty keyboard protocol, Option+Shift+, arrives as <M-S-,>, not <M-lt>
+	["<M-S-,>"] = "buffer_start",
+	["<M-S-.>"] = "buffer_end",
 	["<C-d>"] = "delete_char",
 	["<Del>"] = "delete_char",
 	["<BS>"] = "delete_backward_char",
@@ -37,6 +40,8 @@ local keys = {
 	["<M-r>"] = "move_to_window_line",
 	["<M-{>"] = "backward_paragraph",
 	["<M-}>"] = "forward_paragraph",
+	["<M-S-[>"] = "backward_paragraph",
+	["<M-S-]>"] = "forward_paragraph",
 	["<C-w>"] = "kill_region",
 	["<M-w>"] = "copy_region",
 	["<C-g>"] = "keyboard_quit",
@@ -81,6 +86,7 @@ end
 
 -- defined below, in the order the mode goes through them
 local editable, on_mode_changed, activate, restore, commands, close_completion
+local smooth_scrolling, stop_when_left
 
 -- opts.set_mark: the keys that set the mark, replacing C-SPC and C-@
 function M.setup(opts)
@@ -206,6 +212,34 @@ local function in_normal_mode(mode)
 	return mode == "n" or mode == "nt" or vim.startswith(mode, "t")
 end
 
+-- neoscroll animates C-v, M-v and C-l with :normal from a timer, which passes through Normal mode every step
+function smooth_scrolling()
+	local scroll = package.loaded["neoscroll.scroll"]
+	return scroll ~= nil and scroll.scrolling
+end
+
+-- Ends the mode once Neovim is still in Normal mode after the command or the animation that went through it.
+local waiting_to_stop
+function stop_when_left(active)
+	if waiting_to_stop == active then
+		return
+	end
+	waiting_to_stop = active
+	local function check()
+		if state.active ~= active then
+			return
+		elseif smooth_scrolling() then
+			vim.defer_fn(check, 10)
+			return
+		end
+		waiting_to_stop = nil
+		if in_normal_mode(vim.api.nvim_get_mode().mode) then
+			M.stop()
+		end
+	end
+	vim.schedule(check)
+end
+
 function on_mode_changed()
 	local new = vim.v.event.new_mode
 	local pending = state.pending
@@ -224,17 +258,12 @@ function on_mode_changed()
 		return
 	end
 	local old = vim.v.event.old_mode
-	if vim.startswith(old, "i") or vim.startswith(old, "R") then
+	if (vim.startswith(old, "i") or vim.startswith(old, "R")) and not smooth_scrolling() then
 		M.stop()
 	else
 		-- i_CTRL-O passes through niI and the modes of its command, also Normal mode for :normal, and then comes
 		-- back to Insert mode; only :stopinsert and the like stay in Normal mode
-		local active = state.active
-		vim.schedule(function()
-			if state.active == active and in_normal_mode(vim.api.nvim_get_mode().mode) then
-				M.stop()
-			end
-		end)
+		stop_when_left(state.active)
 	end
 end
 
@@ -428,25 +457,23 @@ local function screen_line(direction)
 	}
 end
 
-local function normal_command(keys)
-	return {
-		keeps_region = true,
-		run = function()
-			normal(keys)
-		end,
-	}
-end
-
 -- Like Emacs' recenter-positions: the middle of the window first, then the top and the bottom.
 local function cycling(steps)
 	local command = { keeps_region = true }
+	local function step_with(step)
+		if type(step) == "string" then
+			normal(step)
+		else
+			step()
+		end
+	end
 	function command.run()
 		local cycle = last_cycle
 		local step = 1
 		if cycle and cycle.command == command and cycle.key_sequence == key_sequence - 1 then
 			step = cycle.step % #steps + 1
 		end
-		normal(steps[step])
+		step_with(steps[step])
 		last_cycle = { command = command, step = step, key_sequence = key_sequence }
 	end
 	return command
@@ -466,6 +493,32 @@ local function converting(convert)
 			end
 		end,
 	}
+end
+
+-- the duration the Normal mode scrolling keys of this config give neoscroll
+local SCROLL_DURATION = 100
+
+-- runs the neoscroll function when neoscroll is loaded, else the Normal mode keys
+local function smooth(keys, animate)
+	return function()
+		if package.loaded["neoscroll"] then
+			animate(require("neoscroll"))
+		else
+			normal(keys)
+		end
+	end
+end
+
+local scroll_down = smooth("<C-f>", function(neoscroll)
+	neoscroll.ctrl_f({ duration = SCROLL_DURATION })
+end)
+local scroll_up = smooth("<C-b>", function(neoscroll)
+	neoscroll.ctrl_b({ duration = SCROLL_DURATION })
+end)
+local function recenter(keys)
+	return smooth(keys, function(neoscroll)
+		neoscroll[keys]({ half_win_duration = SCROLL_DURATION })
+	end)
 end
 
 commands = {
@@ -513,9 +566,9 @@ commands = {
 			last_yank = { buf = buf, from = yank.from, to = to, tick = vim.b.changedtick, key_sequence = key_sequence }
 		end,
 	},
-	scroll_down = normal_command("<C-f>"),
-	scroll_up = normal_command("<C-b>"),
-	recenter = cycling({ "zz", "zt", "zb" }),
+	scroll_down = { keeps_region = true, run = scroll_down },
+	scroll_up = { keeps_region = true, run = scroll_up },
+	recenter = cycling({ recenter("zz"), recenter("zt"), recenter("zb") }),
 	-- Emacs puts the cursor at the start of the line
 	move_to_window_line = cycling({ "M0", "H0", "L0" }),
 	backward_paragraph = moving(motion.backward_paragraph),

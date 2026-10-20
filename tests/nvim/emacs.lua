@@ -39,6 +39,10 @@ local keys = {
 	"<M-r>",
 	"<M-{>",
 	"<M-}>",
+	"<M-S-,>",
+	"<M-S-.>",
+	"<M-S-[>",
+	"<M-S-]>",
 	"<C-w>",
 	"<M-w>",
 	"<C-g>",
@@ -93,7 +97,17 @@ local function highlighted()
 	end
 end
 
+-- waits for neoscroll's animation, when C-v, M-v or C-l started one
+local function settle()
+	if package.loaded["neoscroll.scroll"] then
+		vim.wait(2000, function()
+			return not require("neoscroll.scroll").scrolling
+		end, 5)
+	end
+end
+
 function T.snap(label)
+	settle()
 	T.snaps[label] = {
 		text = render(),
 		mode = vim.fn.mode(),
@@ -246,6 +260,9 @@ cases["line and buffer ends"] = function()
 	check("a\nb|c\nd", "<M-lt>", "|a\nbc\nd")
 	check("a\nb|c\nde", "<M->>", "a\nbc\nde|")
 	check("a\nb|c\n", "<M->>", "a\nbc\n|")
+	-- what Option+Shift+, and Option+Shift+. send through the kitty keyboard protocol
+	check("a\nb|c\nd", "<M-S-,>", "|a\nbc\nd")
+	check("a\nb|c\nde", "<M-S-.>", "a\nbc\nde|")
 end
 
 cases["words follow iskeyword and cross lines"] = function()
@@ -746,6 +763,8 @@ cases["paragraphs are separated by blank lines"] = function()
 	check("a\nbb\n\n|cc", "<M-{>", "a\nbb\n|\ncc")
 	check("a\nbb\n|\ncc", "<M-{>", "|a\nbb\n\ncc")
 	check("a\nb|b\n\ncc", "<M-}><M-}><M-{><M-{>", "|a\nbb\n\ncc")
+	check("a\nb|b\n\ncc", "<M-S-]>", "a\nbb\n|\ncc")
+	check("a\nbb\n\nc|c", "<M-S-[>", "a\nbb\n|\ncc")
 end
 
 cases["C-v, M-v, C-l and M-r work on the window"] = function()
@@ -758,6 +777,8 @@ cases["C-v, M-v, C-l and M-r work on the window"] = function()
 		lines[i] = "line " .. i
 	end
 	local spec = table.concat(lines, "\n"):gsub("line 50", "lin|e 50", 1)
+	-- the full configuration lazy-loads neoscroll, which animates these keys
+	local smooth = pcall(require, "neoscroll")
 	local function at(label)
 		local snapshot = T.snaps[label]
 		return { snapshot.top, snapshot.pos[1], snapshot.pos[2], snapshot.screen_row, snapshot.active }
@@ -767,10 +788,33 @@ cases["C-v, M-v, C-l and M-r work on the window"] = function()
 		"|" .. table.concat(lines, "\n"),
 		"<C-v>" .. snap("down") .. "<C-v>" .. snap("down2") .. "<M-v><M-v>" .. snap("up")
 	)
-	-- a window of 10 lines scrolls by 8, keeping 2 lines on the screen
-	eq({ 9, 9, 0, 1, true }, at("down"), "C-v")
-	eq({ 17, 17, 0, 1, true }, at("down2"), "C-v again")
+	if smooth then
+		-- neoscroll scrolls a whole window and the cursor with it
+		eq({ 11, 11, 0, 1, true }, at("down"), "C-v")
+		eq({ 21, 21, 0, 1, true }, at("down2"), "C-v again")
+	else
+		-- a window of 10 lines scrolls by 8, keeping 2 lines on the screen
+		eq({ 9, 9, 0, 1, true }, at("down"), "C-v")
+		eq({ 17, 17, 0, 1, true }, at("down2"), "C-v again")
+	end
 	eq(1, T.snaps.up.top, "M-v")
+
+	if smooth then
+		-- the animation passes through Normal mode without ending the mode, and Esc during it ends the mode
+		-- once the animation is over, with the cursor shape put back
+		local guicursor = vim.o.guicursor
+		open(spec)
+		feed("e<C-v>" .. snap("scrolled") .. "<C-v><Esc>")
+		eq(true, T.snaps.scrolled.active, "the mode after C-v")
+		assert(
+			vim.wait(2000, function()
+				return not emacs.is_active()
+			end, 5),
+			"the mode stays on after Esc during the animation"
+		)
+		settle()
+		eq({ guicursor, {} }, { vim.o.guicursor, buffer_maps(0) }, "after Esc during the animation")
+	end
 
 	-- the state after every command, since a snapshot between them would be a key that ends the cycle
 	local function after_each(input)
