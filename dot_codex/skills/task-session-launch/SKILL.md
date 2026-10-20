@@ -16,7 +16,7 @@ description: |
    Codexは`sandbox_permissions: require_escalated`を付ける。
    Claudeはそのまま実行する（サンドボックス対象外）。
    パイプ・リダイレクト・`cd`などを付けず単独で実行する（付けると対象外にならない）。
-   - 既定はclaude-opus-5-5・medium。
+   - 既定はclaude-sonnet-5-5・high。
      ユーザーが別モデルを指定した場合だけ`--model`・`--thinking`を渡す。
 4. 出力のthreadId・model・effortを報告する。
    失敗時は理由を報告して停止し、create_threadを直接呼ばない。
