@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"maps"
 	"strconv"
@@ -24,6 +25,8 @@ type Daemon struct {
 	mu   sync.Mutex
 	st   *State
 	wake chan struct{}
+
+	launchMu sync.Mutex
 }
 
 func newDaemon(t Tools, store Store, st *State, logger *log.Logger) *Daemon {
@@ -153,102 +156,152 @@ func (d *Daemon) signal() {
 	}
 }
 
+// Up to maxNotifications notifications wait for an answer at once, so one left on screen
+// does not hold back the requests detected after it.
 func (d *Daemon) notifyLoop(ctx context.Context) {
-	for ctx.Err() == nil {
-		if d.handleNext(ctx) {
-			continue
-		}
+	var wg sync.WaitGroup
+	defer wg.Wait()
+	slots := make(chan struct{}, d.tools.Cfg.MaxNotifications)
+	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-d.wake:
+		case slots <- struct{}{}:
 		}
+		req := d.claim()
+		if req == nil {
+			<-slots
+			select {
+			case <-ctx.Done():
+				return
+			case <-d.wake:
+			}
+			continue
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			d.handle(ctx, *req)
+			<-slots
+			// A freed slot may let a request that was waiting for it through.
+			d.signal()
+		}()
 	}
 }
 
-// Shows the oldest queued request and acts on the answer. Reports whether there was one.
-func (d *Daemon) handleNext(ctx context.Context) bool {
+// Marks the oldest queued request as being notified and returns a copy, or nil when none is queued
+// or the mark could not be saved.
+func (d *Daemon) claim() *Request {
 	d.mu.Lock()
+	defer d.mu.Unlock()
 	req := d.st.nextQueued()
 	if req == nil {
-		d.mu.Unlock()
-		return false
+		return nil
 	}
+	prev := *req
 	req.Status, req.UpdatedAt = StatusNotifying, d.now()
-	snapshot := *req
-	err := d.store.Save(d.st)
-	d.mu.Unlock()
-	if err != nil {
+	if err := d.store.Save(d.st); err != nil {
+		// Left queued, so the next wake-up tries again.
+		*req = prev
 		d.log.Printf("save state: %v", err)
-		return false
+		return nil
 	}
+	snapshot := *req
+	return &snapshot
+}
 
+// Shows one request and acts on the answer.
+func (d *Daemon) handle(ctx context.Context, req Request) {
 	t := d.tools
-	notice := Notice{Key: snapshot.Key, PR: PullRequest{Repo: snapshot.Repo, Number: snapshot.Number, Title: snapshot.Title}, Requester: snapshot.Requester, Team: snapshot.Team}
+	notice := Notice{Key: req.Key, PR: PullRequest{Repo: req.Repo, Number: req.Number, Title: req.Title}, Requester: req.Requester, Team: req.Team}
 	sel, err := notify(ctx, t.R, t.Cmds.Alerter, notice, t.Cfg.Choices, t.Cfg.NotificationTimeoutSeconds)
 	if ctx.Err() != nil {
 		// Stopping: the request stays notifying and is shown again after the restart.
-		return false
+		return
 	}
 	if err != nil {
-		d.log.Printf("notify %s: %v", snapshot.Key, err)
-		d.update(snapshot.Key, func(r *Request) { r.Status, r.Error = StatusQueued, err.Error() })
-		// Retried after a poll interval rather than in a tight loop.
-		_ = d.sleep(ctx, time.Duration(t.Cfg.PollIntervalSeconds)*time.Second)
-		return true
+		d.log.Printf("notify %s: %v", req.Key, err)
+		// Queued again after a poll interval rather than retried in a tight loop.
+		if d.sleep(ctx, time.Duration(t.Cfg.PollIntervalSeconds)*time.Second) != nil {
+			return
+		}
+		d.logSave(d.update(req.Key, func(r *Request) { r.Status, r.Error = StatusQueued, err.Error() }))
+		return
 	}
 
 	switch sel.Outcome {
 	case Declined:
-		d.update(snapshot.Key, func(r *Request) { r.Status = StatusDeclined })
+		d.logSave(d.update(req.Key, func(r *Request) { r.Status = StatusDeclined }))
 	case TimedOut:
-		d.update(snapshot.Key, func(r *Request) { r.Status = StatusTimeout })
+		d.logSave(d.update(req.Key, func(r *Request) { r.Status = StatusTimeout }))
 	case Dismissed:
-		d.update(snapshot.Key, func(r *Request) { r.Status = StatusDismissed })
+		d.logSave(d.update(req.Key, func(r *Request) { r.Status = StatusDismissed }))
 	case Chosen:
-		d.launch(ctx, snapshot, sel.Choice)
-		return true
+		d.launch(ctx, req, sel.Choice)
+		return
 	}
-	d.log.Printf("%s: %s", snapshot.Key, sel.Outcome)
-	return true
+	d.log.Printf("%s: %s", req.Key, sel.Outcome)
 }
 
 func (d *Daemon) launch(ctx context.Context, req Request, ch *Choice) {
 	// Recorded before anything is opened, so a restart never opens the same request twice.
-	if !d.update(req.Key, func(r *Request) { r.Status, r.Choice, r.Error = StatusLaunching, ch.ID, "" }) {
+	// Without that record nothing is opened.
+	if err := d.update(req.Key, func(r *Request) { r.Status, r.Choice, r.Error = StatusLaunching, ch.ID, "" }); err != nil {
+		d.log.Printf("%s: not launched: %v", req.Key, err)
+		d.reportFailure(ctx, req, err)
 		return
 	}
 	d.log.Printf("%s: chose %s", req.Key, ch.ID)
+	// Worktrees of one checkout are added one at a time.
+	d.launchMu.Lock()
 	res, err := launch(ctx, d.tools, ch, req.Repo, req.Number, req.Requester)
-	d.update(req.Key, func(r *Request) {
+	d.launchMu.Unlock()
+	d.logSave(d.update(req.Key, func(r *Request) {
 		r.HeadSHA, r.Worktree = res.PR.HeadSHA, res.Worktree
 		if err != nil {
 			r.Status, r.Error = StatusFailed, err.Error()
 		} else {
 			r.Status = StatusLaunched
 		}
-	})
+	}))
 	if err != nil {
 		d.log.Printf("%s: launch failed: %v", req.Key, err)
-		if nerr := notifyFailure(ctx, d.tools.R, d.tools.Cmds.Osascript, req.Repo+" #"+strconv.Itoa(req.Number), "レビューを開始できませんでした: "+err.Error()); nerr != nil {
-			d.log.Printf("%s: failure notification: %v", req.Key, nerr)
-		}
+		d.reportFailure(ctx, req, err)
 		return
 	}
 	d.log.Printf("%s: opened %s at %s", req.Key, res.Worktree, res.PR.HeadSHA)
 }
 
-func (d *Daemon) update(key string, change func(*Request)) bool {
+func (d *Daemon) reportFailure(ctx context.Context, req Request, err error) {
+	subtitle := req.Repo + " #" + strconv.Itoa(req.Number)
+	if nerr := notifyFailure(ctx, d.tools.R, d.tools.Cmds.Osascript, subtitle, "レビューを開始できませんでした: "+err.Error()); nerr != nil {
+		d.log.Printf("%s: failure notification: %v", req.Key, nerr)
+	}
+}
+
+var errUnknownRequest = errors.New("request is not in the state")
+
+// Applies the change and saves it. On a failed save the change is undone in memory too,
+// so memory never claims a step the state file does not hold.
+func (d *Daemon) update(key string, change func(*Request)) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	req, ok := d.st.Requests[key]
 	if !ok {
-		return false
+		return errUnknownRequest
 	}
+	prev := *req
 	change(req)
 	req.UpdatedAt = d.now()
 	if err := d.store.Save(d.st); err != nil {
-		d.log.Printf("save state: %v", err)
+		*req = prev
+		return fmt.Errorf("save state: %w", err)
 	}
-	return true
+	return nil
+}
+
+func (d *Daemon) logSave(err error) {
+	if err != nil {
+		d.log.Print(err)
+	}
 }

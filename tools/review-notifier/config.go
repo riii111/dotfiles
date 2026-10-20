@@ -20,8 +20,10 @@ type Config struct {
 	PollIntervalSeconds        int      `json:"pollIntervalSeconds"`
 	WorktreeRoot               string   `json:"worktreeRoot"`
 	NotificationTimeoutSeconds int      `json:"notificationTimeoutSeconds"`
-	Commands                   Commands `json:"commands"`
-	Choices                    []Choice `json:"choices"`
+	// Notifications waiting for an answer at the same time; more requests wait in the queue.
+	MaxNotifications int      `json:"maxNotifications"`
+	Commands         Commands `json:"commands"`
+	Choices          []Choice `json:"choices"`
 }
 
 // Absolute paths that replace the fixed-directory lookup.
@@ -58,6 +60,8 @@ const (
 	defaultTimeoutSeconds = 1800
 	defaultPollSeconds    = 60
 	minPollSeconds        = 30
+	defaultNotifications  = 3
+	maxNotifications      = 10
 )
 
 func defaultConfigPath(home string) string {
@@ -108,6 +112,12 @@ func (c *Config) resolve(env Env) error {
 	}
 	if c.PollIntervalSeconds < minPollSeconds {
 		return fmt.Errorf("pollIntervalSeconds must be at least %d", minPollSeconds)
+	}
+	if c.MaxNotifications == 0 {
+		c.MaxNotifications = defaultNotifications
+	}
+	if c.MaxNotifications < 1 || c.MaxNotifications > maxNotifications {
+		return fmt.Errorf("maxNotifications must be between 1 and %d", maxNotifications)
 	}
 	for i, team := range c.Teams {
 		if !repoName.MatchString(team) {

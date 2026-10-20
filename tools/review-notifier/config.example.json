@@ -5,6 +5,7 @@
   "teams": [],
   "pollIntervalSeconds": 60,
   "notificationTimeoutSeconds": 1800,
+  "maxNotifications": 3,
   "choices": [
     {
       "id": "adr",

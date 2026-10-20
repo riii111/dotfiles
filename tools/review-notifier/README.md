@@ -7,7 +7,7 @@
 flowchart LR
   L[launchd] --> P[定期確認<br/>gh api]
   P --> S[(state.json<br/>依頼イベント単位)]
-  S --> Q[通知キュー<br/>1件ずつ]
+  S --> Q[通知キュー<br/>同時に最大3件]
   Q --> A[alerter]
   A -->|Skillを選択| W[head SHAに固定した<br/>専用worktree]
   W --> D[codex://new<br/>prompt・path]
@@ -24,16 +24,19 @@ flowchart LR
 - 重複：依頼イベント単位で記録する。
   同じPRへの再依頼は新しい依頼として通知し、コメントやコミットの追加では再通知しない。
   初回は既存の依頼を基準として記録するだけで、通知しない。
-- 通知：確認処理とは別に、キューから1件ずつ表示する。
+- 通知：確認処理とは別に、キューから表示する。
+  応答待ちの通知は`maxNotifications`件まで同時に出すため、放置した通知があっても後の依頼を表示できる。
   見送る・閉じる・本文クリック・タイムアウトでは何も起動せず、同じ依頼を再表示しない。
   通知中に停止した依頼は、再起動後にもう一度表示する。
 - 起動：Skillを選んだ時点のPRを読み直し、そのhead SHAに固定したdetached worktreeを作る。
   元のcheckoutにはobjectを取得するだけで、branch・HEAD・作業ツリーは変更しない。
-  worktreeは自動で削除しない。
+  同じheadのworktreeは、変更が残っていなければ再利用し、残っていれば番号付きの別のworktreeを作る。
+  worktreeは自動で削除せず、残った変更も破棄しない。
   `codex://new?prompt=…&path=<worktree>`を開き、プロンプトは入力済み・未送信になる。
   スレッドでEnterを押すとレビューが始まる。
   起動中の記録が残ったまま停止した依頼は、二重に開かないよう失敗として扱う。
 - 失敗：リポジトリのcheckoutが未設定・originが違う・取得できないなどの場合は、cloneや別ディレクトリでの起動をせず、理由を通知する。
+  検索結果が欠けている場合も失敗として扱い、取り下げと誤認しない。
   APIの失敗やレート制限では、間隔を倍にしながら（最大15分）確認を続ける。
 - 書き込み：GitHubの通知の既読化、レビュー投稿、Approve、マージは行わない。
 
@@ -77,8 +80,11 @@ cp ~/ghq/github.com/riii111/dotfiles/tools/review-notifier/config.example.json ~
   省略時は60、最小30。
 - `notificationTimeoutSeconds`：通知を閉じるまでの秒数。
   省略時は1800。
+- `maxNotifications`：応答待ちで同時に出す通知の数。
+  省略時は3、最大10。
+  超えた依頼は先の通知が閉じるまで待つ。
 - `worktreeRoot`：省略時は`~/.local/share/review-notifier/worktrees`。
-  `<owner>/<repo>/pr-<番号>-<SHA先頭12桁>`に作る。
+  `<owner>/<repo>/pr-<番号>-<SHA先頭12桁>`（2つ目以降は`-2`などを付ける）に作る。
 - `commands`：`gh`・`git`・`alerter`・`open`・`osascript`の絶対パス。
   省略時はNix profile・`/opt/homebrew/bin`・`/usr/bin`などの固定ディレクトリから探し、`PATH`は使わない。
 - `choices`：通知のメニューに並ぶ順の選択肢。

@@ -52,29 +52,38 @@ func requestQueries(teams []string) []string {
 	return queries
 }
 
+// Search answers at most 1000 results; past that the oldest updated requests are not seen.
 func searchPRs(ctx context.Context, r Runner, gh, query string) ([]searchHit, error) {
-	out, err := r.Run(ctx, gh, "api", "-X", "GET", "search/issues", "-f", "q="+query, "-f", "per_page=100", "-f", "sort=updated")
+	out, err := r.Run(ctx, gh, "api", "--paginate", "-X", "GET", "search/issues", "-f", "q="+query, "-f", "per_page=100", "-f", "sort=updated")
 	if err != nil {
 		return nil, err
 	}
-	var res struct {
-		Items []struct {
+	type page struct {
+		Incomplete bool `json:"incomplete_results"`
+		Items      []struct {
 			Number        int    `json:"number"`
 			Title         string `json:"title"`
 			UpdatedAt     string `json:"updated_at"`
 			RepositoryURL string `json:"repository_url"`
 		} `json:"items"`
 	}
-	if err := json.Unmarshal(out, &res); err != nil {
+	pages, err := decodeAll[page](out)
+	if err != nil {
 		return nil, fmt.Errorf("search %q: %w", query, err)
 	}
-	hits := make([]searchHit, 0, len(res.Items))
-	for _, it := range res.Items {
-		repo := strings.TrimPrefix(it.RepositoryURL, "https://api.github.com/repos/")
-		if !repoName.MatchString(repo) || it.Number <= 0 {
-			return nil, fmt.Errorf("search %q: unexpected item %s#%d", query, it.RepositoryURL, it.Number)
+	var hits []searchHit
+	for _, p := range pages {
+		// A partial answer would make missing requests look withdrawn.
+		if p.Incomplete {
+			return nil, fmt.Errorf("search %q: incomplete results", query)
 		}
-		hits = append(hits, searchHit{Repo: repo, Number: it.Number, Title: it.Title, UpdatedAt: it.UpdatedAt})
+		for _, it := range p.Items {
+			repo := strings.TrimPrefix(it.RepositoryURL, "https://api.github.com/repos/")
+			if !repoName.MatchString(repo) || it.Number <= 0 {
+				return nil, fmt.Errorf("search %q: unexpected item %s#%d", query, it.RepositoryURL, it.Number)
+			}
+			hits = append(hits, searchHit{Repo: repo, Number: it.Number, Title: it.Title, UpdatedAt: it.UpdatedAt})
+		}
 	}
 	return hits, nil
 }
@@ -101,21 +110,33 @@ func fetchEvents(ctx context.Context, r Runner, gh, repo string, number int) ([]
 	return decodePages(out)
 }
 
-// gh api --paginate writes one JSON array per page back to back.
-func decodePages(data []byte) ([]issueEvent, error) {
+// gh api --paginate writes one JSON value per page back to back.
+func decodeAll[T any](data []byte) ([]T, error) {
 	dec := json.NewDecoder(bytes.NewReader(data))
-	var all []issueEvent
+	var all []T
 	for {
-		var page []issueEvent
-		err := dec.Decode(&page)
+		var v T
+		err := dec.Decode(&v)
 		if errors.Is(err, io.EOF) {
 			return all, nil
 		}
 		if err != nil {
-			return nil, fmt.Errorf("issue events: %w", err)
+			return nil, err
 		}
-		all = append(all, page...)
+		all = append(all, v)
 	}
+}
+
+func decodePages(data []byte) ([]issueEvent, error) {
+	pages, err := decodeAll[[]issueEvent](data)
+	if err != nil {
+		return nil, fmt.Errorf("issue events: %w", err)
+	}
+	var all []issueEvent
+	for _, p := range pages {
+		all = append(all, p...)
+	}
+	return all, nil
 }
 
 // The latest review_requested event addressed to the login or to one of the configured teams.
