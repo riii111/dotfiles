@@ -52,6 +52,9 @@ jobs:
           nix eval --raw .#darwinConfigurations.personal.config.system.build.toplevel.drvPath
           nix eval --raw .#darwinConfigurations.work.config.system.build.toplevel.drvPath
 
+      - name: Verify patched uv
+        run: test "$(nix run .#uv -- --version)" = "uv 0.13.4"
+
       - name: Run repo verification
         run: |
           nix develop .#ci -c ./bin/executable_dotctl test
