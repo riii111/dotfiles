@@ -19,7 +19,6 @@
     │   ├── devicons.lua
     │   ├── lazy.lua
     │   └── theme.lua
-    ├── emacs                  # Emacs editing mode entered with `e` (see emacs/README.md; tests/nvim/emacs.lua)
     ├── plugins                # plugin specs (LSP core, UI, tooling)
     │   ├── keymaps.lua        # plugin-dependent keymaps (Telescope, Oil, etc.)
     │   ├── lsp.lua            # lspconfig, none-ls, cmp, symbol-usage
@@ -152,5 +151,6 @@ return {
 - Editor Ergonomics: Treesitter, `windwp/nvim-autopairs`, `folke/which-key.nvim`, and native window resizing.
 - Smart Keymaps: Smart 0 (toggle ^ and 0), auto-indent on empty lines (i/A), delete without yank (x/X), visual mode improvements.
 - File Management: `stevearc/oil.nvim` (buffered file explorer).
+- Emacs editing: `riii111/emacs-mode.nvim`, an Insert mode with Emacs keys started with `e` (`lua/plugins/emacs-mode.lua`).
 - UI Polish: `akinsho/bufferline.nvim` (language‑grouped labels), `b0o/incline.nvim`, `lukas-reineke/indent-blankline.nvim`, `lewis6991/gitsigns.nvim`, `kevinhwang91/nvim-hlslens`.
 - Performance: Lua module loader cache enabled, unused providers/plugins disabled for faster startup.

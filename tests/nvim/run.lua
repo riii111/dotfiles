@@ -262,6 +262,45 @@ printf '/stub/goroot\n/stub/gopath\n'
 	os.remove(dir .. "/bin/go")
 end
 
+-- emacs-mode's own tests, here with blink.cmp, nvim-autopairs and neoscroll loaded, and its label and color in
+-- this config's statusline
+local function emacs_mode()
+	local plugin = require("lazy.core.config").plugins["emacs-mode.nvim"]
+	dofile(plugin.dir .. "/tests/emacs_spec.lua")()
+
+	local function label()
+		local status = vim.api.nvim_eval_statusline(vim.o.statusline, { highlights = true })
+		local at = status.str:find("EMACS", 1, true)
+		if not at then
+			return nil
+		end
+		local group
+		for _, highlight in ipairs(status.highlights) do
+			if highlight.start < at then
+				group = highlight.group
+			end
+		end
+		return vim.api.nvim_get_hl(0, { name = group, link = false }).bg
+	end
+	vim.cmd.tabnew()
+	local seen
+	_G.emacs_mode_label = function()
+		vim.wait(1000, function()
+			seen = label()
+			return seen ~= nil
+		end)
+	end
+	vim.api.nvim_feedkeys(vim.keycode("e<Cmd>lua emacs_mode_label()<CR><Esc>"), "tx", false)
+	assert(seen == 0xc065db, "EMACS is not in the statusline with #c065db: " .. vim.inspect(seen))
+	assert(
+		vim.wait(1000, function()
+			return label() == nil
+		end),
+		"EMACS left in the statusline"
+	)
+	vim.cmd("bwipeout!")
+end
+
 local function smoke()
 	local fixture = vim.env.DOTFILES_NVIM_FIXTURE
 	vim.cmd.edit(vim.fn.fnameescape(fixture .. "/sample.lua"))
@@ -308,7 +347,7 @@ local function smoke()
 		"Oil did not open the directory"
 	)
 	languages()
-	dofile(vim.env.DOTFILES_NVIM_TESTS .. "/emacs.lua")()
+	emacs_mode()
 	healthy()
 end
 

@@ -171,10 +171,10 @@ local function mode()
 	return {
 		"mode",
 		fmt = function(str)
-			return require("emacs").is_active() and "EMACS" or str
+			return require("emacs-mode").is_active() and "EMACS" or str
 		end,
 		color = function()
-			if require("emacs").is_active() then
+			if require("emacs-mode").is_active() then
 				local colors = get_colors()
 				return {
 					fg = colors and colors.normal_a or "#1a1e29",

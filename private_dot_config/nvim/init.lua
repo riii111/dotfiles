@@ -17,7 +17,6 @@ vim.g.maplocalleader = "\\"
 require("config.options")
 require("config.keymaps")
 require("config.autocmd")
-require("emacs").setup()
 require("config.lazy")
 
 -- Apply colorscheme after lazy.nvim (fallback to custom-theme if not found)

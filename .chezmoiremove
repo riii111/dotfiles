@@ -52,3 +52,4 @@ bin/lib/dot/handoff.py
 .claude/skills/promote
 .claude/skills/recall
 .claude/skills/pr-review
+.config/nvim/lua/emacs
