@@ -163,7 +163,8 @@
     ],
     "deny": [
 {{- if eq .type "work" }}
-      "Bash(git push --force*)",
+      "Bash(git push --force)",
+      "Bash(git push --force *)",
       "Bash(git push -f *)",
 {{- end }}
       "Bash(git add -f*)",
@@ -237,9 +238,11 @@
       "NotebookEdit"
     ],
     "ask": [
-      "Bash(git push --force*)",
+      "Bash(git push --force)",
+      "Bash(git push --force *)",
       "Bash(git push -f*)",
-      "Bash(git push * --force*)",
+      "Bash(git push * --force)",
+      "Bash(git push * --force *)",
       "Bash(git push * -f*)",
       "Bash(git config*)",
       "Bash(gcloud storage cat*)",
