@@ -53,7 +53,10 @@ jobs:
           nix eval --raw .#darwinConfigurations.work.config.system.build.toplevel.drvPath
 
       - name: Verify patched uv
-        run: test "$(nix run .#uv -- --version)" = "uv 0.13.4"
+        shell: bash
+        run: |
+          nix run --print-build-logs .#uv -- --version | tee /tmp/uv-version
+          grep -Eq '^uv 0\.13\.4( \(.*\))?$' /tmp/uv-version
 
       - name: Run repo verification
         run: |
