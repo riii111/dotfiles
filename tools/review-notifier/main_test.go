@@ -265,11 +265,11 @@ func newGitRepo(t *testing.T) *gitRepo {
 	git(t, tmp, "init", "-q", "--bare", "-b", "main", bare)
 	seed := filepath.Join(tmp, "seed")
 	git(t, tmp, "init", "-q", "-b", "main", seed)
-	os.WriteFile(filepath.Join(seed, "file.txt"), []byte("base\n"), 0o644)
+	writeFile(t, filepath.Join(seed, "file.txt"), "base\n")
 	git(t, seed, "add", ".")
 	git(t, seed, "commit", "-q", "-m", "base")
 	git(t, seed, "push", "-q", bare, "main")
-	os.WriteFile(filepath.Join(seed, "file.txt"), []byte("change\n"), 0o644)
+	writeFile(t, filepath.Join(seed, "file.txt"), "change\n")
 	git(t, seed, "commit", "-q", "-am", "change")
 	git(t, seed, "push", "-q", bare, "HEAD:refs/pull/12/head")
 	head := git(t, seed, "rev-parse", "HEAD")
@@ -313,7 +313,7 @@ func TestPrepareWorktreeNeverReusesOneWithChanges(t *testing.T) {
 		t.Fatalf("a clean worktree must be reused: %q %v", again, err)
 	}
 	edited := filepath.Join(first, "file.txt")
-	os.WriteFile(edited, []byte("left over\n"), 0o644)
+	writeFile(t, edited, "left over\n")
 	second, err := prepareWorktree(ctx, execRunner{}, "git", g.cfg, g.pr)
 	if err != nil {
 		t.Fatal(err)
@@ -334,5 +334,12 @@ func TestPrepareWorktreeRejectsAnotherRepository(t *testing.T) {
 	}
 	if _, err := os.Stat(g.cfg.WorktreeRoot); !os.IsNotExist(err) {
 		t.Error("no worktree may be created")
+	}
+}
+
+func writeFile(t *testing.T, path, text string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+		t.Fatal(err)
 	}
 }

@@ -15,12 +15,11 @@ import (
 	"syscall"
 )
 
-const usage = `usage:
+var errUsage = errors.New(`usage:
   review-notifier run [--config PATH]
   review-notifier status
   review-notifier check [--config PATH]
-  review-notifier smoke --pr OWNER/REPO#N|URL [--requester LOGIN] [--no-open] [--config PATH]
-`
+  review-notifier smoke --pr OWNER/REPO#N|URL [--requester LOGIN] [--no-open] [--config PATH]`)
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -33,7 +32,7 @@ func main() {
 
 func run(ctx context.Context, args []string, stdout io.Writer) error {
 	if len(args) == 0 {
-		return errors.New(usage)
+		return errUsage
 	}
 	env, err := currentEnv()
 	if err != nil {
@@ -49,7 +48,7 @@ func run(ctx context.Context, args []string, stdout io.Writer) error {
 	case "smoke":
 		return runSmoke(ctx, args[1:], env, execRunner{}, stdout)
 	default:
-		return errors.New(usage)
+		return errUsage
 	}
 }
 
@@ -93,7 +92,8 @@ func runWatch(ctx context.Context, args []string, env Env) error {
 	if err != nil {
 		return err
 	}
-	defer lock.Close()
+	// Closing releases the lock; the process is ending either way.
+	defer func() { _ = lock.Close() }()
 	store := Store{path: filepath.Join(dir, "state.json")}
 	st, _, err := store.Load()
 	if err != nil {
@@ -106,18 +106,19 @@ func runWatch(ctx context.Context, args []string, env Env) error {
 }
 
 func runStatus(env Env, stdout io.Writer) error {
+	out := &printer{w: stdout}
 	store := Store{path: filepath.Join(defaultStateDir(env.Home), "state.json")}
 	st, ok, err := store.Load()
 	if err != nil {
 		return err
 	}
 	if !ok {
-		fmt.Fprintf(stdout, "no state yet: %s\n", store.path)
-		return nil
+		out.printf("no state yet: %s\n", store.path)
+		return out.err
 	}
-	fmt.Fprintf(stdout, "login: %s\nlast poll: %s\n", st.Login, st.LastPoll.Local().Format("2006-01-02 15:04:05"))
+	out.printf("login: %s\nlast poll: %s\n", st.Login, st.LastPoll.Local().Format("2006-01-02 15:04:05"))
 	if st.LastError != "" {
-		fmt.Fprintf(stdout, "last error: %s\n", st.LastError)
+		out.printf("last error: %s\n", st.LastError)
 	}
 	reqs := make([]*Request, 0, len(st.Requests))
 	for _, r := range st.Requests {
@@ -128,7 +129,7 @@ func runStatus(env Env, stdout io.Writer) error {
 	sort.Slice(reqs, func(i, j int) bool { return reqs[i].UpdatedAt.After(reqs[j].UpdatedAt) })
 	for i, r := range reqs {
 		if i == 20 {
-			fmt.Fprintf(stdout, "... %d more\n", len(reqs)-i)
+			out.printf("... %d more\n", len(reqs)-i)
 			break
 		}
 		line := fmt.Sprintf("%s  %-9s %s#%d %s", r.UpdatedAt.Local().Format("01-02 15:04"), r.Status, r.Repo, r.Number, oneLine(r.Title))
@@ -138,13 +139,14 @@ func runStatus(env Env, stdout io.Writer) error {
 		if r.Error != "" {
 			line += "  error: " + r.Error
 		}
-		fmt.Fprintln(stdout, line)
+		out.printf("%s\n", line)
 	}
-	return nil
+	return out.err
 }
 
 // Checks the config, the commands and that the GitHub API answers the queries the watcher uses.
 func runCheck(ctx context.Context, args []string, env Env, r Runner, stdout io.Writer) error {
+	out := &printer{w: stdout}
 	fs := flag.NewFlagSet("check", flag.ContinueOnError)
 	configPath := fs.String("config", defaultConfigPath(env.Home), "config file")
 	if err := fs.Parse(args); err != nil {
@@ -155,42 +157,43 @@ func runCheck(ctx context.Context, args []string, env Env, r Runner, stdout io.W
 		return err
 	}
 	c := t.Cmds
-	fmt.Fprintf(stdout, "config: %s\n", *configPath)
-	fmt.Fprintf(stdout, "commands: gh=%s git=%s alerter=%s open=%s osascript=%s\n", c.GH, c.Git, c.Alerter, c.Open, c.Osascript)
-	fmt.Fprintf(stdout, "pollIntervalSeconds: %d\nworktreeRoot: %s\n", t.Cfg.PollIntervalSeconds, t.Cfg.WorktreeRoot)
+	out.printf("config: %s\n", *configPath)
+	out.printf("commands: gh=%s git=%s alerter=%s open=%s osascript=%s\n", c.GH, c.Git, c.Alerter, c.Open, c.Osascript)
+	out.printf("pollIntervalSeconds: %d\nworktreeRoot: %s\n", t.Cfg.PollIntervalSeconds, t.Cfg.WorktreeRoot)
 	repos := make([]string, 0, len(t.Cfg.Repositories))
 	for repo := range t.Cfg.Repositories {
 		repos = append(repos, repo)
 	}
 	sort.Strings(repos)
 	for _, repo := range repos {
-		fmt.Fprintf(stdout, "repository: %s -> %s\n", repo, t.Cfg.Repositories[repo])
+		out.printf("repository: %s -> %s\n", repo, t.Cfg.Repositories[repo])
 	}
 	for _, ch := range t.Cfg.Choices {
-		fmt.Fprintf(stdout, "choice: %s %q -> %s\n", ch.ID, ch.Label, ch.skillPath)
+		out.printf("choice: %s %q -> %s\n", ch.ID, ch.Label, ch.skillPath)
 	}
 	login, err := currentLogin(ctx, r, c.GH)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(stdout, "github login: %s\n", login)
+	out.printf("github login: %s\n", login)
 	for _, q := range requestQueries(t.Cfg.Teams) {
 		hits, err := searchPRs(ctx, r, c.GH, q)
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(stdout, "pending (%s): %d\n", q, len(hits))
+		out.printf("pending (%s): %d\n", q, len(hits))
 		if len(hits) > 0 {
 			if _, err := fetchEvents(ctx, r, c.GH, hits[0].Repo, hits[0].Number); err != nil {
 				return fmt.Errorf("issue events of %s#%d: %w", hits[0].Repo, hits[0].Number, err)
 			}
 		}
 	}
-	return nil
+	return out.err
 }
 
 // Notification, selection, worktree and deep link for one given PR, without watching GitHub or keeping state.
 func runSmoke(ctx context.Context, args []string, env Env, r Runner, stdout io.Writer) error {
+	out := &printer{w: stdout}
 	fs := flag.NewFlagSet("smoke", flag.ContinueOnError)
 	configPath := fs.String("config", defaultConfigPath(env.Home), "config file")
 	ref := fs.String("pr", "", "pull request as OWNER/REPO#N or URL")
@@ -212,18 +215,18 @@ func runSmoke(ctx context.Context, args []string, env Env, r Runner, stdout io.W
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(stdout, "pr: %s#%d %s head=%s\n", pr.Repo, pr.Number, pr.Title, pr.HeadSHA)
+	out.printf("pr: %s#%d %s head=%s\n", pr.Repo, pr.Number, pr.Title, pr.HeadSHA)
 
 	notice := Notice{Key: fmt.Sprintf("smoke:%s#%d", pr.Repo, pr.Number), PR: pr, Requester: *requester}
 	sel, err := notify(ctx, r, t.Cmds.Alerter, notice, t.Cfg.Choices, t.Cfg.NotificationTimeoutSeconds)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(stdout, "selection: %s\n", sel.Outcome)
+	out.printf("selection: %s\n", sel.Outcome)
 	if sel.Outcome != Chosen {
-		return nil
+		return out.err
 	}
-	fmt.Fprintf(stdout, "choice: %s (%s)\n", sel.Choice.ID, sel.Choice.Skill)
+	out.printf("choice: %s (%s)\n", sel.Choice.ID, sel.Choice.Skill)
 
 	if *noOpen {
 		// The steps of launch, stopping before the App is opened.
@@ -235,18 +238,18 @@ func runSmoke(ctx context.Context, args []string, env Env, r Runner, stdout io.W
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(stdout, "worktree: %s\nlink: %s\n", path, deepLink(prompt, path))
-		return nil
+		out.printf("worktree: %s\nlink: %s\n", path, deepLink(prompt, path))
+		return out.err
 	}
 	res, err := launch(ctx, t, sel.Choice, pr.Repo, pr.Number, *requester)
 	if res.Worktree != "" {
-		fmt.Fprintf(stdout, "worktree: %s\n", res.Worktree)
+		out.printf("worktree: %s\n", res.Worktree)
 	}
 	if err != nil {
 		return err
 	}
-	fmt.Fprintln(stdout, "opened: send the prompt in the new Codex chat to start the review")
-	return nil
+	out.printf("%s\n", "opened: send the prompt in the new Codex chat to start the review")
+	return out.err
 }
 
 func resolveCommands(c Commands, env Env) (Commands, error) {
@@ -270,4 +273,16 @@ func resolveCommands(c Commands, env Env) (Commands, error) {
 		*item.path = found
 	}
 	return out, nil
+}
+
+// Keeps the first write error, so a command reports a failed stdout once at its end.
+type printer struct {
+	w   io.Writer
+	err error
+}
+
+func (p *printer) printf(format string, args ...any) {
+	if p.err == nil {
+		_, p.err = fmt.Fprintf(p.w, format, args...)
+	}
 }

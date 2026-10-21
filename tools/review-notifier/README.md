@@ -110,6 +110,7 @@ review-notifier smoke --pr https://github.com/owner/repo/pull/123 --no-open  # D
 ```
 
 `smoke`は指定したPR1件で通知から起動までを行い、状態は記録しない。
+コードを変えたら、このディレクトリで`golangci-lint fmt`・`golangci-lint run`・`go test -race ./...`を実行する。
 worktreeの削除は`git -C <checkout> worktree remove <path>`で行う。
 
 ## Mac実機での確認状況

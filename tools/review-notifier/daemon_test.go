@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/url"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -123,7 +124,9 @@ func TestLockAllowsOneWatcher(t *testing.T) {
 	if _, err := lockDir(dir); err == nil {
 		t.Error("a second instance must not get the lock")
 	}
-	lock.Close()
+	if err := lock.Close(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // daemonFixture wires a daemon to a fake GitHub whose pending requests the test changes between polls.
@@ -150,8 +153,7 @@ func newDaemonFixture(t *testing.T) *daemonFixture {
 		var items []string
 		for k, ev := range f.events {
 			repo, num, _ := strings.Cut(k, "#")
-			var n int
-			fmt.Sscan(num, &n)
+			n, _ := strconv.Atoi(num)
 			items = append(items, searchItem(repo, n, fmt.Sprint(len(ev))))
 		}
 		return []byte(searchJSON(items...)), nil
@@ -169,8 +171,7 @@ func newDaemonFixture(t *testing.T) *daemonFixture {
 	})
 	f.r.on("gh api repos/", func(args []string) ([]byte, error) {
 		parts := strings.Split(args[1], "/")
-		var n int
-		fmt.Sscan(parts[4], &n)
+		n, _ := strconv.Atoi(parts[4])
 		return []byte(prJSON(parts[1]+"/"+parts[2], n)), nil
 	})
 	f.r.on("alerter", func(args []string) ([]byte, error) {

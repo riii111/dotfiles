@@ -109,14 +109,13 @@ func (s Store) Save(st *State) error {
 	if err != nil {
 		return err
 	}
-	defer os.Remove(tmp.Name())
+	// Fails harmlessly once the rename has moved the file.
+	defer func() { _ = os.Remove(tmp.Name()) }()
 	if _, err := tmp.Write(append(data, '\n')); err != nil {
-		tmp.Close()
-		return err
+		return errors.Join(err, tmp.Close())
 	}
 	if err := tmp.Sync(); err != nil {
-		tmp.Close()
-		return err
+		return errors.Join(err, tmp.Close())
 	}
 	if err := tmp.Close(); err != nil {
 		return err
@@ -134,8 +133,7 @@ func lockDir(dir string) (*os.File, error) {
 		return nil, err
 	}
 	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		f.Close()
-		return nil, fmt.Errorf("another review-notifier is running (%s): %w", f.Name(), err)
+		return nil, errors.Join(fmt.Errorf("another review-notifier is running (%s): %w", f.Name(), err), f.Close())
 	}
 	return f, nil
 }
