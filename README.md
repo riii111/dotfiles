@@ -49,6 +49,15 @@ Japanese Markdown and skill references can be checked and formatted with
 ~/bin/dotctl work-tools update
 ```
 
+### GitHub review requests
+
+Notify review requests on macOS and open a Codex chat with the chosen review skill.
+See [review-notifier](tools/review-notifier/README.md).
+
+```bash
+~/bin/dotctl review-notifier install
+```
+
 ### Finder
 
 Open text / code in Neovim, csv / tsv in csvlens, and parquet / sqlite / jsonl in VisiData, all through Kitty.

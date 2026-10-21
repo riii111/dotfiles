@@ -11,6 +11,8 @@ import tempfile
 from pathlib import Path
 from typing import NamedTuple
 
+from . import review_notifier
+
 
 LINTABLE_SHELLS = frozenset({"bash", "sh"})
 # chezmoi source names of the zsh startup files. They have neither a shebang nor an
@@ -356,6 +358,18 @@ def command_test(_: argparse.Namespace) -> int:
         failures += 1
         print_process_failure("python tests", test_result)
 
+    go = shutil.which("go")
+    for module in sorted((repo_root / "tools").glob("*/go.mod")):
+        label = f"go tests ({module.parent.relative_to(repo_root)})"
+        if go is None:
+            failures += 1
+            print(f"{label}: go not found", file=sys.stderr)
+            continue
+        go_result = run_command([go, "test", "./..."], module.parent)
+        if go_result.returncode != 0:
+            failures += 1
+            print_process_failure(label, go_result)
+
     bash = shutil.which("bash")
     for test_path in sorted((repo_root / "tests").glob("test-*.sh")):
         label = f"shell test ({test_path.relative_to(repo_root)})"
@@ -529,6 +543,23 @@ def command_work_tools_update(args: argparse.Namespace) -> int:
     return 1 if failures else 0
 
 
+def command_review_notifier(args: argparse.Namespace) -> int:
+    home = Path.home()
+    action = args.review_notifier_command
+    if action == "install":
+        user = os.environ.get("USER") or home.name
+        return review_notifier.install(resolve_repo_root(), home, user)
+    if action == "uninstall":
+        return review_notifier.uninstall(home)
+    if action == "start":
+        return review_notifier.start(home)
+    if action == "stop":
+        return review_notifier.stop()
+    if action == "status":
+        return review_notifier.status(home)
+    return review_notifier.logs(home, follow=args.follow)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="dotctl")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -577,6 +608,28 @@ def build_parser() -> argparse.ArgumentParser:
     )
     work_tools_update_parser.add_argument("name", nargs="?")
     work_tools_update_parser.set_defaults(func=command_work_tools_update)
+
+    review_parser = subparsers.add_parser(
+        "review-notifier",
+        help="build and run the GitHub review request notifier LaunchAgent",
+    )
+    review_subparsers = review_parser.add_subparsers(
+        dest="review_notifier_command",
+        required=True,
+    )
+    for name, help_text in (
+        ("install", "build, check and load the LaunchAgent (also updates it)"),
+        ("uninstall", "unload the LaunchAgent and remove the binary"),
+        ("start", "load or restart the LaunchAgent"),
+        ("stop", "unload the LaunchAgent"),
+        ("status", "show the agent and its recent requests"),
+    ):
+        review_subparsers.add_parser(name, help=help_text).set_defaults(
+            func=command_review_notifier
+        )
+    logs_parser = review_subparsers.add_parser("logs", help="show the agent log")
+    logs_parser.add_argument("-f", "--follow", action="store_true")
+    logs_parser.set_defaults(func=command_review_notifier)
 
     return parser
 
