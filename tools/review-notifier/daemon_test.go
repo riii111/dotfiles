@@ -228,7 +228,9 @@ func (d *Daemon) handleNext(ctx context.Context) bool {
 	if req == nil {
 		return false
 	}
-	d.handle(ctx, *req)
+	if ch := d.ask(ctx, ctx, *req); ch != nil {
+		d.launch(ctx, *req, ch)
+	}
 	return true
 }
 
@@ -311,9 +313,9 @@ func TestDaemonReportsALaunchFailure(t *testing.T) {
 
 func TestDaemonKeepsPollingAfterAnAPIFailure(t *testing.T) {
 	f := newDaemonFixture(t)
-	f.r.handlers = append([]handler{{"gh api --paginate -X GET search/issues", func([]string) ([]byte, error) {
+	f.r.on("gh api --paginate -X GET search/issues", func([]string) ([]byte, error) {
 		return nil, fmt.Errorf("HTTP 403: API rate limit exceeded")
-	}}}, f.r.handlers...)
+	})
 	ctx, cancel := context.WithCancel(context.Background())
 	var delays []time.Duration
 	f.d.sleep = func(_ context.Context, d time.Duration) error {
@@ -333,34 +335,44 @@ func TestDaemonKeepsPollingAfterAnAPIFailure(t *testing.T) {
 	}
 }
 
-// A notification left on screen must not hold back the next request.
-func TestDaemonShowsANewRequestWhileAnEarlierOneIsUnanswered(t *testing.T) {
+// With every place taken by unanswered notifications, a new request closes the oldest one
+// instead of waiting for it to time out.
+func TestDaemonShowsANewRequestWhileEarlierOnesAreUnanswered(t *testing.T) {
 	f := newDaemonFixture(t)
 	f.poll(t)
-	f.request("acme/app", 1, requestedEvent(10, "tanaka", "me"))
-	f.request("acme/app", 2, requestedEvent(20, "tanaka", "me"))
-	f.poll(t)
-	release := make(chan struct{})
-	f.answer = func(key string) string {
-		if strings.HasPrefix(key, "acme/app#1@") {
-			<-release
-			return `{"activationType":"timeout"}`
-		}
-		return `{"activationType":"closed"}`
+	for n := 1; n <= 3; n++ {
+		f.request("acme/app", n, requestedEvent(int64(n*10), "tanaka", "me"))
 	}
+	f.poll(t)
+	f.r.onCtx("alerter", func(ctx context.Context, args []string) ([]byte, error) {
+		if strings.HasPrefix(argValue(t, args, "--group"), "review-notifier:acme/app#4@") {
+			return []byte(`{"activationType":"closed"}`), nil
+		}
+		// Left unanswered until alerter is stopped.
+		<-ctx.Done()
+		return nil, ctx.Err()
+	})
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() { f.d.notifyLoop(ctx); close(done) }()
-	defer func() { close(release); cancel(); <-done }()
+	defer func() { cancel(); <-done }()
 
+	waitFor(t, func() bool { return f.status(t, "acme/app#3@30") == StatusNotifying })
+	f.request("acme/app", 4, requestedEvent(40, "tanaka", "me"))
+	f.poll(t)
+	waitFor(t, func() bool { return f.status(t, "acme/app#4@40") == StatusDeclined })
+	if f.status(t, "acme/app#1@10") != StatusReplaced || f.status(t, "acme/app#2@20") != StatusNotifying {
+		t.Errorf("statuses: #1 %s, #2 %s", f.status(t, "acme/app#1@10"), f.status(t, "acme/app#2@20"))
+	}
+}
+
+func waitFor(t *testing.T, cond func() bool) {
+	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
-	for f.status(t, "acme/app#2@20") != StatusDeclined {
+	for !cond() {
 		if time.Now().After(deadline) {
-			t.Fatal("the second request was not shown while the first waited")
+			t.Fatal("condition not reached")
 		}
 		time.Sleep(5 * time.Millisecond)
-	}
-	if got := f.status(t, "acme/app#1@10"); got != StatusNotifying {
-		t.Errorf("first request = %s", got)
 	}
 }

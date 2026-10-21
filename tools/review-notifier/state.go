@@ -22,6 +22,8 @@ const (
 	StatusDeclined  Status = "declined"
 	StatusTimeout   Status = "timeout"
 	StatusDismissed Status = "dismissed"
+	// Closed unanswered to make room for a newer request; treated like a timeout.
+	StatusReplaced Status = "replaced"
 	// The request disappeared from GitHub before it was shown.
 	StatusWithdrawn Status = "withdrawn"
 	StatusLaunching Status = "launching"

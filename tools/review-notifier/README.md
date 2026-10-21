@@ -7,11 +7,11 @@
 flowchart LR
   L[launchd] --> P[定期確認<br/>gh api]
   P --> S[(state.json<br/>依頼イベント単位)]
-  S --> Q[通知キュー<br/>同時に最大3件]
+  S --> Q[通知キュー<br/>同時に最大3件<br/>超えたら古い通知を閉じる]
   Q --> A[alerter]
   A -->|Skillを選択| W[head SHAに固定した<br/>専用worktree]
   W --> D[codex://new<br/>prompt・path]
-  A -->|見送る・閉じる・放置| S
+  A -->|見送る・閉じる・放置・入れ替え| S
 ```
 
 ## 動作
@@ -25,7 +25,9 @@ flowchart LR
   同じPRへの再依頼は新しい依頼として通知し、コメントやコミットの追加では再通知しない。
   初回は既存の依頼を基準として記録するだけで、通知しない。
 - 通知：確認処理とは別に、キューから表示する。
-  応答待ちの通知は`maxNotifications`件まで同時に出すため、放置した通知があっても後の依頼を表示できる。
+  応答待ちの通知は`maxNotifications`件まで同時に出す。
+  すべて応答待ちのときに新しい依頼が届くと、最も古い通知を閉じて新しい依頼を表示する。
+  閉じた依頼は放置と同じ扱いで、何も起動しない。
   見送る・閉じる・本文クリック・タイムアウトでは何も起動せず、同じ依頼を再表示しない。
   通知中に停止した依頼は、再起動後にもう一度表示する。
 - 起動：Skillを選んだ時点のPRを読み直し、そのhead SHAに固定したdetached worktreeを作る。
@@ -82,7 +84,7 @@ cp ~/ghq/github.com/riii111/dotfiles/tools/review-notifier/config.example.json ~
   省略時は1800。
 - `maxNotifications`：応答待ちで同時に出す通知の数。
   省略時は3、最大10。
-  超えた依頼は先の通知が閉じるまで待つ。
+  上限に達すると、新しい依頼の表示のために最も古い通知を閉じる。
 - `worktreeRoot`：省略時は`~/.local/share/review-notifier/worktrees`。
   `<owner>/<repo>/pr-<番号>-<SHA先頭12桁>`（2つ目以降は`-2`などを付ける）に作る。
 - `commands`：`gh`・`git`・`alerter`・`open`・`osascript`の絶対パス。

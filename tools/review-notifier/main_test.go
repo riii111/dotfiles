@@ -28,18 +28,25 @@ type fakeRunner struct {
 
 type handler struct {
 	prefix string
-	answer func(args []string) ([]byte, error)
+	answer func(ctx context.Context, args []string) ([]byte, error)
 }
 
 func (f *fakeRunner) on(prefix string, answer func(args []string) ([]byte, error)) {
-	f.handlers = append(f.handlers, handler{prefix, answer})
+	f.onCtx(prefix, func(_ context.Context, args []string) ([]byte, error) { return answer(args) })
+}
+
+// Handlers added later take precedence, so a test can override a fixture's answer.
+func (f *fakeRunner) onCtx(prefix string, answer func(ctx context.Context, args []string) ([]byte, error)) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.handlers = append([]handler{{prefix, answer}}, f.handlers...)
 }
 
 func (f *fakeRunner) reply(prefix, out string) {
 	f.on(prefix, func([]string) ([]byte, error) { return []byte(out), nil })
 }
 
-func (f *fakeRunner) Run(_ context.Context, name string, args ...string) ([]byte, error) {
+func (f *fakeRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
 	f.mu.Lock()
 	f.calls = append(f.calls, call{name, args})
 	line := strings.Join(append([]string{name}, args...), " ")
@@ -54,7 +61,7 @@ func (f *fakeRunner) Run(_ context.Context, name string, args ...string) ([]byte
 	if found == nil {
 		return nil, fmt.Errorf("unexpected command: %s", line)
 	}
-	return found.answer(args)
+	return found.answer(ctx, args)
 }
 
 func (f *fakeRunner) ran(prefix string) bool {

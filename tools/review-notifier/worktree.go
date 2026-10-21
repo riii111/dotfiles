@@ -11,21 +11,6 @@ import (
 	"strings"
 )
 
-var githubRemote = regexp.MustCompile(`^(?:https://github\.com/|ssh://git@github\.com/|git@github\.com:)([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?/?$`)
-
-func remoteRepo(remote string) (string, bool) {
-	m := githubRemote.FindStringSubmatch(strings.TrimSpace(remote))
-	if m == nil {
-		return "", false
-	}
-	return m[1], true
-}
-
-func worktreePath(root string, pr PullRequest) string {
-	owner, name, _ := strings.Cut(pr.Repo, "/")
-	return filepath.Join(root, owner, name, fmt.Sprintf("pr-%d-%s", pr.Number, pr.HeadSHA[:12]))
-}
-
 // Creates a detached worktree at the PR head, or returns a clean one an earlier selection created.
 // Only objects are fetched into the checkout; its branches, HEAD and working tree are left alone.
 func prepareWorktree(ctx context.Context, r Runner, git string, cfg *Config, pr PullRequest) (string, error) {
@@ -73,15 +58,6 @@ func prepareWorktree(ctx context.Context, r Runner, git string, cfg *Config, pr 
 	return path, nil
 }
 
-func lookupRepo(repos map[string]string, repo string) (string, bool) {
-	for name, path := range repos {
-		if strings.EqualFold(name, repo) {
-			return path, true
-		}
-	}
-	return "", false
-}
-
 // Earlier worktrees of the same head are kept with whatever was done in them, so one is reused
 // only while it is clean; otherwise the next numbered path is used.
 const maxWorktreeCopies = 20
@@ -111,4 +87,28 @@ func cleanAt(ctx context.Context, r Runner, git, path, sha string) bool {
 	}
 	status, err := r.Run(ctx, git, "-C", path, "status", "--porcelain", "--untracked-files=all")
 	return err == nil && len(strings.TrimSpace(string(status))) == 0
+}
+
+func worktreePath(root string, pr PullRequest) string {
+	owner, name, _ := strings.Cut(pr.Repo, "/")
+	return filepath.Join(root, owner, name, fmt.Sprintf("pr-%d-%s", pr.Number, pr.HeadSHA[:12]))
+}
+
+func lookupRepo(repos map[string]string, repo string) (string, bool) {
+	for name, path := range repos {
+		if strings.EqualFold(name, repo) {
+			return path, true
+		}
+	}
+	return "", false
+}
+
+var githubRemote = regexp.MustCompile(`^(?:https://github\.com/|ssh://git@github\.com/|git@github\.com:)([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?/?$`)
+
+func remoteRepo(remote string) (string, bool) {
+	m := githubRemote.FindStringSubmatch(strings.TrimSpace(remote))
+	if m == nil {
+		return "", false
+	}
+	return m[1], true
 }

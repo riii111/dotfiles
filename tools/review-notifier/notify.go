@@ -29,44 +29,6 @@ type Selection struct {
 	Choice  *Choice
 }
 
-const (
-	noticeTitle   = "GitHub レビュー依頼"
-	dropdownLabel = "レビュー方法を選択"
-	declineLabel  = "見送る"
-)
-
-func alerterArgs(n Notice, choices []Choice, timeoutSeconds int) []string {
-	labels := make([]string, len(choices))
-	for i, ch := range choices {
-		labels[i] = ch.Label
-	}
-	requester := "依頼者不明"
-	if n.Requester != "" {
-		requester = "依頼者: @" + n.Requester
-	}
-	if n.Team != "" {
-		requester += "（" + n.Team + " 宛て）"
-	}
-	args := []string{
-		"--title", noticeTitle,
-		"--subtitle", oneLine(n.PR.Title),
-		"--message", fmt.Sprintf("%s\n%s #%d", requester, n.PR.Repo, n.PR.Number),
-		"--actions", strings.Join(labels, ","),
-		"--close-label", declineLabel,
-		"--group", "review-notifier:" + n.Key,
-		"--timeout", strconv.Itoa(timeoutSeconds),
-		"--json",
-	}
-	if len(choices) > 1 {
-		args = append(args, "--dropdown-label", dropdownLabel)
-	}
-	return args
-}
-
-func oneLine(s string) string {
-	return strings.Join(strings.Fields(s), " ")
-}
-
 func notify(ctx context.Context, r Runner, alerter string, n Notice, choices []Choice, timeoutSeconds int) (Selection, error) {
 	out, err := r.Run(ctx, alerter, alerterArgs(n, choices, timeoutSeconds)...)
 	if err != nil {
@@ -111,4 +73,42 @@ func parseSelection(data []byte, choices []Choice) (Selection, error) {
 		}
 	}
 	return Selection{}, fmt.Errorf("alerter output names no configured action: %q", value)
+}
+
+const (
+	noticeTitle   = "GitHub レビュー依頼"
+	dropdownLabel = "レビュー方法を選択"
+	declineLabel  = "見送る"
+)
+
+func alerterArgs(n Notice, choices []Choice, timeoutSeconds int) []string {
+	labels := make([]string, len(choices))
+	for i, ch := range choices {
+		labels[i] = ch.Label
+	}
+	requester := "依頼者不明"
+	if n.Requester != "" {
+		requester = "依頼者: @" + n.Requester
+	}
+	if n.Team != "" {
+		requester += "（" + n.Team + " 宛て）"
+	}
+	args := []string{
+		"--title", noticeTitle,
+		"--subtitle", oneLine(n.PR.Title),
+		"--message", fmt.Sprintf("%s\n%s #%d", requester, n.PR.Repo, n.PR.Number),
+		"--actions", strings.Join(labels, ","),
+		"--close-label", declineLabel,
+		"--group", "review-notifier:" + n.Key,
+		"--timeout", strconv.Itoa(timeoutSeconds),
+		"--json",
+	}
+	if len(choices) > 1 {
+		args = append(args, "--dropdown-label", dropdownLabel)
+	}
+	return args
+}
+
+func oneLine(s string) string {
+	return strings.Join(strings.Fields(s), " ")
 }

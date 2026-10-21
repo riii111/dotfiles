@@ -11,10 +11,7 @@ import (
 	"time"
 )
 
-const maxBackoff = 15 * time.Minute
-
 // Polling and notifying run separately, so a notification waiting for the user never delays the next poll.
-// Notifications are shown one at a time from the queue in the state.
 type Daemon struct {
 	tools Tools
 	store Store
@@ -38,17 +35,6 @@ func newDaemon(t Tools, store Store, st *State, logger *log.Logger) *Daemon {
 		now:   time.Now,
 		sleep: sleepCtx,
 		wake:  make(chan struct{}, 1),
-	}
-}
-
-func sleepCtx(ctx context.Context, d time.Duration) error {
-	timer := time.NewTimer(d)
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-timer.C:
-		return nil
 	}
 }
 
@@ -93,15 +79,6 @@ func (d *Daemon) pollLoop(ctx context.Context) {
 	}
 }
 
-// Rate limits and outages are waited out with a growing delay instead of stopping the watcher.
-func backoff(interval time.Duration, failures int) time.Duration {
-	delay := interval
-	for i := 0; i < failures && delay < maxBackoff; i++ {
-		delay *= 2
-	}
-	return min(delay, maxBackoff)
-}
-
 func (d *Daemon) pollOnce(ctx context.Context) error {
 	d.mu.Lock()
 	login := d.st.Login
@@ -139,108 +116,100 @@ func (d *Daemon) pollOnce(ctx context.Context) error {
 	return nil
 }
 
-func (d *Daemon) recordError(err error) error {
-	d.mu.Lock()
-	d.st.LastError = err.Error()
-	if saveErr := d.store.Save(d.st); saveErr != nil {
-		err = errors.Join(err, saveErr)
-	}
-	d.mu.Unlock()
-	return err
+var errReplaced = errors.New("replaced by a newer request")
+
+type shownNotice struct {
+	seq       int
+	cancel    context.CancelCauseFunc
+	replacing bool
 }
 
-func (d *Daemon) signal() {
-	select {
-	case d.wake <- struct{}{}:
-	default:
-	}
-}
-
-// Up to maxNotifications notifications wait for an answer at once, so one left on screen
-// does not hold back the requests detected after it.
+// Up to maxNotifications notifications wait for an answer at once. When they are all on screen and
+// another request is queued, the oldest one is closed as if it timed out, so a new request is never
+// held back by notifications left unanswered and the number of alerter processes stays bounded.
 func (d *Daemon) notifyLoop(ctx context.Context) {
 	var wg sync.WaitGroup
 	defer wg.Wait()
-	slots := make(chan struct{}, d.tools.Cfg.MaxNotifications)
-	for {
+	var mu sync.Mutex
+	shown := map[string]*shownNotice{}
+	seq := 0
+	for ctx.Err() == nil {
+		mu.Lock()
+		full := len(shown) >= d.tools.Cfg.MaxNotifications
+		if full && d.hasQueued() {
+			d.replaceOldest(shown)
+		}
+		mu.Unlock()
+
+		if !full {
+			if req := d.claim(); req != nil {
+				nctx, cancel := context.WithCancelCause(ctx)
+				mu.Lock()
+				seq++
+				shown[req.Key] = &shownNotice{seq: seq, cancel: cancel}
+				mu.Unlock()
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					ch := d.ask(ctx, nctx, *req)
+					mu.Lock()
+					delete(shown, req.Key)
+					mu.Unlock()
+					cancel(nil)
+					// The freed place may let a queued request through.
+					d.signal()
+					if ch != nil {
+						d.launch(ctx, *req, ch)
+					}
+				}()
+				continue
+			}
+		}
 		select {
 		case <-ctx.Done():
 			return
-		case slots <- struct{}{}:
+		case <-d.wake:
 		}
-		req := d.claim()
-		if req == nil {
-			<-slots
-			select {
-			case <-ctx.Done():
-				return
-			case <-d.wake:
-			}
-			continue
-		}
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			d.handle(ctx, *req)
-			<-slots
-			// A freed slot may let a request that was waiting for it through.
-			d.signal()
-		}()
 	}
 }
 
-// Marks the oldest queued request as being notified and returns a copy, or nil when none is queued
-// or the mark could not be saved.
-func (d *Daemon) claim() *Request {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	req := d.st.nextQueued()
-	if req == nil {
-		return nil
-	}
-	prev := *req
-	req.Status, req.UpdatedAt = StatusNotifying, d.now()
-	if err := d.store.Save(d.st); err != nil {
-		// Left queued, so the next wake-up tries again.
-		*req = prev
-		d.log.Printf("save state: %v", err)
-		return nil
-	}
-	snapshot := *req
-	return &snapshot
-}
-
-// Shows one request and acts on the answer.
-func (d *Daemon) handle(ctx context.Context, req Request) {
+// Shows one request and records the answer. Returns the choice when the user picked one.
+func (d *Daemon) ask(ctx, nctx context.Context, req Request) *Choice {
 	t := d.tools
 	notice := Notice{Key: req.Key, PR: PullRequest{Repo: req.Repo, Number: req.Number, Title: req.Title}, Requester: req.Requester, Team: req.Team}
-	sel, err := notify(ctx, t.R, t.Cmds.Alerter, notice, t.Cfg.Choices, t.Cfg.NotificationTimeoutSeconds)
+	sel, err := notify(nctx, t.R, t.Cmds.Alerter, notice, t.Cfg.Choices, t.Cfg.NotificationTimeoutSeconds)
 	if ctx.Err() != nil {
 		// Stopping: the request stays notifying and is shown again after the restart.
-		return
+		return nil
+	}
+	// A choice made just before the notification was closed still counts.
+	if context.Cause(nctx) == errReplaced && (err != nil || sel.Outcome != Chosen) {
+		d.logSave(d.update(req.Key, func(r *Request) { r.Status = StatusReplaced }))
+		d.log.Printf("%s: %v", req.Key, errReplaced)
+		return nil
 	}
 	if err != nil {
 		d.log.Printf("notify %s: %v", req.Key, err)
 		// Queued again after a poll interval rather than retried in a tight loop.
 		if d.sleep(ctx, time.Duration(t.Cfg.PollIntervalSeconds)*time.Second) != nil {
-			return
+			return nil
 		}
 		d.logSave(d.update(req.Key, func(r *Request) { r.Status, r.Error = StatusQueued, err.Error() }))
-		return
+		return nil
 	}
 
 	switch sel.Outcome {
+	case Chosen:
+		return sel.Choice
 	case Declined:
 		d.logSave(d.update(req.Key, func(r *Request) { r.Status = StatusDeclined }))
 	case TimedOut:
 		d.logSave(d.update(req.Key, func(r *Request) { r.Status = StatusTimeout }))
 	case Dismissed:
 		d.logSave(d.update(req.Key, func(r *Request) { r.Status = StatusDismissed }))
-	case Chosen:
-		d.launch(ctx, req, sel.Choice)
-		return
 	}
 	d.log.Printf("%s: %s", req.Key, sel.Outcome)
+	return nil
 }
 
 func (d *Daemon) launch(ctx context.Context, req Request, ch *Choice) {
@@ -272,11 +241,48 @@ func (d *Daemon) launch(ctx context.Context, req Request, ch *Choice) {
 	d.log.Printf("%s: opened %s at %s", req.Key, res.Worktree, res.PR.HeadSHA)
 }
 
-func (d *Daemon) reportFailure(ctx context.Context, req Request, err error) {
-	subtitle := req.Repo + " #" + strconv.Itoa(req.Number)
-	if nerr := notifyFailure(ctx, d.tools.R, d.tools.Cmds.Osascript, subtitle, "レビューを開始できませんでした: "+err.Error()); nerr != nil {
-		d.log.Printf("%s: failure notification: %v", req.Key, nerr)
+func (d *Daemon) hasQueued() bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.st.nextQueued() != nil
+}
+
+// Closes the longest-shown notification that is not already being closed.
+func (d *Daemon) replaceOldest(shown map[string]*shownNotice) {
+	var oldest *shownNotice
+	key := ""
+	for k, s := range shown {
+		if !s.replacing && (oldest == nil || s.seq < oldest.seq) {
+			oldest, key = s, k
+		}
 	}
+	if oldest == nil {
+		return
+	}
+	oldest.replacing = true
+	d.log.Printf("%s: closing to show a newer request", key)
+	oldest.cancel(errReplaced)
+}
+
+// Marks the oldest queued request as being notified and returns a copy, or nil when none is queued
+// or the mark could not be saved.
+func (d *Daemon) claim() *Request {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	req := d.st.nextQueued()
+	if req == nil {
+		return nil
+	}
+	prev := *req
+	req.Status, req.UpdatedAt = StatusNotifying, d.now()
+	if err := d.store.Save(d.st); err != nil {
+		// Left queued, so the next wake-up tries again.
+		*req = prev
+		d.log.Printf("save state: %v", err)
+		return nil
+	}
+	snapshot := *req
+	return &snapshot
 }
 
 var errUnknownRequest = errors.New("request is not in the state")
@@ -300,8 +306,54 @@ func (d *Daemon) update(key string, change func(*Request)) error {
 	return nil
 }
 
+func (d *Daemon) recordError(err error) error {
+	d.mu.Lock()
+	d.st.LastError = err.Error()
+	if saveErr := d.store.Save(d.st); saveErr != nil {
+		err = errors.Join(err, saveErr)
+	}
+	d.mu.Unlock()
+	return err
+}
+
+func (d *Daemon) reportFailure(ctx context.Context, req Request, err error) {
+	subtitle := req.Repo + " #" + strconv.Itoa(req.Number)
+	if nerr := notifyFailure(ctx, d.tools.R, d.tools.Cmds.Osascript, subtitle, "レビューを開始できませんでした: "+err.Error()); nerr != nil {
+		d.log.Printf("%s: failure notification: %v", req.Key, nerr)
+	}
+}
+
 func (d *Daemon) logSave(err error) {
 	if err != nil {
 		d.log.Print(err)
+	}
+}
+
+func (d *Daemon) signal() {
+	select {
+	case d.wake <- struct{}{}:
+	default:
+	}
+}
+
+const maxBackoff = 15 * time.Minute
+
+// Rate limits and outages are waited out with a growing delay instead of stopping the watcher.
+func backoff(interval time.Duration, failures int) time.Duration {
+	delay := interval
+	for i := 0; i < failures && delay < maxBackoff; i++ {
+		delay *= 2
+	}
+	return min(delay, maxBackoff)
+}
+
+func sleepCtx(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
 	}
 }
