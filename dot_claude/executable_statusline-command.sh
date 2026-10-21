@@ -7,25 +7,36 @@ DIR="$(cd "$(dirname "$SELF")/statusline" && pwd)"
 BIN="$DIR/statusline-go"
 HASH_FILE="$DIR/.src-hash"
 
+# Prefer the managed compiler even when launched outside an interactive shell.
+export PATH="$HOME/.nix-profile/bin:$PATH"
+export GOTOOLCHAIN=local
+GO_VERSION=$(go env GOVERSION 2>/dev/null) || {
+  printf '🤖 (Go unavailable)'
+  exit 0
+}
+
+source_hash() {
+  { printf '%s\n' "$GO_VERSION"; cat "$DIR"/*.go "$DIR"/go.mod "$DIR"/go.sum; } | shasum -a 256 | cut -d' ' -f1
+}
+
 # Rebuild if binary missing, source newer than binary, or content hash changed
 needs_build() {
   [ ! -x "$BIN" ] && return 0
-  for src in "$DIR"/*.go "$DIR"/go.mod; do
+  for src in "$DIR"/*.go "$DIR"/go.mod "$DIR"/go.sum; do
     [ "$src" -nt "$BIN" ] && return 0
   done
   [ ! -f "$HASH_FILE" ] && return 0
   local cur
-  cur=$(cat "$DIR"/*.go "$DIR"/go.mod 2>/dev/null | shasum -a 256 | cut -d' ' -f1)
+  cur=$(source_hash)
   [ "$cur" != "$(head -1 "$HASH_FILE")" ]
 }
 
 if needs_build; then
-  export PATH="/opt/homebrew/bin:/usr/local/go/bin:$PATH"
   go build -C "$DIR" -o "$BIN" . 2>/dev/null || {
     printf '🤖 (build failed)'
     exit 0
   }
-  cat "$DIR"/*.go "$DIR"/go.mod 2>/dev/null | shasum -a 256 | cut -d' ' -f1 > "$HASH_FILE"
+  source_hash > "$HASH_FILE"
 fi
 
 exec "$BIN"

@@ -16,6 +16,19 @@
       ...
     }:
     let
+      # CVE-2026-111943: rebuild Go CLIs, not just the compiler on PATH.
+      securityOverlay = final: prev: {
+        go = final.go_1_27;
+        buildGoModule = final.buildGo127Module;
+        # Nix's PEM consumers do not receive Firefox's OneCRL updates.
+        cacert = prev.cacert.overrideAttrs (_: {
+          version = "3.131.1";
+          src = final.fetchurl {
+            url = "https://raw.githubusercontent.com/nss-dev/nss/NSS_3_131_1_RTM/lib/ckfw/builtins/certdata.txt";
+            hash = "sha256-PsK00kDcEsdH6vRQBh24SvdXxIO72jAvninOtdcL5RA=";
+          };
+        });
+      };
       # This dotfiles repo is macOS-only for now, so keep the shell darwin-only too.
       systems = [
         "aarch64-darwin"
@@ -26,6 +39,7 @@
         let
           pkgs = import nixpkgs {
             inherit system;
+            overlays = [ securityOverlay ];
             config.allowUnfreePredicate =
               pkg:
               builtins.elem (nixpkgs.lib.getName pkg) [
@@ -210,12 +224,14 @@
       darwinConfigurations = {
         personal = nix-darwin.lib.darwinSystem {
           modules = [
+            { nixpkgs.overlays = [ securityOverlay ]; }
             ./darwin/hosts/personal.nix
           ];
         };
 
         work = nix-darwin.lib.darwinSystem {
           modules = [
+            { nixpkgs.overlays = [ securityOverlay ]; }
             ./darwin/hosts/work.nix
           ];
         };
