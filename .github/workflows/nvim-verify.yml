@@ -38,5 +38,5 @@ jobs:
         run: >-
           nix shell --inputs-from .
           nixpkgs#neovim nixpkgs#tree-sitter nixpkgs#lua-language-server
-          nixpkgs#go nixpkgs#ripgrep
+          nixpkgs#go_1_27 nixpkgs#ripgrep
           --command python3 scripts/nvim-plugins.py "$MODE"

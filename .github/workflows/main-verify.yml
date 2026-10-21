@@ -45,5 +45,20 @@ jobs:
           primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.nix', 'flake.lock') }}
           restore-prefixes-first-match: nix-${{ runner.os }}-
 
+      - name: Evaluate Go and both Darwin configurations
+        run: |
+          nix eval --json .#lib.toolVersions.aarch64-darwin.go \
+            --apply 'v: builtins.compareVersions v "1.27.3" >= 0' | grep -qx true
+          nix eval --raw .#darwinConfigurations.personal.config.system.build.toplevel.drvPath
+          nix eval --raw .#darwinConfigurations.work.config.system.build.toplevel.drvPath
+
+      - name: Verify patched uv
+        shell: bash
+        run: |
+          nix run --print-build-logs .#uv -- --version | tee /tmp/uv-version
+          grep -Eq '^uv 0\.13\.4( \(.*\))?$' /tmp/uv-version
+
       - name: Run repo verification
-        run: nix develop .#ci -c ./bin/executable_dotctl test
+        run: |
+          nix develop .#ci -c ./bin/executable_dotctl test
+          nix develop .#ci -c go -C dot_claude/statusline test ./...

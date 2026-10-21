@@ -16,6 +16,33 @@
       ...
     }:
     let
+      # CVE-2026-111943: rebuild Go CLIs, not just the compiler on PATH.
+      securityOverlay = final: prev: {
+        go = final.go_1_27;
+        buildGoModule = final.buildGo127Module;
+        # uv uses bundled Web PKI roots by default (GHSA-hq85-5cpj-mr62).
+        uv = prev.uv.overrideAttrs (attrs: _: {
+          version = "0.13.4";
+          src = final.fetchFromGitHub {
+            owner = "astral-sh";
+            repo = "uv";
+            tag = "0.13.4";
+            hash = "sha256-US3SjwhWE3v4/i46YuBon2GA6PupC4Z0NRUqcV9CPLM=";
+          };
+          cargoDeps = final.rustPlatform.fetchCargoVendor {
+            inherit (attrs) pname version src;
+            hash = "sha256-9L47CTlkOVYfGuzE4e7e2FYAI192pAsipzzScF7B1j4=";
+          };
+        });
+        # Nix's PEM consumers do not receive Firefox's OneCRL updates.
+        cacert = prev.cacert.overrideAttrs (_: {
+          version = "3.131.1";
+          src = final.fetchurl {
+            url = "https://raw.githubusercontent.com/nss-dev/nss/NSS_3_131_1_RTM/lib/ckfw/builtins/certdata.txt";
+            hash = "sha256-PsK00kDcEsdH6vRQBh24SvdXxIO72jAvninOtdcL5RA=";
+          };
+        });
+      };
       # This dotfiles repo is macOS-only for now, so keep the shell darwin-only too.
       systems = [
         "aarch64-darwin"
@@ -26,6 +53,7 @@
         let
           pkgs = import nixpkgs {
             inherit system;
+            overlays = [ securityOverlay ];
             config.allowUnfreePredicate =
               pkg:
               builtins.elem (nixpkgs.lib.getName pkg) [
@@ -158,6 +186,7 @@
         in
         {
           cli = cli.cliProfile;
+          uv = cli.pkgs.uv;
           default = cli.cliProfile;
         }
       );
@@ -210,12 +239,14 @@
       darwinConfigurations = {
         personal = nix-darwin.lib.darwinSystem {
           modules = [
+            { nixpkgs.overlays = [ securityOverlay ]; }
             ./darwin/hosts/personal.nix
           ];
         };
 
         work = nix-darwin.lib.darwinSystem {
           modules = [
+            { nixpkgs.overlays = [ securityOverlay ]; }
             ./darwin/hosts/work.nix
           ];
         };
