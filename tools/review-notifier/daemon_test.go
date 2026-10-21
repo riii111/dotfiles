@@ -367,6 +367,39 @@ func TestDaemonShowsANewRequestWhileEarlierOnesAreUnanswered(t *testing.T) {
 	}
 }
 
+// alerter takes a moment to close; meanwhile a spurious wake-up must not close another notification.
+func TestDaemonClosesOneNotificationPerNewRequest(t *testing.T) {
+	f := newDaemonFixture(t)
+	f.poll(t)
+	for n := 1; n <= 4; n++ {
+		f.request("acme/app", n, requestedEvent(int64(n*10), "tanaka", "me"))
+	}
+	f.poll(t)
+	f.r.onCtx("alerter", func(ctx context.Context, args []string) ([]byte, error) {
+		if strings.HasPrefix(argValue(t, args, "--group"), "review-notifier:acme/app#4@") {
+			return []byte(`{"activationType":"closed"}`), nil
+		}
+		<-ctx.Done()
+		for i := 0; i < 5; i++ {
+			f.d.signal()
+			time.Sleep(10 * time.Millisecond)
+		}
+		return nil, ctx.Err()
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { f.d.notifyLoop(ctx); close(done) }()
+	defer func() { cancel(); <-done }()
+
+	waitFor(t, func() bool { return f.status(t, "acme/app#4@40") == StatusDeclined })
+	time.Sleep(100 * time.Millisecond)
+	for key, want := range map[string]Status{"acme/app#1@10": StatusReplaced, "acme/app#2@20": StatusNotifying, "acme/app#3@30": StatusNotifying} {
+		if got := f.status(t, key); got != want {
+			t.Errorf("%s = %s, want %s", key, got, want)
+		}
+	}
+}
+
 func waitFor(t *testing.T, cond func() bool) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)

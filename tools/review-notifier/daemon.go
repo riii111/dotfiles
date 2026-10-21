@@ -136,7 +136,8 @@ func (d *Daemon) notifyLoop(ctx context.Context) {
 	for ctx.Err() == nil {
 		mu.Lock()
 		full := len(shown) >= d.tools.Cfg.MaxNotifications
-		if full && d.hasQueued() {
+		// One notification is closed per waiting request; a closing one already makes room.
+		if full && replacing(shown) < d.queuedCount() {
 			d.replaceOldest(shown)
 		}
 		mu.Unlock()
@@ -241,10 +242,26 @@ func (d *Daemon) launch(ctx context.Context, req Request, ch *Choice) {
 	d.log.Printf("%s: opened %s at %s", req.Key, res.Worktree, res.PR.HeadSHA)
 }
 
-func (d *Daemon) hasQueued() bool {
+func (d *Daemon) queuedCount() int {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return d.st.nextQueued() != nil
+	n := 0
+	for _, req := range d.st.Requests {
+		if req.Status == StatusQueued {
+			n++
+		}
+	}
+	return n
+}
+
+func replacing(shown map[string]*shownNotice) int {
+	n := 0
+	for _, s := range shown {
+		if s.replacing {
+			n++
+		}
+	}
+	return n
 }
 
 // Closes the longest-shown notification that is not already being closed.
