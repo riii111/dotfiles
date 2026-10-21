@@ -30,33 +30,42 @@ func prJSON(repo string, number int) string {
 	return fmt.Sprintf(`{"number":%d,"title":"T","html_url":"https://github.com/%s/pull/%d","head":{"sha":%q},"base":{"ref":"main","repo":{"full_name":%q}}}`, number, repo, number, headSHA, repo)
 }
 
-func TestLatestRequestNamesTheRequesterNotTheAuthor(t *testing.T) {
-	hit := searchHit{Repo: "acme/app", Number: 3}
-	events, _ := decodePages([]byte(`[` +
-		requestedEvent(10, "tanaka", "me") + `,` +
-		requestedEvent(11, "sato", "someone-else") + `,` +
-		requestedEvent(12, "suzuki", "ME") + `]`))
-	f, ok := latestRequest(events, hit, "me", nil)
-	if !ok || f.Key != "acme/app#3@12" || f.Requester != "suzuki" {
-		t.Fatalf("found = %+v %v", f, ok)
+func TestLatestRequest(t *testing.T) {
+	teamEvents := `{"id":1,"event":"review_requested","review_requester":{"login":"a"},"requested_team":{"slug":"backend"}},` +
+		`{"id":2,"event":"review_requested","review_requester":{"login":"b"},"requested_team":{"slug":"frontend"}}`
+	cases := []struct {
+		name          string
+		events        string
+		teams         []string
+		wantKey       string // empty when no request matches
+		wantRequester string
+	}{
+		{
+			// The requester is the person who asked, and the latest request to the login wins.
+			name:          "direct request",
+			events:        requestedEvent(10, "tanaka", "me") + "," + requestedEvent(11, "sato", "someone-else") + "," + requestedEvent(12, "suzuki", "ME"),
+			wantKey:       "acme/app#3@12",
+			wantRequester: "suzuki",
+		},
+		{
+			name:    "unknown requester",
+			events:  `{"id":20,"event":"review_requested","requested_reviewer":{"login":"me"}}`,
+			wantKey: "acme/app#3@20",
+		},
+		{name: "configured team", events: teamEvents, teams: []string{"acme/backend"}, wantKey: "acme/app#3@1", wantRequester: "a"},
+		{name: "team of another organization", events: teamEvents, teams: []string{"other/backend"}},
 	}
-
-	events, _ = decodePages([]byte(`[{"id":20,"event":"review_requested","requested_reviewer":{"login":"me"}}]`))
-	if f, _ := latestRequest(events, hit, "me", nil); f.Requester != "" {
-		t.Errorf("a missing requester must stay unknown, got %q", f.Requester)
-	}
-}
-
-func TestLatestRequestOnlyCountsConfiguredTeams(t *testing.T) {
-	hit := searchHit{Repo: "acme/app", Number: 3}
-	events, _ := decodePages([]byte(`[
-		{"id":1,"event":"review_requested","review_requester":{"login":"a"},"requested_team":{"slug":"backend"}},
-		{"id":2,"event":"review_requested","review_requester":{"login":"b"},"requested_team":{"slug":"frontend"}}]`))
-	if f, ok := latestRequest(events, hit, "me", []string{"acme/backend"}); !ok || f.Key != "acme/app#3@1" {
-		t.Fatalf("found = %+v %v", f, ok)
-	}
-	if _, ok := latestRequest(events, hit, "me", []string{"other/backend"}); ok {
-		t.Error("a team of another organization must not match")
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			events, err := decodePages([]byte("[" + c.events + "]"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			f, ok := latestRequest(events, searchHit{Repo: "acme/app", Number: 3}, "me", c.teams)
+			if ok != (c.wantKey != "") || f.Key != c.wantKey || f.Requester != c.wantRequester {
+				t.Errorf("found = %+v %v", f, ok)
+			}
+		})
 	}
 }
 
@@ -274,27 +283,33 @@ func TestDaemonNotifiesEachRequestOnceAndOpensTheChoice(t *testing.T) {
 	}
 }
 
-func TestDaemonDeclineAndTimeoutStartNothing(t *testing.T) {
-	f := newDaemonFixture(t)
-	ctx := context.Background()
-	f.poll(t)
-	f.request("acme/app", 1, requestedEvent(10, "tanaka", "me"))
-	f.request("acme/app", 2, requestedEvent(20, "tanaka", "me"))
-	f.poll(t)
-	f.answer = func(key string) string {
-		if strings.HasPrefix(key, "acme/app#1@") {
-			return `{"activationType":"closed","activationValue":"見送る"}`
-		}
-		return `{"activationType":"timeout"}`
+func TestDaemonAnswersOtherThanAChoiceStartNothing(t *testing.T) {
+	cases := []struct {
+		name   string
+		answer string
+		want   Status
+	}{
+		{"decline", `{"activationType":"closed","activationValue":"見送る"}`, StatusDeclined},
+		{"timeout", `{"activationType":"timeout"}`, StatusTimeout},
+		{"body click", `{"activationType":"contentsClicked"}`, StatusDismissed},
 	}
-	f.d.handleNext(ctx)
-	f.d.handleNext(ctx)
-	if f.status(t, "acme/app#1@10") != StatusDeclined || f.status(t, "acme/app#2@20") != StatusTimeout {
-		t.Error("unexpected statuses")
-	}
-	f.poll(t)
-	if f.d.handleNext(ctx) || f.r.ran("git") || len(f.opened) != 0 {
-		t.Error("declined and timed-out requests must start nothing and not come back")
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			f := newDaemonFixture(t)
+			ctx := context.Background()
+			f.poll(t)
+			f.request("acme/app", 1, requestedEvent(10, "tanaka", "me"))
+			f.poll(t)
+			f.answer = func(string) string { return c.answer }
+			f.d.handleNext(ctx)
+			if got := f.status(t, "acme/app#1@10"); got != c.want {
+				t.Errorf("status = %s", got)
+			}
+			f.poll(t)
+			if f.d.handleNext(ctx) || f.r.ran("git") || len(f.opened) != 0 {
+				t.Error("the request must start nothing and not come back")
+			}
+		})
 	}
 }
 
@@ -336,67 +351,74 @@ func TestDaemonKeepsPollingAfterAnAPIFailure(t *testing.T) {
 	}
 }
 
-// With every place taken by unanswered notifications, a new request closes the oldest one
-// instead of waiting for it to time out.
-func TestDaemonShowsANewRequestWhileEarlierOnesAreUnanswered(t *testing.T) {
-	f := newDaemonFixture(t)
-	f.poll(t)
-	for n := 1; n <= 3; n++ {
-		f.request("acme/app", n, requestedEvent(int64(n*10), "tanaka", "me"))
+// With every place taken by unanswered notifications, a new request closes exactly the oldest one.
+func TestDaemonClosesTheOldestNotificationForANewRequest(t *testing.T) {
+	cases := []struct {
+		name string
+		// The fourth request arrives while three are on screen, instead of being queued from the start.
+		late bool
+		// alerter takes a while to close, and wake-ups arrive meanwhile; they must not close another one.
+		slowClose bool
+	}{
+		{name: "new request while three are shown", late: true},
+		{name: "four queued and a wake-up while closing", slowClose: true},
 	}
-	f.poll(t)
-	f.r.onCtx("alerter", func(ctx context.Context, args []string) ([]byte, error) {
-		if strings.HasPrefix(argValue(t, args, "--group"), "review-notifier:acme/app#4@") {
-			return []byte(`{"activationType":"closed"}`), nil
-		}
-		// Left unanswered until alerter is stopped.
-		<-ctx.Done()
-		return nil, ctx.Err()
-	})
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	go func() { f.d.notifyLoop(ctx); close(done) }()
-	defer func() { cancel(); <-done }()
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			f := newDaemonFixture(t)
+			f.poll(t)
+			queued := 4
+			if c.late {
+				queued = 3
+			}
+			for n := 1; n <= queued; n++ {
+				f.request("acme/app", n, requestedEvent(int64(n*10), "tanaka", "me"))
+			}
+			f.poll(t)
 
-	waitFor(t, func() bool { return f.status(t, "acme/app#3@30") == StatusNotifying })
-	f.request("acme/app", 4, requestedEvent(40, "tanaka", "me"))
-	f.poll(t)
-	waitFor(t, func() bool { return f.status(t, "acme/app#4@40") == StatusDeclined })
-	if f.status(t, "acme/app#1@10") != StatusReplaced || f.status(t, "acme/app#2@20") != StatusNotifying {
-		t.Errorf("statuses: #1 %s, #2 %s", f.status(t, "acme/app#1@10"), f.status(t, "acme/app#2@20"))
-	}
-}
+			var mu sync.Mutex
+			var closed []string
+			f.r.onCtx("alerter", func(ctx context.Context, args []string) ([]byte, error) {
+				key := strings.TrimPrefix(argValue(t, args, "--group"), "review-notifier:")
+				if strings.HasPrefix(key, "acme/app#4@") {
+					return []byte(`{"activationType":"closed"}`), nil
+				}
+				<-ctx.Done()
+				mu.Lock()
+				closed = append(closed, key)
+				mu.Unlock()
+				if c.slowClose {
+					for range 5 {
+						f.d.signal()
+						time.Sleep(10 * time.Millisecond)
+					}
+				}
+				return nil, ctx.Err()
+			})
+			ctx, cancel := context.WithCancel(context.Background())
+			done := make(chan struct{})
+			go func() { f.d.notifyLoop(ctx); close(done) }()
 
-// alerter takes a moment to close; meanwhile a spurious wake-up must not close another notification.
-func TestDaemonClosesOneNotificationPerNewRequest(t *testing.T) {
-	f := newDaemonFixture(t)
-	f.poll(t)
-	for n := 1; n <= 4; n++ {
-		f.request("acme/app", n, requestedEvent(int64(n*10), "tanaka", "me"))
-	}
-	f.poll(t)
-	f.r.onCtx("alerter", func(ctx context.Context, args []string) ([]byte, error) {
-		if strings.HasPrefix(argValue(t, args, "--group"), "review-notifier:acme/app#4@") {
-			return []byte(`{"activationType":"closed"}`), nil
-		}
-		<-ctx.Done()
-		for i := 0; i < 5; i++ {
-			f.d.signal()
-			time.Sleep(10 * time.Millisecond)
-		}
-		return nil, ctx.Err()
-	})
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	go func() { f.d.notifyLoop(ctx); close(done) }()
-	defer func() { cancel(); <-done }()
+			if c.late {
+				waitFor(t, func() bool { return f.status(t, "acme/app#3@30") == StatusNotifying })
+				f.request("acme/app", 4, requestedEvent(40, "tanaka", "me"))
+				f.poll(t)
+			}
+			// The fourth is shown only after the closed one has exited, so any extra close happened before this.
+			waitFor(t, func() bool { return f.status(t, "acme/app#4@40") == StatusDeclined })
+			mu.Lock()
+			got := append([]string(nil), closed...)
+			mu.Unlock()
+			cancel()
+			<-done
 
-	waitFor(t, func() bool { return f.status(t, "acme/app#4@40") == StatusDeclined })
-	time.Sleep(100 * time.Millisecond)
-	for key, want := range map[string]Status{"acme/app#1@10": StatusReplaced, "acme/app#2@20": StatusNotifying, "acme/app#3@30": StatusNotifying} {
-		if got := f.status(t, key); got != want {
-			t.Errorf("%s = %s, want %s", key, got, want)
-		}
+			if len(got) != 1 || got[0] != "acme/app#1@10" {
+				t.Errorf("closed = %v, want only the oldest", got)
+			}
+			if s := f.status(t, "acme/app#1@10"); s != StatusReplaced {
+				t.Errorf("oldest = %s", s)
+			}
+		})
 	}
 }
 

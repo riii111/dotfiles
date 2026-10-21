@@ -176,16 +176,25 @@ func TestParseSelection(t *testing.T) {
 		out     string
 		outcome Outcome
 		id      string
+		wantErr bool
 	}{
-		{"dropdown", `{"activationType":"actionClicked","activationValue":"コードレビュー","activationValueIndex":"1"}`, Chosen, "code"},
-		{"single action", `{"activationType":"actionClicked","activationValue":"ADRレビュー"}`, Chosen, "adr"},
-		{"decline", `{"activationType":"closed","activationValue":"見送る"}`, Declined, ""},
-		{"timeout", `{"activationType":"timeout"}`, TimedOut, ""},
-		{"body click", `{"activationType":"contentsClicked"}`, Dismissed, ""},
+		{name: "dropdown", out: `{"activationType":"actionClicked","activationValue":"コードレビュー","activationValueIndex":"1"}`, outcome: Chosen, id: "code"},
+		{name: "single action", out: `{"activationType":"actionClicked","activationValue":"ADRレビュー"}`, outcome: Chosen, id: "adr"},
+		{name: "decline", out: `{"activationType":"closed","activationValue":"見送る"}`, outcome: Declined},
+		{name: "timeout", out: `{"activationType":"timeout"}`, outcome: TimedOut},
+		{name: "body click", out: `{"activationType":"contentsClicked"}`, outcome: Dismissed},
+		// An action that is not configured must never start some other review.
+		{name: "unknown action", out: `{"activationType":"actionClicked","activationValue":"x"}`, wantErr: true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			sel, err := parseSelection([]byte(c.out), choices)
+			if c.wantErr {
+				if err == nil {
+					t.Fatalf("expected an error, got %s %+v", sel.Outcome, sel.Choice)
+				}
+				return
+			}
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -193,10 +202,6 @@ func TestParseSelection(t *testing.T) {
 				t.Errorf("selection = %s %+v", sel.Outcome, sel.Choice)
 			}
 		})
-	}
-	// An action that is not configured must never start some other review.
-	if _, err := parseSelection([]byte(`{"activationType":"actionClicked","activationValue":"x"}`), choices); err == nil {
-		t.Error("an unknown action must be an error")
 	}
 }
 
@@ -217,17 +222,20 @@ func TestDeepLinkEncodesPromptAndPath(t *testing.T) {
 }
 
 func TestRemoteRepo(t *testing.T) {
-	for remote, want := range map[string]string{
-		"git@github.com:acme/app.git\n":     "acme/app",
-		"https://github.com/acme/app":       "acme/app",
-		"ssh://git@github.com/acme/app.git": "acme/app",
-	} {
-		if got, ok := remoteRepo(remote); !ok || got != want {
-			t.Errorf("%q: %q %v", remote, got, ok)
-		}
+	cases := []struct {
+		remote string
+		want   string
+		ok     bool
+	}{
+		{"git@github.com:acme/app.git\n", "acme/app", true},
+		{"https://github.com/acme/app", "acme/app", true},
+		{"ssh://git@github.com/acme/app.git", "acme/app", true},
+		{"https://gitlab.com/acme/app.git", "", false},
 	}
-	if _, ok := remoteRepo("https://gitlab.com/acme/app.git"); ok {
-		t.Error("non-GitHub remote must not match")
+	for _, c := range cases {
+		if got, ok := remoteRepo(c.remote); ok != c.ok || got != c.want {
+			t.Errorf("%q: %q %v", c.remote, got, ok)
+		}
 	}
 }
 
