@@ -41,7 +41,9 @@ Ready化・mergeは別途依頼された場合だけ行い、その直前に現�
 参照文書に積み先のPRがある場合は、その上に積む。
 起動時の開始branchは積み先のPRのhead branchなので、その上に自分のbranchを作る。
 Draft PRのbaseは積み先のbranchにする。
-PRを作成したら`gh stack link <積み先のPRのURL> <自分のPRのURL>`を実行し、stackへ載せる。
+PRを作成したら、積み先のPRからbaseをmainまでたどり、そのPRを下から順にすべて並べる。
+`gh stack link <下のPR...> <積み先のPR> <自分のPR>`を実行し、stackへ載せる。
+積み先が既にstackにある場合、既存のPRを1本でも欠くと失敗するため。
 Open後にbaseの付け替えやstackの組み直しをしない。
 承認は最後のpush以降のものだけが数えられるため。
 
