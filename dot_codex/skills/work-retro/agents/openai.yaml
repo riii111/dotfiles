@@ -1,0 +1,4 @@
+interface:
+  display_name: "Work Retro"
+  short_description: "会話ログから繰り返しの指示を集計し、仕組みの改善を提案する。"
+  default_prompt: "$work-retroを使い、直近7日の振り返りを作成してください。"
