@@ -58,6 +58,10 @@ jobs:
           nix run --print-build-logs .#uv -- --version | tee /tmp/uv-version
           grep -Eq '^uv 0\.13\.5( \(.*\))?$' /tmp/uv-version
 
+      - name: Verify patched Python and ensurepip
+        run: |
+          nix run --print-build-logs .#python3 -- -I -c 'import sys, ensurepip, pip; assert sys.version_info[:3] == (3, 14, 9); assert ensurepip.version() == pip.__version__ == "26.2.2"'
+
       - name: Run repo verification
         run: |
           nix develop .#ci -c ./bin/executable_dotctl test

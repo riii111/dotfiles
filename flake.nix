@@ -116,6 +116,35 @@
               ln -s "${pkgs.rustup}/bin/$bin" "$out/bin/$bin"
             done
           '';
+          # Update PATH Python and both pip copies without rebuilding Python CLI dependencies.
+          dailyPython = pkgs.stdenvNoCC.mkDerivation {
+            pname = "python3";
+            version = "3.14.9";
+            src = pkgs.fetchurl {
+              url = "https://github.com/astral-sh/python-build-standalone/releases/download/20261021/cpython-3.14.9%2B20261021-aarch64-apple-darwin-install_only_stripped.tar.gz";
+              hash = "sha256-n4w0gLjw21U8Jw21SOiiGujjnfQS5WYdZugFDFxu0qg=";
+            };
+            dontConfigure = true;
+            dontBuild = true;
+            dontStrip = true;
+            dontPatchShebangs = true;
+            installPhase = ''
+              runHook preInstall
+              mkdir -p "$out"
+              cp -R . "$out/"
+              PATH="$out/bin:$PATH" patchShebangs "$out/bin"
+              runHook postInstall
+            '';
+            doInstallCheck = true;
+            installCheckPhase = ''
+              runHook preInstallCheck
+              "$out/bin/python3" -I -c 'import sys, ssl, sqlite3, ensurepip, pip; assert sys.version_info[:3] == (3, 14, 9); assert ensurepip.version() == pip.__version__ == "26.2.2"'
+              "$out/bin/python3" -I -m venv "$TMPDIR/verify-venv"
+              "$TMPDIR/verify-venv/bin/python" -I -m pip --version | grep -F "pip 26.2.2 "
+              runHook postInstallCheck
+            '';
+            meta = pkgs.python3.meta // { platforms = [ "aarch64-darwin" ]; };
+          };
           # Keep the security release and its patched bundled libraries together.
           dailyNode = pkgs.stdenvNoCC.mkDerivation (attrs: {
             pname = "nodejs";
@@ -194,7 +223,7 @@
             bashInteractive
             nixd
             nixfmt
-            python3
+            dailyPython
             shellcheck
             shfmt
             stylua
@@ -288,6 +317,7 @@
             toolVersions
             dailyCliPackages
             dailyNode
+            dailyPython
             cliProfile
             cliTrust
             ;
@@ -302,6 +332,7 @@
         {
           cli = cli.cliProfile;
           uv = cli.pkgs.uv;
+          python3 = cli.dailyPython;
           rustup = cli.pkgs.rustup;
           nodejs = cli.dailyNode;
           ca-certificates = cli.cliTrust;
@@ -336,7 +367,7 @@
               git
               go
               jq
-              python3
+              cli.dailyPython
               ruff
             ];
           };
