@@ -108,7 +108,6 @@
               url = "https://nodejs.org/dist/v${attrs.version}/node-v${attrs.version}-darwin-arm64.tar.gz";
               hash = "sha256-icaCWT12zUQjP6U7FWMmTn3py7GJytFpE1xbT637wKc=";
             };
-            nativeBuildInputs = [ pkgs.makeWrapper ];
             dontConfigure = true;
             dontBuild = true;
             dontStrip = true;
@@ -117,10 +116,6 @@
               runHook preInstall
               mkdir -p "$out"
               cp -R bin include lib share "$out/"
-              # Children spawned through process.execPath bypass this wrapper.
-              wrapProgram "$out/bin/node" \
-                --prefix NODE_OPTIONS " " --use-openssl-ca \
-                --set-default SSL_CERT_FILE "${cliTrust}/share/dotfiles/ca-bundle.crt"
               runHook postInstall
             '';
             doInstallCheck = true;
