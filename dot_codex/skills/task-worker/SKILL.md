@@ -36,6 +36,17 @@ Codexは`sandbox_permissions: require_escalated`を付け、Claudeはそのま�
 決まっていない点は暫定で選んで進め、選んだ点と確かめていないことがあれば、完了報告にふつうの文で書く。
 Ready化・mergeは別途依頼された場合だけ行い、その直前に現在のbaseとのmerge可否と意味的な競合を確認する。
 
+## 積んだPR
+
+参照文書に積み先のPRがある場合は、その上に積む。
+起動時の開始branchは積み先のPRのhead branchなので、その上に自分のbranchを作る。
+Draft PRのbaseは積み先のbranchにする。
+PRを作成したら、積み先のPRからbaseをmainまでたどり、そのPRを下から順にすべて並べる。
+`gh stack link <下のPR...> <積み先のPR> <自分のPR>`を実行し、stackへ載せる。
+積み先が既にstackにある場合、既存のPRを1本でも欠くと失敗するため。
+Open後にbaseの付け替えやstackの組み直しをしない。
+承認は最後のpush以降のものだけが数えられるため。
+
 ## Review基点
 
 最初のレビュー直前にbase branchをfetchし、そのtipを必要に応じて取り込む。

@@ -27,6 +27,12 @@ description: |
 ユーザーがAppで確認した結果だけを、承認を得て記録する。
 送信済みなら`harnexus-task resolve --request <JSON> --sent [--thread-id <ID>]`、未送信なら`--not-sent`で記録する。
 
+## PRの積み方
+
+積むかどうかの基準は[PRの積み方](references/stacking.md)に従う。
+積み方は呼び出す側が決め、この手順では決めない。
+積むと決めた場合は、起動依頼JSONにstartingBranchと積み先のPRのURLを入れる。
+
 ## 参照文書
 
 合意・制約・依存成果・担当境界は文書へ記録し、worktreeへ入らない資料や規約もdocumentRefsで渡す。
