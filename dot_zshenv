@@ -6,6 +6,14 @@ export PSQL_PAGER="${PSQL_PAGER:-pspg}"
 export PSQL_WATCH_PAGER="${PSQL_WATCH_PAGER:-pspg --stream}"
 export NPM_CONFIG_CACHE="${NPM_CONFIG_CACHE:-$HOME/.cache/npm}"
 
+if [[ -r "${NIX_DOTFILES_SHARE}/dotfiles/ca-bundle.crt" ]]; then
+  export SSL_CERT_FILE="${NIX_DOTFILES_SHARE}/dotfiles/ca-bundle.crt"
+  export NIX_SSL_CERT_FILE="$SSL_CERT_FILE"
+  export CURL_CA_BUNDLE="$SSL_CERT_FILE"
+  export REQUESTS_CA_BUNDLE="$SSL_CERT_FILE"
+  export PIP_CERT="$SSL_CERT_FILE"
+fi
+
 typeset -gU path PATH
 [[ -d "$HOME/.local/bin" ]] && path=("$HOME/.local/bin" "${path[@]}")
 export PATH
@@ -18,6 +26,7 @@ _dotfiles_place_nix_path() {
 
   [[ -d "${NIX_DOTFILES_BIN}" ]] && nix_paths+=("${NIX_DOTFILES_BIN}")
   [[ -d "$HOME/.local/state/nix/profiles/profile/bin" ]] && nix_paths+=("$HOME/.local/state/nix/profiles/profile/bin")
+  [[ -d /run/current-system/sw/bin ]] && nix_paths+=(/run/current-system/sw/bin)
   [[ -d /nix/var/nix/profiles/default/bin ]] && nix_paths+=(/nix/var/nix/profiles/default/bin)
 
   (( ${#nix_paths} )) || return 0
