@@ -40,6 +40,31 @@ nix develop -c ./bin/executable_dotctl test
 Japanese Markdown and skill references can be checked and formatted with
 [the Markdown tools](scripts/ai-docs/README.md).
 
+### Repair a leftover macOS SDK
+
+If C or Rust linking fails with `unknown architecture arm64e.x1`, diagnose the
+installed Command Line Tools and SDKs:
+
+```bash
+python3 scripts/repair-macos-sdk.py
+```
+
+The repair is available only when the default SDK is newer than the installed
+Command Line Tools and the installer-selected `MacOSX.sdk` links successfully.
+After reviewing the listed candidates, apply it explicitly:
+
+```bash
+sudo /usr/bin/python3 scripts/repair-macos-sdk.py --apply
+xcrun --kill-cache
+```
+
+The script moves the failing SDK and its aliases into the printed backup directory,
+then checks default linking. A failed check restores the moved entries. Existing
+`SDKROOT` overrides are ignored during diagnosis and remain unchanged; unset a
+manual override before checking your normal build. To undo a successful repair,
+move the backed-up entries back into `/Library/Developer/CommandLineTools/SDKs/`
+with administrator privileges and run `xcrun --kill-cache` again.
+
 ## Optional integrations
 
 ### Work tools
