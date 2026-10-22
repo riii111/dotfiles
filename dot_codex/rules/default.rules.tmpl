@@ -56,6 +56,7 @@ prefix_rule(pattern=["codex-force-with-lease"], decision="allow", justification=
 prefix_rule(pattern=["harnexus-task", "launch"], decision="allow", justification="Send a generated worker launch through the harnexus call socket")
 prefix_rule(pattern=["harnexus-task", "review"], decision="allow", justification="Send a generated review request through the harnexus call socket")
 prefix_rule(pattern=["harnexus-task", "state"], decision="allow", justification="Show recorded task launch and review state")
+prefix_rule(pattern=["harnexus-task", "name"], decision="allow", justification="Append the worker's PR number to its own chat title")
 
 # 名前で許可したwrapperは、絶対パス指定時にインストール先だけを照合する。
 host_executable(name="gh-loupe", paths=["{{ .chezmoi.homeDir }}/.cargo/bin/gh-loupe"])
