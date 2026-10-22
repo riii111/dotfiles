@@ -87,7 +87,7 @@ OK済みの項目は翌朝の早朝の実行で起動する。
 | 3. `harnexus-task state`（`--request`なし）の記録に、同じIssueを指す別のlaunchがない。taskIdが別の書き方（`#456`・`456`など）のものと、documentRefsに同じIssueのURLを含むものも探す     | `needs_decision`                                                                                 |
 | 4. 依存先（blocked by）がすべて完了している、または未完了の依存先が積み先のPRだけである。Issueが今も`sources`のクエリか`add`に当たるか、有効なOKのnoteが`担当外でOK`で、`exclude`にない | 依存先が未完了なら`ready`のまま`next_action`に依存先を書く。候補から外れていれば`needs_decision` |
 | 5. `codex_app__list_projects`を一度呼び、パスの`git remote get-url origin`がIssueのリポジトリと一致するprojectが1つだけある                                                             | `needs_decision`                                                                                 |
-| 6. 積み先を選んだ場合（起動直前は`planned`のnoteの積み先）、積み先のPRがopenで、mainから2段目までにある                                                                                 | 積まずに起動せず、`plan_cancelled`で閉じる。積み方は次の予定で決め直す                           |
+| 6. 積み先を選んだ場合（起動直前は`planned`のnoteの積み先）、積み先のPRがopenで、mainから2段目までにあり、そのbranchをbaseにするopenのPRがない                                           | 積まずに起動せず、`plan_cancelled`で閉じる。積み方は次の予定で決め直す                           |
 
 ## 起動の手順
 
