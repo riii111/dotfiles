@@ -27,6 +27,10 @@ Non-blockingの未対応だけでは再レビューしない。
 全検証は修正のたびに繰り返さず、LGTM後の最終headでリポジトリ所定の必須検証を完了する。
 
 そのheadを通常のpushで公開し、create-pr SKILL、なければPR templateと直近の慣例に従ってDraft PRを作成・更新する。
+Draft PRを初めて作成したら、`harnexus-task name --pr <PRのURL>`をサンドボックス外で一度実行し、自分のスレッド名の末尾にPR番号を付ける。
+Codexは`sandbox_permissions: require_escalated`を付け、Claudeはそのまま実行する（サンドボックス対象外）。
+パイプ・リダイレクト・`cd`などを付けず単独で実行する（付けると対象外にならない）。
+失敗しても再実行せず作業を続け、完了報告に書く。
 完了条件はPR headとreview済みheadの一致、そのheadの必須検証・独立LGTM・CI成功とする。
 完了報告のGit・PR・CI状態は直近の確認結果に基づき、未追跡・失敗などを未確認のまま断言しない。
 決まっていない点は暫定で選んで進め、選んだ点と確かめていないことがあれば、完了報告にふつうの文で書く。
