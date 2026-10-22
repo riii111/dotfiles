@@ -116,14 +116,15 @@
               ln -s "${pkgs.rustup}/bin/$bin" "$out/bin/$bin"
             done
           '';
-          # Update PATH Python and both pip copies without rebuilding Python CLI dependencies.
+          # Patch ensurepip in a copied runtime; retain Nix Python's TLS backend and CA defaults.
           dailyPython = pkgs.stdenvNoCC.mkDerivation {
             pname = "python3";
-            version = "3.14.9";
-            src = pkgs.fetchurl {
-              url = "https://github.com/astral-sh/python-build-standalone/releases/download/20261021/cpython-3.14.9%2B20261021-aarch64-apple-darwin-install_only_stripped.tar.gz";
-              hash = "sha256-n4w0gLjw21U8Jw21SOiiGujjnfQS5WYdZugFDFxu0qg=";
+            inherit (pkgs.python3) version;
+            pipWheel = pkgs.fetchurl {
+              url = "https://files.pythonhosted.org/packages/3f/06/3e4420302363fbb71be3c7f35ce042f54bfca330e3e66b3a2e3c4cca579f/pip-26.2.2-py3-none-any.whl";
+              hash = "sha256-/X9N+oGQ4BQBO58I8+lz9OTCb/0XmiBIlVM6clSBOnA=";
             };
+            dontUnpack = true;
             dontConfigure = true;
             dontBuild = true;
             dontStrip = true;
@@ -131,19 +132,24 @@
             installPhase = ''
               runHook preInstall
               mkdir -p "$out"
-              cp -R . "$out/"
-              PATH="$out/bin:$PATH" patchShebangs "$out/bin"
+              cp -R "${pkgs.python3}/." "$out/"
+              chmod -R u+w "$out"
+              ensurepip="$out/lib/python3.14/ensurepip"
+              substituteInPlace "$ensurepip/__init__.py" \
+                --replace-fail '_PIP_VERSION = "26.2.1"' '_PIP_VERSION = "26.2.2"'
+              rm "$ensurepip/_bundled/pip-26.2.1-py3-none-any.whl"
+              cp "$pipWheel" "$ensurepip/_bundled/pip-26.2.2-py3-none-any.whl"
               runHook postInstall
             '';
             doInstallCheck = true;
             installCheckPhase = ''
               runHook preInstallCheck
-              "$out/bin/python3" -I -c 'import sys, ssl, sqlite3, ensurepip, pip; assert sys.version_info[:3] == (3, 14, 9); assert ensurepip.version() == pip.__version__ == "26.2.2"'
+              "$out/bin/python3" -I -c 'import sys, ssl, sqlite3, ensurepip; assert ensurepip.__file__.startswith(sys.argv[1]); assert ensurepip.version() == "26.2.2"' "$out/"
               "$out/bin/python3" -I -m venv "$TMPDIR/verify-venv"
               "$TMPDIR/verify-venv/bin/python" -I -m pip --version | grep -F "pip 26.2.2 "
               runHook postInstallCheck
             '';
-            meta = pkgs.python3.meta // { platforms = [ "aarch64-darwin" ]; };
+            meta = pkgs.python3.meta;
           };
           # Keep the security release and its patched bundled libraries together.
           dailyNode = pkgs.stdenvNoCC.mkDerivation (attrs: {

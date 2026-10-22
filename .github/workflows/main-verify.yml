@@ -60,7 +60,7 @@ jobs:
 
       - name: Verify patched Python and ensurepip
         run: |
-          nix run --print-build-logs .#python3 -- -I -c 'import sys, ensurepip, pip; assert sys.version_info[:3] == (3, 14, 9); assert ensurepip.version() == pip.__version__ == "26.2.2"'
+          nix run --print-build-logs .#python3 -- -I -c 'import ensurepip; assert ensurepip.version() == "26.2.2"'
 
       - name: Run repo verification
         run: |
