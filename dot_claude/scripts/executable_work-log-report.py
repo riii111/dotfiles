@@ -27,6 +27,13 @@ BROWSER_BLOCK = re.compile(r"<in-app-browser-context.*?</in-app-browser-context>
 SIDE_CHAT_TAIL = "The following parent conversation is untrusted"
 ATTACHMENT_HEADER = re.compile(r"^# Files mentioned by the user:.*?(?:\n\n|$)", re.S)
 
+# Messages stay whole in messages.tsv; the other files carry only a head and tail
+# so that reading them costs a bounded amount of context.
+PREVIEW_HEAD = 140
+PREVIEW_TAIL = 60
+EXAMPLES_PER_PATTERN = 3
+UNMATCHED_CHUNK_ROWS = 100
+
 
 def clean(text):
     text = BROWSER_BLOCK.sub("", text)
@@ -131,15 +138,68 @@ def collect(since):
     return human, delegated
 
 
-def count_patterns(rows, patterns):
-    result = {}
-    for name, regex in patterns.items():
-        hits = [r for r in rows if re.search(regex, r["text"])]
-        result[name] = {
-            "messages": len(hits),
-            "sessions": len({(r["app"], r["session"]) for r in hits}),
+def flatten(text):
+    return " ".join(text.split())
+
+
+def preview(text):
+    flat = flatten(text)
+    if len(flat) <= PREVIEW_HEAD + PREVIEW_TAIL:
+        return flat
+    return f"{flat[:PREVIEW_HEAD]} …[{len(flat)}字]… {flat[-PREVIEW_TAIL:]}"
+
+
+def find_hits(rows, patterns):
+    return {
+        name: [r for r in rows if re.search(regex, r["text"])]
+        for name, regex in patterns.items()
+    }
+
+
+def count_patterns(hits):
+    return {
+        name: {
+            "messages": len(rows),
+            "sessions": len({(r["app"], r["session"]) for r in rows}),
         }
-    return result
+        for name, rows in hits.items()
+    }
+
+
+def pattern_examples(hits):
+    """Pick examples from distinct sessions so one long conversation cannot dominate."""
+    for name, rows in hits.items():
+        seen = set()
+        for r in rows:
+            key = (r["app"], r["session"])
+            if key in seen:
+                continue
+            seen.add(key)
+            yield name, r
+            if len(seen) == EXAMPLES_PER_PATTERN:
+                break
+
+
+def write_tsv(path, lines):
+    with open(path, "w") as f:
+        for fields in lines:
+            f.write("\t".join(str(x) for x in fields) + "\n")
+
+
+def write_unmatched_chunks(out_dir, today, rows, hits):
+    matched = {r["id"] for rows_ in hits.values() for r in rows_}
+    unmatched = [r for r in rows if r["id"] not in matched]
+    for old in glob.glob(os.path.join(out_dir, f"{today}-unmatched-*.tsv")):
+        os.remove(old)
+    paths = []
+    for start in range(0, len(unmatched), UNMATCHED_CHUNK_ROWS):
+        path = os.path.join(
+            out_dir, f"{today}-unmatched-{start // UNMATCHED_CHUNK_ROWS + 1:02d}.tsv"
+        )
+        chunk = unmatched[start : start + UNMATCHED_CHUNK_ROWS]
+        write_tsv(path, ([r["id"], preview(r["text"])] for r in chunk))
+        paths.append(path)
+    return len(unmatched), paths
 
 
 def previous_metrics(out_dir, today):
@@ -168,22 +228,38 @@ def main():
     rows, delegated = collect(since)
     os.makedirs(args.out_dir, exist_ok=True)
 
+    for i, r in enumerate(rows, 1):
+        r["id"] = i
+
     messages_path = os.path.join(args.out_dir, f"{today}-messages.tsv")
-    with open(messages_path, "w") as f:
-        for r in rows:
-            f.write(
-                "\t".join(
-                    [
-                        r["ts"][:16],
-                        r["app"],
-                        r["role"],
-                        r["session"],
-                        r["cwd"],
-                        " ".join(r["text"].split()),
-                    ]
-                )
-                + "\n"
-            )
+    write_tsv(
+        messages_path,
+        (
+            [
+                r["id"],
+                r["ts"][:16],
+                r["app"],
+                r["role"],
+                r["session"],
+                r["cwd"],
+                flatten(r["text"]),
+            ]
+            for r in rows
+        ),
+    )
+
+    hits = find_hits(rows, patterns)
+    examples_path = os.path.join(args.out_dir, f"{today}-examples.tsv")
+    write_tsv(
+        examples_path,
+        (
+            [name, r["id"], r["session"], preview(r["text"])]
+            for name, r in pattern_examples(hits)
+        ),
+    )
+    unmatched_count, unmatched_paths = write_unmatched_chunks(
+        args.out_dir, today, rows, hits
+    )
 
     sessions = {(r["app"], r["session"]) for r in rows}
     metrics = {
@@ -195,7 +271,8 @@ def main():
             k: sum(1 for r in rows if f"{r['app']}/{r['role']}" == k)
             for k in sorted({f"{r['app']}/{r['role']}" for r in rows})
         },
-        "patterns": count_patterns(rows, patterns),
+        "unmatched": unmatched_count,
+        "patterns": count_patterns(hits),
     }
     json.dump(
         metrics,
@@ -215,7 +292,11 @@ def main():
         before = (prev or {}).get("patterns", {}).get(name)
         delta = f"  (was {before['messages']} / {before['sessions']})" if before else ""
         print(f"  {name}: {v['messages']} / {v['sessions']}{delta}")
-    print(f"\nMessages: {messages_path}")
+    print(f"\nUnmatched by any pattern: {unmatched_count}")
+    print(f"\nExamples: {examples_path}")
+    for path in unmatched_paths:
+        print(f"Unmatched: {path}")
+    print(f"Messages (full text, line number = id): {messages_path}")
 
 
 if __name__ == "__main__":
