@@ -159,7 +159,6 @@
               url = "https://nodejs.org/dist/v${attrs.version}/node-v${attrs.version}-darwin-arm64.tar.gz";
               hash = "sha256-icaCWT12zUQjP6U7FWMmTn3py7GJytFpE1xbT637wKc=";
             };
-            nativeBuildInputs = [ pkgs.makeWrapper ];
             dontConfigure = true;
             dontBuild = true;
             dontStrip = true;
@@ -168,10 +167,6 @@
               runHook preInstall
               mkdir -p "$out"
               cp -R bin include lib share "$out/"
-              # Children spawned through process.execPath bypass this wrapper.
-              wrapProgram "$out/bin/node" \
-                --prefix NODE_OPTIONS " " --use-openssl-ca \
-                --set-default SSL_CERT_FILE "${cliTrust}/share/dotfiles/ca-bundle.crt"
               runHook postInstall
             '';
             doInstallCheck = true;
@@ -222,6 +217,45 @@
               mkdir -p "$out/share/dotfiles"
               ln -s "$bundle" "$out/share/dotfiles/ca-bundle.crt"
             '';
+          # Only this curl uses the verifier that blocks compromised intermediate keys.
+          # rustls-ffi 0.15.6 pins rustls-webpki 0.103.16.
+          curlRustlsFfi = pkgs.rustls-ffi.overrideAttrs (
+            attrs: _: {
+              version = "0.15.6";
+              src = pkgs.fetchFromGitHub {
+                owner = "rustls";
+                repo = "rustls-ffi";
+                tag = "v${attrs.version}";
+                hash = "sha256-qVsadtAxS+yTt9FZMszwxql0CBTuz9ofpTto1hw9Kzg=";
+              };
+              cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
+                inherit (attrs) pname version src;
+                hash = "sha256-rALR92Ia+I2axVTMVjI9UyNiiS4e6QuN5QU9JfM0UY8=";
+              };
+            }
+          );
+          curlWithRustls = pkgs.curl.override {
+            opensslSupport = false;
+            rustlsSupport = true;
+            http3Support = false; # rustls-ffi does not support QUIC yet.
+            rustls-ffi = curlRustlsFfi;
+          };
+          dailyCurl =
+            pkgs.runCommand "curl-${curlWithRustls.version}"
+              {
+                inherit (curlWithRustls) version;
+                meta = curlWithRustls.meta // {
+                  outputsToInstall = [ "out" ];
+                };
+                nativeBuildInputs = [ pkgs.makeWrapper ];
+                passthru.rustlsFfi = curlRustlsFfi;
+              }
+              ''
+                mkdir -p "$out/bin"
+                # Plain PEM for rustls; do not inherit the installer's stale default bundle.
+                makeWrapper "${pkgs.lib.getBin curlWithRustls}/bin/curl" "$out/bin/curl" \
+                  --set-default CURL_CA_BUNDLE "${pkgs.cacert}/etc/ssl/certs/ca-no-trust-rules-bundle.crt"
+              '';
           mkVersionEntry = name: value: { inherit name value; };
           dailyCliPackages = with pkgs; [
             # Editor-integrated tooling that should exist in the normal shell too.
@@ -241,6 +275,7 @@
             bat
             chezmoi
             csvlens
+            dailyCurl
             delta
             direnv
             colima
@@ -322,6 +357,7 @@
             pkgs
             toolVersions
             dailyCliPackages
+            dailyCurl
             dailyNode
             dailyPython
             cliProfile
@@ -338,6 +374,7 @@
         {
           cli = cli.cliProfile;
           uv = cli.pkgs.uv;
+          curl = cli.dailyCurl;
           python3 = cli.dailyPython;
           rustup = cli.pkgs.rustup;
           nodejs = cli.dailyNode;

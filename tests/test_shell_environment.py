@@ -88,3 +88,14 @@ class ShellEnvironmentTest(unittest.TestCase):
             ),
             [str(bundle)] * 5,
         )
+
+    def test_homebrew_uses_managed_curl_when_available(self):
+        curl = self.profile / "bin/curl"
+        curl.write_text("#!/bin/sh\nexit 0\n")
+        curl.chmod(0o755)
+        self.assertEqual(self.run_zsh('print -r -- "$HOMEBREW_CURL_PATH"'), [str(curl)])
+
+    def test_missing_managed_curl_does_not_set_broken_homebrew_path(self):
+        self.assertEqual(
+            self.run_zsh('print -r -- "${HOMEBREW_CURL_PATH-unset}"'), ["unset"]
+        )
