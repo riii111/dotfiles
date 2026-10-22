@@ -171,6 +171,45 @@
               mkdir -p "$out/share/dotfiles"
               ln -s "$bundle" "$out/share/dotfiles/ca-bundle.crt"
             '';
+          # Only this curl uses the verifier that blocks compromised intermediate keys.
+          # rustls-ffi 0.15.6 pins rustls-webpki 0.103.16.
+          curlRustlsFfi = pkgs.rustls-ffi.overrideAttrs (
+            attrs: _: {
+              version = "0.15.6";
+              src = pkgs.fetchFromGitHub {
+                owner = "rustls";
+                repo = "rustls-ffi";
+                tag = "v${attrs.version}";
+                hash = "sha256-qVsadtAxS+yTt9FZMszwxql0CBTuz9ofpTto1hw9Kzg=";
+              };
+              cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
+                inherit (attrs) pname version src;
+                hash = "sha256-rALR92Ia+I2axVTMVjI9UyNiiS4e6QuN5QU9JfM0UY8=";
+              };
+            }
+          );
+          curlWithRustls = pkgs.curl.override {
+            opensslSupport = false;
+            rustlsSupport = true;
+            http3Support = false; # rustls-ffi does not support QUIC yet.
+            rustls-ffi = curlRustlsFfi;
+          };
+          dailyCurl =
+            pkgs.runCommand "curl-${curlWithRustls.version}"
+              {
+                inherit (curlWithRustls) version;
+                meta = curlWithRustls.meta // {
+                  outputsToInstall = [ "out" ];
+                };
+                nativeBuildInputs = [ pkgs.makeWrapper ];
+                passthru.rustlsFfi = curlRustlsFfi;
+              }
+              ''
+                mkdir -p "$out/bin"
+                # Plain PEM for rustls; do not inherit the installer's stale default bundle.
+                makeWrapper "${pkgs.lib.getBin curlWithRustls}/bin/curl" "$out/bin/curl" \
+                  --set-default CURL_CA_BUNDLE "${pkgs.cacert}/etc/ssl/certs/ca-no-trust-rules-bundle.crt"
+              '';
           mkVersionEntry = name: value: { inherit name value; };
           dailyCliPackages = with pkgs; [
             # Editor-integrated tooling that should exist in the normal shell too.
@@ -190,6 +229,7 @@
             bat
             chezmoi
             csvlens
+            dailyCurl
             delta
             direnv
             colima
@@ -271,6 +311,7 @@
             pkgs
             toolVersions
             dailyCliPackages
+            dailyCurl
             dailyNode
             cliProfile
             cliTrust
@@ -286,6 +327,7 @@
         {
           cli = cli.cliProfile;
           uv = cli.pkgs.uv;
+          curl = cli.dailyCurl;
           rustup = cli.pkgs.rustup;
           nodejs = cli.dailyNode;
           ca-certificates = cli.cliTrust;
