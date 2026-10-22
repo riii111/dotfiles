@@ -52,6 +52,8 @@ class PrStateTest(unittest.TestCase):
         for command in (
             "gh pr edit 42 --base main -R org/repo",
             "gh -R org/repo pr edit --base main 42",
+            "gh pr --repo org/repo edit --base main 42",
+            "gh pr -R org/repo edit --base main 42",
             "gh pr edit --repo=org/repo --base main 42",
             "gh pr edit -Rorg/repo 42 -B main",
         ):
@@ -100,6 +102,61 @@ class PrStateTest(unittest.TestCase):
         )
         self.assertEqual(
             self.runner.call_args.kwargs["cwd"], str(Path("/tmp/repo").resolve())
+        )
+
+    def test_subshell_restores_the_original_repository(self):
+        self.state(False)
+        command = "(cd /tmp/draft && gh pr view 1) && gh pr edit 1 -B main"
+        self.assertIsNotNone(self.hook.check(command, "/tmp/open"))
+        self.assertEqual(self.runner.call_args.kwargs["cwd"], "/tmp/open")
+
+    def test_redirections_do_not_change_pr_identity(self):
+        for suffix in (
+            " </dev/null",
+            " > /tmp/result",
+            " 2>/dev/null",
+            " >/tmp/out 2>&1",
+            " &>/tmp/result",
+            " >> /tmp/result",
+            " # explanatory comment",
+        ):
+            for draft in (True, False):
+                self.state(draft)
+                self.assertEqual(
+                    bool(self.hook.check("gh pr edit 1 --base main" + suffix, "/tmp")),
+                    not draft,
+                    suffix,
+                )
+                self.assertEqual(
+                    self.runner.call_args.args[0],
+                    [
+                        "gh",
+                        "pr",
+                        "view",
+                        "1",
+                        "--json",
+                        "isDraft",
+                    ],
+                )
+
+    def test_quoted_shell_characters_remain_argument_values(self):
+        self.state(True)
+        self.assertIsNone(
+            self.hook.check(
+                "gh pr edit 42 -B main --body '(quoted) > output; # comment'",
+                "/tmp",
+            )
+        )
+        self.assertEqual(
+            self.runner.call_args.args[0],
+            [
+                "gh",
+                "pr",
+                "view",
+                "42",
+                "--json",
+                "isDraft",
+            ],
         )
 
     def test_unrelated_commands_do_not_query(self):

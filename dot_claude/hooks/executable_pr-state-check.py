@@ -36,19 +36,54 @@ VALUE_FLAGS = {
     "--remove-project",
     "--attach",
 }
+SHELL_TOKEN = re.compile(
+    r"""(?P<redirect>\d*(?:>&|<&|<>|>\||>>?|<<?)|&>>?)"""
+    r"""|(?P<comment>#[^\n]*)"""
+    r"""|(?P<control>&&|\|\||[;&|()\n])"""
+    r"""|(?P<word>(?:[^\s;&|()<>'"\\]|\\.|'[^']*'|"(?:[^"\\]|\\.)*")+)"""
+)
 
 
 def segments(command: str) -> list[list[str]]:
-    lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|()\n")
-    lexer.whitespace = " \t\r"
-    lexer.whitespace_split = True
     result: list[list[str]] = [[]]
-    for token in lexer:
-        if token and all(char in ";&|()\n" for char in token):
-            result.append([])
+    position = 0
+    redirect_target = False
+    for match in SHELL_TOKEN.finditer(command):
+        if command[position : match.start()].strip():
+            raise ValueError("unsupported shell syntax")
+        position = match.end()
+        raw = match.group()
+        if match.lastgroup == "comment":
+            continue
+        if match.lastgroup == "redirect":
+            if "<<" in raw:
+                raise ValueError("heredoc requires a separate command")
+            redirect_target = True
+        elif match.lastgroup == "control":
+            if redirect_target:
+                raise ValueError("missing redirection target")
+            if raw in {"(", ")"}:
+                result.extend([[raw], []])
+            else:
+                result.append([])
+        elif redirect_target:
+            redirect_target = False
         else:
-            result[-1].append(token)
+            words = shlex.split(raw)
+            if len(words) != 1:
+                raise ValueError("ambiguous shell word")
+            result[-1].append(words[0])
+    if command[position:].strip() or redirect_target:
+        raise ValueError("incomplete shell syntax")
     return [part for part in result if part]
+
+
+def take_repo(args: list[str]) -> tuple[list[str], list[str]]:
+    if args and args[0] in {"-R", "--repo"}:
+        return args[:2], args[2:]
+    if args and (args[0].startswith("--repo=") or args[0].startswith("-R")):
+        return args[:1], args[1:]
+    return [], args
 
 
 def query_args(args: list[str]) -> tuple[list[str], bool]:
@@ -81,7 +116,14 @@ def check(command: str, cwd: str) -> str | None:
         return None
     try:
         deadline = time.monotonic() + 10
+        directories = []
         for part in segments(command):
+            if part == ["("]:
+                directories.append(cwd)
+                continue
+            if part == [")"]:
+                cwd = directories.pop()
+                continue
             if part[0] == "cd":
                 if len(part) != 2 or re.search(r"[$`~]", part[1]):
                     raise ValueError("working directory is dynamic")
@@ -99,17 +141,15 @@ def check(command: str, cwd: str) -> str | None:
                 part = part[1:]
             if not part or Path(part[0]).name != "gh":
                 continue
-            args = part[1:]
-            prefix = []
-            if args and args[0] in {"-R", "--repo"}:
-                prefix, args = args[:2], args[2:]
-            elif args and (args[0].startswith("--repo=") or args[0].startswith("-R")):
-                prefix, args = args[:1], args[1:]
-            if len(args) < 2 or args[0] != "pr" or args[1] not in {"edit", "ready"}:
+            prefix, args = take_repo(part[1:])
+            if not args or args[0] != "pr":
+                continue
+            parent_repo, args = take_repo(args[1:])
+            if not args or args[0] not in {"edit", "ready"}:
                 continue
             if "--help" in args or "-h" in args:
                 continue
-            query, dangerous = query_args(prefix + args[2:])
+            query, dangerous = query_args(prefix + parent_repo + args[1:])
             if not dangerous:
                 continue
             remaining = deadline - time.monotonic()
