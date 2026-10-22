@@ -46,19 +46,35 @@
             });
           })
         ];
-        # uv uses bundled Web PKI roots by default (GHSA-hq85-5cpj-mr62).
-        uv = prev.uv.overrideAttrs (attrs: _: {
-          version = "0.13.4";
-          src = final.fetchFromGitHub {
-            owner = "astral-sh";
-            repo = "uv";
-            tag = "0.13.4";
-            hash = "sha256-US3SjwhWE3v4/i46YuBon2GA6PupC4Z0NRUqcV9CPLM=";
+        # Keep the patched verifier and managed-Python catalog in the official release.
+        uv = final.stdenvNoCC.mkDerivation (attrs: {
+          pname = "uv";
+          version = "0.13.5";
+          src = final.fetchurl {
+            url = "https://releases.astral.sh/github/uv/releases/download/${attrs.version}/uv-aarch64-apple-darwin.tar.gz";
+            hash = "sha256-dD+FA1oZluyzUGWeAc2frqlwmCm+CbG0sDxz6vPJzXM=";
           };
-          cargoDeps = final.rustPlatform.fetchCargoVendor {
-            inherit (attrs) pname version src;
-            hash = "sha256-9L47CTlkOVYfGuzE4e7e2FYAI192pAsipzzScF7B1j4=";
-          };
+          nativeBuildInputs = [ final.installShellFiles ];
+          dontConfigure = true;
+          dontBuild = true;
+          dontStrip = true;
+          installPhase = ''
+            runHook preInstall
+            install -Dm755 uv "$out/bin/uv"
+            install -Dm755 uvx "$out/bin/uvx"
+            installShellCompletion --cmd uv \
+              --bash <("$out/bin/uv" generate-shell-completion bash) \
+              --fish <("$out/bin/uv" generate-shell-completion fish) \
+              --zsh <("$out/bin/uv" generate-shell-completion zsh)
+            runHook postInstall
+          '';
+          doInstallCheck = true;
+          installCheckPhase = ''
+            runHook preInstallCheck
+            "$out/bin/uv" --version | grep -F "uv ${attrs.version} "
+            runHook postInstallCheck
+          '';
+          meta = prev.uv.meta // { platforms = [ "aarch64-darwin" ]; };
         });
         # Nix's PEM consumers do not receive Firefox's OneCRL updates.
         cacert = prev.cacert.overrideAttrs (_: {
