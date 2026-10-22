@@ -83,7 +83,6 @@
     # Notifications with an action menu for tools/review-notifier.
     brews = [ "vjeantet/tap/alerter" ];
     casks = [
-      "arc"
       "codex"
       "font-droid-sans-mono-nerd-font"
       "font-udev-gothic"
