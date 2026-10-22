@@ -56,7 +56,11 @@ jobs:
         shell: bash
         run: |
           nix run --print-build-logs .#uv -- --version | tee /tmp/uv-version
-          grep -Eq '^uv 0\.13\.4( \(.*\))?$' /tmp/uv-version
+          grep -Eq '^uv 0\.13\.5( \(.*\))?$' /tmp/uv-version
+
+      - name: Verify patched Python and ensurepip
+        run: |
+          nix run --print-build-logs .#python3 -- -I -c 'import ensurepip; assert ensurepip.version() == "26.2.2"'
 
       - name: Run repo verification
         run: |

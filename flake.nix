@@ -46,19 +46,35 @@
             });
           })
         ];
-        # uv uses bundled Web PKI roots by default (GHSA-hq85-5cpj-mr62).
-        uv = prev.uv.overrideAttrs (attrs: _: {
-          version = "0.13.4";
-          src = final.fetchFromGitHub {
-            owner = "astral-sh";
-            repo = "uv";
-            tag = "0.13.4";
-            hash = "sha256-US3SjwhWE3v4/i46YuBon2GA6PupC4Z0NRUqcV9CPLM=";
+        # Keep the patched verifier and managed-Python catalog in the official release.
+        uv = final.stdenvNoCC.mkDerivation (attrs: {
+          pname = "uv";
+          version = "0.13.5";
+          src = final.fetchurl {
+            url = "https://releases.astral.sh/github/uv/releases/download/${attrs.version}/uv-aarch64-apple-darwin.tar.gz";
+            hash = "sha256-dD+FA1oZluyzUGWeAc2frqlwmCm+CbG0sDxz6vPJzXM=";
           };
-          cargoDeps = final.rustPlatform.fetchCargoVendor {
-            inherit (attrs) pname version src;
-            hash = "sha256-9L47CTlkOVYfGuzE4e7e2FYAI192pAsipzzScF7B1j4=";
-          };
+          nativeBuildInputs = [ final.installShellFiles ];
+          dontConfigure = true;
+          dontBuild = true;
+          dontStrip = true;
+          installPhase = ''
+            runHook preInstall
+            install -Dm755 uv "$out/bin/uv"
+            install -Dm755 uvx "$out/bin/uvx"
+            installShellCompletion --cmd uv \
+              --bash <("$out/bin/uv" generate-shell-completion bash) \
+              --fish <("$out/bin/uv" generate-shell-completion fish) \
+              --zsh <("$out/bin/uv" generate-shell-completion zsh)
+            runHook postInstall
+          '';
+          doInstallCheck = true;
+          installCheckPhase = ''
+            runHook preInstallCheck
+            "$out/bin/uv" --version | grep -F "uv ${attrs.version} "
+            runHook postInstallCheck
+          '';
+          meta = prev.uv.meta // { platforms = [ "aarch64-darwin" ]; };
         });
         # Nix's PEM consumers do not receive Firefox's OneCRL updates.
         cacert = prev.cacert.overrideAttrs (_: {
@@ -100,6 +116,41 @@
               ln -s "${pkgs.rustup}/bin/$bin" "$out/bin/$bin"
             done
           '';
+          # Patch ensurepip in a copied runtime; retain Nix Python's TLS backend and CA defaults.
+          dailyPython = pkgs.stdenvNoCC.mkDerivation {
+            pname = "python3";
+            inherit (pkgs.python3) version;
+            pipWheel = pkgs.fetchurl {
+              url = "https://files.pythonhosted.org/packages/3f/06/3e4420302363fbb71be3c7f35ce042f54bfca330e3e66b3a2e3c4cca579f/pip-26.2.2-py3-none-any.whl";
+              hash = "sha256-/X9N+oGQ4BQBO58I8+lz9OTCb/0XmiBIlVM6clSBOnA=";
+            };
+            dontUnpack = true;
+            dontConfigure = true;
+            dontBuild = true;
+            dontStrip = true;
+            dontPatchShebangs = true;
+            installPhase = ''
+              runHook preInstall
+              mkdir -p "$out"
+              cp -R "${pkgs.python3}/." "$out/"
+              chmod -R u+w "$out"
+              ensurepip="$out/lib/python3.14/ensurepip"
+              substituteInPlace "$ensurepip/__init__.py" \
+                --replace-fail '_PIP_VERSION = "26.2.1"' '_PIP_VERSION = "26.2.2"'
+              rm "$ensurepip/_bundled/pip-26.2.1-py3-none-any.whl"
+              cp "$pipWheel" "$ensurepip/_bundled/pip-26.2.2-py3-none-any.whl"
+              runHook postInstall
+            '';
+            doInstallCheck = true;
+            installCheckPhase = ''
+              runHook preInstallCheck
+              "$out/bin/python3" -I -c 'import sys, ssl, sqlite3, ensurepip; assert ensurepip.__file__.startswith(sys.argv[1]); assert ensurepip.version() == "26.2.2"' "$out/"
+              "$out/bin/python3" -I -m venv "$TMPDIR/verify-venv"
+              "$TMPDIR/verify-venv/bin/python" -I -m pip --version | grep -F "pip 26.2.2 "
+              runHook postInstallCheck
+            '';
+            meta = pkgs.python3.meta;
+          };
           # Keep the security release and its patched bundled libraries together.
           dailyNode = pkgs.stdenvNoCC.mkDerivation (attrs: {
             pname = "nodejs";
@@ -212,7 +263,7 @@
             bashInteractive
             nixd
             nixfmt
-            python3
+            dailyPython
             shellcheck
             shfmt
             stylua
@@ -308,6 +359,7 @@
             dailyCliPackages
             dailyCurl
             dailyNode
+            dailyPython
             cliProfile
             cliTrust
             ;
@@ -323,6 +375,7 @@
           cli = cli.cliProfile;
           uv = cli.pkgs.uv;
           curl = cli.dailyCurl;
+          python3 = cli.dailyPython;
           rustup = cli.pkgs.rustup;
           nodejs = cli.dailyNode;
           ca-certificates = cli.cliTrust;
@@ -357,7 +410,7 @@
               git
               go
               jq
-              python3
+              cli.dailyPython
               ruff
             ];
           };
