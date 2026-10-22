@@ -40,6 +40,23 @@ nix develop -c ./bin/executable_dotctl test
 Japanese Markdown and skill references can be checked and formatted with
 [the Markdown tools](scripts/ai-docs/README.md).
 
+### Repair SDK linking
+
+If C or Rust linking fails with `unknown architecture arm64e.x1`, diagnose it:
+
+```bash
+python3 scripts/repair-macos-sdk.py
+```
+
+Review the listed SDKs before applying. They are backed up rather than deleted.
+
+```bash
+sudo /usr/bin/python3 scripts/repair-macos-sdk.py --apply
+xcrun --kill-cache
+```
+
+Unset any temporary `SDKROOT` override before retrying your build.
+
 ## Optional integrations
 
 ### Work tools
