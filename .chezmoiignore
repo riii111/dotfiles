@@ -24,6 +24,7 @@ config/pi
 .gitconfig-riii111
 .claude/skills/deploy-preflight
 .codex/skills/deploy-preflight
+.config/harnexus/pr-watch.json
 {{ end }}
 
 # Build artifacts (auto-built by statusline-command.sh)
