@@ -6,6 +6,10 @@ export PSQL_PAGER="${PSQL_PAGER:-pspg}"
 export PSQL_WATCH_PAGER="${PSQL_WATCH_PAGER:-pspg --stream}"
 export NPM_CONFIG_CACHE="${NPM_CONFIG_CACHE:-$HOME/.cache/npm}"
 
+if [[ -x "${NIX_DOTFILES_BIN}/curl" ]]; then
+  export HOMEBREW_CURL_PATH="${NIX_DOTFILES_BIN}/curl"
+fi
+
 if [[ -r "${NIX_DOTFILES_SHARE}/dotfiles/ca-bundle.crt" ]]; then
   export SSL_CERT_FILE="${NIX_DOTFILES_SHARE}/dotfiles/ca-bundle.crt"
   export NIX_SSL_CERT_FILE="$SSL_CERT_FILE"
