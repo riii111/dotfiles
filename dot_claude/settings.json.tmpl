@@ -321,6 +321,11 @@
             "timeout": 5
           },
           {
+            "type": "command",
+            "command": "python3 {{ .chezmoi.homeDir }}/.claude/hooks/pr-state-check.py",
+            "timeout": 15
+          },
+          {
             "type": "prompt",
             "if": "Bash(gh pr create *)",
             "prompt": {{ includeTemplate "pr-format-judge.txt" . | toJson }},
@@ -333,6 +338,17 @@
             "prompt": {{ includeTemplate "pr-format-judge.txt" . | toJson }},
             "continueOnBlock": true,
             "statusMessage": "PRのタイトルと本文を確認しています"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 {{ .chezmoi.homeDir }}/.claude/hooks/reference-link-check.py",
+            "timeout": 5
           }
         ]
       }

@@ -27,6 +27,12 @@
             "command": "python3 ~/.codex/hooks/pr-format-check.py",
             "timeout": 5,
             "statusMessage": "Checking PR format"
+          },
+          {
+            "type": "command",
+            "command": "python3 ~/.codex/hooks/pr-state-check.py",
+            "timeout": 15,
+            "statusMessage": "Checking PR state"
           }
         ]
       }
@@ -40,6 +46,17 @@
             "command": "python3 ~/.codex/hooks/permission_request.py",
             "timeout": 5,
             "statusMessage": "Checking command policy"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.codex/hooks/reference-link-check.py",
+            "timeout": 5
           }
         ]
       }

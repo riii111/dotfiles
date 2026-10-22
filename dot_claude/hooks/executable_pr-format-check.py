@@ -169,6 +169,11 @@ def check_body(body: str) -> list[str]:
     problems = []
 
     top_level = [line for line in lines if TOP_LEVEL_BULLET.match(line)]
+    if any(re.match(r"^refs?\s+.*#\d+", line.strip(), re.IGNORECASE) for line in lines):
+        problems.append(
+            "対象Issueは `Close #N` で参照する。1 Issue = 1 PRに分け、"
+            "Refsにしたくなる場合はPRかIssueを分ける。対象Issueがなければ参照は不要"
+        )
     if len(top_level) > MAX_BULLETS:
         problems.append(
             f"箇条書きが{len(top_level)}個ある。{MAX_BULLETS}個以内に統合する"
@@ -185,7 +190,7 @@ def check_body(body: str) -> list[str]:
     ):
         problems.append(
             "IssueやPRの番号を文中に埋め込まない。"
-            "Issueは先頭の `close #N` の行に書き、PRの番号は書かない"
+            "Issueは先頭の `Close #N` の行に書き、PRの番号は書かない"
         )
     if any(MIXED_SPACE.search(line) for line in lines):
         problems.append("本文の日本語と英語の間にスペースを入れない")

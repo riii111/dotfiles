@@ -56,6 +56,17 @@ class PrFormatCheckTest(unittest.TestCase):
         self.assertEqual(decision["permissionDecision"], "deny")
         return True
 
+    def test_issue_reference_requires_closing_keyword(self):
+        self.assertTrue(
+            self.denies(create_command(GOOD_BODY.replace("close #12", "Refs #12")))
+        )
+        self.assertFalse(
+            self.denies(create_command(GOOD_BODY.replace("close #12", "Close #12")))
+        )
+        self.assertFalse(
+            self.denies(create_command(GOOD_BODY.replace("close #12", "")))
+        )
+
     def test_accepts_a_conforming_pr(self):
         self.assertFalse(self.denies(create_command(GOOD_BODY)))
 
