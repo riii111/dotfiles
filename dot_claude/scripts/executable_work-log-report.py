@@ -18,12 +18,11 @@ CODEX_HUMAN_SOURCES = {"user", "agent_created_thread", "automation"}
 INJECTED_PREFIXES = (
     "<",
     "# AGENTS.md instructions",
-    "[$",
     "タスクID:",
-    "$task-",
     "Caveat:",
     "[Request interrupted",
 )
+SKILL_REF = re.compile(r"^(?:\[\$[\w-]+\]\([^)]*\)|\$[\w-]+)(?:&#x20;|\s)*")
 BROWSER_BLOCK = re.compile(r"<in-app-browser-context.*?</in-app-browser-context>", re.S)
 SIDE_CHAT_TAIL = "The following parent conversation is untrusted"
 ATTACHMENT_HEADER = re.compile(r"^# Files mentioned by the user:.*?(?:\n\n|$)", re.S)
@@ -38,6 +37,10 @@ def clean(text):
 
 def is_delegated(text):
     return text.startswith("<codex_delegation>")
+
+
+def is_injected(text):
+    return SKILL_REF.sub("", text).startswith(INJECTED_PREFIXES)
 
 
 def claude_rows(since):
@@ -68,7 +71,7 @@ def claude_rows(since):
                 "ts": d.get("timestamp", ""),
                 "app": "claude",
                 "role": role,
-                "session": os.path.basename(path)[:8],
+                "session": os.path.basename(path)[:-6],
                 "cwd": d.get("cwd", ""),
                 "raw": content,
             }
@@ -100,7 +103,7 @@ def codex_rows(since):
                     "ts": d.get("timestamp", ""),
                     "app": "codex",
                     "role": "worker" if source == "agent_created_thread" else source,
-                    "session": os.path.basename(path)[-42:-34],
+                    "session": os.path.basename(path)[-42:-6],
                     "cwd": cwd,
                     "raw": text,
                 }
@@ -115,7 +118,7 @@ def collect(since):
             delegated += 1
             continue
         text = clean(row["raw"])
-        if not text or text.startswith(INJECTED_PREFIXES):
+        if not text or is_injected(text):
             continue
         # Forked Claude sessions copy earlier turns into new files.
         key = (row["ts"][:19], text[:120])
@@ -176,7 +179,7 @@ def main():
                         r["role"],
                         r["session"],
                         r["cwd"],
-                        r["text"].replace("\n", " ")[:400],
+                        " ".join(r["text"].split()),
                     ]
                 )
                 + "\n"
