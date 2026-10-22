@@ -75,6 +75,21 @@ See [review-notifier](tools/review-notifier/README.md).
 ~/bin/dotctl review-notifier install
 ```
 
+### PR watch
+
+Tell each task worker about review comments, conflicts and failed required checks on its PR (work machine).
+The watch is `harnexus-task watch` from [harnexus](https://github.com/riii111/harnexus); install it with `bun run install:task` there first.
+chezmoi writes its config to `~/.config/harnexus/pr-watch.json`.
+
+```bash
+~/bin/dotctl pr-watch install
+~/bin/dotctl pr-watch status            # the agent and the watched PRs
+~/bin/dotctl pr-watch logs -f
+~/bin/dotctl pr-watch stop
+~/bin/dotctl pr-watch start             # start, or restart
+harnexus-task watch --dry-run           # what would be sent, without sending
+```
+
 ### Finder
 
 Open text / code in Neovim, csv / tsv in csvlens, and parquet / sqlite / jsonl in VisiData, all through Kitty.

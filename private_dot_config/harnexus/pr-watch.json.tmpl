@@ -1,0 +1,13 @@
+{
+  "repositories": {
+    "{{ .gh_work_org }}/{{ .work_project }}": { "account": "{{ .gh_work_user }}" }
+  },
+  "ignore": [
+    { "author": "coderabbitai[bot]", "kind": "issue_comment" },
+    { "author": "github-actions[bot]", "kind": "issue_comment" },
+    { "author": "github-actions[bot]", "kind": "review" },
+    { "author": "github-actions[bot]", "kind": "inline", "bodyIncludes": "[phase-timing]" },
+    { "author": "github-actions[bot]", "kind": "inline", "bodyIncludes": "[wait-audit]" },
+    { "author": "blacksmith-sh[bot]" }
+  ]
+}

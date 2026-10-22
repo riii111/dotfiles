@@ -11,7 +11,7 @@ import tempfile
 from pathlib import Path
 from typing import NamedTuple
 
-from . import review_notifier
+from . import pr_watch, review_notifier
 
 
 LINTABLE_SHELLS = frozenset({"bash", "sh"})
@@ -560,6 +560,23 @@ def command_review_notifier(args: argparse.Namespace) -> int:
     return review_notifier.logs(home, follow=args.follow)
 
 
+def command_pr_watch(args: argparse.Namespace) -> int:
+    home = Path.home()
+    action = args.pr_watch_command
+    if action == "install":
+        user = os.environ.get("USER") or home.name
+        return pr_watch.install(home, user)
+    if action == "uninstall":
+        return pr_watch.uninstall(home)
+    if action == "start":
+        return pr_watch.start(home)
+    if action == "stop":
+        return pr_watch.stop()
+    if action == "status":
+        return pr_watch.status(home)
+    return pr_watch.logs(home, follow=args.follow)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="dotctl")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -630,6 +647,28 @@ def build_parser() -> argparse.ArgumentParser:
     logs_parser = review_subparsers.add_parser("logs", help="show the agent log")
     logs_parser.add_argument("-f", "--follow", action="store_true")
     logs_parser.set_defaults(func=command_review_notifier)
+
+    watch_parser = subparsers.add_parser(
+        "pr-watch",
+        help="run harnexus-task watch, which tells task workers about their PRs",
+    )
+    watch_subparsers = watch_parser.add_subparsers(
+        dest="pr_watch_command",
+        required=True,
+    )
+    for name, help_text in (
+        ("install", "check the config and load the LaunchAgent (also updates it)"),
+        ("uninstall", "unload the LaunchAgent and remove its plist"),
+        ("start", "load or restart the LaunchAgent"),
+        ("stop", "unload the LaunchAgent"),
+        ("status", "show the agent and the watched PRs"),
+    ):
+        watch_subparsers.add_parser(name, help=help_text).set_defaults(
+            func=command_pr_watch
+        )
+    watch_logs_parser = watch_subparsers.add_parser("logs", help="show the agent log")
+    watch_logs_parser.add_argument("-f", "--follow", action="store_true")
+    watch_logs_parser.set_defaults(func=command_pr_watch)
 
     return parser
 
