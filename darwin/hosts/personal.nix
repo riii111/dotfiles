@@ -5,8 +5,6 @@
 
   system.primaryUser = "a81803";
 
-  homebrew.onActivation.extraEnv.HOMEBREW_CURL_PATH = "/Users/a81803/.nix-profile/bin/curl";
-
   homebrew.taps = [
     {
       name = "riii111/terraleph";
