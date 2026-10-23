@@ -74,6 +74,7 @@ def status(home: Path) -> int:
         return result.returncode
     for line in watched_prs(result.stdout):
         print(line)
+    print(sender_line(result.stdout))
     return 0
 
 
@@ -96,6 +97,17 @@ def watched_prs(output: str) -> list[str]:
             f"pending={pr.get('pending', 0)}{waiting}"
         )
     return lines
+
+
+def sender_line(output: str) -> str:
+    try:
+        shown = json.loads(output)
+    except ValueError:
+        return "sender: unknown"
+    sender = shown.get("sender") if isinstance(shown, dict) else None
+    if sender:
+        return f"sender: {sender}"
+    return "sender: none; run `harnexus-task watch --sender` in a chat kept for it"
 
 
 def binary_path(home: Path) -> Path:

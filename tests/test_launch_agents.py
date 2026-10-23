@@ -74,6 +74,18 @@ class WatchedPrsTest(unittest.TestCase):
         )
 
 
+class SenderLineTest(unittest.TestCase):
+    def test_names_the_sender_or_how_to_register_one(self):
+        self.assertEqual(
+            pr_watch.sender_line(json.dumps({"sender": "chat-1", "prs": []})),
+            "sender: chat-1",
+        )
+        self.assertIn(
+            "harnexus-task watch --sender",
+            pr_watch.sender_line(json.dumps({"sender": None, "prs": []})),
+        )
+
+
 class AgentActionTest(unittest.TestCase):
     def test_dispatches_the_shared_actions_to_the_tool_module(self):
         args = cli.build_parser().parse_args(["pr-watch", "logs", "-f"])
