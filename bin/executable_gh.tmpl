@@ -1,5 +1,10 @@
 #!/bin/zsh -f
-# Switches the active gh account to the owner of the target repository, then runs gh.
+# Runs gh with GH_CONFIG_DIR set to the account folder for the target
+# repository's owner. Each folder's hosts.yml names one github.com user, so gh
+# reads that user's keychain item, and concurrent calls for different accounts
+# never touch shared state the way gh auth switch does.
+# Other hosts are not listed in those hosts.yml files; gh falls back to that
+# host's own keychain item, never to the github.com token.
 # This is a PATH wrapper rather than a shell function because the Bash tools of
 # Claude Code and Codex run non-interactive shells, which never reach the
 # function definitions in .zshrc.
@@ -9,6 +14,7 @@ setopt extended_glob
 
 # Captured at top level: inside a function, $0 is the function name.
 wrapper_path=${0:A}
+accounts_dir=$HOME/.config/gh-accounts
 
 _gh_real_binary() {
   local candidate
@@ -38,109 +44,59 @@ _gh_owner_of_location() {
   esac
 }
 
-_gh_owner_from_args() {
-  local arg expect_repo=0
-  for arg in "$@"; do
-    if ((expect_repo)); then
-      _gh_owner_of_location "$arg" && return 0
-      expect_repo=0
-      continue
-    fi
+# Prints the account folder name, or nothing when no account is determined.
+_gh_target_account() {
+  local -a args=("$@")
+  local i arg repo url_owner origin owner
+  for ((i = 1; i <= $#args; i++)); do
+    arg=$args[i]
     case $arg in
-      -R | --repo) expect_repo=1 ;;
-      --repo=?*) _gh_owner_of_location "${arg#--repo=}" && return 0 ;;
-      -R?*) _gh_owner_of_location "${arg#-R}" && return 0 ;;
-      *github.com/[^/]##/*)
-        local rest=${arg#*github.com/}
-        print -r -- "${rest%%/*}"
-        return 0
+      -R | --repo) ((i++)); repo=$args[i] ;;
+      --repo=*) repo=${arg#--repo=} ;;
+      -R*) repo=${${arg#-R}#=} ;;
+      (#i)https://(www.|)github.com/[^/[:space:]]##(/[^[:space:]]#|))
+        [[ -z $url_owner ]] && url_owner=${${arg#(#i)*github.com/}%%/*}
         ;;
     esac
   done
-  return 1
-}
+  repo=${repo:-${GH_REPO-}}
 
-_gh_owner_from_origin() {
-  local url
-  url=$(command git remote get-url origin 2>/dev/null) || return 1
-  _gh_owner_of_location "$url"
-}
+  if [[ -n $repo ]]; then
+    owner=$(_gh_owner_of_location "$repo")
+  elif [[ -n $url_owner ]]; then
+    owner=$url_owner
+  elif origin=$(command git remote get-url origin 2>/dev/null); then
+    owner=$(_gh_owner_of_location "$origin")
+  elif [[ "$PWD/" == "${GHQ_ROOT:-$HOME/ghq}/github.com/"[^/]##/* ]]; then
+    owner=${${PWD#${GHQ_ROOT:-$HOME/ghq}/github.com/}%%/*}
+  fi
 
-_gh_owner_from_pwd() {
-  local prefix="${GHQ_ROOT:-$HOME/ghq}/github.com/"
-  [[ "$PWD/" == "$prefix"[^/]##/* ]] || return 1
-  local rest=${PWD#$prefix}
-  print -r -- "${rest%%/*}"
-}
-
-_gh_target_user() {
-  local owner
-  owner=$(_gh_owner_from_args "$@") ||
-    owner=$(_gh_owner_from_origin) ||
-    owner=$(_gh_owner_from_pwd) ||
-    return 0
   case ${(L)owner} in
-    riii111) print -r -- riii111 ;;
+    riii111) print -r -- personal ;;
 {{- if eq .type "work" }}
-    {{ .gh_work_org | lower }}) print -r -- {{ .gh_work_user | quote }} ;;
+    {{ .gh_work_org | lower }}) print -r -- work ;;
 {{- end }}
   esac
-}
-
-_gh_active_user() {
-  awk '
-    $1 == "github.com:" { in_host = 1; next }
-    in_host && $1 == "user:" { print $2; exit }
-    in_host && /^[^[:space:]]/ { exit }
-  ' "$HOME/.config/gh/hosts.yml" 2>/dev/null
-}
-
-_gh_acquire_lock() {
-  local lock_dir="${TMPDIR:-/tmp}/gh-auth-switch.lock"
-  local waited=0
-
-  while ! mkdir "$lock_dir" 2>/dev/null; do
-    sleep 0.05
-    ((waited += 1))
-    if ((waited >= 200)); then
-      print -u2 "Error: timed out waiting for gh auth lock"
-      return 1
-    fi
-  done
-
-  print -r -- "$lock_dir"
-}
-
-_gh_release_lock() {
-  [[ -n "$1" ]] && rmdir "$1" 2>/dev/null
-}
-
-_gh_run_with_target_user() {
-  local real_gh=$1 target_user=$2
-  shift 2
-
-  local lock_dir
-  lock_dir=$(_gh_acquire_lock) || return 1
-
-  {
-    if [[ "$(_gh_active_user)" != "$target_user" ]]; then
-      "$real_gh" auth switch --hostname github.com --user "$target_user" >/dev/null || return 1
-    fi
-
-    "$real_gh" "$@"
-  } always {
-    _gh_release_lock "$lock_dir"
-  }
 }
 
 real_gh=$(_gh_real_binary) || {
   print -u2 "gh: no gh binary found on PATH besides this wrapper"
   exit 127
 }
-target_user=$(_gh_target_user "$@")
 
-if [[ -z "$target_user" ]]; then
+# An outer GH_CONFIG_DIR also covers nested calls such as git-credential run by
+# gh itself, which must stay on the parent's account. Tokens in the environment
+# take precedence inside gh anyway. auth subcommands manage the stored accounts.
+if [[ -n ${GH_CONFIG_DIR-}${GH_TOKEN-}${GITHUB_TOKEN-} ]] || [[ $1 == auth && $2 != git-credential ]]; then
   exec "$real_gh" "$@"
 fi
 
-_gh_run_with_target_user "$real_gh" "$target_user" "$@"
+account=$(_gh_target_account "$@")
+if [[ -n $account ]]; then
+  if [[ -f $accounts_dir/$account/hosts.yml ]]; then
+    export GH_CONFIG_DIR=$accounts_dir/$account
+  else
+    print -u2 "gh: $accounts_dir/$account/hosts.yml is missing; using the active account"
+  fi
+fi
+exec "$real_gh" "$@"
