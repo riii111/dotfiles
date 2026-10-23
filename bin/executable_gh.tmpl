@@ -1,0 +1,146 @@
+#!/bin/zsh -f
+# Switches the active gh account to the owner of the target repository, then runs gh.
+# This is a PATH wrapper rather than a shell function because the Bash tools of
+# Claude Code and Codex run non-interactive shells, which never reach the
+# function definitions in .zshrc.
+
+emulate -R zsh
+setopt extended_glob
+
+# Captured at top level: inside a function, $0 is the function name.
+wrapper_path=${0:A}
+
+_gh_real_binary() {
+  local candidate
+  for candidate in ${(f)"$(whence -ap gh)"}; do
+    if [[ ${candidate:A} != "$wrapper_path" ]]; then
+      print -r -- "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Accepts OWNER/REPO, HOST/OWNER/REPO, URLs and scp-like git remotes.
+_gh_owner_of_location() {
+  local value=$1
+  if [[ $value == *://* ]]; then
+    value=${value#*://}
+  else
+    value=${value/:/\/}
+  fi
+  value=${value#*@}
+  local -a parts=(${(s:/:)value})
+  case ${#parts} in
+    0 | 1) return 1 ;;
+    2) print -r -- "$parts[1]" ;;
+    *) print -r -- "$parts[2]" ;;
+  esac
+}
+
+_gh_owner_from_args() {
+  local arg expect_repo=0
+  for arg in "$@"; do
+    if ((expect_repo)); then
+      _gh_owner_of_location "$arg" && return 0
+      expect_repo=0
+      continue
+    fi
+    case $arg in
+      -R | --repo) expect_repo=1 ;;
+      --repo=?*) _gh_owner_of_location "${arg#--repo=}" && return 0 ;;
+      -R?*) _gh_owner_of_location "${arg#-R}" && return 0 ;;
+      *github.com/[^/]##/*)
+        local rest=${arg#*github.com/}
+        print -r -- "${rest%%/*}"
+        return 0
+        ;;
+    esac
+  done
+  return 1
+}
+
+_gh_owner_from_origin() {
+  local url
+  url=$(command git remote get-url origin 2>/dev/null) || return 1
+  _gh_owner_of_location "$url"
+}
+
+_gh_owner_from_pwd() {
+  local prefix="${GHQ_ROOT:-$HOME/ghq}/github.com/"
+  [[ "$PWD/" == "$prefix"[^/]##/* ]] || return 1
+  local rest=${PWD#$prefix}
+  print -r -- "${rest%%/*}"
+}
+
+_gh_target_user() {
+  local owner
+  owner=$(_gh_owner_from_args "$@") ||
+    owner=$(_gh_owner_from_origin) ||
+    owner=$(_gh_owner_from_pwd) ||
+    return 0
+  case ${(L)owner} in
+    riii111) print -r -- riii111 ;;
+{{- if eq .type "work" }}
+    {{ .gh_work_org | lower }}) print -r -- {{ .gh_work_user | quote }} ;;
+{{- end }}
+  esac
+}
+
+_gh_active_user() {
+  awk '
+    $1 == "github.com:" { in_host = 1; next }
+    in_host && $1 == "user:" { print $2; exit }
+    in_host && /^[^[:space:]]/ { exit }
+  ' "$HOME/.config/gh/hosts.yml" 2>/dev/null
+}
+
+_gh_acquire_lock() {
+  local lock_dir="${TMPDIR:-/tmp}/gh-auth-switch.lock"
+  local waited=0
+
+  while ! mkdir "$lock_dir" 2>/dev/null; do
+    sleep 0.05
+    ((waited += 1))
+    if ((waited >= 200)); then
+      print -u2 "Error: timed out waiting for gh auth lock"
+      return 1
+    fi
+  done
+
+  print -r -- "$lock_dir"
+}
+
+_gh_release_lock() {
+  [[ -n "$1" ]] && rmdir "$1" 2>/dev/null
+}
+
+_gh_run_with_target_user() {
+  local real_gh=$1 target_user=$2
+  shift 2
+
+  local lock_dir
+  lock_dir=$(_gh_acquire_lock) || return 1
+
+  {
+    if [[ "$(_gh_active_user)" != "$target_user" ]]; then
+      "$real_gh" auth switch --hostname github.com --user "$target_user" >/dev/null || return 1
+    fi
+
+    "$real_gh" "$@"
+  } always {
+    _gh_release_lock "$lock_dir"
+  }
+}
+
+real_gh=$(_gh_real_binary) || {
+  print -u2 "gh: no gh binary found on PATH besides this wrapper"
+  exit 127
+}
+target_user=$(_gh_target_user "$@")
+
+if [[ -z "$target_user" ]]; then
+  exec "$real_gh" "$@"
+fi
+
+_gh_run_with_target_user "$real_gh" "$target_user" "$@"

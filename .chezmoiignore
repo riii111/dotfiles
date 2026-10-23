@@ -22,6 +22,7 @@ config/pi
 # Work machine only
 {{ if ne .type "work" }}
 .gitconfig-riii111
+bin/gh
 .claude/skills/deploy-preflight
 .codex/skills/deploy-preflight
 .config/harnexus/pr-watch.json
