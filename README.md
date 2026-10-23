@@ -90,6 +90,8 @@ pr-watch and review-notifier share their LaunchAgent handling in `bin/lib/dot/la
 ~/bin/dotctl pr-watch stop
 ~/bin/dotctl pr-watch start             # start, or restart
 harnexus-task watch --dry-run           # what would be sent, without sending
+harnexus-task watch --sender            # once, in a chat kept for sending to workers without a reviewer
+harnexus-task watch --link <PR URL>     # from any chat, to have it told about that PR
 ```
 
 ### Finder
