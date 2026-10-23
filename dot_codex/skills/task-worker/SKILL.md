@@ -13,8 +13,8 @@ description: |
 割り当てられたGit worktreeでConventionalな英語branchを作り、実装する。
 自身のTask IDはCodex・Claudeとも`CODEX_THREAD_ID`とする。
 候補をcommitする。
-実装・検証までの場合は検証結果とcommitを報告して完了する。
-Draft PR以降の場合は[task-review-cycle](../task-review-cycle/SKILL.md)を読み、独立レビューを受ける。
+`implementation`（実装・検証まで）の場合は検証結果とcommitを報告して完了する。
+`draft_pr`（Draft PR・CI成功まで）と`merge`（マージまで）の場合は[task-review-cycle](../task-review-cycle/SKILL.md)を読み、独立レビューを受ける。
 参照資料の相対パスは、そのSKILL.mdのディレクトリを基準に解決する。
 親への通知や完了記録は扱わない。
 
