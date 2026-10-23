@@ -262,11 +262,14 @@ printf '/stub/goroot\n/stub/gopath\n'
 	os.remove(dir .. "/bin/go")
 end
 
--- emacs-mode's own tests, here with blink.cmp, nvim-autopairs and neoscroll loaded, and its label and color in
--- this config's statusline
+-- emacs-mode's own tests with blink.cmp, nvim-autopairs and neoscroll loaded but not connected, then its hooks
+-- for neoscroll and blink.cmp as this config sets them, and its label and color in this config's statusline
 local function emacs_mode()
 	local plugin = require("lazy.core.config").plugins["emacs-mode.nvim"]
 	dofile(plugin.dir .. "/tests/emacs_spec.lua")()
+	-- the spec leaves the plugin set up without hooks
+	plugin.config(plugin, require("lazy.core.plugin").values(plugin, "opts", false))
+	dofile(vim.env.DOTFILES_NVIM_TESTS .. "/emacs_mode.lua")()
 
 	local function label()
 		local status = vim.api.nvim_eval_statusline(vim.o.statusline, { highlights = true })
