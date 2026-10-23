@@ -17,4 +17,4 @@ description: |
    PRのURLは`https://github.com/<owner>/<repo>/pull/<番号>`の形が必要。
 
 届いた知らせへの対応は、task-workerの「PRへの指摘対応」に従う。
-このチャットにreviewerがいなければ、ownerが`harnexus-task watch --sender`で登録したチャットから届く。
+知らせは、ownerが`harnexus-task watch --sender`で登録した送信用チャットから届く。

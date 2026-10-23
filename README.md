@@ -82,6 +82,7 @@ The watch is `harnexus-task watch` from [harnexus](https://github.com/riii111/ha
 chezmoi writes its config to `~/.config/harnexus/pr-watch.json`.
 The AI review bot it waits for is `reviewBots` there; to move off CodeRabbit, describe the new bot as the harnexus README shows.
 pr-watch and review-notifier share their LaunchAgent handling in `bin/lib/dot/launch_agent.py`.
+Every message comes from one chat: after installing, open a Codex chat kept for it and have it run `harnexus-task watch --sender` once. Nothing is sent until then.
 
 ```bash
 ~/bin/dotctl pr-watch install
@@ -90,7 +91,7 @@ pr-watch and review-notifier share their LaunchAgent handling in `bin/lib/dot/la
 ~/bin/dotctl pr-watch stop
 ~/bin/dotctl pr-watch start             # start, or restart
 harnexus-task watch --dry-run           # what would be sent, without sending
-harnexus-task watch --sender            # once, in a chat kept for sending to workers without a reviewer
+harnexus-task watch --sender            # once, in a chat kept for sending every PR watch message
 harnexus-task watch --link <PR URL>     # from any chat, to have it told about that PR
 ```
 
