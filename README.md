@@ -80,10 +80,12 @@ See [review-notifier](tools/review-notifier/README.md).
 Tell each task worker about review comments, conflicts and failed required checks on its PR (work machine).
 The watch is `harnexus-task watch` from [harnexus](https://github.com/riii111/harnexus); install it with `bun run install:task` there first.
 chezmoi writes its config to `~/.config/harnexus/pr-watch.json`.
+The AI review bot it waits for is `reviewBots` there; to move off CodeRabbit, describe the new bot as the harnexus README shows.
+pr-watch and review-notifier share their LaunchAgent handling in `bin/lib/dot/launch_agent.py`.
 
 ```bash
 ~/bin/dotctl pr-watch install
-~/bin/dotctl pr-watch status            # the agent and the watched PRs
+~/bin/dotctl pr-watch status            # the agent and the watched PRs (from harnexus-task watch --status)
 ~/bin/dotctl pr-watch logs -f
 ~/bin/dotctl pr-watch stop
 ~/bin/dotctl pr-watch start             # start, or restart

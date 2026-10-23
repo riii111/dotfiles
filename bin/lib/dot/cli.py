@@ -545,36 +545,25 @@ def command_work_tools_update(args: argparse.Namespace) -> int:
 
 def command_review_notifier(args: argparse.Namespace) -> int:
     home = Path.home()
-    action = args.review_notifier_command
-    if action == "install":
+    if args.review_notifier_command == "install":
         user = os.environ.get("USER") or home.name
         return review_notifier.install(resolve_repo_root(), home, user)
-    if action == "uninstall":
-        return review_notifier.uninstall(home)
-    if action == "start":
-        return review_notifier.start(home)
-    if action == "stop":
-        return review_notifier.stop()
-    if action == "status":
-        return review_notifier.status(home)
-    return review_notifier.logs(home, follow=args.follow)
+    return run_agent_action(review_notifier, args.review_notifier_command, home, args)
 
 
 def command_pr_watch(args: argparse.Namespace) -> int:
     home = Path.home()
-    action = args.pr_watch_command
-    if action == "install":
+    if args.pr_watch_command == "install":
         user = os.environ.get("USER") or home.name
         return pr_watch.install(home, user)
-    if action == "uninstall":
-        return pr_watch.uninstall(home)
-    if action == "start":
-        return pr_watch.start(home)
-    if action == "stop":
-        return pr_watch.stop()
-    if action == "status":
-        return pr_watch.status(home)
-    return pr_watch.logs(home, follow=args.follow)
+    return run_agent_action(pr_watch, args.pr_watch_command, home, args)
+
+
+# The actions every resident tool module offers alike.
+def run_agent_action(module, action: str, home: Path, args: argparse.Namespace) -> int:
+    if action == "logs":
+        return module.logs(home, follow=args.follow)
+    return getattr(module, action)(home)
 
 
 def build_parser() -> argparse.ArgumentParser:
