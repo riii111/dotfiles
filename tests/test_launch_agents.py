@@ -66,7 +66,7 @@ class WatchedPrsTest(unittest.TestCase):
         )
 
         self.assertEqual(
-            pr_watch.watched_prs(output),
+            pr_watch.status_lines(output)[:-1],
             [
                 "https://github.com/org/pay/pull/7 watching pending=2 awaiting answer",
                 "https://github.com/org/pay/pull/8 stopped (worker thread is gone) pending=0",
@@ -75,14 +75,18 @@ class WatchedPrsTest(unittest.TestCase):
 
 
 class SenderLineTest(unittest.TestCase):
-    def test_names_the_sender_or_how_to_register_one(self):
+    def test_names_the_sender_an_unreadable_record_or_how_to_register_one(self):
         self.assertEqual(
-            pr_watch.sender_line(json.dumps({"sender": "chat-1", "prs": []})),
-            "sender: chat-1",
+            pr_watch.status_lines(json.dumps({"sender": "chat-1", "prs": []})),
+            ["sender: chat-1"],
+        )
+        self.assertEqual(
+            pr_watch.sender_line({"sender": None, "senderError": "bad JSON"}),
+            "sender: unreadable (bad JSON)",
         )
         self.assertIn(
             "harnexus-task watch --sender",
-            pr_watch.sender_line(json.dumps({"sender": None, "prs": []})),
+            pr_watch.sender_line({"sender": None}),
         )
 
 
