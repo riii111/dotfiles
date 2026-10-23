@@ -68,13 +68,7 @@ experimental_use_profile = true
 # =============================================================================
 # MCP Servers
 # =============================================================================
-# No API key: anonymous tier only (lower rate limits, no billing possible).
-# Free tier with API key blocks at 1,000 calls/month; Pro requires explicit subscription.
 # App-owned MCP (node_repl / computer-use) is intentionally omitted.
-[mcp_servers.context7]
-command = "npx"
-args = ["-y", "@upstash/context7-mcp"]
-startup_timeout_ms = 20_000
 
 # =============================================================================
 # Trusted Projects
