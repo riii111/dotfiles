@@ -9,6 +9,8 @@ description: |
 
 commit済み候補をfreshなCodex reviewerへ渡し、以後は同じreview Taskで続ける。
 修正・検証・review基点・完了条件は[task-worker](../task-worker/SKILL.md)に従う。
+LGTMの後に、owner・レビュアー・reviewerから伝えられた指摘への修正は、再レビューに回さない。
+対象の範囲と完了条件は、task-workerの「PRへの指摘対応」に従う。
 
 ## 依頼と結果の受取
 
@@ -28,6 +30,7 @@ worktreeに`*`だけの`.gitignore`を置いた`.reviewctl/`を作り、[依頼J
    Claudeはharnexusの`wait_threads` / `read_thread`で待つ。
 4. 最終回答のbase/headが`harnexus-task state --request <JSON>`の`base`・`head`と一致することを確認する。
    修正後は同じJSONのPR URL・参照文書を必要に応じて更新し、手順1から繰り返す。
+   LGTM後の指摘への修正では繰り返さない。
    判定保留なら不足を解消する。
 
 Claudeはwait_threadsのtimeoutMsを60000以下にし、cursorを次のafterCursorへ渡す。
