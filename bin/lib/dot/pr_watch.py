@@ -72,7 +72,7 @@ def status(home: Path) -> int:
     if result.returncode != 0:
         print(result.stderr, end="", file=sys.stderr)
         return result.returncode
-    for line in watched_prs(result.stdout):
+    for line in status_lines(result.stdout):
         print(line)
     return 0
 
@@ -81,13 +81,15 @@ def logs(home: Path, follow: bool) -> int:
     return launch_agent.logs(agent(home), follow)
 
 
-def watched_prs(output: str) -> list[str]:
+def status_lines(output: str) -> list[str]:
     try:
         shown = json.loads(output)
     except ValueError:
         return [output.rstrip()]
+    if not isinstance(shown, dict):
+        return [output.rstrip()]
     lines = []
-    for pr in shown.get("prs", []) if isinstance(shown, dict) else []:
+    for pr in shown.get("prs", []):
         reason = pr.get("reason")
         detail = f" ({reason})" if reason else ""
         waiting = " awaiting answer" if pr.get("awaitingAnswer") else ""
@@ -95,7 +97,16 @@ def watched_prs(output: str) -> list[str]:
             f"{pr.get('pr')} {pr.get('status')}{detail} "
             f"pending={pr.get('pending', 0)}{waiting}"
         )
+    lines.append(sender_line(shown))
     return lines
+
+
+def sender_line(shown: dict) -> str:
+    if shown.get("senderError"):
+        return f"sender: unreadable ({shown['senderError']})"
+    if shown.get("sender"):
+        return f"sender: {shown['sender']}"
+    return "sender: none; run `harnexus-task watch --sender` in a chat kept for it"
 
 
 def binary_path(home: Path) -> Path:
