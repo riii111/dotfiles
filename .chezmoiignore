@@ -7,7 +7,6 @@ flake.nix
 flake.lock
 tests
 scripts
-tools
 config/pi
 
 # Python runtime artifacts

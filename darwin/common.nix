@@ -81,7 +81,7 @@
     onActivation.extraEnv.XDG_CONFIG_HOME = "/Users/${config.system.primaryUser}/.config";
     onActivation.extraEnv.HOMEBREW_CURL_PATH = "/Users/${config.system.primaryUser}/.nix-profile/bin/curl";
     taps = [ "vjeantet/tap" ];
-    # Notifications with an action menu for tools/review-notifier.
+    # Notifications with an action menu for pr-wake review (github.com/riii111/pr-wake).
     brews = [ "vjeantet/tap/alerter" ];
     casks = [
       "codex"
