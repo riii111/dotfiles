@@ -14,7 +14,7 @@ export default {
         repository: false,
         // These destinations are placeholders in the repository's review templates.
         skipPathPatterns: [
-          /\/\{(?:skill_path|cycle_skill_path|reply_path|worker_skill_path)\}(?:#.*)?$/u,
+          /\/reply-\{worker_ai\}\.md$/u,
           /\/dot_codex\/skills\/adr-review\/templates\/(?:直接リンク|検証済みの行URL|URL)$/u,
         ],
       },
