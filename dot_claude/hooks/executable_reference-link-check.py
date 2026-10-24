@@ -25,7 +25,9 @@ def main() -> int:
             json.dumps(
                 {
                     "decision": "block",
-                    "reason": "最終回答のIssue #N・PR #Nに、そのIssue・PRへのMarkdownリンクを付けてください。",
+                    # The reply is already shown, so a rewrite would show it twice.
+                    "reason": "回答全体は繰り返さないでください。リンクのないIssue #N・PR #Nへの"
+                    "Markdownリンクだけを「参照: [PR #1](URL)」の形で1〜2行で追記してください。",
                 },
                 ensure_ascii=False,
             )

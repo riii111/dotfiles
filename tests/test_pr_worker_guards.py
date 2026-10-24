@@ -238,6 +238,18 @@ class ReferenceLinkTest(unittest.TestCase):
             self.hook.missing_links("[PR #1](https://github.com/o/r/pull/1) と PR #2")
         )
 
+    def test_asks_to_append_links_instead_of_rewriting(self):
+        event = {"last_assistant_message": "PR #42", "stop_hook_active": False}
+        output = io.StringIO()
+        with (
+            mock.patch("sys.stdin", io.StringIO(json.dumps(event))),
+            redirect_stdout(output),
+        ):
+            self.hook.main()
+        reason = json.loads(output.getvalue())["reason"]
+        self.assertIn("繰り返さない", reason)
+        self.assertIn("追記", reason)
+
     def test_no_continuation_loop(self):
         for active in (False, True):
             event = {"last_assistant_message": "PR #42", "stop_hook_active": active}
