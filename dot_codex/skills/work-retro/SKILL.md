@@ -15,7 +15,7 @@ ownerの発言を集計し、同じ指示を人が繰り返さずに済む仕組
 
 1. 次のコマンドを実行する。
    ```sh
-   python3 ~/.claude/scripts/work-log-report.py --days <日数> \
+   agents-retro --days <日数> \
      --patterns ~/.codex/skills/work-retro/references/patterns.json \
      --out-dir ~/agent-desk/retro
    ```
