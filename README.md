@@ -59,18 +59,18 @@ Unset any temporary `SDKROOT` override before retrying your build.
 
 ## Optional integrations
 
-### Local vulnerability monitoring
+### 脆弱性の監視
 
-Install the optional agent separately at `~/.local/bin/am-i-affected`.
-On the personal Mac, chezmoi installs the wrapper and nix-darwin manages both LaunchAgents automatically.
-They collect every three hours and on wake; successful chezmoi, CLI-profile, and nix-darwin applications also request collection.
-The wake observer starts at login and restarts only after a crash, with a five-minute throttle.
-Diagnostics stay in `~/.am-i-affected-wake.log`; fix setup errors before restarting the observer.
-Claude/Codex show cached counts and separate Mac/cloud last-success times.
-Restart Codex and trust the updated `SessionStart` handler through `/hooks` to enable its display.
-Missing setup is silent; a failed agent cannot fail dotfiles application.
-The work Mac receives only the local remediation skill and sends no inventory.
-Verify real scheduling, wake collection, status display, transport, and work-Mac application before relying on the integration.
+個人用 Mac では、監視エージェントを別途 `~/.local/bin/am-i-affected` に配置する。
+chezmoi が呼び出しスクリプトを配置し、nix-darwin が LaunchAgent を管理する。
+収集は3時間ごと、スリープ復帰時、chezmoi・CLI プロファイル・nix-darwin の適用成功後に実行する。
+復帰監視はログイン時に起動し、クラッシュ時だけ5分以上空けて再起動する。
+診断は `~/.am-i-affected-wake.log` で確認し、設定エラーを直してから監視を再起動する。
+Claude/Codex にはキャッシュの件数と、Mac 側・クラウド側それぞれの最終成功時刻を表示する。
+Codex の表示を有効にするには、再起動後に `/hooks` で更新された `SessionStart` を信頼する。
+エージェントの未導入や失敗は dotfiles の適用を妨げない。
+仕事用 Mac にはローカル対応用のスキルだけを配置し、環境情報を送信しない。
+運用前に、定期実行・復帰時の収集・表示・送信・仕事用 Mac への適用を実機で確認する。
 
 ### Work tools
 
