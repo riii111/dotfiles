@@ -13,7 +13,7 @@ The managed Nix profile and current system tools are added to its `PATH`.
 
 | Public wrapper argument | Private agent argument | Time limit | Result |
 | --- | --- | --- | --- |
-| `collect-and-push` | `collect-and-push` | 15 minutes | Agent exit status; missing setup succeeds silently |
+| `collect-and-push` | `collect-and-push` | Private agent | Replaces wrapper with agent; preserves exit status; missing setup succeeds silently |
 | `after-apply` | `after-apply` | 2 seconds | Always succeeds; agent must schedule collection and return immediately |
 | `status` | `status` | 0.5 seconds | Prints one short cached status line; never collects or calls AI |
 | `codex-status` | `status` | 0.5 seconds | Same text in a JSON `systemMessage` |
@@ -22,7 +22,11 @@ The managed Nix profile and current system tools are added to its `PATH`.
 Status must include aggregate pending counts and separate Mac/cloud last-success
 times. Missing setup is silent; an installed agent that fails or times out shows
 unavailable status and unknown times. The wrapper does not store monitoring data.
-An agent timeout terminates its process group; scheduled background work from
+Collection deadlines and scanner process cleanup belong to the private agent.
+Collection starts in the home directory with stdin, stdout and stderr redirected
+to `/dev/null`; delegating execution does not expose agent output in caller logs.
+The wrapper limits only `status` and `after-apply`, terminating their foreground
+process group on timeout. Scheduled background work from
 `after-apply` must run in its own session without inherited output pipes.
 
 ## Personal Mac

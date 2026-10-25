@@ -7,6 +7,7 @@ import os
 import plistlib
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 import unittest
@@ -57,22 +58,73 @@ class AgentInvocationTest(unittest.TestCase):
         ):
             self.assertEqual(self.run_main(command), (0, ""))
 
-    def test_wake_observer_preserves_exit_status_for_launchd_restart_policy(self):
-        self.script("import sys\nassert sys.argv[1] == 'watch-wake'\nsys.exit(7)\n")
-        result = subprocess.run(
-            ["python3", str(ROOT / "bin/executable_affected-agent"), "watch-wake"],
-            capture_output=True,
-            timeout=5,
-        )
-        self.assertEqual(result.returncode, 7)
-        self.assertEqual(result.stdout, b"")
-        self.script("import sys\nsys.exit(0)\n")
-        result = subprocess.run(
-            ["python3", str(ROOT / "bin/executable_affected-agent"), "watch-wake"],
-            capture_output=True,
-            timeout=5,
-        )
-        self.assertEqual(result.returncode, 0)
+    def test_delegated_commands_replace_wrapper_and_preserve_arguments_path_exit_status(
+        self,
+    ):
+        for command in ("collect-and-push", "watch-wake"):
+            for exit_status in (0, 7):
+                with self.subTest(command=command, exit_status=exit_status):
+                    self.script(
+                        "import json, os, pathlib, sys\n"
+                        "result = {'pid': os.getpid(), 'args': sys.argv[1:], "
+                        "'path': os.environ['PATH'], 'cwd': os.getcwd(), 'stdin': sys.stdin.read()}\n"
+                        "(pathlib.Path.home() / 'exec-result.json').write_text(json.dumps(result))\n"
+                        "print('agent output')\nprint('agent error', file=sys.stderr)\n"
+                        f"sys.exit({exit_status})\n"
+                    )
+                    with subprocess.Popen(
+                        [
+                            sys.executable,
+                            str(ROOT / "bin/executable_affected-agent"),
+                            command,
+                        ],
+                        cwd=ROOT,
+                        stdin=subprocess.PIPE,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                    ) as process:
+                        output, errors = process.communicate(
+                            input=b"caller input", timeout=5
+                        )
+                    result = json.loads((self.home / "exec-result.json").read_text())
+                    self.assertEqual(process.returncode, exit_status)
+                    collecting = command == "collect-and-push"
+                    self.assertEqual(output, b"" if collecting else b"agent output\n")
+                    self.assertEqual(errors, b"" if collecting else b"agent error\n")
+                    self.assertEqual(
+                        result["cwd"],
+                        str((self.home if collecting else ROOT).resolve()),
+                    )
+                    self.assertEqual(
+                        result["stdin"], "" if collecting else "caller input"
+                    )
+                    self.assertEqual(result["pid"], process.pid)
+                    self.assertEqual(result["args"], [command])
+                    self.assertEqual(
+                        result["path"].split(os.pathsep)[:3],
+                        [
+                            str(self.home / ".nix-profile/bin"),
+                            str(self.home / ".local/bin"),
+                            "/run/current-system/sw/bin",
+                        ],
+                    )
+
+    def test_delegation_failure_returns_one(self):
+        self.agent.write_text("#!/missing-interpreter\n")
+        self.agent.chmod(0o755)
+        for command in ("collect-and-push", "watch-wake"):
+            with self.subTest(command=command):
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        str(ROOT / "bin/executable_affected-agent"),
+                        command,
+                    ],
+                    capture_output=True,
+                    timeout=5,
+                )
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual((result.stdout, result.stderr), (b"", b""))
 
     def test_status_only_requests_cached_status_and_returns_ui_json(self):
         self.script(
@@ -95,27 +147,18 @@ class AgentInvocationTest(unittest.TestCase):
             "import sys\nprint('sensitive failure', file=sys.stderr)\nsys.exit(7)\n"
         )
         self.assertEqual(self.run_main("after-apply"), (0, ""))
-        self.assertEqual(self.run_main("collect-and-push"), (7, ""))
         self.assertEqual(self.run_main("status"), (0, affected.UNAVAILABLE + "\n"))
 
-    def test_timeout_stops_scanner_children_and_returns_promptly(self):
-        self.script(
-            "import subprocess, sys, time\n"
-            "subprocess.Popen([sys.executable, '-c', "
-            "\"import pathlib,time; time.sleep(1); pathlib.Path('leaked-child').touch()\"])\n"
-            "time.sleep(30)\n"
-        )
-        started = time.monotonic()
-        with mock.patch.dict(affected.TIMEOUTS, {"collect-and-push": 0.2}):
-            self.assertEqual(self.run_main("collect-and-push"), (1, ""))
-        self.assertLess(time.monotonic() - started, 2)
-        time.sleep(1.1)
-        self.assertFalse((self.home / "leaked-child").exists())
-
-    def test_status_timeout_keeps_session_usable(self):
+    def test_status_and_after_apply_deadlines_keep_sessions_and_apply_usable(self):
         self.script("import time\ntime.sleep(30)\n")
-        with mock.patch.dict(affected.TIMEOUTS, {"status": 0.05}):
-            self.assertEqual(self.run_main("status"), (0, affected.UNAVAILABLE + "\n"))
+        for command, deadline, expected in (
+            ("status", 0.5, affected.UNAVAILABLE + "\n"),
+            ("after-apply", 2, ""),
+        ):
+            with self.subTest(command=command):
+                started = time.monotonic()
+                self.assertEqual(self.run_main(command), (0, expected))
+                self.assertLess(time.monotonic() - started, deadline + 1)
 
 
 @unittest.skipUnless(shutil.which("chezmoi"), "chezmoi is not installed")

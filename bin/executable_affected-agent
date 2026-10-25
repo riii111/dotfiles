@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 
-TIMEOUTS = {"status": 0.5, "after-apply": 2, "collect-and-push": 900}
+TIMEOUTS = {"status": 0.5, "after-apply": 2}
 UNAVAILABLE = "AIA: status unavailable | Mac: unknown | cloud: unknown"
 
 
@@ -29,8 +29,17 @@ def invoke(command: str) -> tuple[int, str]:
             env.get("PATH", os.defpath),
         ]
     )
-    if command == "watch-wake":
+    if command in ("collect-and-push", "watch-wake"):
         try:
+            if command == "collect-and-push":
+                os.chdir(Path.home())
+                devnull = os.open(os.devnull, os.O_RDWR)
+                try:
+                    for descriptor in (0, 1, 2):
+                        os.dup2(devnull, descriptor)
+                finally:
+                    if devnull > 2:
+                        os.close(devnull)
             os.execve(str(agent), [str(agent), command], env)
         except OSError:
             return 1, ""
@@ -49,7 +58,6 @@ def invoke(command: str) -> tuple[int, str]:
     try:
         output, _ = process.communicate(timeout=TIMEOUTS[command])
     except subprocess.TimeoutExpired:
-        # A timed-out scanner must not leave its child processes running.
         try:
             os.killpg(process.pid, signal.SIGKILL)
         except ProcessLookupError:
@@ -62,7 +70,12 @@ def invoke(command: str) -> tuple[int, str]:
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 1 or argv[0] not in {*TIMEOUTS, "codex-status", "watch-wake"}:
+    if len(argv) != 1 or argv[0] not in {
+        *TIMEOUTS,
+        "codex-status",
+        "watch-wake",
+        "collect-and-push",
+    }:
         return 2
     command = "status" if argv[0] == "codex-status" else argv[0]
     code, text = invoke(command)
