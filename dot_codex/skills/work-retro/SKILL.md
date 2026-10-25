@@ -19,7 +19,8 @@ description: |
 
 ## 追加の手順
 
-- agents-retroを実行した後、`permission-analyze`の手順1・4に従い、権限確認・自動モードの拒否・サンドボックスの失敗を集計する。
+- agents-retroを実行した後、`permission-analyze`スキルを読み、同じ日数で権限確認・自動モードの拒否・サンドボックスの失敗を集計する。
+  その手順と制約に従い、改善候補を振り返りの報告に含める。
 - 各所見の変更先は、次の順で選ぶ。
   - hook・設定・スクリプト：dotfiles（`chezmoi source-path`で管理元を調べる）
   - harnexusの拡張：`~/ghq/github.com/riii111/harnexus`。
