@@ -34,7 +34,10 @@ in
     affected-wake = agentService "watch-wake" {
       Label = "local.am-i-affected-wake";
       RunAtLoad = true;
-      KeepAlive = false;
+      KeepAlive.Crashed = true;
+      ThrottleInterval = 300;
+      StandardErrorPath = "${home}/.am-i-affected-wake.log";
+      Umask = 63;
     };
   };
 

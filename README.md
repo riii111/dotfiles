@@ -64,7 +64,8 @@ Unset any temporary `SDKROOT` override before retrying your build.
 Install the optional agent separately at `~/.local/bin/am-i-affected`.
 On the personal Mac, chezmoi installs the wrapper and nix-darwin manages both LaunchAgents automatically.
 They collect every three hours and on wake; successful chezmoi, CLI-profile, and nix-darwin applications also request collection.
-The wake observer starts at login and does not restart automatically after failure; log in again or restart it after fixing the cause.
+The wake observer starts at login and restarts only after a crash, with a five-minute throttle.
+Diagnostics stay in `~/.am-i-affected-wake.log`; fix setup errors before restarting the observer.
 Claude/Codex show cached counts and separate Mac/cloud last-success times.
 Restart Codex and trust the updated `SessionStart` handler through `/hooks` to enable its display.
 Missing setup is silent; a failed agent cannot fail dotfiles application.
