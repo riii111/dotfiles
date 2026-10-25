@@ -2,7 +2,6 @@
 
 import json
 import os
-import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -26,6 +25,7 @@ def invoke(command: str) -> tuple[int, str]:
             str(Path.home() / ".nix-profile/bin"),
             str(Path.home() / ".local/bin"),
             "/run/current-system/sw/bin",
+            "/opt/homebrew/bin",
             env.get("PATH", os.defpath),
         ]
     )
@@ -44,29 +44,21 @@ def invoke(command: str) -> tuple[int, str]:
         except OSError:
             return 1, ""
     try:
-        process = subprocess.Popen(
+        result = subprocess.run(
             [str(agent), command],
             cwd=Path.home(),
             env=env,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE if command == "status" else subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            start_new_session=True,
+            timeout=TIMEOUTS[command],
+            check=False,
         )
-    except OSError:
+    except (OSError, subprocess.TimeoutExpired):
         return 1, ""
-    try:
-        output, _ = process.communicate(timeout=TIMEOUTS[command])
-    except subprocess.TimeoutExpired:
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        process.communicate()
-        return 1, ""
-    text = (output or b"").decode("utf-8", errors="replace")
+    text = (result.stdout or b"").decode("utf-8", errors="replace")
     text = " ".join("".join(c for c in text if c.isprintable() or c == "\n").split())
-    return process.returncode, text[:512]
+    return result.returncode, text[:512]
 
 
 def main(argv: list[str]) -> int:

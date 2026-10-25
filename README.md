@@ -61,9 +61,14 @@ Unset any temporary `SDKROOT` override before retrying your build.
 
 ### Local vulnerability monitoring
 
-Personal-machine scheduling and cached Claude/Codex status are optional.
-Install the agent separately, then follow [the setup instructions](docs/affected-integration.md).
-The work machine receives the local remediation skill only.
+Install the optional agent separately at `~/.local/bin/am-i-affected`.
+On the personal Mac, apply chezmoi and log in again to load the generated LaunchAgents.
+They collect every three hours and on wake; successful chezmoi, CLI-profile, and nix-darwin applications also request collection.
+Claude/Codex show cached counts and separate Mac/cloud last-success times.
+Restart Codex and trust the updated `SessionStart` handler through `/hooks` to enable its display.
+Missing setup is silent; a failed agent cannot fail dotfiles application.
+The work Mac receives only the local remediation skill and sends no inventory.
+Verify real scheduling, wake collection, status display, transport, and work-Mac application before relying on the integration.
 
 ### Work tools
 

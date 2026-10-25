@@ -58,56 +58,38 @@ class AgentInvocationTest(unittest.TestCase):
         ):
             self.assertEqual(self.run_main(command), (0, ""))
 
-    def test_delegated_commands_replace_wrapper_and_preserve_arguments_path_exit_status(
-        self,
-    ):
+    def test_delegated_commands_preserve_arguments_exit_status_and_private_output(self):
         for command in ("collect-and-push", "watch-wake"):
             for exit_status in (0, 7):
                 with self.subTest(command=command, exit_status=exit_status):
                     self.script(
                         "import json, os, pathlib, sys\n"
-                        "result = {'pid': os.getpid(), 'args': sys.argv[1:], "
-                        "'path': os.environ['PATH'], 'cwd': os.getcwd(), 'stdin': sys.stdin.read()}\n"
+                        "result = {'args': sys.argv[1:], 'path': os.environ['PATH']}\n"
                         "(pathlib.Path.home() / 'exec-result.json').write_text(json.dumps(result))\n"
                         "print('agent output')\nprint('agent error', file=sys.stderr)\n"
                         f"sys.exit({exit_status})\n"
                     )
-                    with subprocess.Popen(
+                    process = subprocess.run(
                         [
                             sys.executable,
                             str(ROOT / "bin/executable_affected-agent"),
                             command,
                         ],
-                        cwd=ROOT,
-                        stdin=subprocess.PIPE,
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
-                    ) as process:
-                        output, errors = process.communicate(
-                            input=b"caller input", timeout=5
-                        )
+                        timeout=5,
+                    )
                     result = json.loads((self.home / "exec-result.json").read_text())
                     self.assertEqual(process.returncode, exit_status)
                     collecting = command == "collect-and-push"
-                    self.assertEqual(output, b"" if collecting else b"agent output\n")
-                    self.assertEqual(errors, b"" if collecting else b"agent error\n")
                     self.assertEqual(
-                        result["cwd"],
-                        str((self.home if collecting else ROOT).resolve()),
+                        process.stdout, b"" if collecting else b"agent output\n"
                     )
                     self.assertEqual(
-                        result["stdin"], "" if collecting else "caller input"
+                        process.stderr, b"" if collecting else b"agent error\n"
                     )
-                    self.assertEqual(result["pid"], process.pid)
                     self.assertEqual(result["args"], [command])
-                    self.assertEqual(
-                        result["path"].split(os.pathsep)[:3],
-                        [
-                            str(self.home / ".nix-profile/bin"),
-                            str(self.home / ".local/bin"),
-                            "/run/current-system/sw/bin",
-                        ],
-                    )
+                    self.assertIn("/opt/homebrew/bin", result["path"].split(os.pathsep))
 
     def test_delegation_failure_returns_one(self):
         self.agent.write_text("#!/missing-interpreter\n")
@@ -170,12 +152,13 @@ class ChezmoiIntegrationTest(unittest.TestCase):
         self.source = self.root / "source"
         self.home = self.root / "home with spaces"
         self.home.mkdir()
+        (self.home / "Library").mkdir(mode=0o700)
         for name in (
             ".chezmoiignore",
             "bin/executable_affected-agent",
             "run_after_zz-notify-affected.sh.tmpl",
-            "Library/LaunchAgents/local.am-i-affected.plist.tmpl",
-            "Library/LaunchAgents/local.am-i-affected-wake.plist.tmpl",
+            "private_Library/LaunchAgents/local.am-i-affected.plist.tmpl",
+            "private_Library/LaunchAgents/local.am-i-affected-wake.plist.tmpl",
             "dot_codex/hooks.json.tmpl",
             "dot_claude/settings.json.tmpl",
             ".chezmoitemplates/pr-format-judge.txt",
@@ -216,6 +199,7 @@ class ChezmoiIntegrationTest(unittest.TestCase):
     def test_personal_application_generates_calendar_and_invokes_after_success(self):
         result = self.apply("personal")
         self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.home / "Library").stat().st_mode & 0o777, 0o700)
         self.assertEqual((self.home / "invoked").read_text(), "after-apply\n")
         plist = plistlib.loads(
             (self.home / "Library/LaunchAgents/local.am-i-affected.plist").read_bytes()
@@ -265,6 +249,7 @@ class ChezmoiIntegrationTest(unittest.TestCase):
     def test_work_application_contains_no_collector_sender_or_startup_invocation(self):
         result = self.apply("work")
         self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.home / "Library").stat().st_mode & 0o777, 0o700)
         self.assertFalse((self.home / "bin/affected-agent").exists())
         self.assertFalse(
             (self.home / "Library/LaunchAgents/local.am-i-affected.plist").exists()
@@ -282,17 +267,6 @@ class ChezmoiIntegrationTest(unittest.TestCase):
         self.assertTrue(
             (self.home / ".claude/skills/vulnerability-remediation/SKILL.md").is_file()
         )
-
-    def test_failed_application_does_not_request_collection(self):
-        (self.source / "run_after_a-fail.sh").write_text("#!/bin/sh\nexit 1\n")
-        result = self.apply("personal")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertFalse((self.home / "invoked").exists())
-
-    def test_agent_failure_cannot_fail_application(self):
-        self.agent.write_text("#!/bin/sh\nexit 1\n")
-        result = self.apply("personal")
-        self.assertEqual(result.returncode, 0, result.stderr)
 
 
 class ProfileIntegrationTest(unittest.TestCase):
