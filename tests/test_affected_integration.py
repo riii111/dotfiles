@@ -4,7 +4,6 @@ import importlib.util
 import io
 import json
 import os
-import plistlib
 import shutil
 import subprocess
 import sys
@@ -152,13 +151,10 @@ class ChezmoiIntegrationTest(unittest.TestCase):
         self.source = self.root / "source"
         self.home = self.root / "home with spaces"
         self.home.mkdir()
-        (self.home / "Library").mkdir(mode=0o700)
         for name in (
             ".chezmoiignore",
             "bin/executable_affected-agent",
             "run_after_zz-notify-affected.sh.tmpl",
-            "private_Library/LaunchAgents/local.am-i-affected.plist.tmpl",
-            "private_Library/LaunchAgents/local.am-i-affected-wake.plist.tmpl",
             "dot_codex/hooks.json.tmpl",
             "dot_claude/settings.json.tmpl",
             ".chezmoitemplates/pr-format-judge.txt",
@@ -196,27 +192,10 @@ class ChezmoiIntegrationTest(unittest.TestCase):
             timeout=60,
         )
 
-    def test_personal_application_generates_calendar_and_invokes_after_success(self):
+    def test_personal_application_invokes_after_apply_and_displays_cached_status(self):
         result = self.apply("personal")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual((self.home / "Library").stat().st_mode & 0o777, 0o700)
         self.assertEqual((self.home / "invoked").read_text(), "after-apply\n")
-        plist = plistlib.loads(
-            (self.home / "Library/LaunchAgents/local.am-i-affected.plist").read_bytes()
-        )
-        self.assertEqual(
-            plist["StartCalendarInterval"],
-            [{"Hour": hour, "Minute": 0} for hour in range(0, 24, 3)],
-        )
-        self.assertNotIn("RunAtLoad", plist)
-        wake = plistlib.loads(
-            (
-                self.home / "Library/LaunchAgents/local.am-i-affected-wake.plist"
-            ).read_bytes()
-        )
-        self.assertEqual(wake["ProgramArguments"][-1], "watch-wake")
-        self.assertEqual(wake["KeepAlive"], {"SuccessfulExit": False})
-        self.assertEqual(wake["ThrottleInterval"], 60)
         hooks = json.loads((self.home / ".codex/hooks.json").read_text())
         self.assertIn(
             "affected-agent codex-status",
@@ -249,14 +228,8 @@ class ChezmoiIntegrationTest(unittest.TestCase):
     def test_work_application_contains_no_collector_sender_or_startup_invocation(self):
         result = self.apply("work")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual((self.home / "Library").stat().st_mode & 0o777, 0o700)
         self.assertFalse((self.home / "bin/affected-agent").exists())
-        self.assertFalse(
-            (self.home / "Library/LaunchAgents/local.am-i-affected.plist").exists()
-        )
-        self.assertFalse(
-            (self.home / "Library/LaunchAgents/local.am-i-affected-wake.plist").exists()
-        )
+        self.assertFalse((self.home / "Library").exists())
         self.assertFalse((self.home / "invoked").exists())
         hooks = (self.home / ".codex/hooks.json").read_text()
         self.assertNotIn("affected-agent", hooks)

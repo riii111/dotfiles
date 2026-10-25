@@ -17,7 +17,6 @@ config/pi
 {{ if ne .type "personal" }}
 .gitconfig-side-work
 bin/affected-agent
-Library
 {{ end }}
 
 # Work machine only

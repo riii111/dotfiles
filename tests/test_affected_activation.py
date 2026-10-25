@@ -1,4 +1,5 @@
 import json
+import plistlib
 import shutil
 import subprocess
 import unittest
@@ -21,7 +22,7 @@ class DarwinActivationTest(unittest.TestCase):
                 ".#darwinConfigurations",
                 "--apply",
                 "hosts: builtins.mapAttrs (_: host: { "
-                "user = host.config.system.primaryUser; "
+                "agents = builtins.mapAttrs (_: agent: agent.text) host.config.environment.userLaunchAgents; "
                 "script = host.config.system.activationScripts.script.text; }) hosts",
             ],
             cwd=ROOT,
@@ -50,3 +51,20 @@ class DarwinActivationTest(unittest.TestCase):
             ),
         )
         self.assertNotIn("affected-agent", self.hosts["work"]["script"])
+
+    def test_personal_manages_calendar_and_wake_agents_without_failure_restart_loop(
+        self,
+    ):
+        personal = self.hosts["personal"]["agents"]
+        calendar = plistlib.loads(personal["local.am-i-affected.plist"].encode())
+        wake = plistlib.loads(personal["local.am-i-affected-wake.plist"].encode())
+        self.assertEqual(calendar["Label"], "local.am-i-affected")
+        self.assertEqual(
+            calendar["StartCalendarInterval"],
+            [{"Hour": hour, "Minute": 0} for hour in range(0, 24, 3)],
+        )
+        self.assertEqual(wake["Label"], "local.am-i-affected-wake")
+        self.assertTrue(wake["RunAtLoad"])
+        self.assertFalse(wake["KeepAlive"])
+        self.assertNotIn("local.am-i-affected.plist", self.hosts["work"]["agents"])
+        self.assertNotIn("local.am-i-affected-wake.plist", self.hosts["work"]["agents"])
