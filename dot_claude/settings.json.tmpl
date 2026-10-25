@@ -398,7 +398,7 @@
   "enableWorkflows": false,
   "statusLine": {
     "type": "command",
-    "command": "{{ .chezmoi.homeDir }}/.claude/statusline-command.sh"
+    "command": "{{ if eq .type "personal" }}python3 {{ .chezmoi.homeDir }}/bin/affected-agent status < /dev/null 2>/dev/null; {{ end }}{{ .chezmoi.homeDir }}/.claude/statusline-command.sh"
   },
   "alwaysThinkingEnabled": true,
   "effortLevel": "medium",

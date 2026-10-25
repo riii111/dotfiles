@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>local.am-i-affected</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/env</string>
+    <string>python3</string>
+    <string>{{ .chezmoi.homeDir }}/bin/affected-agent</string>
+    <string>collect-and-push</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>{{ .chezmoi.homeDir }}/.nix-profile/bin:{{ .chezmoi.homeDir }}/.local/bin:/run/current-system/sw/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+  <key>StartCalendarInterval</key>
+  <array>
+{{- range list 0 3 6 9 12 15 18 21 }}
+    <dict>
+      <key>Hour</key>
+      <integer>{{ . }}</integer>
+      <key>Minute</key>
+      <integer>0</integer>
+    </dict>
+{{- end }}
+  </array>
+  <key>ProcessType</key>
+  <string>Background</string>
+</dict>
+</plist>

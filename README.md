@@ -59,6 +59,12 @@ Unset any temporary `SDKROOT` override before retrying your build.
 
 ## Optional integrations
 
+### Local vulnerability monitoring
+
+Personal-machine scheduling and cached Claude/Codex status are optional.
+Install the agent separately, then follow [the setup instructions](docs/affected-integration.md).
+The work machine receives the local remediation skill only.
+
 ### Work tools
 
 ```bash

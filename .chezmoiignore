@@ -7,6 +7,7 @@ flake.nix
 flake.lock
 tests
 scripts
+docs
 config/pi
 
 # Python runtime artifacts
@@ -16,6 +17,9 @@ config/pi
 # Personal machine only
 {{ if ne .type "personal" }}
 .gitconfig-side-work
+bin/affected-agent
+Library/LaunchAgents/local.am-i-affected.plist
+Library/LaunchAgents/local.am-i-affected-wake.plist
 {{ end }}
 
 # Work machine only

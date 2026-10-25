@@ -8,7 +8,12 @@
             "command": "bash ~/.codex/herdr-agent-state.sh session",
             "timeout": 10,
             "type": "command"
-          }
+          }{{ if eq .type "personal" }},
+          {
+            "command": "python3 ~/bin/affected-agent codex-status",
+            "timeout": 2,
+            "type": "command"
+          }{{ end }}
         ]
       }
     ],
