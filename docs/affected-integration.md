@@ -54,8 +54,14 @@ launchctl bootout "gui/$(id -u)/local.am-i-affected-wake"
 
 The final chezmoi after-script invokes `after-apply` after successful application.
 `dotctl sync-nix-profile` also invokes it after a successful profile update.
-For updates applied separately, such as a nix-darwin switch, invoke
-`~/bin/affected-agent after-apply` only after the update succeeds.
+The personal nix-darwin activation script invokes it as the primary user after
+updating `/run/current-system` and its garbage-collection root.
+The ordinary `postActivation` hook runs before that system pointer changes, so
+the call is appended to the complete activation script instead.
+This ordering follows the [pinned nix-darwin activation script](https://github.com/nix-darwin/nix-darwin/blob/f0ec2b3fae4df92ea7788359aef9e07bb88d720f/modules/system/activation-scripts.nix).
+An earlier activation failure exits before reaching this call.
+For other separately applied updates, invoke `~/bin/affected-agent after-apply`
+only after the update succeeds.
 An absent or failed agent cannot fail dotfiles application.
 
 Claude Code displays the cached line above the existing status line, using its

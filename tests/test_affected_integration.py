@@ -125,7 +125,7 @@ class ChezmoiIntegrationTest(unittest.TestCase):
         self.addCleanup(directory.cleanup)
         self.root = Path(directory.name)
         self.source = self.root / "source"
-        self.home = self.root / "home"
+        self.home = self.root / "home with spaces"
         self.home.mkdir()
         for name in (
             ".chezmoiignore",
