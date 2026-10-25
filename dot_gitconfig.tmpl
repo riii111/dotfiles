@@ -9,6 +9,10 @@
 [user]
 	email = {{ .git_email }}
 	name = {{ .git_name }}
+
+# 既定の言語。includeIf で読む側（side-work など）が後から上書きできるよう、include より前に置く
+[pr]
+	language = en
 {{ if eq .type "personal" }}
 
 [commit]
@@ -150,5 +154,3 @@
 # ==========================================
 [ghq]
 	root = ~/ghq
-[pr]
-	language = en
