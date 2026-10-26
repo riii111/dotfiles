@@ -4,16 +4,20 @@ let
   user = lib.escapeShellArg config.system.primaryUser;
   home = "/Users/${config.system.primaryUser}";
   agent = lib.escapeShellArg "${home}/bin/affected-agent";
+  collector = lib.escapeShellArg "${home}/.local/bin/am-i-affected";
   agentPath = "${home}/.nix-profile/bin:${home}/.local/bin:/run/current-system/sw/bin:/opt/homebrew/bin:/usr/bin:/bin";
   agentService = command: settings: {
     environment.PATH = agentPath;
     script = ''
-      if [ -x ${agent} ]; then
-        exec ${agent} ${command}
+      if [ -x ${collector} ]; then
+        exec ${collector} ${command}${
+          lib.optionalString (command == "collect-and-push") " </dev/null >/dev/null 2>&1"
+        }
       fi
     '';
     serviceConfig = {
       ProcessType = "Background";
+      WorkingDirectory = home;
     }
     // settings;
   };

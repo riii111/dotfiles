@@ -1,7 +1,9 @@
 import json
 import plistlib
+import shlex
 import shutil
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -23,6 +25,7 @@ class DarwinActivationTest(unittest.TestCase):
                 "--apply",
                 "hosts: builtins.mapAttrs (_: host: { "
                 "agents = builtins.mapAttrs (_: agent: agent.text) host.config.environment.userLaunchAgents; "
+                "commands = builtins.mapAttrs (_: agent: agent.script) host.config.launchd.user.agents; "
                 "script = host.config.system.activationScripts.script.text; }) hosts",
             ],
             cwd=ROOT,
@@ -71,3 +74,38 @@ class DarwinActivationTest(unittest.TestCase):
         self.assertTrue(wake["StandardErrorPath"].endswith("/.am-i-affected-wake.log"))
         self.assertNotIn("local.am-i-affected.plist", self.hosts["work"]["agents"])
         self.assertNotIn("local.am-i-affected-wake.plist", self.hosts["work"]["agents"])
+
+    def test_direct_collection_is_optional_and_does_not_expose_agent_output(self):
+        personal = self.hosts["personal"]
+        calendar = plistlib.loads(
+            personal["agents"]["local.am-i-affected.plist"].encode()
+        )
+        installed = calendar["WorkingDirectory"] + "/.local/bin/am-i-affected"
+        self.assertIn(
+            "/opt/homebrew/bin", calendar["EnvironmentVariables"]["PATH"].split(":")
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            agent = Path(directory) / "agent with spaces"
+            calls = Path(directory) / "calls"
+            commands = {
+                name: script.replace(installed, shlex.quote(str(agent)))
+                for name, script in personal["commands"].items()
+            }
+            for script in commands.values():
+                result = subprocess.run(
+                    ["/bin/sh", "-c", script], capture_output=True, timeout=30
+                )
+                self.assertEqual(
+                    (result.returncode, result.stdout, result.stderr), (0, b"", b"")
+                )
+            agent.write_text(
+                f'#!/bin/sh\nprintf "%s\\n" "$1" > {shlex.quote(str(calls))}\n'
+                "echo private-output\necho private-error >&2\nexit 7\n"
+            )
+            agent.chmod(0o755)
+            result = subprocess.run(
+                ["/bin/sh", "-c", commands["affected"]], capture_output=True, timeout=30
+            )
+            self.assertEqual(result.returncode, 7)
+            self.assertEqual(calls.read_text(), "collect-and-push\n")
+            self.assertEqual((result.stdout, result.stderr), (b"", b""))

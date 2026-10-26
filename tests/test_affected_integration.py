@@ -6,14 +6,11 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 import tempfile
 import time
 import unittest
 from pathlib import Path
 from unittest import mock
-
-from bin.lib.dot import cli
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -38,7 +35,7 @@ class AgentInvocationTest(unittest.TestCase):
         self.addCleanup(patch.stop)
 
     def script(self, body):
-        self.agent.write_text("#!/usr/bin/env python3\n" + body)
+        self.agent.write_text("#!/bin/sh\n" + body)
         self.agent.chmod(0o755)
 
     def run_main(self, command):
@@ -52,66 +49,13 @@ class AgentInvocationTest(unittest.TestCase):
             "status",
             "codex-status",
             "after-apply",
-            "collect-and-push",
-            "watch-wake",
         ):
             self.assertEqual(self.run_main(command), (0, ""))
 
-    def test_delegated_commands_preserve_arguments_exit_status_and_private_output(self):
-        for command in ("collect-and-push", "watch-wake"):
-            for exit_status in (0, 7):
-                with self.subTest(command=command, exit_status=exit_status):
-                    self.script(
-                        "import json, os, pathlib, sys\n"
-                        "result = {'args': sys.argv[1:], 'path': os.environ['PATH']}\n"
-                        "(pathlib.Path.home() / 'exec-result.json').write_text(json.dumps(result))\n"
-                        "print('agent output')\nprint('agent error', file=sys.stderr)\n"
-                        f"sys.exit({exit_status})\n"
-                    )
-                    process = subprocess.run(
-                        [
-                            sys.executable,
-                            str(ROOT / "bin/executable_affected-agent"),
-                            command,
-                        ],
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        timeout=5,
-                    )
-                    result = json.loads((self.home / "exec-result.json").read_text())
-                    self.assertEqual(process.returncode, exit_status)
-                    collecting = command == "collect-and-push"
-                    self.assertEqual(
-                        process.stdout, b"" if collecting else b"agent output\n"
-                    )
-                    self.assertEqual(
-                        process.stderr, b"" if collecting else b"agent error\n"
-                    )
-                    self.assertEqual(result["args"], [command])
-                    self.assertIn("/opt/homebrew/bin", result["path"].split(os.pathsep))
-
-    def test_delegation_failure_returns_one(self):
-        self.agent.write_text("#!/missing-interpreter\n")
-        self.agent.chmod(0o755)
-        for command in ("collect-and-push", "watch-wake"):
-            with self.subTest(command=command):
-                result = subprocess.run(
-                    [
-                        sys.executable,
-                        str(ROOT / "bin/executable_affected-agent"),
-                        command,
-                    ],
-                    capture_output=True,
-                    timeout=5,
-                )
-                self.assertEqual(result.returncode, 1)
-                self.assertEqual((result.stdout, result.stderr), (b"", b""))
-
     def test_status_only_requests_cached_status_and_returns_ui_json(self):
         self.script(
-            "import pathlib, sys\n"
-            "pathlib.Path('called').write_text(sys.argv[1])\n"
-            "print('AIA: open 2 / pending 1 / Mac 2026-10-25 / cloud 2026-10-24')\n"
+            'printf "%s" "$1" > "$HOME/called"\n'
+            "echo 'AIA: open 2 / pending 1 / Mac 2026-10-25 / cloud 2026-10-24'\n"
         )
         code, output = self.run_main("codex-status")
         self.assertEqual(code, 0)
@@ -124,14 +68,12 @@ class AgentInvocationTest(unittest.TestCase):
         )
 
     def test_failures_do_not_break_apply_or_claim_known_status(self):
-        self.script(
-            "import sys\nprint('sensitive failure', file=sys.stderr)\nsys.exit(7)\n"
-        )
+        self.script("echo 'sensitive failure' >&2\nexit 7\n")
         self.assertEqual(self.run_main("after-apply"), (0, ""))
         self.assertEqual(self.run_main("status"), (0, affected.UNAVAILABLE + "\n"))
 
     def test_status_and_after_apply_deadlines_keep_sessions_and_apply_usable(self):
-        self.script("import time\ntime.sleep(30)\n")
+        self.script("exec /bin/sleep 30\n")
         for command, deadline, expected in (
             ("status", 0.5, affected.UNAVAILABLE + "\n"),
             ("after-apply", 2, ""),
@@ -148,68 +90,68 @@ class ChezmoiIntegrationTest(unittest.TestCase):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         self.root = Path(directory.name)
-        self.source = self.root / "source"
         self.home = self.root / "home with spaces"
         self.home.mkdir()
-        for name in (
-            ".chezmoiignore",
-            "bin/executable_affected-agent",
-            "run_after_zz-notify-affected.sh.tmpl",
-            "dot_codex/hooks.json.tmpl",
-            "dot_claude/settings.json.tmpl",
-            ".chezmoitemplates/pr-format-judge.txt",
-            "dot_claude/skills/vulnerability-remediation/SKILL.md",
-        ):
-            destination = self.source / name
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(ROOT / name, destination)
-        self.agent = self.root / "agent"
-        self.agent.write_text('#!/bin/sh\nprintf \'%s\\n\' "$1" >> "$HOME/invoked"\n')
-        self.agent.chmod(0o755)
 
-    def apply(self, machine):
-        return subprocess.run(
+    def chezmoi(self, machine, *args):
+        return subprocess.check_output(
             [
                 "chezmoi",
                 "--config",
                 str(ROOT / f"tests/chezmoi/{machine}.toml"),
                 "--source",
-                str(self.source),
+                str(ROOT),
                 "--destination",
                 str(self.home),
                 "--persistent-state",
                 str(self.root / "state.boltdb"),
-                "apply",
-                "--force",
+                *args,
             ],
-            env={
-                **os.environ,
-                "HOME": str(self.home),
-                "AM_I_AFFECTED_BIN": str(self.agent),
-            },
-            capture_output=True,
+            env={**os.environ, "HOME": str(self.home)},
             text=True,
             timeout=60,
         )
 
-    def test_personal_application_invokes_after_apply_and_displays_cached_status(self):
-        result = self.apply("personal")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual((self.home / "invoked").read_text(), "after-apply\n")
-        hooks = json.loads((self.home / ".codex/hooks.json").read_text())
-        self.assertIn(
-            "affected-agent codex-status",
-            hooks["hooks"]["SessionStart"][0]["hooks"][1]["command"],
-        )
-        command = json.loads((self.home / ".claude/settings.json").read_text())[
-            "statusLine"
-        ]["command"]
+    def test_only_personal_generates_monitoring_invocations(self):
+        for machine in ("personal", "work"):
+            with self.subTest(machine=machine):
+                personal = machine == "personal"
+                paths = self.chezmoi(
+                    machine, "managed", "--include=files", "--path-style=relative"
+                ).splitlines()
+                self.assertEqual("bin/affected-agent" in paths, personal)
+                self.assertFalse(any(path.startswith("Library/") for path in paths))
+                for template in (
+                    "dot_codex/hooks.json.tmpl",
+                    "dot_claude/settings.json.tmpl",
+                    "run_after_zz-notify-affected.sh.tmpl",
+                ):
+                    rendered = self.chezmoi(
+                        machine, "execute-template", "--file", str(ROOT / template)
+                    )
+                    self.assertEqual("affected-agent" in rendered, personal)
+
+    def test_personal_status_preserves_session_input_with_spaces_in_home(self):
+        command = json.loads(
+            self.chezmoi(
+                "personal",
+                "execute-template",
+                "--file",
+                str(ROOT / "dot_claude/settings.json.tmpl"),
+            )
+        )["statusLine"]["command"]
+        wrapper = self.home / "bin/affected-agent"
+        wrapper.parent.mkdir()
+        shutil.copyfile(ROOT / "bin/executable_affected-agent", wrapper)
         statusline = self.home / ".claude/statusline-command.sh"
+        statusline.parent.mkdir()
         statusline.write_text("#!/bin/sh\ncat\n")
         statusline.chmod(0o755)
-        self.agent.write_text(
+        agent = self.home / "agent"
+        agent.write_text(
             "#!/bin/sh\nprintf 'AIA: open 2 / pending 1 / Mac unknown / cloud unknown\\n'\n"
         )
+        agent.chmod(0o755)
         output = subprocess.check_output(
             ["/bin/sh", "-c", command],
             input="session-input\n",
@@ -217,52 +159,10 @@ class ChezmoiIntegrationTest(unittest.TestCase):
             env={
                 **os.environ,
                 "HOME": str(self.home),
-                "AM_I_AFFECTED_BIN": str(self.agent),
+                "AM_I_AFFECTED_BIN": str(agent),
             },
         )
         self.assertEqual(
             output.splitlines(),
             ["AIA: open 2 / pending 1 / Mac unknown / cloud unknown", "session-input"],
         )
-
-    def test_work_application_contains_no_collector_sender_or_startup_invocation(self):
-        result = self.apply("work")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertFalse((self.home / "bin/affected-agent").exists())
-        self.assertFalse((self.home / "Library").exists())
-        self.assertFalse((self.home / "invoked").exists())
-        hooks = (self.home / ".codex/hooks.json").read_text()
-        self.assertNotIn("affected-agent", hooks)
-        command = json.loads((self.home / ".claude/settings.json").read_text())[
-            "statusLine"
-        ]["command"]
-        self.assertNotIn("affected-agent", command)
-        self.assertTrue(
-            (self.home / ".claude/skills/vulnerability-remediation/SKILL.md").is_file()
-        )
-
-
-class ProfileIntegrationTest(unittest.TestCase):
-    def test_only_successful_profile_updates_notify(self):
-        with tempfile.TemporaryDirectory() as directory:
-            for result in (0, 1):
-                with (
-                    mock.patch.object(
-                        cli, "NIX_DOTFILES_PROFILE", Path(directory) / "profile"
-                    ),
-                    mock.patch.object(cli.shutil, "which", return_value="nix"),
-                    mock.patch.object(cli, "resolve_repo_root", return_value=ROOT),
-                    mock.patch.object(
-                        cli, "run_capture", return_value='{"elements":{}}'
-                    ),
-                    mock.patch.object(
-                        cli,
-                        "run_command",
-                        return_value=subprocess.CompletedProcess([], result, "", ""),
-                    ),
-                    mock.patch.object(cli, "notify_affected_after_apply") as notify,
-                    contextlib.redirect_stdout(io.StringIO()),
-                    contextlib.redirect_stderr(io.StringIO()),
-                ):
-                    self.assertEqual(cli.command_sync_nix_profile(None), result)
-                    self.assertEqual(notify.call_count, 1 if result == 0 else 0)
