@@ -49,17 +49,6 @@
           }
         ]
       }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 ~/.codex/hooks/reference-link-check.py",
-            "timeout": 5
-          }
-        ]
-      }
     ]
   }
 }

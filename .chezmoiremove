@@ -54,3 +54,5 @@ bin/lib/dot/handoff.py
 .claude/skills/recall
 .claude/skills/pr-review
 .config/nvim/lua/emacs
+.claude/hooks/reference-link-check.py
+.codex/hooks/reference-link-check.py
