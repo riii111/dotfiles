@@ -55,11 +55,16 @@ class AgentInvocationTest(unittest.TestCase):
         self.script(
             "echo 'AIA: previous cache'\n"
             'printf "%s" "$1" > "$HOME/called"\n'
+            'printf "%s" "$AM_I_AFFECTED_STATUS_DEADLINE" > "$HOME/deadline"\n'
             "echo 'AIA: open 2 / pending 1 / Mac 2026-10-25 / cloud 2026-10-24'\n"
         )
+        started = time.monotonic()
         code, output = self.run_main("codex-status")
         self.assertEqual(code, 0)
         self.assertEqual((self.home / "called").read_text(), "status")
+        deadline = float((self.home / "deadline").read_text())
+        self.assertGreater(deadline, started)
+        self.assertLess(deadline, started + 0.5)
         self.assertEqual(
             json.loads(output),
             {

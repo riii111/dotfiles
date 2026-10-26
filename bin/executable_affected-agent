@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 
@@ -26,6 +27,8 @@ def main(argv: list[str]) -> int:
         f"{env.get('PATH', os.defpath)}"
     )
     try:
+        if command == "status":
+            env["AM_I_AFFECTED_STATUS_DEADLINE"] = str(time.monotonic() + 0.35)
         result = subprocess.run(
             [str(agent), command],
             env=env,
