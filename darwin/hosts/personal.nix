@@ -6,42 +6,27 @@ let
   agent = lib.escapeShellArg "${home}/bin/affected-agent";
   collector = lib.escapeShellArg "${home}/.local/bin/am-i-affected";
   agentPath = "${home}/.nix-profile/bin:${home}/.local/bin:/run/current-system/sw/bin:/opt/homebrew/bin:/usr/bin:/bin";
-  agentService = command: settings: {
-    environment.PATH = agentPath;
-    script = ''
-      if [ -x ${collector} ]; then
-        exec ${collector} ${command}${
-          lib.optionalString (command == "collect-and-push") " </dev/null >/dev/null 2>&1"
-        }
-      fi
-    '';
-    serviceConfig = {
-      ProcessType = "Background";
-      WorkingDirectory = home;
-    }
-    // settings;
-  };
 in
 {
   imports = [ ../common.nix ];
 
   system.primaryUser = "a81803";
 
-  launchd.user.agents = {
-    affected = agentService "collect-and-push" {
+  launchd.user.agents.affected = {
+    environment.PATH = agentPath;
+    script = ''
+      if [ -x ${collector} ]; then
+        exec ${collector} collect-and-push </dev/null >/dev/null 2>&1
+      fi
+    '';
+    serviceConfig = {
       Label = "local.am-i-affected";
+      ProcessType = "Background";
+      WorkingDirectory = home;
       StartCalendarInterval = builtins.genList (i: {
         Hour = i * 3;
         Minute = 0;
       }) 8;
-    };
-    affected-wake = agentService "watch-wake" {
-      Label = "local.am-i-affected-wake";
-      RunAtLoad = true;
-      KeepAlive.Crashed = true;
-      ThrottleInterval = 300;
-      StandardErrorPath = "${home}/.am-i-affected-wake.log";
-      Umask = 63;
     };
   };
 

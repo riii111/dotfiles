@@ -55,23 +55,15 @@ class DarwinActivationTest(unittest.TestCase):
         )
         self.assertNotIn("affected-agent", self.hosts["work"]["script"])
 
-    def test_personal_manages_calendar_and_wake_agents_without_failure_restart_loop(
-        self,
-    ):
+    def test_only_personal_manages_calendar_agent(self):
         personal = self.hosts["personal"]["agents"]
         calendar = plistlib.loads(personal["local.am-i-affected.plist"].encode())
-        wake = plistlib.loads(personal["local.am-i-affected-wake.plist"].encode())
         self.assertEqual(calendar["Label"], "local.am-i-affected")
         self.assertEqual(
             calendar["StartCalendarInterval"],
             [{"Hour": hour, "Minute": 0} for hour in range(0, 24, 3)],
         )
-        self.assertEqual(wake["Label"], "local.am-i-affected-wake")
-        self.assertTrue(wake["RunAtLoad"])
-        self.assertEqual(wake["KeepAlive"], {"Crashed": True})
-        self.assertEqual(wake["ThrottleInterval"], 300)
-        self.assertEqual(wake["Umask"], 0o077)
-        self.assertTrue(wake["StandardErrorPath"].endswith("/.am-i-affected-wake.log"))
+        self.assertNotIn("local.am-i-affected-wake.plist", personal)
         self.assertNotIn("local.am-i-affected.plist", self.hosts["work"]["agents"])
         self.assertNotIn("local.am-i-affected-wake.plist", self.hosts["work"]["agents"])
 
