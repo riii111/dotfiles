@@ -206,63 +206,69 @@ class PrStateTest(unittest.TestCase):
             "deny",
         )
 
-
-class ReferenceLinkTest(unittest.TestCase):
-    def setUp(self):
-        self.hook = load_hook("reference-link-check")
-
-    def test_explicit_unlinked_references(self):
-        for message in (
-            "Issue #42を確認しました",
-            "PR#42を作成しました",
-            "issue #1 と PR #2",
-        ):
-            self.assertTrue(self.hook.missing_links(message), message)
-
-    def test_excludes_code_quotes_and_links(self):
-        for message in (
-            "[PR #42](https://github.com/org/repo/pull/42)",
-            "[Issue #42](https://github.com/org/repo/issues/42)",
-            "`Issue #42`",
-            "```text\nPR #42\n```",
-            "~~~\nIssue #42\n~~~",
-            "> PR #42",
-            "#42",
-            "## 42件の結果",
-            "C#12",
-        ):
-            self.assertFalse(self.hook.missing_links(message), message)
-
-    def test_link_elsewhere_does_not_hide_missing_reference(self):
-        self.assertTrue(
-            self.hook.missing_links("[PR #1](https://github.com/o/r/pull/1) と PR #2")
+    def pr_url(self, owner):
+        self.runner.return_value.stdout = json.dumps(
+            {"url": f"https://github.com/{owner}/repo/pull/42"}
         )
 
-    def test_asks_to_append_links_instead_of_rewriting(self):
-        event = {"last_assistant_message": "PR #42", "stop_hook_active": False}
-        output = io.StringIO()
-        with (
-            mock.patch("sys.stdin", io.StringIO(json.dumps(event))),
-            redirect_stdout(output),
+    def test_merge_asks_outside_personal_repositories(self):
+        for command in (
+            "gh pr merge 42 --merge",
+            "gh pr merge --auto --squash -R org/repo 42",
+            "git status && gh pr merge 42 --subject 'fix: x' -b body",
         ):
-            self.hook.main()
-        reason = json.loads(output.getvalue())["reason"]
-        self.assertIn("繰り返さない", reason)
-        self.assertIn("追記", reason)
+            for owner, decision in (("sansaninc", "ask"), ("riii111", None)):
+                with self.subTest(command=command, owner=owner):
+                    self.pr_url(owner)
+                    verdict = self.hook.check(command, "/tmp")
+                    self.assertEqual(verdict and verdict[0], decision)
+        self.assertEqual(
+            self.runner.call_args.args[0][:3] + self.runner.call_args.args[0][-2:],
+            ["gh", "pr", "view", "--json", "url"],
+        )
 
-    def test_no_continuation_loop(self):
-        for active in (False, True):
-            event = {"last_assistant_message": "PR #42", "stop_hook_active": active}
-            output = io.StringIO()
-            with (
-                mock.patch("sys.stdin", io.StringIO(json.dumps(event))),
-                redirect_stdout(output),
-            ):
-                self.hook.main()
-            self.assertEqual(bool(output.getvalue()), not active)
-        event = {"last_assistant_message": None}
-        with mock.patch("sys.stdin", io.StringIO(json.dumps(event))):
-            self.assertEqual(self.hook.main(), 0)
+    def test_merge_asks_when_its_repository_is_unknown(self):
+        for error in (subprocess.CalledProcessError(1, "gh"), OSError()):
+            self.runner.side_effect = error
+            self.assertEqual(self.hook.check("gh pr merge 42", "/tmp")[0], "ask")
+        self.runner.side_effect = None
+        for output in ("garbage", "{}", '{"url": "https://example.com/o/r/pull/1"}'):
+            self.runner.return_value.stdout = output
+            self.assertEqual(self.hook.check("gh pr merge 42", "/tmp")[0], "ask")
+        self.assertEqual(self.hook.check('gh pr merge "$PR"', "/tmp")[0], "ask")
+
+    def test_api_merge_asks_outside_personal_repositories(self):
+        for command in (
+            "gh api -X PUT repos/sansaninc/app/pulls/1/merge",
+            "gh api --method=PUT /repos/sansaninc/app/pulls/1/merge -f merge_method=squash",
+            "gh api graphql -f query='mutation { mergePullRequest(input: {}) { clientMutationId } }'",
+            "gh api graphql -f query='mutation { enablePullRequestAutoMerge(input: {}) { clientMutationId } }'",
+        ):
+            self.assertEqual(self.hook.check(command, "/tmp")[0], "ask", command)
+        for command in (
+            "gh api -X PUT repos/riii111/app/pulls/1/merge",
+            "gh api repos/sansaninc/app/pulls/1/merge",
+            "gh api repos/sansaninc/app/pulls/1",
+        ):
+            self.assertIsNone(self.hook.check(command, "/tmp"), command)
+        self.runner.assert_not_called()
+
+    def test_merge_help_does_not_query(self):
+        self.assertIsNone(self.hook.check("gh pr merge --help", "/tmp"))
+        self.runner.assert_not_called()
+
+    def test_codex_copy_denies_merges(self):
+        template = (ROOT / "dot_codex/hooks/pr-state-check.py.tmpl").read_text()
+        self.assertIn(
+            'replace "MERGE_DECISION = \\"ask\\"" "MERGE_DECISION = \\"deny\\""',
+            template,
+        )
+        self.assertEqual(
+            (ROOT / "dot_claude/hooks/executable_pr-state-check.py")
+            .read_text()
+            .count('MERGE_DECISION = "ask"'),
+            1,
+        )
 
 
 if __name__ == "__main__":
