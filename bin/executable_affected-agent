@@ -14,27 +14,20 @@ def main(argv: list[str]) -> int:
     if len(argv) != 1 or argv[0] not in ("status", "codex-status", "after-apply"):
         return 2
     command = "status" if argv[0] == "codex-status" else argv[0]
-    agent = Path(
-        os.environ.get(
-            "AM_I_AFFECTED_BIN", str(Path.home() / ".local/bin/am-i-affected")
-        )
-    ).expanduser()
-    if not agent.is_absolute() or not os.access(agent, os.X_OK):
+    home = Path.home()
+    agent = home / ".local/bin/am-i-affected"
+    if not os.access(agent, os.X_OK):
         return 0
     env = os.environ.copy()
-    env["PATH"] = os.pathsep.join(
-        [
-            str(Path.home() / ".nix-profile/bin"),
-            str(Path.home() / ".local/bin"),
-            "/run/current-system/sw/bin",
-            "/opt/homebrew/bin",
-            env.get("PATH", os.defpath),
-        ]
+    # GUI hooks do not guarantee the managed tool paths.
+    env["PATH"] = (
+        f"{home}/.nix-profile/bin:{home}/.local/bin:"
+        "/run/current-system/sw/bin:/opt/homebrew/bin:"
+        f"{env.get('PATH', os.defpath)}"
     )
     try:
         result = subprocess.run(
             [str(agent), command],
-            cwd=Path.home(),
             env=env,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE if command == "status" else subprocess.DEVNULL,
@@ -42,16 +35,21 @@ def main(argv: list[str]) -> int:
             timeout=2 if command == "after-apply" else 0.5,
             check=False,
         )
-    except (OSError, subprocess.TimeoutExpired):
-        code, text = 1, ""
+    except subprocess.TimeoutExpired as error:
+        code, output = 1, error.output or b""
+    except OSError:
+        code, output = 1, b""
     else:
-        code = result.returncode
-        text = (result.stdout or b"").decode("utf-8", errors="replace")
-        text = " ".join(
-            "".join(c for c in text if c.isprintable() or c == "\n").split()
-        )[:512]
+        code, output = result.returncode, result.stdout or b""
+    clean = "".join(
+        c
+        for c in output.decode("utf-8", errors="replace")
+        if c.isprintable() or c == "\n"
+    )
+    lines = [" ".join(line.split()) for line in clean.split("\n")]
+    text = next((line for line in reversed(lines) if line), "")[:512]
     if command == "status":
-        if code:
+        if code and not text:
             text = UNAVAILABLE
         if text:
             print(

@@ -27,10 +27,9 @@ class AgentInvocationTest(unittest.TestCase):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         self.home = Path(directory.name)
-        self.agent = self.home / "agent with spaces"
-        patch = mock.patch.dict(
-            os.environ, {"HOME": str(self.home), "AM_I_AFFECTED_BIN": str(self.agent)}
-        )
+        self.agent = self.home / ".local/bin/am-i-affected"
+        self.agent.parent.mkdir(parents=True)
+        patch = mock.patch.dict(os.environ, {"HOME": str(self.home)})
         patch.start()
         self.addCleanup(patch.stop)
 
@@ -54,6 +53,7 @@ class AgentInvocationTest(unittest.TestCase):
 
     def test_status_only_requests_cached_status_and_returns_ui_json(self):
         self.script(
+            "echo 'AIA: previous cache'\n"
             'printf "%s" "$1" > "$HOME/called"\n'
             "echo 'AIA: open 2 / pending 1 / Mac 2026-10-25 / cloud 2026-10-24'\n"
         )
@@ -66,6 +66,14 @@ class AgentInvocationTest(unittest.TestCase):
                 "systemMessage": "AIA: open 2 / pending 1 / Mac 2026-10-25 / cloud 2026-10-24"
             },
         )
+
+    def test_timeout_retains_flushed_cache_in_codex_message(self):
+        self.script("printf 'cached status\\n\\n'\nexec /bin/sleep 30\n")
+        started = time.monotonic()
+        code, output = self.run_main("codex-status")
+        self.assertLess(time.monotonic() - started, 1)
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(output), {"systemMessage": "cached status"})
 
     def test_failures_do_not_break_apply_or_claim_known_status(self):
         self.script("echo 'sensitive failure' >&2\nexit 7\n")
@@ -147,7 +155,8 @@ class ChezmoiIntegrationTest(unittest.TestCase):
         statusline.parent.mkdir()
         statusline.write_text("#!/bin/sh\ncat\n")
         statusline.chmod(0o755)
-        agent = self.home / "agent"
+        agent = self.home / ".local/bin/am-i-affected"
+        agent.parent.mkdir(parents=True)
         agent.write_text(
             "#!/bin/sh\nprintf 'AIA: open 2 / pending 1 / Mac unknown / cloud unknown\\n'\n"
         )
@@ -156,11 +165,7 @@ class ChezmoiIntegrationTest(unittest.TestCase):
             ["/bin/sh", "-c", command],
             input="session-input\n",
             text=True,
-            env={
-                **os.environ,
-                "HOME": str(self.home),
-                "AM_I_AFFECTED_BIN": str(agent),
-            },
+            env={**os.environ, "HOME": str(self.home)},
         )
         self.assertEqual(
             output.splitlines(),
