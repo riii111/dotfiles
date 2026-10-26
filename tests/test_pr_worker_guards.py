@@ -206,6 +206,70 @@ class PrStateTest(unittest.TestCase):
             "deny",
         )
 
+    def pr_url(self, owner):
+        self.runner.return_value.stdout = json.dumps(
+            {"url": f"https://github.com/{owner}/repo/pull/42"}
+        )
+
+    def test_merge_asks_outside_personal_repositories(self):
+        for command in (
+            "gh pr merge 42 --merge",
+            "gh pr merge --auto --squash -R org/repo 42",
+            "git status && gh pr merge 42 --subject 'fix: x' -b body",
+        ):
+            for owner, decision in (("sansaninc", "ask"), ("riii111", None)):
+                with self.subTest(command=command, owner=owner):
+                    self.pr_url(owner)
+                    verdict = self.hook.check(command, "/tmp")
+                    self.assertEqual(verdict and verdict[0], decision)
+        self.assertEqual(
+            self.runner.call_args.args[0][:3] + self.runner.call_args.args[0][-2:],
+            ["gh", "pr", "view", "--json", "url"],
+        )
+
+    def test_merge_asks_when_its_repository_is_unknown(self):
+        for error in (subprocess.CalledProcessError(1, "gh"), OSError()):
+            self.runner.side_effect = error
+            self.assertEqual(self.hook.check("gh pr merge 42", "/tmp")[0], "ask")
+        self.runner.side_effect = None
+        for output in ("garbage", "{}", '{"url": "https://example.com/o/r/pull/1"}'):
+            self.runner.return_value.stdout = output
+            self.assertEqual(self.hook.check("gh pr merge 42", "/tmp")[0], "ask")
+        self.assertEqual(self.hook.check('gh pr merge "$PR"', "/tmp")[0], "ask")
+
+    def test_api_merge_asks_outside_personal_repositories(self):
+        for command in (
+            "gh api -X PUT repos/sansaninc/app/pulls/1/merge",
+            "gh api --method=PUT /repos/sansaninc/app/pulls/1/merge -f merge_method=squash",
+            "gh api graphql -f query='mutation { mergePullRequest(input: {}) { clientMutationId } }'",
+            "gh api graphql -f query='mutation { enablePullRequestAutoMerge(input: {}) { clientMutationId } }'",
+        ):
+            self.assertEqual(self.hook.check(command, "/tmp")[0], "ask", command)
+        for command in (
+            "gh api -X PUT repos/riii111/app/pulls/1/merge",
+            "gh api repos/sansaninc/app/pulls/1/merge",
+            "gh api repos/sansaninc/app/pulls/1",
+        ):
+            self.assertIsNone(self.hook.check(command, "/tmp"), command)
+        self.runner.assert_not_called()
+
+    def test_merge_help_does_not_query(self):
+        self.assertIsNone(self.hook.check("gh pr merge --help", "/tmp"))
+        self.runner.assert_not_called()
+
+    def test_codex_copy_denies_merges(self):
+        template = (ROOT / "dot_codex/hooks/pr-state-check.py.tmpl").read_text()
+        self.assertIn(
+            'replace "MERGE_DECISION = \\"ask\\"" "MERGE_DECISION = \\"deny\\""',
+            template,
+        )
+        self.assertEqual(
+            (ROOT / "dot_claude/hooks/executable_pr-state-check.py")
+            .read_text()
+            .count('MERGE_DECISION = "ask"'),
+            1,
+        )
+
 
 class ReferenceLinkTest(unittest.TestCase):
     def setUp(self):

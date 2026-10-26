@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Protect review approvals; uncertain PR identity must not authorize a mutation."""
+"""Protect review approvals and merges; uncertain PR identity must not authorize a mutation."""
 
 from __future__ import annotations
 
@@ -35,7 +35,20 @@ VALUE_FLAGS = {
     "--add-project",
     "--remove-project",
     "--attach",
+    "--subject",
+    "--match-head-commit",
+    "-A",
+    "--author-email",
 }
+# Personal repositories merge without asking; any other owner's PR waits for the owner.
+MERGE_FREE_OWNERS = {"riii111"}
+# Codex parses "ask" but runs the command anyway, so its copy of this hook replaces it with "deny".
+MERGE_DECISION = "ask"
+MERGE_REASON = (
+    "マージはownerの確認が必要です。ownerに頼まれたマージだけを実行してください。"
+)
+API_MERGE = re.compile(r"(?:^|/)repos/(?P<owner>[\w.-]+)/[\w.-]+/pulls/\d+/merge$")
+GRAPHQL_MERGE = re.compile(r"\b(?:mergePullRequest|enablePullRequestAutoMerge)\b")
 SHELL_TOKEN = re.compile(
     r"""(?P<redirect>\d*(?:>&|<&|<>|>\||>>?|<<?)|&>>?)"""
     r"""|(?P<comment>#[^\n]*)"""
@@ -111,9 +124,49 @@ def query_args(args: list[str]) -> tuple[list[str], bool]:
     return [*targets, *repo], dangerous
 
 
-def check(command: str, cwd: str) -> str | None:
-    if not re.search(r"\bgh\b.*\bpr\b.*\b(?:ready|edit)\b", command, re.DOTALL):
+def api_merge_owner(args: list[str]) -> str | None:
+    """The owner of a merge through `gh api`, "" when its owner is unknown, None when it is no merge."""
+    # A GET on the merge endpoint only asks whether the PR is merged.
+    put = any(
+        method.upper() == "PUT"
+        for flag, method in zip(args, args[1:])
+        if flag in {"-X", "--method"}
+    ) or any(arg.upper() in {"-XPUT", "--METHOD=PUT"} for arg in args)
+    owner = None
+    for arg in args:
+        value = arg.split("=", 1)[1] if arg.startswith("-") and "=" in arg else arg
+        if GRAPHQL_MERGE.search(value):
+            return ""
+        match = API_MERGE.search(value)
+        if match and put:
+            owner = match.group("owner")
+    return owner
+
+
+def merge_owner(
+    gh: str, query: list[str], cwd: str, environment, remaining: float
+) -> str:
+    result = subprocess.run(
+        [gh, "pr", "view", *query, "--json", "url"],
+        cwd=cwd,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=min(5, remaining),
+        check=True,
+    )
+    match = re.match(r"https://github\.com/([^/]+)/", json.loads(result.stdout)["url"])
+    if match is None:
+        raise ValueError("PR URL is not on GitHub")
+    return match.group(1)
+
+
+def check(command: str, cwd: str) -> tuple[str, str] | None:
+    if not re.search(
+        r"\bgh\b.*\b(?:pr\b.*\b(?:ready|edit|merge)|api)\b", command, re.DOTALL
+    ):
         return None
+    merging = False
     try:
         deadline = time.monotonic() + 10
         directories = []
@@ -142,17 +195,30 @@ def check(command: str, cwd: str) -> str | None:
             if not part or Path(part[0]).name != "gh":
                 continue
             prefix, args = take_repo(part[1:])
+            if args and args[0] == "api":
+                owner = api_merge_owner(args[1:])
+                if owner is not None and owner not in MERGE_FREE_OWNERS:
+                    return MERGE_DECISION, MERGE_REASON
+                continue
             if not args or args[0] != "pr":
                 continue
             parent_repo, args = take_repo(args[1:])
-            if not args or args[0] not in {"edit", "ready"}:
+            if not args or args[0] not in {"edit", "ready", "merge"}:
                 continue
             if "--help" in args or "-h" in args:
                 continue
+            merging = merging or args[0] == "merge"
             query, dangerous = query_args(prefix + parent_repo + args[1:])
+            remaining = deadline - time.monotonic()
+            if args[0] == "merge":
+                if remaining <= 0:
+                    raise ValueError("lookup deadline exceeded")
+                owner = merge_owner(part[0], query, cwd, environment, remaining)
+                if owner not in MERGE_FREE_OWNERS:
+                    return MERGE_DECISION, MERGE_REASON
+                continue
             if not dangerous:
                 continue
-            remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise ValueError("lookup deadline exceeded")
             result = subprocess.run(
@@ -165,32 +231,42 @@ def check(command: str, cwd: str) -> str | None:
                 check=True,
             )
             if json.loads(result.stdout).get("isDraft") is not True:
-                return "Open済みPRのDraft化・base変更は禁止。承認を保つため操作を止めました。"
+                return (
+                    "deny",
+                    "Open済みPRのDraft化・base変更は禁止。承認を保つため操作を止めました。",
+                )
     except (
         ValueError,
         TypeError,
         AttributeError,
         IndexError,
+        KeyError,
         OSError,
         subprocess.SubprocessError,
     ):
-        return "PRがDraftか確認できないため操作を止めました。対象PR・リポジトリ・接続を確認してください。"
+        if merging:
+            return MERGE_DECISION, MERGE_REASON
+        return (
+            "deny",
+            "PRがDraftか確認できないため操作を止めました。対象PR・リポジトリ・接続を確認してください。",
+        )
     return None
 
 
 def main() -> int:
     event = json.load(sys.stdin)
-    reason = check(
+    verdict = check(
         (event.get("tool_input") or {}).get("command") or "",
         event.get("cwd") or os.getcwd(),
     )
-    if reason:
+    if verdict:
+        decision, reason = verdict
         print(
             json.dumps(
                 {
                     "hookSpecificOutput": {
                         "hookEventName": "PreToolUse",
-                        "permissionDecision": "deny",
+                        "permissionDecision": decision,
                         "permissionDecisionReason": reason,
                     }
                 },
