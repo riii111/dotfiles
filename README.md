@@ -59,6 +59,19 @@ Unset any temporary `SDKROOT` override before retrying your build.
 
 ## Optional integrations
 
+### 脆弱性の監視
+
+個人用 Mac では、監視エージェントを別途 `~/.local/bin/am-i-affected` に配置する。
+chezmoi が呼び出しスクリプトを配置し、nix-darwin が LaunchAgent を管理する。
+収集は3時間ごと、chezmoi・CLI プロファイル・nix-darwin の適用成功後に実行する。
+スリープ中に過ぎた定期実行は、復帰後にまとめて1回実行する。
+予定時刻をまたがない短いスリープでは、復帰時の追加収集は行わない。
+Claude/Codex にはキャッシュの件数と、Mac 側・クラウド側それぞれの最終成功時刻を表示する。
+Codex の表示を有効にするには、再起動後に `/hooks` で更新された `SessionStart` を信頼する。
+エージェントの未導入や失敗は dotfiles の適用を妨げない。
+仕事用 Mac にはローカル対応用のスキルだけを配置し、環境情報を送信しない。
+運用前に、定期実行・表示・送信・仕事用 Mac への適用を実機で確認する。
+
 ### Work tools
 
 ```bash

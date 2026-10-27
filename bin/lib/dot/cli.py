@@ -455,8 +455,26 @@ def command_sync_nix_profile(_: argparse.Namespace) -> int:
             print_process_failure("nix profile add", result)
             return 1
 
+    notify_affected_after_apply()
     print(f"Nix CLI profile synced: {NIX_DOTFILES_PROFILE}")
     return 0
+
+
+def notify_affected_after_apply() -> None:
+    hook = Path.home() / "bin/affected-agent"
+    if not os.access(hook, os.X_OK):
+        return
+    try:
+        subprocess.run(
+            [sys.executable, str(hook), "after-apply"],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=3,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        pass
 
 
 def select_work_tools(name: str | None) -> list[tuple[str, WorkTool]]:
