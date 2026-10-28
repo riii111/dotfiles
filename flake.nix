@@ -35,17 +35,6 @@
             };
           }
         );
-        # Keep diff-cover's HTML fixtures compatible with Pygments 2.21.
-        pythonPackagesExtensions = prev.pythonPackagesExtensions ++ [
-          (_: pythonPrev: {
-            diff-cover = pythonPrev.diff-cover.overridePythonAttrs (attrs: {
-              postPatch = (attrs.postPatch or "") + ''
-                substituteInPlace tests/fixtures/{pycodestyle,pyflakes,pylint}_violations_report.html \
-                  --replace-fail '&quot;&quot;&quot;A less messy function&quot;&quot;&quot;' '"""A less messy function"""'
-              '';
-            });
-          })
-        ];
         # Keep the patched verifier and managed-Python catalog in the official release.
         uv = final.stdenvNoCC.mkDerivation (attrs: {
           pname = "uv";
