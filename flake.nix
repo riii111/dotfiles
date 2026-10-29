@@ -407,17 +407,22 @@
           };
 
           # Only what `dotctl test` runs; the daily shell builds unfree tools like terraform from source in CI.
-          ci = cli.pkgs.mkShell {
-            packages = with cli.pkgs; [
-              bashInteractive
-              chezmoi
-              git
-              go
-              jq
-              cli.dailyPython
-              ruff
-            ];
-          };
+          # Take the tools from unpatched nixpkgs: the overlay's Brotli reaches rustc via curl, so git and ruff rebuild Rust.
+          ci =
+            let
+              upstream = nixpkgs.legacyPackages.${system};
+            in
+            upstream.mkShell {
+              packages = with upstream; [
+                bashInteractive
+                chezmoi
+                git
+                go_1_27
+                jq
+                cli.dailyPython
+                ruff
+              ];
+            };
         }
       );
 

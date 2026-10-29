@@ -38,12 +38,8 @@ jobs:
         with:
           persist-credentials: false
 
+      # No store cache: the CI shell comes from cache.nixos.org, and restoring a cached store cost more than it saved.
       - uses: nixbuild/nix-quick-install-action@9f63be77f412a248c9d9a65a4c82cf066cdf8f0c # v35
-
-      - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7
-        with:
-          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.nix', 'flake.lock') }}
-          restore-prefixes-first-match: nix-${{ runner.os }}-
 
       - name: Evaluate Go and both Darwin configurations
         run: |
