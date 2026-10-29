@@ -2,6 +2,7 @@ import importlib.machinery
 import importlib.util
 import json
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -101,9 +102,23 @@ class GithubCommentCheckTest(unittest.TestCase):
         self.assertEqual(result.stdout, "")
 
     def test_rendered_configs_register_the_hook(self):
+        state = tempfile.TemporaryDirectory()
+        self.addCleanup(state.cleanup)
+
         def render(path):
             return subprocess.run(
-                ["chezmoi", "execute-template", "--file", str(ROOT / path)],
+                [
+                    "chezmoi",
+                    "--config",
+                    str(ROOT / "tests/chezmoi/personal.toml"),
+                    "--source",
+                    str(ROOT),
+                    "--persistent-state",
+                    str(Path(state.name) / "state.boltdb"),
+                    "execute-template",
+                    "--file",
+                    str(ROOT / path),
+                ],
                 cwd=ROOT,
                 capture_output=True,
                 text=True,
