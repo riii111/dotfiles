@@ -2,7 +2,9 @@
 """Deny GitHub comment posting from shell commands and GitHub MCP tools.
 
 Commands are matched by their parsed words. Requests that scripts build at
-runtime or read from files are not recognized.
+runtime or read from files are not recognized. Issue comments stay available
+through `gh issue`; the API and connector share PR and Issue comment endpoints,
+so they stay denied for both.
 """
 
 import json
@@ -92,9 +94,9 @@ def posts_comment(words: list[str]) -> bool:
         return False
     while args and args[0] in {"-R", "--repo", "--hostname"}:
         args = args[2:]
-    if args[:2] in (["pr", "comment"], ["issue", "comment"], ["pr", "review"]):
+    if args[:2] in (["pr", "comment"], ["pr", "review"]):
         return True
-    if len(args) >= 2 and args[0] in {"pr", "issue"} and args[1] in {"close", "reopen"}:
+    if len(args) >= 2 and args[0] == "pr" and args[1] in {"close", "reopen"}:
         return any(
             arg in {"-c", "--comment"} or arg.startswith("--comment=") for arg in args
         )
