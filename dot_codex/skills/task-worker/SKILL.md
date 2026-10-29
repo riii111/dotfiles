@@ -27,7 +27,9 @@ Non-blockingの未対応だけでは再レビューしない。
 全検証は修正のたびに繰り返さず、LGTM後の最終headでリポジトリ所定の必須検証を完了する。
 
 そのheadを通常のpushで公開し、create-pr SKILL、なければPR templateと直近の慣例に従ってDraft PRを作成・更新する。
-Draft PRを初めて作成したら、`harnexus-task name --pr <PRのURL>`をサンドボックス外で一度実行し、PRを監視に登録する。
+Draft PRを初めて作成したら、[実行環境の切り替え](references/environment.md)で環境を判定する。
+localなら`harnexus-task name --pr <PRのURL>`をサンドボックス外で一度実行し、PRを監視に登録する。
+Cloudでは実行しない。
 launchから起動したworkerなら、スレッド名の末尾にPR番号も付く。
 Codexは`sandbox_permissions: require_escalated`を付け、Claudeはそのまま実行する（サンドボックス対象外）。
 パイプ・リダイレクト・`cd`などを付けず単独で実行する（付けると対象外にならない）。

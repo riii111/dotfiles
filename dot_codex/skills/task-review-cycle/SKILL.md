@@ -14,6 +14,10 @@ LGTMの後に、owner・レビュアー・reviewerから伝えられた指摘へ
 
 ## 依頼と結果の受取
 
+最初に[実行環境の切り替え](../task-worker/references/environment.md)に従って環境を判定する。
+Cloudでは下の手順の代わりに、その文書の「Cloudでのレビュー」に従う。
+
+
 `harnexus-task`が未導入ならユーザーに伝えて停止する。
 worktreeに`*`だけの`.gitignore`を置いた`.reviewctl/`を作り、[依頼JSON](references/request.md)を`.reviewctl/request.json`へ保存する。
 候補はcommit済みで、追跡ファイルに未commitの変更がないことを`git status`で確認する。

@@ -547,6 +547,19 @@ def command_work_tools_update(args: argparse.Namespace) -> int:
     return 1 if failures else 0
 
 
+def command_cloud_install(args: argparse.Namespace) -> int:
+    from . import cloud
+
+    return cloud.run(
+        resolve_repo_root(),
+        Path(args.codex_home) if args.codex_home else cloud.default_codex_home(),
+        Path(args.claude_home) if args.claude_home else cloud.default_claude_home(),
+        tuple(args.skill) if args.skill else cloud.DEFAULT_SKILLS,
+        not args.no_hooks,
+        args.apply,
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="dotctl")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -565,6 +578,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="install/update the dotfiles Nix CLI profile",
     )
     nix_profile_parser.set_defaults(func=command_sync_nix_profile)
+
+    cloud_install_parser = subparsers.add_parser(
+        "cloud-install",
+        help="install shared skills and portable hooks into a Codex Cloud task",
+    )
+    cloud_install_parser.add_argument("--codex-home", help="default: $CODEX_HOME or ~/.codex")
+    cloud_install_parser.add_argument(
+        "--claude-home",
+        help="default: $CLAUDE_CONFIG_DIR, else the Cloud setup's Claude directory, else ~/.claude",
+    )
+    cloud_install_parser.add_argument(
+        "--skill", action="append", help="skill to install (repeatable); default: the task skills"
+    )
+    cloud_install_parser.add_argument("--no-hooks", action="store_true", help="skills only")
+    cloud_install_parser.add_argument(
+        "--apply", action="store_true", help="write files; without it only the plan is shown"
+    )
+    cloud_install_parser.set_defaults(func=command_cloud_install)
 
     work_tools_parser = subparsers.add_parser(
         "work-tools",
