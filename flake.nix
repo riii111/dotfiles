@@ -28,6 +28,11 @@
             hash = "sha256-llY72cYffDv0ugsH0p89xIPEbElV4L8u7U/Fe8hT3gI=";
           };
         });
+        # Rebuilding Brotli consumers also runs Node's worker-memory test.
+        # Bound its worker count; the unchanged test fails at 11 workers on this Mac.
+        nodejs-slim_24 = prev.nodejs-slim_24.overrideAttrs (attrs: {
+          checkFlags = attrs.checkFlags ++ [ "JOBS=4" ];
+        });
         go = final.go_1_27;
         buildGoModule = final.buildGo127Module;
         rustup = prev.rustup.overrideAttrs (
