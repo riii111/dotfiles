@@ -89,6 +89,23 @@
           };
         });
       };
+      # The uninstaller evaluates a separate system; preserve the security overlay there too.
+      securityDarwinTools =
+        { pkgs, ... }:
+        let
+          source = pkgs.applyPatches {
+            name = "nix-darwin-security-tools";
+            src = nix-darwin;
+            patches = [ ./darwin/uninstaller-pkgs.patch ];
+          };
+        in
+        {
+          # Replace the default tool with the same implementation using patched packages.
+          system.tools.darwin-uninstaller.enable = false;
+          environment.systemPackages = [
+            (pkgs.callPackage "${source}/pkgs/darwin-uninstaller" { })
+          ];
+        };
       # This dotfiles repo is macOS-only for now, so keep the shell darwin-only too.
       systems = [
         "aarch64-darwin"
@@ -446,6 +463,7 @@
         personal = nix-darwin.lib.darwinSystem {
           modules = [
             { nixpkgs.overlays = [ securityOverlay ]; }
+            securityDarwinTools
             ./darwin/hosts/personal.nix
           ];
         };
@@ -453,6 +471,7 @@
         work = nix-darwin.lib.darwinSystem {
           modules = [
             { nixpkgs.overlays = [ securityOverlay ]; }
+            securityDarwinTools
             ./darwin/hosts/work.nix
           ];
         };
