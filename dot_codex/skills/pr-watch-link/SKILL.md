@@ -7,6 +7,9 @@ description: |
 
 # PR Watch Link
 
+最初に[実行環境の切り替え](../task-worker/references/environment.md)に従って環境を判定する。
+Cloudでは登録せず、監視されていないことを伝える。
+
 1. `harnexus-task watch --link <PRのURL>`をサンドボックス外で一度実行する。
    Codexは`sandbox_permissions: require_escalated`を付け、Claudeはそのまま実行する。
    パイプ・リダイレクト・`cd`などを付けず単独で実行する。

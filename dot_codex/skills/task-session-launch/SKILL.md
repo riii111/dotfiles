@@ -9,6 +9,9 @@ description: |
 
 ## 手順
 
+最初に[実行環境の切り替え](../task-worker/references/environment.md)に従って環境を判定する。
+Cloudでは起動しない。
+
 1. `list_projects`を一度呼び、repositoryに対応するprojectIdを決める。
    CodexはAppのツール、harnexus内のClaudeは`mcp__codex_link__list_projects`を使う。
 2. [起動依頼JSON](references/request.md)を保存する。
