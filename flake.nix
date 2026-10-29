@@ -100,6 +100,33 @@
           };
         in
         {
+          # Nix can invalidate Mach-O signatures when rebuilding only missing outputs.
+          # Re-sign a separate build-time CLI; keep the shared library and its consumers unchanged.
+          nixpkgs.overlays = [
+            (final: prev: {
+              nixosOptionsDoc =
+                attrs:
+                prev.nixosOptionsDoc (
+                  attrs
+                  // {
+                    pkgs = final // {
+                      brotli = final.runCommand "brotli-docs-cli" { } ''
+                        mkdir -p "$out/bin"
+                        cp ${final.brotli}/bin/brotli "$out/bin/brotli"
+                        chmod u+w "$out/bin/brotli"
+                        source ${final.darwin.signingUtils}
+                        sign "$out/bin/brotli"
+                        "$out/bin/brotli" --version
+                        printf 'brotli documentation check' > input
+                        "$out/bin/brotli" -9 -c input > input.br
+                        "$out/bin/brotli" -d -c input.br > roundtrip
+                        cmp input roundtrip
+                      '';
+                    };
+                  }
+                );
+            })
+          ];
           # Replace the default tool with the same implementation using patched packages.
           system.tools.darwin-uninstaller.enable = false;
           environment.systemPackages = [
