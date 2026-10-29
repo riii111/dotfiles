@@ -125,6 +125,73 @@ class CloudInstallTest(unittest.TestCase):
                 expected = expected.replace(old.encode(), new.encode())
             self.assertEqual(plan.files[self.codex / "hooks" / script][0], expected)
 
+    def test_refuses_a_symlink_above_the_nearest_existing_directory(self):
+        elsewhere = self.root / "elsewhere"
+        (elsewhere / "task-worker").mkdir(parents=True)
+        self.codex.mkdir()
+        (self.codex / "skills").symlink_to(elsewhere)
+        # skills/task-worker/references does not exist yet, so only the chain shows the link.
+        self.assertEqual(self.run_install(), 1)
+        self.assertEqual(list((elsewhere / "task-worker").iterdir()), [])
+
+    def test_refuses_a_symlinked_manifest(self):
+        self.claude.mkdir()
+        target = self.root / "elsewhere.json"
+        (self.claude / cloud.MANIFEST_NAME).symlink_to(target)
+        self.assertEqual(self.run_install(), 1)
+        self.assertFalse(target.exists())
+        self.assertFalse((self.claude / "skills").exists())
+
+    def test_quotes_hook_paths_with_spaces(self):
+        self.claude = self.root / "my claude"
+        self.codex = self.root / "my codex"
+        self.assertEqual(self.run_install(), 0)
+        import shlex
+
+        settings = json.loads((self.claude / "settings.json").read_text())
+        command = settings["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
+        self.assertEqual(
+            shlex.split(command),
+            ["python3", str(self.claude / "hooks/github-comment-check.py")],
+        )
+        hooks = json.loads((self.codex / "hooks.json").read_text())
+        command = hooks["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
+        self.assertEqual(shlex.split(command)[1], str(self.codex / "hooks/pr-format-check.py"))
+
+    def test_installs_linked_skills_and_every_relative_link_resolves(self):
+        self.assertEqual(self.run_install(skills=cloud.DEFAULT_SKILLS, hooks=False), 0)
+        installed = {path.name for path in (self.claude / "skills").iterdir()}
+        # code-review is linked from the review skills, so it comes with them.
+        self.assertIn("code-review", installed)
+        checked = 0
+        for home in (self.codex, self.claude):
+            for doc in (home / "skills").rglob("*.md"):
+                for target in cloud.relative_links(doc.read_text()):
+                    pattern = cloud.PLACEHOLDER.sub("*", target)
+                    matches = list(doc.parent.glob(pattern))
+                    self.assertTrue(matches, f"{doc} -> {target}")
+                    checked += 1
+        self.assertGreater(checked, 5)
+
+    def test_a_link_in_a_code_block_is_not_a_link(self):
+        text = "see [a](../x/y.md)\n```text\n[b](nowhere)\n```\nand `[c](also)`\n"
+        self.assertEqual(cloud.relative_links(text), ["../x/y.md"])
+
+    def test_a_read_only_home_names_the_alternative(self):
+        locked = self.root / "locked"
+        locked.mkdir()
+        locked.chmod(0o500)
+        self.addCleanup(locked.chmod, 0o700)
+        if os.access(locked, os.W_OK):
+            self.skipTest("running with privileges that ignore permissions")
+        self.codex = locked / "codex"
+        stderr = io.StringIO()
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(stderr):
+            code = cloud.run(ROOT, self.codex, self.claude, ("task-worker",), False, True)
+        self.assertEqual(code, 1)
+        self.assertIn("--codex-home", stderr.getvalue())
+        self.assertFalse((self.claude / "skills").exists())
+
     def test_dotctl_registers_the_command(self):
         parser = cli.build_parser()
         args = parser.parse_args(["cloud-install", "--skill", "task-worker", "--apply"])

@@ -88,19 +88,25 @@ The AI review bot it waits for is `reviewBots` there; to move off CodeRabbit, de
 ### Codex Cloud
 
 The task skills run locally and in Cloud from the same files; `harnexus-task environment` picks the path (see `dot_codex/skills/task-worker/references/environment.md`).
+Claude implements and Codex reviews in both. In Cloud, Codex delegates the implementation to Claude with `harnexus-task claude` inside the current task.
+It cannot start another Codex task, so the independent review is a handoff: the work stops as `needs_review` until a Codex review of the fixed SHAs comes back.
+
 chezmoi does not run in Cloud. Install from a checkout instead:
 
 ```sh
 python3 bin/executable_dotctl cloud-install          # plan only
 python3 bin/executable_dotctl cloud-install --apply  # write
+# when $CODEX_HOME is read-only:
+python3 bin/executable_dotctl cloud-install --apply \
+  --codex-home /workspace/.cloud-setup/codex --claude-home /workspace/.cloud-setup/claude
 ```
 
-It copies the task skills into `$CODEX_HOME` and `$CLAUDE_CONFIG_DIR`, plus the PR and git hooks that need only Python, git and gh.
-It skips chezmoi templates, never overwrites a file it did not write, and prints what it did not carry over.
+It copies the task skills, the skills they link to, and the PR and git hooks that need only Python, git and gh.
+It skips chezmoi templates, never overwrites a file it did not write, refuses symlinks under the target, and prints what it did not carry over.
+`harnexus-task` is built separately with `scripts/install-cloud-task.sh` in the harnexus checkout and called by its absolute path.
 
-Not carried to Cloud: PR watch and notifications, `task-session-launch` workers, `task-dispatch`, permission logging, herdr and the status line.
-Cloud has no way here to create or resume other tasks, so independent review runs as a fresh Claude session inside the same task.
-That Cloud loads the installed skills and hooks, and that `harnexus-task` can be installed there without a manual step, are not verified.
+Not carried to Cloud: PR watch and notifications, `task-dispatch` (its ledger lives in the local Codex App), permission logging, herdr and the status line.
+That Cloud loads the installed skills and hooks is not verified.
 
 ### Finder
 
