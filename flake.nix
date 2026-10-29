@@ -89,6 +89,50 @@
           };
         });
       };
+      # The uninstaller evaluates a separate system; preserve the security overlay there too.
+      securityDarwinTools =
+        { pkgs, ... }:
+        let
+          source = pkgs.applyPatches {
+            name = "nix-darwin-security-tools";
+            src = nix-darwin;
+            patches = [ ./darwin/uninstaller-pkgs.patch ];
+          };
+        in
+        {
+          # Nix can invalidate Mach-O signatures when rebuilding only missing outputs.
+          # Re-sign a separate build-time CLI; keep the shared library and its consumers unchanged.
+          nixpkgs.overlays = [
+            (final: prev: {
+              nixosOptionsDoc =
+                attrs:
+                prev.nixosOptionsDoc (
+                  attrs
+                  // {
+                    pkgs = final // {
+                      brotli = final.runCommand "brotli-docs-cli" { } ''
+                        mkdir -p "$out/bin"
+                        cp ${final.brotli}/bin/brotli "$out/bin/brotli"
+                        chmod u+w "$out/bin/brotli"
+                        source ${final.darwin.signingUtils}
+                        sign "$out/bin/brotli"
+                        "$out/bin/brotli" --version
+                        printf 'brotli documentation check' > input
+                        "$out/bin/brotli" -9 -c input > input.br
+                        "$out/bin/brotli" -d -c input.br > roundtrip
+                        cmp input roundtrip
+                      '';
+                    };
+                  }
+                );
+            })
+          ];
+          # Replace the default tool with the same implementation using patched packages.
+          system.tools.darwin-uninstaller.enable = false;
+          environment.systemPackages = [
+            (pkgs.callPackage "${source}/pkgs/darwin-uninstaller" { })
+          ];
+        };
       # This dotfiles repo is macOS-only for now, so keep the shell darwin-only too.
       systems = [
         "aarch64-darwin"
@@ -446,6 +490,7 @@
         personal = nix-darwin.lib.darwinSystem {
           modules = [
             { nixpkgs.overlays = [ securityOverlay ]; }
+            securityDarwinTools
             ./darwin/hosts/personal.nix
           ];
         };
@@ -453,6 +498,7 @@
         work = nix-darwin.lib.darwinSystem {
           modules = [
             { nixpkgs.overlays = [ securityOverlay ]; }
+            securityDarwinTools
             ./darwin/hosts/work.nix
           ];
         };

@@ -1,0 +1,16 @@
+diff --git a/pkgs/darwin-uninstaller/default.nix b/pkgs/darwin-uninstaller/default.nix
+--- a/pkgs/darwin-uninstaller/default.nix
++++ b/pkgs/darwin-uninstaller/default.nix
+@@ -1 +1 @@
+-{ lib, path, stdenv, writeShellApplication }:
++{ lib, pkgs, stdenv, writeShellApplication }:
+@@ -6,8 +6,7 @@
+     modules = [
+       ./configuration.nix
+       {
+-        nixpkgs.source = path;
+-        nixpkgs.hostPlatform = stdenv.hostPlatform.system;
++        nixpkgs.pkgs = pkgs;
+         system.tools.darwin-uninstaller.enable = false;
+       }
+     ];
