@@ -38,13 +38,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
-
-      # Fetch only the locally built paths on demand; restoring the whole store took ~7 minutes.
-      - uses: DeterminateSystems/magic-nix-cache-action@84c0677f58dcedf3b91f8223ce36a9ea5b3c84b7 # v15
-        with:
-          use-flakehub: false
-          diagnostic-endpoint: ""
+      # No store cache: the CI shell comes from cache.nixos.org, and restoring a cached store cost more than it saved.
+      - uses: nixbuild/nix-quick-install-action@9f63be77f412a248c9d9a65a4c82cf066cdf8f0c # v35
 
       - name: Evaluate Go and both Darwin configurations
         run: |
