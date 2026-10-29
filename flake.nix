@@ -18,6 +18,16 @@
     let
       # CVE-2026-111943: rebuild Go CLIs, not just the compiler on PATH.
       securityOverlay = final: prev: {
+        # CVE-2026-111497: also rebuild shared-library and Python consumers.
+        brotli = prev.brotli.overrideAttrs (attrs: _: {
+          version = "1.2.1";
+          src = final.fetchFromGitHub {
+            owner = "google";
+            repo = "brotli";
+            tag = "v${attrs.version}";
+            hash = "sha256-llY72cYffDv0ugsH0p89xIPEbElV4L8u7U/Fe8hT3gI=";
+          };
+        });
         go = final.go_1_27;
         buildGoModule = final.buildGo127Module;
         rustup = prev.rustup.overrideAttrs (
