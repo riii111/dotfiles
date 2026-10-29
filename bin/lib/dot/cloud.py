@@ -10,10 +10,12 @@ overwritten.
 
 from __future__ import annotations
 
+import fnmatch
 import hashlib
 import json
 import os
 import re
+import shlex
 import stat
 import sys
 from dataclasses import dataclass, field
@@ -86,11 +88,73 @@ def collect_skill(repo: Path, name: str, dest: Path, plan: Plan) -> None:
         plan.files[dest / name / relative] = (read_source(source), mode)
 
 
+LINK = re.compile(r"\]\(([^)\s]+)\)")
+PLACEHOLDER = re.compile(r"\{[^}]*\}")
+SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
+
+
+FENCE = re.compile(r"^(`{3,}|~{3,}).*?^\1[ \t]*$", re.MULTILINE | re.DOTALL)
+INLINE_CODE = re.compile(r"`[^`\n]*`")
+
+
+def relative_links(text: str) -> list[str]:
+    # Examples in code are not links.
+    text = INLINE_CODE.sub("", FENCE.sub("", text))
+    targets = []
+    for raw in LINK.findall(text):
+        target = raw.split("#", 1)[0]
+        if not target or target.startswith(("/", "{", "<")) or SCHEME.match(target):
+            continue
+        targets.append(target)
+    return targets
+
+
+def with_linked_skills(repo: Path, requested: tuple[str, ...]) -> tuple[str, ...]:
+    """Adds the skills that the requested skills link to, so no link is left dangling."""
+    skills_root = repo / "dot_codex" / "skills"
+    names = list(requested)
+    index = 0
+    while index < len(names):
+        root = skills_root / names[index]
+        index += 1
+        if root.is_symlink() or not root.is_dir():
+            continue
+        for source in sorted(root.rglob("*.md")):
+            if source.is_symlink() or not source.is_file():
+                continue
+            for target in relative_links(source.read_text(encoding="utf-8")):
+                resolved = Path(os.path.normpath(source.parent / target))
+                try:
+                    inside = resolved.relative_to(skills_root)
+                except ValueError:
+                    raise InstallError(f"{source.relative_to(repo)} links outside the skills: {target}")
+                owner = inside.parts[0] if inside.parts else ""
+                if not SKILL_NAME.match(owner):
+                    raise InstallError(f"{source.relative_to(repo)} has a link to {target} that is not in a skill")
+                if owner not in names:
+                    names.append(owner)
+    return tuple(names)
+
+
+def check_links(repo: Path, names: tuple[str, ...], plan_sources: set[Path]) -> None:
+    skills_root = repo / "dot_codex" / "skills"
+    for name in names:
+        for source in sorted((skills_root / name).rglob("*.md")):
+            for target in relative_links(source.read_text(encoding="utf-8")):
+                resolved = Path(os.path.normpath(source.parent / target))
+                # A field in a target, as in reply-{worker_ai}.md, stands for every value it can take.
+                pattern = PLACEHOLDER.sub("*", str(resolved))
+                if not any(fnmatch.fnmatchcase(str(known), pattern) for known in plan_sources) and not any(
+                    resolved in known.parents for known in plan_sources
+                ):
+                    raise InstallError(f"{source.relative_to(repo)} links to {target}, which would not be installed")
+
+
 def claude_settings(claude_home: Path) -> bytes:
     def command(script: str, extra: str = "") -> dict[str, object]:
         return {
             "type": "command",
-            "command": f"python3 {claude_home / 'hooks' / script}{extra}",
+            "command": f"python3 {shlex.quote(str(claude_home / 'hooks' / script))}{extra}",
             "timeout": 15 if script == "pr-state-check.py" else 5,
         }
 
@@ -119,7 +183,7 @@ def codex_hooks(codex_home: Path) -> bytes:
     def command(script: str, status: str, timeout: int = 5) -> dict[str, object]:
         return {
             "type": "command",
-            "command": f"python3 {codex_home / 'hooks' / script}",
+            "command": f"python3 {shlex.quote(str(codex_home / 'hooks' / script))}",
             "timeout": timeout,
             "statusMessage": status,
         }
@@ -158,9 +222,16 @@ def build_plan(
     for target in (codex_home, claude_home):
         if not target.is_absolute():
             raise InstallError(f"{target} is not an absolute path")
+    skills = with_linked_skills(repo, skills)
+    sources: set[Path] = set()
     for name in skills:
         collect_skill(repo, name, codex_home / "skills", plan)
         collect_skill(repo, name, claude_home / "skills", plan)
+        for source in (repo / "dot_codex" / "skills" / name).rglob("*"):
+            if source.is_file() and not source.name.endswith(".tmpl"):
+                sources.add(source)
+    check_links(repo, skills, sources)
+    plan.notes.append("Skills installed: " + ", ".join(skills))
     if not with_hooks:
         return plan
     claude_sources = repo / "dot_claude" / "hooks"
@@ -208,15 +279,29 @@ def load_manifest(path: Path) -> dict[str, str]:
     return {str(key): str(value) for key, value in files.items()}
 
 
-def check_target(path: Path, content: bytes, managed: dict[str, str]) -> str:
-    """Returns create, update or same; raises when the file is not ours."""
-    for parent in path.parents:
-        if parent.is_symlink():
-            raise InstallError(f"{parent} is a symlink; refusing to write through it")
-        if parent.exists():
+def check_chain(path: Path, home: Path) -> None:
+    """Refuses a symlink anywhere from the home directory down to path.
+
+    The home is the directory the caller chose, so a link at the home itself is
+    followed once; everything below it must be plain directories and files.
+    """
+    real_home = home.resolve()
+    try:
+        relative = path.relative_to(home)
+    except ValueError:
+        raise InstallError(f"{path} is outside {home}")
+    current = real_home
+    for part in relative.parts:
+        current = current / part
+        if current.is_symlink():
+            raise InstallError(f"{current} is a symlink; refusing to write through or replace it")
+        if not current.exists():
             break
-    if path.is_symlink():
-        raise InstallError(f"{path} is a symlink; refusing to replace it")
+
+
+def check_target(path: Path, content: bytes, managed: dict[str, str], home: Path) -> str:
+    """Returns create, update or same; raises when the file is not ours."""
+    check_chain(path, home)
     if not path.exists():
         return "create"
     current = path.read_bytes()
@@ -228,6 +313,18 @@ def check_target(path: Path, content: bytes, managed: dict[str, str]) -> str:
         f"{path} exists and was not written by this command (or was edited since); "
         "move it away or merge it by hand"
     )
+
+
+def check_writable(home: Path) -> None:
+    probe = home
+    while not probe.exists():
+        probe = probe.parent
+    if not probe.is_dir() or not os.access(probe, os.W_OK | os.X_OK):
+        raise InstallError(
+            f"{home} cannot be written ({probe} is read-only here). "
+            "Pass a writable directory with --codex-home and --claude-home, "
+            "for example /workspace/.cloud-setup/codex and /workspace/.cloud-setup/claude"
+        )
 
 
 def write_file(path: Path, content: bytes, mode: int) -> None:
@@ -244,15 +341,25 @@ def write_file(path: Path, content: bytes, mode: int) -> None:
     os.chmod(path, mode)
 
 
+def home_of(path: Path, homes: tuple[Path, ...]) -> Path:
+    return next(home for home in homes if home in path.parents)
+
+
 def apply_plan(plan: Plan, homes: tuple[Path, ...], apply: bool) -> list[str]:
     manifests = {home: home / MANIFEST_NAME for home in homes}
     managed: dict[str, str] = {}
-    for manifest in manifests.values():
+    for home, manifest in manifests.items():
+        check_chain(manifest, home)
         managed.update(load_manifest(manifest))
-    actions = {path: check_target(path, content, managed) for path, (content, _) in plan.files.items()}
+    actions = {
+        path: check_target(path, content, managed, home_of(path, homes))
+        for path, (content, _) in plan.files.items()
+    }
     lines = [f"{action:6} {path}" for path, action in sorted(actions.items())]
     if not apply:
         return lines
+    for home in homes:
+        check_writable(home)
     for path, (content, mode) in plan.files.items():
         if actions[path] != "same":
             write_file(path, content, mode)
@@ -290,7 +397,7 @@ def run(
     try:
         plan = build_plan(repo, codex_home, claude_home, skills, with_hooks)
         lines = apply_plan(plan, (codex_home, claude_home), apply)
-    except InstallError as error:
+    except (InstallError, OSError) as error:
         print(f"cloud-install: {error}", file=sys.stderr)
         return 1
     print("\n".join(lines))
