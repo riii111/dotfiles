@@ -56,3 +56,4 @@ bin/lib/dot/handoff.py
 .config/nvim/lua/emacs
 .claude/hooks/reference-link-check.py
 .codex/hooks/reference-link-check.py
+bin/gh

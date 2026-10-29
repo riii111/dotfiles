@@ -22,7 +22,6 @@ bin/affected-agent
 # Work machine only
 {{ if ne .type "work" }}
 .gitconfig-riii111
-bin/gh
 .config/gh-accounts
 .claude/skills/deploy-preflight
 .codex/skills/deploy-preflight
