@@ -6,6 +6,10 @@
 # sandbox内でも常に禁止する操作にはPreToolUse hookを使う。
 # =============================================================================
 
+prefix_rule(pattern=["gh", "pr", "comment"], decision="forbidden", justification="Return GitHub comment drafts in chat")
+prefix_rule(pattern=["gh", "issue", "comment"], decision="forbidden", justification="Return GitHub comment drafts in chat")
+prefix_rule(pattern=["gh", "pr", "review"], decision="forbidden", justification="Return GitHub review drafts in chat")
+
 # -----------------------------------------------------------------------------
 # ALLOW: Fixed read-only network operations and dedicated wrappers
 # -----------------------------------------------------------------------------

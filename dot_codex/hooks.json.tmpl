@@ -40,6 +40,17 @@
             "statusMessage": "Checking PR state"
           }
         ]
+      },
+      {
+        "matcher": "^(Bash|mcp__.*)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.codex/hooks/github-comment-check.py",
+            "timeout": 5,
+            "statusMessage": "Checking GitHub comment policy"
+          }
+        ]
       }
     ],
     "PermissionRequest": [

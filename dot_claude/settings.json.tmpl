@@ -165,6 +165,9 @@
       "Bash(pe *)"
     ],
     "deny": [
+      "Bash(gh pr comment*)",
+      "Bash(gh issue comment*)",
+      "Bash(gh pr review*)",
       "Bash(git add -f*)",
       "Bash(git add --force*)",
       "Bash(terraform apply:*)",
@@ -309,6 +312,16 @@
   },
   "hooks": {
     "PreToolUse": [
+      {
+        "matcher": "^(Bash|mcp__.*)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 {{ .chezmoi.homeDir }}/.claude/hooks/github-comment-check.py",
+            "timeout": 5
+          }
+        ]
+      },
       {
         "matcher": "Bash",
         "hooks": [
