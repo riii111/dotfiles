@@ -4,7 +4,8 @@
 Commands are matched by their parsed words. Requests that scripts build at
 runtime or read from files are not recognized. Issue comments stay available
 through `gh issue`; the API and connector share PR and Issue comment endpoints,
-so they stay denied for both.
+so they stay denied for both. Resolving a review thread is denied with them,
+since it answers the reviewer as a reply would.
 """
 
 import json
@@ -14,13 +15,19 @@ import sys
 
 
 REASON = "GitHub comment posting is forbidden. Return the draft in chat."
-# Operations of the Codex GitHub connector that publish comment text.
+# Operations of the Codex GitHub connector and of the GitHub MCP server that
+# Claude Code cloud sessions use, which publish comment text or resolve threads.
 COMMENT_TOOLS = {
     "add_comment_to_issue",
     "add_review_to_pr",
     "reply_to_review_comment",
     "update_issue_comment",
     "update_review_comment",
+    "add_issue_comment",
+    "add_comment_to_pending_review",
+    "add_reply_to_pull_request_comment",
+    "pull_request_review_write",
+    "resolve_review_thread",
 }
 COMMENT_ENDPOINT = re.compile(
     r"repos/[^/\s]+/[^/\s]+/(?:issues|pulls)/(?:\d+/)?(?:comments|reviews)\b"

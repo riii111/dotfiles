@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Deny gh pr create/edit when the PR title or body breaks the mechanical format rules.
 
+A PR the GitHub MCP server creates or edits, as in Claude Code cloud sessions, is
+checked the same way from its structured title and body, and must be created as a
+draft.
+
 Rules that need judgment (restated title, mergeable bullets) belong to the prompt
 hook in settings.json, which only sees the command text. The body therefore has to be
 written inside the command, as a heredoc or a literal. An exception while parsing the
@@ -198,6 +202,43 @@ def check_body(body: str) -> list[str]:
     return problems
 
 
+def mcp_operation(event: dict) -> str | None:
+    """The GitHub MCP operation of the event, such as create_pull_request, or None."""
+    name = event.get("tool_name") or ""
+    if not name.startswith("mcp__") or "github" not in name:
+        return None
+    return re.sub(r"^github[._]", "", name.rsplit("__", 1)[-1])
+
+
+def mcp_problems(
+    operation: str, tool_input: dict
+) -> tuple[list[str], str | None, str | None]:
+    """Problems of a PR the GitHub MCP server would create or edit, with its title and body."""
+    title = tool_input.get("title")
+    body = tool_input.get("body")
+    title = title if isinstance(title, str) else None
+    body = body if isinstance(body, str) else None
+    problems = []
+    if operation == "create_pull_request" and tool_input.get("draft") is not True:
+        problems.append("PRはDraftで作る。`draft: true` を指定する")
+    if title is not None:
+        problems += check_title(title)
+    if body is not None:
+        problems += check_body(body)
+    return problems, title, body
+
+
+def language_problems(cwd: str, title: str | None, body: str | None) -> list[str]:
+    language = read_language(cwd)
+    if language in LANGUAGES:
+        return check_language(language, title, body)
+    return [
+        "このリポジトリのPRの言語が未設定か不正。"
+        "ユーザーに英語か日本語かを確認し、"
+        "`git config pr.language en` か `git config pr.language ja` を設定する"
+    ]
+
+
 def deny(problems: list[str]) -> None:
     reason = (
         "PRのタイトルか本文を次のとおり直し、同じコマンドを再実行してください。\n"
@@ -220,6 +261,17 @@ def deny(problems: list[str]) -> None:
 def main() -> int:
     try:
         event = json.load(sys.stdin)
+        cwd = event.get("cwd") or os.getcwd()
+        operation = mcp_operation(event)
+        if operation in {"create_pull_request", "update_pull_request"}:
+            problems, title, body = mcp_problems(
+                operation, event.get("tool_input") or {}
+            )
+            if title is not None or body is not None:
+                problems += language_problems(cwd, title, body)
+            if problems:
+                deny(problems)
+            return 0
         command = (event.get("tool_input") or {}).get("command") or ""
         match = PR_COMMAND.search(command)
         if not match:
@@ -241,15 +293,7 @@ def main() -> int:
                 "ファイルや変数を経由すると本文を検査できない"
             )
         if title is not None or body is not None:
-            language = read_language(event.get("cwd") or os.getcwd())
-            if language in LANGUAGES:
-                problems += check_language(language, title, body)
-            else:
-                problems.append(
-                    "このリポジトリのPRの言語が未設定か不正。"
-                    "ユーザーに英語か日本語かを確認し、"
-                    "`git config pr.language en` か `git config pr.language ja` を設定する"
-                )
+            problems += language_problems(cwd, title, body)
         if problems:
             deny(problems)
     except Exception:
