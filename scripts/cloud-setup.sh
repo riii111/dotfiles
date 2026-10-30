@@ -2,29 +2,33 @@
 # Installs the Claude Code hooks of these dotfiles into a Claude Code cloud environment,
 # whose user settings start empty and which chezmoi does not manage.
 #
-# Add to the environment's setup script:
-#   curl -fsSL https://raw.githubusercontent.com/riii111/dotfiles/main/scripts/cloud-setup.sh | PR_LANGUAGE=ja bash
+# Add to the environment's setup script; it is downloaded first, since a failed download piped
+# into bash would exit 0 and start the session without the hooks:
+#   curl -fsSLo /tmp/cloud-setup.sh https://raw.githubusercontent.com/riii111/dotfiles/main/scripts/cloud-setup.sh && PR_LANGUAGE=ja bash /tmp/cloud-setup.sh
 #
 # PR_LANGUAGE sets the global `git config pr.language` the PR format hook requires, since a fresh
-# clone has none. The hooks that need tools a cloud VM lacks (fd, bat) or that only log locally
-# are left out. Running it again replaces the hooks it installed and keeps other settings.
+# clone has none. Running it again replaces the hooks it installed and keeps other settings.
+# Left out: the inline Bash hook, which steers find, grep and cat to fd, rg and bat that a cloud
+# VM lacks, and with them loses its terraform and publish guards, which need credentials a cloud
+# VM rarely holds; the prompt hooks, which need chezmoi templates and see only gh, while cloud
+# sessions use GitHub MCP; and the hooks that only log or set up local worktrees.
 set -euo pipefail
 
-here=$(cd "$(dirname "${BASH_SOURCE[0]:-.}")" && pwd)
-source=${DOTFILES_DIR:-}
-if [[ -z $source && -d $here/../dot_claude/hooks ]]; then
-  source=$(cd "$here/.." && pwd)
+script=${BASH_SOURCE[0]:-}
+dotfiles=${DOTFILES_DIR:-}
+if [[ -z $dotfiles && -n $script && -d $(dirname "$script")/../dot_claude/hooks ]]; then
+  dotfiles=$(cd "$(dirname "$script")/.." && pwd)
 fi
-if [[ -z $source ]]; then
-  source=$(mktemp -d)
-  trap 'rm -rf "$source"' EXIT
-  git clone --quiet --depth 1 "${DOTFILES_REPO:-https://github.com/riii111/dotfiles.git}" "$source"
+if [[ -z $dotfiles ]]; then
+  dotfiles=$(mktemp -d)
+  trap 'rm -rf "$dotfiles"' EXIT
+  git clone --quiet --depth 1 "${DOTFILES_REPO:-https://github.com/riii111/dotfiles.git}" "$dotfiles"
 fi
 
 hooks="$HOME/.claude/hooks"
 mkdir -p "$hooks"
 for name in github-comment-check git-force-check pr-format-check pr-state-check; do
-  install -m 0755 "$source/dot_claude/hooks/executable_$name.py" "$hooks/$name.py"
+  install -m 0755 "$dotfiles/dot_claude/hooks/executable_$name.py" "$hooks/$name.py"
 done
 
 python3 - "$HOME/.claude/settings.json" "$hooks" <<'PY'

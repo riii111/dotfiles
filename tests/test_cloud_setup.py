@@ -16,9 +16,11 @@ class CloudSetupTest(unittest.TestCase):
         self.addCleanup(home.cleanup)
         self.home = Path(home.name)
 
-    def run_setup(self, **env):
+    def run_setup(self, piped=False, **env):
         subprocess.run(
-            ["bash", str(SCRIPT)],
+            ["bash"] if piped else ["bash", str(SCRIPT)],
+            stdin=SCRIPT.open() if piped else None,
+            cwd=self.home,
             env={
                 "PATH": os.environ["PATH"],
                 "HOME": str(self.home),
@@ -34,7 +36,8 @@ class CloudSetupTest(unittest.TestCase):
     def commands(self, settings):
         return {
             group["matcher"]: [
-                hook["command"].rsplit("/", 1)[-1] for hook in group["hooks"]
+                (hook["command"].rsplit("/", 1)[-1], hook["timeout"])
+                for hook in group["hooks"]
             ]
             for group in settings["hooks"]["PreToolUse"]
         }
@@ -45,12 +48,15 @@ class CloudSetupTest(unittest.TestCase):
         self.assertEqual(
             self.commands(settings),
             {
-                "^(Bash|mcp__.*)$": ["github-comment-check.py"],
-                "^mcp__github__.*$": ["pr-format-check.py", "pr-state-check.py"],
+                "^(Bash|mcp__.*)$": [("github-comment-check.py", 5)],
+                "^mcp__github__.*$": [
+                    ("pr-format-check.py", 5),
+                    ("pr-state-check.py", 5),
+                ],
                 "Bash": [
-                    "git-force-check.py",
-                    "pr-format-check.py",
-                    "pr-state-check.py",
+                    ("git-force-check.py", 5),
+                    ("pr-format-check.py", 5),
+                    ("pr-state-check.py", 15),
                 ],
             },
         )
@@ -67,6 +73,12 @@ class CloudSetupTest(unittest.TestCase):
                     (ROOT / f"dot_claude/hooks/executable_{name}.py").read_text(),
                 )
                 self.assertTrue(os.access(hook, os.X_OK))
+
+    def test_clones_the_dotfiles_when_piped_into_bash(self):
+        settings = self.run_setup(piped=True, DOTFILES_REPO=str(ROOT))
+
+        self.assertEqual(len(settings["hooks"]["PreToolUse"]), 3)
+        self.assertTrue((self.home / ".claude/hooks/pr-state-check.py").exists())
 
     def test_running_again_keeps_other_hooks_and_adds_nothing_twice(self):
         own = {
