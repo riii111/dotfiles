@@ -5,11 +5,13 @@ Cloudでは、Codexの別タスクまたは独立コンテキストへこの文�
 
 - タスクID：
 - 実装者：Claude（`harnexus-task claude`のセッションIDを併記）
-- checkout：絶対パス。Cloudタスクが同じなら、そのまま読める場所
+- checkout：絶対パス。
+  Cloudタスクが同じなら、そのまま読める場所
 - base branch・base SHA：
 - head SHA：
 - PR URL：なければ`null`
-- 参照文書：先頭をタスク管理元とする。パスまたはHTTPS URLを1行ずつ
+- 参照文書：先頭をタスク管理元とする。
+  パスまたはHTTPS URLを1行ずつ
 - 実行した検証とその結果：コマンド、終了状態、未実行の検証とその理由
 - 既知の未確認事項：
 

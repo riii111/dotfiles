@@ -1,9 +1,11 @@
 # 実行環境の切り替え
 
 task系スキルの役割・完了条件・レビュー方針は環境によらず同じで、実行方法だけを切り替える。
-実装はClaude、独立レビューはCodexが担う。この分担はCloudでも変えない。
+実装はClaude、独立レビューはCodexが担う。
+この分担はCloudでも変えない。
 環境判定は各スキルで行わず、`harnexus-task environment`に任せる。
 スキルを複製しない。
+参照文書内の相対リンクは、その文書のディレクトリを基準に解決する。
 
 ## 判定
 
@@ -27,23 +29,28 @@ Cloudでは他のタスクやスレッドを作成・再開できない。
 次のコマンドはCloudで明示エラーになる：`launch`・`review`・`resolve`・`name`・`watch`・`state --request`。
 エラーを避ける回避や、成功したことにする記録はしない。
 
-| スキル | Cloudでの扱い |
-| --- | --- |
-| task-session-launch | 別タスクは作らず、現在のCloudタスク内でClaude workerを起動する（下の「Claude workerの起動」）。 |
-| task-worker | 実装はClaudeが行う。実行主体がCodexなら自分で実装せず、Claude workerへ委任する。PRの監視登録（`harnexus-task name`）は行わず、完了報告の冒頭に「PRは監視されていない（Cloud）」と書く。 |
-| task-review-cycle | Claudeによるレビューで代替しない。「独立レビューの引き渡し」に従い、独立LGTMがなければ`needs_review`で止める。 |
-| pr-watch-link | 登録しない。「PRは監視されていない（Cloudは通知未対応）」と伝え、`gh pr view`・`gh pr checks`で確認するようユーザーに求める。 |
-| task-dispatch | 実行しない。`~/agent-desk/`の台帳とScheduled TaskはローカルのCodex Appに依存すると報告する。 |
-| task-orchestration | 開始対象の選定までは行える。起動はtask-session-launchの扱いに従う。 |
+| スキル              | Cloudでの扱い                                                                                                                                                                           |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| task-session-launch | 別タスクは作らず、現在のCloudタスク内でClaude workerを起動する（下の「Claude workerの起動」）。                                                                                         |
+| task-worker         | 実装はClaudeが行う。実行主体がCodexなら自分で実装せず、Claude workerへ委任する。PRの監視登録（`harnexus-task name`）は行わず、完了報告の冒頭に「PRは監視されていない（Cloud）」と書く。 |
+| task-review-cycle   | Claudeによるレビューで代替しない。「独立レビューの引き渡し」に従い、独立LGTMがなければ`needs_review`で止める。                                                                          |
+| pr-watch-link       | 登録しない。「PRは監視されていない（Cloudは通知未対応）」と伝え、`gh pr view`・`gh pr checks`で確認するようユーザーに求める。                                                           |
+| task-dispatch       | 実行しない。`~/agent-desk/`の台帳とScheduled TaskはローカルのCodex Appに依存すると報告する。                                                                                            |
+| task-orchestration  | 開始対象の選定までは行える。起動はtask-session-launchの扱いに従う。                                                                                                                     |
 
 ### Claude workerの起動
 
 1. [worker.md](../../task-session-launch/references/worker.md)の項目（task_id・document_refs・completion_target）を依頼の値で埋めたプロンプトを、ワークツリー外の一時ファイルに書く。
-2. このcheckoutで`harnexus-task claude --session worker-<taskId> --start --prompt-file <FILE> --cwd <checkoutの絶対パス>`を実行する。
+2. このcheckoutで下記のコマンドを実行する。
    モデルの指定がなければ既定に任せる。
 3. 出力の`sessionId`と`result`を報告する。
    続きの指示や修正の依頼は、同じ`--session`で`--resume`を使う。
-4. Codexは実装を代行しない。workerの結果が不足なら、`--resume`で不足を指示する。
+4. Codexは実装を代行しない。
+   workerの結果が不足なら、`--resume`で不足を指示する。
+
+```sh
+harnexus-task claude --session worker-<taskId> --start --prompt-file <FILE> --cwd <checkoutの絶対パス>
+```
 
 終了コード、`Not logged in`、ネットワーク未許可などの失敗は出力の理由を報告して止める。
 結果不明（`did not report back`）は再実行せず、ユーザーに確認を求める。
@@ -69,9 +76,13 @@ CloudにはCodexの別タスクや独立コンテキストを自動で起動す�
 ## 前提
 
 - Cloudには`harnexus-task`の導入が別途必要で、自動では入らない。
-  harnexusのチェックアウトで`bash scripts/install-cloud-task.sh`（`bun run install:task:cloud`）を実行すると、`/workspace/.cloud-setup/bin/harnexus-task`に置かれる。
-  `PATH`は変更されないため、絶対パスで呼ぶ。Bunがなければ、スクリプトが導入コマンドを表示する。
+  harnexusのチェックアウトで`bun run install:task:cloud`を実行する。
+  `bash scripts/install-cloud-task.sh`でも導入できる。
+  導入先は`/workspace/.cloud-setup/bin/harnexus-task`となる。
+  `PATH`は変更されないため、絶対パスで呼ぶ。
+  Bunがなければ、スクリプトが導入コマンドを表示する。
 - スキルとHookは`dotctl cloud-install`で導入する。
   `$CODEX_HOME`が読み取り専用なら、書き込める場所を`--codex-home`・`--claude-home`で明示する。
   Cloudがそれらを自動で読み込むかは確認していない。
-- ローカルのHookと通知はCloudへ自動では移らない。移したものと移していないものは`dotctl cloud-install`の出力に出る。
+- ローカルのHookと通知はCloudへ自動では移らない。
+  移したものと移していないものは`dotctl cloud-install`の出力に出る。

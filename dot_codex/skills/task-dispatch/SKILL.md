@@ -8,14 +8,11 @@ description: |
 
 # Task Dispatch
 
-起動・実装・レビューにはtask-session-launch・task-worker・task-review-cycleを使う。
-workerの完了は待たない。
-各文書内のリンクは、その文書のディレクトリを基準に解決する。
+起動・実装・レビューにはtask-session-launch・task-worker・task-review-cycleを使い、workerの完了は待たない。
 
 ## 実行環境
 
 最初に[実行環境の切り替え](../task-worker/references/environment.md)に従って環境を判定する。
-Cloudでは何も起動せず、台帳とScheduled TaskがローカルのCodex Appに依存することを報告して終了する。
 
 ## 1日の流れ
 
