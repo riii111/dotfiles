@@ -18,7 +18,6 @@ LGTMの後に、owner・レビュアー・reviewerから伝えられた指摘へ
 Cloudでは下の手順の代わりに、その文書の「独立レビューの引き渡し」に従う。
 ClaudeによるレビューでCodexの独立レビューを代替せず、独立LGTMがなければ`needs_review`で止めて完了にしない。
 
-
 `harnexus-task`が未導入ならユーザーに伝えて停止する。
 worktreeに`*`だけの`.gitignore`を置いた`.reviewctl/`を作り、[依頼JSON](references/request.md)を`.reviewctl/request.json`へ保存する。
 候補はcommit済みで、追跡ファイルに未commitの変更がないことを`git status`で確認する。
