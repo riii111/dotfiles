@@ -7,6 +7,8 @@ description: |
 
 # Task Review Cycle
 
+`harnexus-task environment`が`"host":"claude"`を返す場合は、先に末尾の「Claude CodeのCloud」を読む。
+
 commit済み候補をfreshなCodex reviewerへ渡し、以後は同じreview Taskで続ける。
 修正・検証・review基点・完了条件は[task-worker](../task-worker/SKILL.md)に従う。
 LGTMの後に、owner・レビュアー・reviewerから伝えられた指摘への修正は、再レビューに回さない。
@@ -63,3 +65,27 @@ worker checkoutでレビューし、branchやcheckoutは変更しないでくだ
 base branchが進んだことだけを理由にLGTMを保留しないでください。
 参照文書に根拠がなく、人が答えないと決まらない判断は、決めた点・選んだもの・推奨を確認事項として結果に含めてください。
 確認事項だけを理由にLGTMを保留しないでください。
+
+## Claude CodeのCloud
+
+`harnexus-task environment`が`"host":"claude"`を返す場合、reviewerは同じVMのCodex CLIで動き、Appのチャットは使わない。
+依頼JSONは次のとおりにする。
+
+- workerAIは`Claude`、projectIdはリポジトリ名にする（list_projectsは使わない）。
+- checkoutはリポジトリの最上位の絶対パスでよい。
+- documentRefsは、checkout内のファイルの絶対パスかHTTPSのURLにする。
+  起動依頼でリポジトリ内のパスとして渡された参照文書は、checkoutを前に付けて絶対パスにする。
+
+`harnexus-task review --request <JSON>`はレビューが終わるまで戻らず、1〜2分かかる。
+Bashのtimeoutは最大10分で、`HARNEXUS_REVIEW_TIMEOUT_MS`（既定30分）に届かないため、バックグラウンドで実行して終了を待つ。
+出力の`status`が`completed`なら、`verdict`・`answer`・`base`・`head`をそのまま結果として扱う。
+`verdict`が`null`なら`answer`を読み、判定の行がなければ判定保留として扱う。
+`state --request`・wait_threads・read_threadは使わない。
+修正後は同じ依頼JSONで再実行し、同じreviewerに再レビューさせる。
+taskId・workerAI・checkoutは変えず、PRを作った後はprUrlを更新する。
+同じheadは拒否されるため、修正をcommitしてから再実行する。
+出力が結果不明（`--recover discard`の案内）なら再実行せず、報告して停止する。
+reviewerを確かめたうえでownerが送り直すと決めた場合だけ、`--recover discard`を付けて実行する。
+
+VMが作り直されると、依頼JSONとレビューの状態とreviewerの会話は失われる。
+依頼JSONを作り直して実行すると、新しいreviewerが現在のbase branchのtipを基点に全体をレビューする。

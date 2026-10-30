@@ -84,7 +84,7 @@ PY
 # The skills the review cycle reads, replaced whole so a file removed upstream does not linger.
 skills="$HOME/.codex/skills"
 mkdir -p "$skills"
-for name in ai-code-review code-review explain-change task-orchestration task-review-cycle task-session-launch task-worker; do
+for name in ai-code-review code-review explain-change pr-watch-link task-orchestration task-review-cycle task-session-launch task-worker; do
   rm -rf "${skills:?}/$name"
   cp -R "$dotfiles/dot_codex/skills/$name" "$skills/$name"
 done
