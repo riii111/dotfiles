@@ -41,7 +41,8 @@ Claudeの会話を継続する追加指示は、元のCloudタスクへ渡す。
 
 ## Codexによる独立レビュー
 
-Cloudの統括Codexが、組み込みの独立エージェント機能でreviewerを起動する。
+Claude workerは候補SHA・検証結果・レビュー依頼を統括Codexへ返す。
+統括Codexが、組み込みの独立エージェント機能でreviewerを起動する。
 開始時に、起動・待機・追加指示のツールが利用できることを確認する。
 この環境では`spawn_agent`・`wait_agent`・`followup_task`で循環を検証した。
 機能が揃わない環境では、引き渡し文書と`needs_review`を報告して中断する。
