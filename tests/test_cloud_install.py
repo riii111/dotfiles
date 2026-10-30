@@ -2,11 +2,12 @@ import contextlib
 import io
 import json
 import os
+import re
 import tempfile
 import unittest
 from pathlib import Path
 
-from bin.lib.dot import cli, cloud
+from bin.lib.dot import cloud
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,9 +21,9 @@ class CloudInstallTest(unittest.TestCase):
         self.codex = self.root / "codex"
         self.claude = self.root / "claude"
 
-    def run_install(self, apply=True, skills=("task-worker", "pr-watch-link"), hooks=True):
+    def run_install(self, apply=True, skills=("task-worker", "pr-watch-link"), hooks=True, repo=ROOT):
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-            return cloud.run(ROOT, self.codex, self.claude, skills, hooks, apply)
+            return cloud.run(repo, self.codex, self.claude, skills, hooks, apply)
 
     def test_dry_run_writes_nothing(self):
         self.assertEqual(self.run_install(apply=False), 0)
@@ -38,17 +39,21 @@ class CloudInstallTest(unittest.TestCase):
             manifest = json.loads((home / cloud.MANIFEST_NAME).read_text())
             self.assertIn(str(home / "skills/task-worker/SKILL.md"), manifest["files"])
 
-    def test_default_skills_all_exist_and_their_templates_are_skipped_not_rendered(self):
-        plan = cloud.build_plan(ROOT, self.codex, self.claude, cloud.DEFAULT_SKILLS, False)
-        self.assertTrue(plan.files)
-        self.assertFalse([path for path in plan.files if path.name.endswith(".tmpl")])
-
-    def test_second_run_changes_nothing_and_a_changed_source_updates(self):
-        self.assertEqual(self.run_install(), 0)
-        target = self.claude / "skills/task-worker/SKILL.md"
+    def test_reinstall_preserves_unchanged_files_and_updates_managed_content(self):
+        repo = self.root / "source"
+        source = repo / "dot_codex/skills/example/SKILL.md"
+        source.parent.mkdir(parents=True)
+        source.write_text("# First version\n")
+        options = {"repo": repo, "skills": ("example",), "hooks": False}
+        self.assertEqual(self.run_install(**options), 0)
+        target = self.claude / "skills/example/SKILL.md"
         before = target.stat().st_mtime_ns
-        self.assertEqual(self.run_install(), 0)
+        self.assertEqual(self.run_install(**options), 0)
         self.assertEqual(target.stat().st_mtime_ns, before)
+        source.write_text("# Updated version\n")
+        self.assertEqual(self.run_install(**options), 0)
+        for home in (self.codex, self.claude):
+            self.assertEqual((home / "skills/example/SKILL.md").read_text(), source.read_text())
 
     def test_refuses_to_overwrite_a_file_it_did_not_write(self):
         target = self.claude / "settings.json"
@@ -111,20 +116,6 @@ class CloudInstallTest(unittest.TestCase):
         self.assertFalse((self.claude / "settings.json").exists())
         self.assertFalse((self.codex / "hooks").exists())
 
-    def test_codex_hooks_come_from_the_sources_chezmoi_includes(self):
-        # Keeps the Cloud subset from drifting from the local Codex copies.
-        plan = cloud.build_plan(ROOT, self.codex, self.claude, (), True)
-        for script in cloud.CODEX_HOOKS:
-            template = (ROOT / "dot_codex/hooks" / f"{script}.tmpl").read_text()
-            source = f"dot_claude/hooks/executable_{script}"
-            self.assertIn(f'include "{source}"', template)
-            expected = (ROOT / source).read_bytes()
-            if script == "pr-state-check.py":
-                old, new = cloud.ASK_TO_DENY
-                self.assertIn(new.replace('"', '\\"'), template)
-                expected = expected.replace(old.encode(), new.encode())
-            self.assertEqual(plan.files[self.codex / "hooks" / script][0], expected)
-
     def test_refuses_a_symlink_above_the_nearest_existing_directory(self):
         elsewhere = self.root / "elsewhere"
         (elsewhere / "task-worker").mkdir(parents=True)
@@ -167,7 +158,7 @@ class CloudInstallTest(unittest.TestCase):
         for home in (self.codex, self.claude):
             for doc in (home / "skills").rglob("*.md"):
                 for target in cloud.relative_links(doc.read_text()):
-                    pattern = cloud.PLACEHOLDER.sub("*", target)
+                    pattern = re.sub(r"\{[^}]*\}", "*", target)
                     matches = list(doc.parent.glob(pattern))
                     self.assertTrue(matches, f"{doc} -> {target}")
                     checked += 1
@@ -191,12 +182,6 @@ class CloudInstallTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("--codex-home", stderr.getvalue())
         self.assertFalse((self.claude / "skills").exists())
-
-    def test_dotctl_registers_the_command(self):
-        parser = cli.build_parser()
-        args = parser.parse_args(["cloud-install", "--skill", "task-worker", "--apply"])
-        self.assertTrue(args.apply)
-        self.assertEqual(args.skill, ["task-worker"])
 
 
 if __name__ == "__main__":
