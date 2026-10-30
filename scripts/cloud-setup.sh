@@ -33,6 +33,23 @@ mkdir -p "$hooks"
 for name in github-comment-check git-force-check pr-format-check pr-state-check; do
   install -m 0755 "$dotfiles/dot_claude/hooks/executable_$name.py" "$hooks/$name.py"
 done
+# The environment's variables are set only once Claude Code starts, after this script, so the Codex
+# login the environment holds in CODEX_AUTH_B64 is written by a session start hook. It prints nothing.
+cat > "$hooks/codex-auth.sh" <<'SH'
+#!/usr/bin/env bash
+auth="${CODEX_HOME:-$HOME/.codex}/auth.json"
+[[ -s $auth || -z ${CODEX_AUTH_B64:-} ]] && exit 0
+mkdir -p "$(dirname "$auth")"
+umask 077
+written=$(mktemp "$auth.XXXXXX") || exit 0
+if printf %s "$CODEX_AUTH_B64" | base64 -d > "$written" 2>/dev/null; then
+  mv -f "$written" "$auth"
+else
+  rm -f "$written"
+fi
+exit 0
+SH
+chmod 0755 "$hooks/codex-auth.sh"
 
 python3 - "$HOME/.claude/settings.json" "$hooks" <<'PY'
 import json
@@ -46,6 +63,9 @@ def command(name, timeout=5):
     return {"type": "command", "command": f"python3 {hooks}/{name}.py", "timeout": timeout}
 
 
+start = [
+    {"hooks": [{"type": "command", "command": f"bash {hooks}/codex-auth.sh", "timeout": 10}]}
+]
 ours = [
     {"matcher": "^(Bash|mcp__.*)$", "hooks": [command("github-comment-check")]},
     {
@@ -66,16 +86,17 @@ settings = {}
 if os.path.exists(path):
     with open(path) as file:
         settings = json.load(file)
-groups = settings.setdefault("hooks", {}).setdefault("PreToolUse", [])
 # Only the commands this script installs are taken out before they are added again, so another
 # hook, even one in the same folder or group, stays; a group left with no hooks goes.
-installed = {hook["command"] for group in ours for hook in group["hooks"]}
-for group in groups:
-    group["hooks"] = [
-        hook for hook in group.get("hooks", []) if hook.get("command") not in installed
-    ]
-groups[:] = [group for group in groups if group["hooks"]]
-groups.extend(ours)
+for event, added in (("PreToolUse", ours), ("SessionStart", start)):
+    groups = settings.setdefault("hooks", {}).setdefault(event, [])
+    installed = {hook["command"] for group in added for hook in group["hooks"]}
+    for group in groups:
+        group["hooks"] = [
+            hook for hook in group.get("hooks", []) if hook.get("command") not in installed
+        ]
+    groups[:] = [group for group in groups if group["hooks"]]
+    groups.extend(added)
 with open(path, "w") as file:
     json.dump(settings, file, indent=2)
     file.write("\n")

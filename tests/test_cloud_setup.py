@@ -118,6 +118,30 @@ class CloudSetupTest(unittest.TestCase):
 
         self.assertFalse(stale.exists())
 
+    def test_writes_the_codex_login_at_session_start_once(self):
+        settings = self.run_setup()
+        self.run_setup()
+        (start,) = settings["hooks"]["SessionStart"]
+        (hook,) = start["hooks"]
+        login = '{"auth_mode":"chatgpt"}'
+        env = {
+            "PATH": os.environ["PATH"],
+            "HOME": str(self.home),
+            "CODEX_AUTH_B64": __import__("base64").b64encode(login.encode()).decode(),
+        }
+
+        ran = subprocess.run(hook["command"], shell=True, env=env, capture_output=True, text=True)
+
+        auth = self.home / ".codex/auth.json"
+        self.assertEqual([ran.returncode, ran.stdout, ran.stderr], [0, "", ""])
+        self.assertEqual(auth.read_text(), login)
+        self.assertEqual(auth.stat().st_mode & 0o777, 0o600)
+        auth.write_text("kept")
+        subprocess.run(hook["command"], shell=True, env=env, check=True)
+        self.assertEqual(auth.read_text(), "kept")
+        settings = json.loads((self.home / ".claude/settings.json").read_text())
+        self.assertEqual(len(settings["hooks"]["SessionStart"]), 1)
+
     def test_clones_the_dotfiles_when_piped_into_bash(self):
         settings = self.run_setup(piped=True, DOTFILES_REPO=str(ROOT))
 
