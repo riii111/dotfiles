@@ -18,3 +18,6 @@ description: |
 
 届いた知らせへの対応は、task-workerの「PRへの指摘対応」に従う。
 知らせは、ownerが`harnexus-task watch --sender`で登録した送信用チャットから届く。
+
+`harnexus-task environment`が`"host":"claude"`を返すClaude CodeのCloudでは、`harnexus-task watch`は使えない。
+代わりに`subscribe_pr_activity`でPRをこのセッションに購読する。

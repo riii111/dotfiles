@@ -29,3 +29,10 @@ harnexus内のClaudeは、自分が起動したworkerを追う。
 idleやtimeoutだけで停止と判断せず、worker/reviewerの結果受取方式を変更しない。
 harnexus-taskの結果不明・モデル不一致は再送せず、ユーザーへ確認を求める。
 merge通知の自動受信や親Taskの自動再開は扱わない。
+
+## Claude CodeのCloud
+
+`harnexus-task environment`が`"host":"claude"`を返す場合、このセッションのClaudeが統括役になる。
+workerはtask-session-launchの「Claude CodeのCloud」で起動する。
+完了報告は各workerからの`send_message`で受け取り、進捗は`get_session`の状態と`list_events`で確かめる。
+mcp__codex_link__のツールとharnexus-taskのlaunch・state・resolveは使わない。

@@ -63,3 +63,16 @@ worker checkoutでレビューし、branchやcheckoutは変更しないでくだ
 base branchが進んだことだけを理由にLGTMを保留しないでください。
 参照文書に根拠がなく、人が答えないと決まらない判断は、決めた点・選んだもの・推奨を確認事項として結果に含めてください。
 確認事項だけを理由にLGTMを保留しないでください。
+
+## Claude CodeのCloud
+
+`harnexus-task environment`が`"host":"claude"`を返す場合、reviewerは同じVMのCodex CLIで動き、Appのチャットは使わない。
+依頼JSONのcheckoutはリポジトリの最上位でよく、projectIdにはリポジトリ名を入れる（list_projectsは使わない）。
+`harnexus-task review --request <JSON>`はレビューが終わるまで戻らず、1〜2分かかる。
+Bashのtimeoutを600000ms以上にするか、バックグラウンドで実行して終了を待つ。
+出力の`status`が`completed`なら、`verdict`・`answer`・`base`・`head`をそのまま結果として扱う。
+`state --request`・wait_threads・read_threadは使わない。
+修正後は同じJSONで再実行し、同じreviewerに再レビューさせる。
+同じheadは拒否されるため、修正をcommitしてから再実行する。
+出力が結果不明（`--recover discard`の案内）なら再実行せず、報告して停止する。
+reviewerを確かめたうえでownerが送り直すと決めた場合だけ、`--recover discard`を付けて実行する。

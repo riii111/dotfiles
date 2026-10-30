@@ -95,3 +95,15 @@ branch名とPR URLを依頼JSONに記録し、harnexus-taskが取得したbase/h
 
 baseの進行だけでは取り込み・全検証・再レビューを繰り返さない。
 実際の競合や変更行・挙動の重複で上流を取り込んだ場合だけ、そのbase SHAへ基点を更新し、必要な検証と再レビューをする。
+
+## Claude CodeのCloud
+
+`harnexus-task environment`が`"host":"claude"`を返す場合は、次のとおり読み替える。
+
+- 自身のTask IDは`CLAUDE_CODE_SESSION_ID`とする。
+- worktreeは作らず、セッションのcheckoutでbranchを作って作業する。
+- VMは放置すると回収されるため、commitしたらその都度作業branchへpushする。
+- 独立レビューはtask-review-cycleの「Claude CodeのCloud」に従う。
+- Draft PRを初めて作成したら、`harnexus-task name --pr`の代わりに`subscribe_pr_activity`で自分のPRを購読する。
+  届いた知らせへの対応は「PRへの指摘対応」に従い、Auto-fixは使わない。
+- 統括役が`create_session`で起動したworkerは、完了報告を`send_message`（session_idは`@parent`）で統括役へ送る。

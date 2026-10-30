@@ -39,3 +39,20 @@ description: |
 先頭はタスク管理元とする。
 harnexus-taskが[起動依頼](references/worker.md)とtask-workerの実在するリンクから定型文を作り、そのまま送る。
 未導入なら停止して不足を報告する。
+
+## Claude CodeのCloud
+
+`harnexus-task environment`が`"host":"claude"`を返す場合、launchは使えない。
+workerは1つのtaskにつき1つの新しいCloudセッションとして、`create_session`で起動する。
+
+- source_url：対象リポジトリのURL
+- source_revision：開始branch（積む場合は積み先のPRのhead branch）
+- title：displayName、なければタスクID
+- permission_mode：`auto`
+- prompt：[起動依頼](references/worker.md)の項目を埋めた本文
+  `$task-worker`のリンク先は`~/.codex/skills/task-worker/SKILL.md`の絶対パスにする
+
+参照文書は、workerのVMから読めるURLかリポジトリ内のパスにする。
+統括役のVMにしかないファイルは、workerからは読めない。
+起動前に`list_sessions`で同じtitleのセッションを探し、あれば新しく作らずそのsession IDを返す。
+出力のsession IDとURLを報告する。
