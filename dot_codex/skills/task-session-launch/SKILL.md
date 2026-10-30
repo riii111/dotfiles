@@ -7,6 +7,8 @@ description: |
 
 # Task Session Launch
 
+`harnexus-task environment`が`"host":"claude"`を返す場合は、先に末尾の「Claude CodeのCloud」を読む。
+
 ## 手順
 
 1. `list_projects`を一度呼び、repositoryに対応するprojectIdを決める。
@@ -42,19 +44,23 @@ harnexus-taskが[起動依頼](references/worker.md)とtask-workerの実在す�
 
 ## Claude CodeのCloud
 
-`harnexus-task environment`が`"host":"claude"`を返す場合、launchは使えない。
+`harnexus-task environment`が`"host":"claude"`を返す場合、この節が手順1〜4と結果不明の確認・記録に代わる。
+list_projects・起動依頼JSON・launch・state・resolveは使わない。
 workerは1つのtaskにつき1つの新しいCloudセッションとして、`create_session`で起動する。
 
 - source_url：対象リポジトリのURL
-- source_revision：開始branch（積む場合は積み先のPRのhead branch）
-- title：`<displayName> [<owner>/<repo>#<タスクID>]`（displayNameがなければ角括弧の部分だけ）
-- permission_mode：`auto`
+- source_revision：開始branch
+  積む場合は積み先のPRのhead branch、どちらもなければ既定branchにする
+- title：`<displayName> [<owner>/<repo>#<タスクID>]`
+  displayNameがなければ角括弧の部分だけにする
+- permission_mode：統括役のセッションが`auto`のときだけ`auto`を指定し、それ以外は省略する
 - prompt：[起動依頼](references/worker.md)の項目を埋めた本文
-  `$task-worker`のリンク先は`~/.codex/skills/task-worker/SKILL.md`の絶対パスにする
+  `$task-worker`のリンク先は、`$HOME`を展開した`~/.codex/skills/task-worker/SKILL.md`の絶対パスにする
 
-参照文書は、workerのVMから読めるURLかリポジトリ内のパスにする。
-統括役のVMにしかないファイルは、workerからは読めない。
+参照文書は、workerのVMから読めるHTTPSのURLか、source_revisionに含まれるリポジトリ内のパスにする。
+統括役のVMにしかないファイルや、統括役がまだpushしていない変更は、workerからは読めない。
 起動前に`list_sessions`で、titleの末尾が同じ`[<owner>/<repo>#<タスクID>]`のセッションを探す。
+一覧が続く場合は最後まで読む。
 あれば新しく作らず、そのsession IDを返す。
 displayNameだけが同じセッションは別のworkerとして扱う。
-出力のsession IDとURLを報告する。
+session IDと、`https://claude.ai/code/<session ID>`のURLを報告する。

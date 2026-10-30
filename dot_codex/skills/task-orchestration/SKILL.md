@@ -7,6 +7,8 @@ description: |
 
 # Task Orchestration
 
+`harnexus-task environment`が`"host":"claude"`を返す場合は、先に末尾の「Claude CodeのCloud」を読む。
+
 統括役はCodexを既定とし、ユーザーがClaudeでの統括を指示した場合（AppでClaudeを選択した場合を含む）にClaudeを使う。
 workerは既定Claude、reviewerはCodexとし、統括役の選択から変更しない。
 
@@ -34,5 +36,9 @@ merge通知の自動受信や親Taskの自動再開は扱わない。
 
 `harnexus-task environment`が`"host":"claude"`を返す場合、このセッションのClaudeが統括役になる。
 workerはtask-session-launchの「Claude CodeのCloud」で起動する。
-完了報告は各workerからの`send_message`で受け取り、進捗は`get_session`の状態と`list_events`で確かめる。
-mcp__codex_link__のツールとharnexus-taskのlaunch・state・resolveは使わない。
+開始済みかどうかは、既存のCodex Taskの代わりに`list_sessions`で確かめる。
+workerの完了・停止・指摘対応の報告は、各workerからの`send_message`で受け取る。
+この報告で統括役のturnが始まるため、「親Taskの自動再開は扱わない」は当てはまらない。
+進捗は`get_session`の`status_bucket`と`list_events`で確かめる。
+`status`は失敗したturnでも`idle`と読めるため、判断に使わない。
+mcp__codex_link__のツールと、harnexus-taskのlaunch・state・resolveは使わない。
