@@ -69,7 +69,7 @@ base branchが進んだことだけを理由にLGTMを保留しないでくだ�
 `harnexus-task environment`が`"host":"claude"`を返す場合、reviewerは同じVMのCodex CLIで動き、Appのチャットは使わない。
 依頼JSONのcheckoutはリポジトリの最上位でよく、projectIdにはリポジトリ名を入れる（list_projectsは使わない）。
 `harnexus-task review --request <JSON>`はレビューが終わるまで戻らず、1〜2分かかる。
-Bashのtimeoutを600000ms以上にするか、バックグラウンドで実行して終了を待つ。
+Bashのtimeoutは最大10分で、`HARNEXUS_REVIEW_TIMEOUT_MS`（既定30分）に届かないため、バックグラウンドで実行して終了を待つ。
 出力の`status`が`completed`なら、`verdict`・`answer`・`base`・`head`をそのまま結果として扱う。
 `state --request`・wait_threads・read_threadは使わない。
 修正後は同じJSONで再実行し、同じreviewerに再レビューさせる。

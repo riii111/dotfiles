@@ -102,7 +102,8 @@ baseの進行だけでは取り込み・全検証・再レビューを繰り返�
 
 - 自身のTask IDは`CLAUDE_CODE_SESSION_ID`とする。
 - worktreeは作らず、セッションのcheckoutでbranchを作って作業する。
-- VMは放置すると回収されるため、commitしたらその都度作業branchへpushする。
+- VMは放置すると回収されるため、Draft PRを作るまでは、commitしたらその都度作業branchへpushする。
+  PRを作った後のpushは「PRへの指摘対応」に従い、ownerのOK待ちの修正はpushしない。
 - 独立レビューはtask-review-cycleの「Claude CodeのCloud」に従う。
 - Draft PRを初めて作成したら、`harnexus-task name --pr`の代わりに`subscribe_pr_activity`で自分のPRを購読する。
   届いた知らせへの対応は「PRへの指摘対応」に従い、Auto-fixは使わない。

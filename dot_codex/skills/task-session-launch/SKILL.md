@@ -47,12 +47,14 @@ workerは1つのtaskにつき1つの新しいCloudセッションとして、`cr
 
 - source_url：対象リポジトリのURL
 - source_revision：開始branch（積む場合は積み先のPRのhead branch）
-- title：displayName、なければタスクID
+- title：`<displayName> [<owner>/<repo>#<タスクID>]`（displayNameがなければ角括弧の部分だけ）
 - permission_mode：`auto`
 - prompt：[起動依頼](references/worker.md)の項目を埋めた本文
   `$task-worker`のリンク先は`~/.codex/skills/task-worker/SKILL.md`の絶対パスにする
 
 参照文書は、workerのVMから読めるURLかリポジトリ内のパスにする。
 統括役のVMにしかないファイルは、workerからは読めない。
-起動前に`list_sessions`で同じtitleのセッションを探し、あれば新しく作らずそのsession IDを返す。
+起動前に`list_sessions`で、titleの末尾が同じ`[<owner>/<repo>#<タスクID>]`のセッションを探す。
+あれば新しく作らず、そのsession IDを返す。
+displayNameだけが同じセッションは別のworkerとして扱う。
 出力のsession IDとURLを報告する。
