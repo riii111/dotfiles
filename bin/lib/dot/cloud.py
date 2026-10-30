@@ -1,16 +1,7 @@
-"""Install the shared agent skills and portable hooks into a Codex Cloud task.
-
-chezmoi does not run in Cloud, so this reads the same managed sources it reads
-and writes plain files. Nothing here fetches from the network, reads
-credentials, or renders chezmoi templates; a source that needs rendering is
-skipped and reported. Only files this command wrote earlier (tracked by a
-manifest) are replaced, so a file someone else put in the target is never
-overwritten.
-"""
+"""Install shared skills and portable hooks, preserving user-edited files."""
 
 from __future__ import annotations
 
-import fnmatch
 import hashlib
 import json
 import os
@@ -69,7 +60,7 @@ def read_source(path: Path) -> bytes:
     return path.read_bytes()
 
 
-def collect_skill(repo: Path, name: str, dest: Path, plan: Plan) -> None:
+def collect_skill(repo: Path, name: str, destinations: tuple[Path, ...], plan: Plan) -> None:
     if not SKILL_NAME.match(name):
         raise InstallError(f"invalid skill name: {name}")
     root = repo / "dot_codex" / "skills" / name
@@ -85,11 +76,12 @@ def collect_skill(repo: Path, name: str, dest: Path, plan: Plan) -> None:
             plan.skipped.append(f"{name}/{relative} (chezmoi template; render it with chezmoi)")
             continue
         mode = 0o755 if source.stat().st_mode & stat.S_IXUSR else 0o644
-        plan.files[dest / name / relative] = (read_source(source), mode)
+        content = read_source(source)
+        for dest in destinations:
+            plan.files[dest / name / relative] = (content, mode)
 
 
 LINK = re.compile(r"\]\(([^)\s]+)\)")
-PLACEHOLDER = re.compile(r"\{[^}]*\}")
 SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
 
 
@@ -134,20 +126,6 @@ def with_linked_skills(repo: Path, requested: tuple[str, ...]) -> tuple[str, ...
                 if owner not in names:
                     names.append(owner)
     return tuple(names)
-
-
-def check_links(repo: Path, names: tuple[str, ...], plan_sources: set[Path]) -> None:
-    skills_root = repo / "dot_codex" / "skills"
-    for name in names:
-        for source in sorted((skills_root / name).rglob("*.md")):
-            for target in relative_links(source.read_text(encoding="utf-8")):
-                resolved = Path(os.path.normpath(source.parent / target))
-                # A field in a target, as in reply-{worker_ai}.md, stands for every value it can take.
-                pattern = PLACEHOLDER.sub("*", str(resolved))
-                if not any(fnmatch.fnmatchcase(str(known), pattern) for known in plan_sources) and not any(
-                    resolved in known.parents for known in plan_sources
-                ):
-                    raise InstallError(f"{source.relative_to(repo)} links to {target}, which would not be installed")
 
 
 def claude_settings(claude_home: Path) -> bytes:
@@ -223,14 +201,9 @@ def build_plan(
         if not target.is_absolute():
             raise InstallError(f"{target} is not an absolute path")
     skills = with_linked_skills(repo, skills)
-    sources: set[Path] = set()
+    destinations = (codex_home / "skills", claude_home / "skills")
     for name in skills:
-        collect_skill(repo, name, codex_home / "skills", plan)
-        collect_skill(repo, name, claude_home / "skills", plan)
-        for source in (repo / "dot_codex" / "skills" / name).rglob("*"):
-            if source.is_file() and not source.name.endswith(".tmpl"):
-                sources.add(source)
-    check_links(repo, skills, sources)
+        collect_skill(repo, name, destinations, plan)
     plan.notes.append("Skills installed: " + ", ".join(skills))
     if not with_hooks:
         return plan
@@ -348,9 +321,11 @@ def home_of(path: Path, homes: tuple[Path, ...]) -> Path:
 def apply_plan(plan: Plan, homes: tuple[Path, ...], apply: bool) -> list[str]:
     manifests = {home: home / MANIFEST_NAME for home in homes}
     managed: dict[str, str] = {}
+    existing = {}
     for home, manifest in manifests.items():
         check_chain(manifest, home)
-        managed.update(load_manifest(manifest))
+        existing[home] = load_manifest(manifest)
+        managed.update(existing[home])
     actions = {
         path: check_target(path, content, managed, home_of(path, homes))
         for path, (content, _) in plan.files.items()
@@ -369,7 +344,7 @@ def apply_plan(plan: Plan, homes: tuple[Path, ...], apply: bool) -> list[str]:
             for path, (content, _) in plan.files.items()
             if home in path.parents
         }
-        previous = load_manifest(manifest)
+        previous = existing[home]
         previous.update(recorded)
         write_file(manifest, (json.dumps({"files": previous}, indent=2, sort_keys=True) + "\n").encode(), 0o644)
     return lines
