@@ -6,6 +6,9 @@
 # into bash would exit 0 and start the session without the hooks:
 #   curl -fsSLo /tmp/cloud-setup.sh https://raw.githubusercontent.com/riii111/dotfiles/main/scripts/cloud-setup.sh && PR_LANGUAGE=ja bash /tmp/cloud-setup.sh
 #
+# It also places the task review skills where the Codex CLI and harnexus-task read them, so a
+# worker can review with `harnexus-task review` there; HARNEXUS_TASK=1 builds harnexus-task too.
+#
 # PR_LANGUAGE sets the global `git config pr.language` the PR format hook requires, since a fresh
 # clone has none. Running it again replaces the hooks it installed and keeps other settings.
 # Left out: the inline Bash hook, which steers find, grep and cat to fd, rg and bat that a cloud
@@ -78,7 +81,40 @@ with open(path, "w") as file:
     file.write("\n")
 PY
 
+# The skills the review cycle reads, replaced whole so a file removed upstream does not linger.
+skills="$HOME/.codex/skills"
+mkdir -p "$skills"
+for name in ai-code-review code-review explain-change task-orchestration task-review-cycle task-session-launch task-worker; do
+  rm -rf "${skills:?}/$name"
+  cp -R "$dotfiles/dot_codex/skills/$name" "$skills/$name"
+done
+config="${XDG_CONFIG_HOME:-$HOME/.config}/harnexus"
+mkdir -p "$config"
+cat > "$config/task.json" <<JSON
+{
+  "templates": {
+    "worker": "$skills/task-session-launch/references/worker.md",
+    "reviewer": "$skills/task-review-cycle/references/reviewer.md"
+  }
+}
+JSON
+
+# harnexus-task needs the exact Bun harnexus pins, which the image may not have; a failed build only
+# leaves it out, so the session still starts with the hooks.
+if [[ ${HARNEXUS_TASK:-} == 1 ]]; then
+  if ! (
+    harnexus=$(mktemp -d)
+    trap 'rm -rf "$harnexus"' EXIT
+    # set -e does not apply inside a condition, so each step stops the rest itself.
+    git clone --quiet --depth 1 "${HARNEXUS_REPO:-https://github.com/riii111/harnexus.git}" "$harnexus" || exit 1
+    bun_bin=$(command -v bun || echo "$HOME/.bun/bin/bun")
+    bash "$harnexus/scripts/install-cloud-task.sh" --prefix "${HARNEXUS_TASK_PREFIX:-/usr/local/bin}" --bun "$bun_bin"
+  ); then
+    echo "cloud-setup: harnexus-task was not installed; the hooks and skills were" >&2
+  fi
+fi
+
 if [[ -n ${PR_LANGUAGE:-} ]]; then
   git config --global pr.language "$PR_LANGUAGE"
 fi
-echo "installed the dotfiles hooks into $HOME/.claude"
+echo "installed the dotfiles hooks into $HOME/.claude and the task skills into $skills"

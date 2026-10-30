@@ -74,6 +74,45 @@ class CloudSetupTest(unittest.TestCase):
                 )
                 self.assertTrue(os.access(hook, os.X_OK))
 
+    def test_installs_the_review_skills_and_the_task_templates(self):
+        self.run_setup()
+
+        skills = self.home / ".codex/skills"
+        for name in ("ai-code-review", "code-review", "task-review-cycle", "task-worker"):
+            with self.subTest(name=name):
+                self.assertEqual(
+                    (skills / name / "SKILL.md").read_text(),
+                    (ROOT / "dot_codex/skills" / name / "SKILL.md").read_text(),
+                )
+        self.assertTrue((skills / "task-review-cycle/references/reply-Cloud.md").exists())
+        self.assertEqual(
+            json.loads((self.home / ".config/harnexus/task.json").read_text()),
+            {
+                "templates": {
+                    "worker": f"{skills}/task-session-launch/references/worker.md",
+                    "reviewer": f"{skills}/task-review-cycle/references/reviewer.md",
+                }
+            },
+        )
+
+    def test_a_failed_harnexus_task_build_still_installs_the_rest(self):
+        settings = self.run_setup(
+            HARNEXUS_TASK="1",
+            HARNEXUS_REPO=str(self.home / "missing"),
+        )
+
+        self.assertEqual(len(settings["hooks"]["PreToolUse"]), 3)
+        self.assertTrue((self.home / ".config/harnexus/task.json").exists())
+
+    def test_replaces_a_skill_whole_when_run_again(self):
+        self.run_setup()
+        stale = self.home / ".codex/skills/task-worker/stale.md"
+        stale.write_text("removed upstream")
+
+        self.run_setup()
+
+        self.assertFalse(stale.exists())
+
     def test_clones_the_dotfiles_when_piped_into_bash(self):
         settings = self.run_setup(piped=True, DOTFILES_REPO=str(ROOT))
 
