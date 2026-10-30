@@ -85,6 +85,11 @@ class CloudSetupTest(unittest.TestCase):
                     (ROOT / "dot_codex/skills" / name / "SKILL.md").read_text(),
                 )
         self.assertTrue((skills / "task-review-cycle/references/reply-Cloud.md").exists())
+        for name in ("task-orchestration", "task-worker", "pr-watch-link"):
+            with self.subTest(claude=name):
+                link = self.home / ".claude/skills" / name
+                self.assertEqual(link.resolve(), (skills / name).resolve())
+                self.assertTrue((link / "SKILL.md").exists())
         self.assertEqual(
             json.loads((self.home / ".config/harnexus/task.json").read_text()),
             {

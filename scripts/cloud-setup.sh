@@ -84,9 +84,13 @@ PY
 # The skills the review cycle reads, replaced whole so a file removed upstream does not linger.
 skills="$HOME/.codex/skills"
 mkdir -p "$skills"
+# Claude Code finds the same skills by name through ~/.claude/skills, so a request can name one.
+claude_skills="$HOME/.claude/skills"
+mkdir -p "$claude_skills"
 for name in ai-code-review code-review explain-change pr-watch-link task-orchestration task-review-cycle task-session-launch task-worker; do
-  rm -rf "${skills:?}/$name"
+  rm -rf "${skills:?}/$name" "${claude_skills:?}/$name"
   cp -R "$dotfiles/dot_codex/skills/$name" "$skills/$name"
+  ln -s "$skills/$name" "$claude_skills/$name"
 done
 config="${XDG_CONFIG_HOME:-$HOME/.config}/harnexus"
 mkdir -p "$config"
