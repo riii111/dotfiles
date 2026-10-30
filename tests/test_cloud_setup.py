@@ -54,7 +54,12 @@ class CloudSetupTest(unittest.TestCase):
                 ],
             },
         )
-        for name in ("github-comment-check", "git-force-check", "pr-format-check"):
+        for name in (
+            "github-comment-check",
+            "git-force-check",
+            "pr-format-check",
+            "pr-state-check",
+        ):
             with self.subTest(name=name):
                 hook = self.home / f".claude/hooks/{name}.py"
                 self.assertEqual(
@@ -63,33 +68,29 @@ class CloudSetupTest(unittest.TestCase):
                 )
                 self.assertTrue(os.access(hook, os.X_OK))
 
-    def test_running_again_keeps_other_settings_and_adds_nothing_twice(self):
-        settings_path = self.home / ".claude/settings.json"
-        settings_path.parent.mkdir(parents=True)
-        settings_path.write_text(
-            json.dumps(
-                {
-                    "permissions": {"deny": ["SearchPlugins"]},
-                    "hooks": {
-                        "PreToolUse": [
-                            {
-                                "matcher": "Write",
-                                "hooks": [{"type": "command", "command": "true"}],
-                            }
-                        ]
-                    },
-                }
-            )
-        )
+    def test_running_again_keeps_other_hooks_and_adds_nothing_twice(self):
+        own = {
+            "type": "command",
+            "command": f"python3 {self.home}/.claude/hooks/my-check.py",
+        }
+        settings = self.run_setup()
+        settings["permissions"] = {"deny": ["SearchPlugins"]}
+        settings["hooks"]["PreToolUse"].insert(0, {"matcher": "Write", "hooks": [own]})
+        # A hook of the user's own added to a group this script installed.
+        settings["hooks"]["PreToolUse"][-1]["hooks"].append(own)
+        (self.home / ".claude/settings.json").write_text(json.dumps(settings))
 
-        self.run_setup()
         settings = self.run_setup()
 
         self.assertEqual(settings["permissions"], {"deny": ["SearchPlugins"]})
+        groups = settings["hooks"]["PreToolUse"]
         self.assertEqual(
-            [group["matcher"] for group in settings["hooks"]["PreToolUse"]],
-            ["Write", "^(Bash|mcp__.*)$", "^mcp__github__.*$", "Bash"],
+            [group["matcher"] for group in groups],
+            ["Write", "Bash", "^(Bash|mcp__.*)$", "^mcp__github__.*$", "Bash"],
         )
+        self.assertEqual(groups[0]["hooks"], [own])
+        self.assertEqual(groups[1]["hooks"], [own])
+        self.assertEqual(sum(len(group["hooks"]) for group in groups), 2 + 1 + 2 + 3)
 
     def test_sets_the_pr_language_only_when_given(self):
         self.run_setup()

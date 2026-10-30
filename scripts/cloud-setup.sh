@@ -60,12 +60,14 @@ if os.path.exists(path):
     with open(path) as file:
         settings = json.load(file)
 groups = settings.setdefault("hooks", {}).setdefault("PreToolUse", [])
-# Groups this script installed earlier are replaced, so running it again adds nothing twice.
-groups[:] = [
-    group
-    for group in groups
-    if not any(hooks in hook.get("command", "") for hook in group.get("hooks", []))
-]
+# Only the commands this script installs are taken out before they are added again, so another
+# hook, even one in the same folder or group, stays; a group left with no hooks goes.
+installed = {hook["command"] for group in ours for hook in group["hooks"]}
+for group in groups:
+    group["hooks"] = [
+        hook for hook in group.get("hooks", []) if hook.get("command") not in installed
+    ]
+groups[:] = [group for group in groups if group["hooks"]]
 groups.extend(ours)
 with open(path, "w") as file:
     json.dump(settings, file, indent=2)
