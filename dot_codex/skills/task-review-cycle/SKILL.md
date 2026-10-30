@@ -69,12 +69,15 @@ base branchが進んだことだけを理由にLGTMを保留しないでくだ�
 ## Claude CodeのCloud
 
 `harnexus-task environment`が`"host":"claude"`を返す場合、reviewerは同じVMのCodex CLIで動き、Appのチャットは使わない。
+この節が、手順2の「同じheadは再送しない」と手順3〜4の受け取り方に代わる。
 依頼JSONは次のとおりにする。
 
 - workerAIは`Claude`、projectIdはリポジトリ名にする（list_projectsは使わない）。
 - checkoutはリポジトリの最上位の絶対パスでよい。
 - documentRefsは、checkout内のファイルの絶対パスかHTTPSのURLにする。
   起動依頼でリポジトリ内のパスとして渡された参照文書は、checkoutを前に付けて絶対パスにする。
+- GitHubのIssueやPRの本文は、reviewerのsandboxから読めないことがある。
+  本文を取得して`.reviewctl/`に保存し、そのファイルの絶対パスを渡す。
 
 `harnexus-task review --request <JSON>`はレビューが終わるまで戻らず、1〜2分かかる。
 Bashのtimeoutは最大10分で、`HARNEXUS_REVIEW_TIMEOUT_MS`（既定30分）に届かないため、バックグラウンドで実行して終了を待つ。
@@ -83,7 +86,9 @@ Bashのtimeoutは最大10分で、`HARNEXUS_REVIEW_TIMEOUT_MS`（既定30分）�
 `state --request`・wait_threads・read_threadは使わない。
 修正後は同じ依頼JSONで再実行し、同じreviewerに再レビューさせる。
 taskId・workerAI・checkoutは変えず、PRを作った後はprUrlを更新する。
-同じheadは拒否されるため、修正をcommitしてから再実行する。
+判定が`LGTM`か`修正必要`だったheadは拒否されるため、修正をcommitしてから再実行する。
+判定保留なら、reviewerに足りなかった資料などを依頼JSONに足し、同じheadのまま再実行する。
+reviewerを`codex exec`で直接呼ばず、追加の依頼もすべて`harnexus-task review`を通す。
 出力が結果不明（`--recover discard`の案内）なら再実行せず、報告して停止する。
 reviewerを確かめたうえでownerが送り直すと決めた場合だけ、`--recover discard`を付けて実行する。
 
