@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Protect review approvals and merges; uncertain PR identity must not authorize a mutation."""
+"""Protect review approvals and merges; uncertain PR identity must not authorize a mutation.
+
+The GitHub MCP server that Claude Code cloud sessions use is held to the same rules:
+its merges ask outside personal repositories, and since this hook cannot ask it
+whether a PR is a draft, its base changes and conversions to draft are denied.
+"""
 
 from __future__ import annotations
 
@@ -253,12 +258,38 @@ def check(command: str, cwd: str) -> tuple[str, str] | None:
     return None
 
 
+MCP_MERGES = {"merge_pull_request", "enable_pr_auto_merge"}
+MCP_DRAFT_UNKNOWN = (
+    "GitHub MCPではPRがDraftか確認できないため、base変更・Draft化を止めました。"
+    "必要ならownerに頼んでください。"
+)
+
+
+def mcp_check(name: str, tool_input: dict) -> tuple[str, str] | None:
+    if not name.startswith("mcp__") or "github" not in name:
+        return None
+    operation = re.sub(r"^github[._]", "", name.rsplit("__", 1)[-1])
+    if operation in MCP_MERGES:
+        if tool_input.get("owner") in MERGE_FREE_OWNERS:
+            return None
+        return MERGE_DECISION, MERGE_REASON
+    if operation == "update_pull_request" and (
+        "base" in tool_input or tool_input.get("draft") is True
+    ):
+        return "deny", MCP_DRAFT_UNKNOWN
+    return None
+
+
 def main() -> int:
     event = json.load(sys.stdin)
-    verdict = check(
-        (event.get("tool_input") or {}).get("command") or "",
-        event.get("cwd") or os.getcwd(),
-    )
+    name = event.get("tool_name") or ""
+    if name.startswith("mcp__"):
+        verdict = mcp_check(name, event.get("tool_input") or {})
+    else:
+        verdict = check(
+            (event.get("tool_input") or {}).get("command") or "",
+            event.get("cwd") or os.getcwd(),
+        )
     if verdict:
         decision, reason = verdict
         print(

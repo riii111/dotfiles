@@ -257,6 +257,56 @@ class PrStateTest(unittest.TestCase):
         self.assertIsNone(self.hook.check("gh pr merge --help", "/tmp"))
         self.runner.assert_not_called()
 
+    def test_github_mcp_merges_ask_outside_personal_repositories(self):
+        for operation in ("merge_pull_request", "enable_pr_auto_merge"):
+            with self.subTest(operation=operation):
+                self.assertIsNone(
+                    self.hook.mcp_check(
+                        "mcp__github__" + operation,
+                        {"owner": "riii111", "repo": "harnexus", "pullNumber": 3},
+                    )
+                )
+                self.assertEqual(
+                    self.hook.mcp_check(
+                        "mcp__github__" + operation,
+                        {"owner": "acme", "repo": "app", "pullNumber": 3},
+                    )[0],
+                    "ask",
+                )
+
+    def test_github_mcp_cannot_change_base_or_convert_to_draft(self):
+        for tool_input in ({"base": "main"}, {"draft": True}):
+            with self.subTest(tool_input=tool_input):
+                self.assertEqual(
+                    self.hook.mcp_check(
+                        "mcp__github__update_pull_request",
+                        {"owner": "riii111", "pullNumber": 3, **tool_input},
+                    )[0],
+                    "deny",
+                )
+        for tool_input in ({"draft": False}, {"title": "fix: x"}):
+            with self.subTest(tool_input=tool_input):
+                self.assertIsNone(
+                    self.hook.mcp_check(
+                        "mcp__github__update_pull_request",
+                        {"owner": "riii111", "pullNumber": 3, **tool_input},
+                    )
+                )
+        self.runner.assert_not_called()
+
+    def test_github_mcp_event_is_checked_without_a_command(self):
+        event = json.dumps(
+            {
+                "tool_name": "mcp__github__merge_pull_request",
+                "tool_input": {"owner": "acme", "repo": "app", "pullNumber": 3},
+            }
+        )
+        output = io.StringIO()
+        with mock.patch("sys.stdin", io.StringIO(event)), redirect_stdout(output):
+            self.assertEqual(self.hook.main(), 0)
+        decision = json.loads(output.getvalue())["hookSpecificOutput"]
+        self.assertEqual(decision["permissionDecision"], "ask")
+
     def test_codex_copy_denies_merges(self):
         template = (ROOT / "dot_codex/hooks/pr-state-check.py.tmpl").read_text()
         self.assertIn(

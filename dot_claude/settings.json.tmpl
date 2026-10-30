@@ -322,6 +322,21 @@
         ]
       },
       {
+        "matcher": "^mcp__github__.*$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 {{ .chezmoi.homeDir }}/.claude/hooks/pr-format-check.py",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "python3 {{ .chezmoi.homeDir }}/.claude/hooks/pr-state-check.py",
+            "timeout": 5
+          }
+        ]
+      },
+      {
         "matcher": "Bash",
         "hooks": [
           {

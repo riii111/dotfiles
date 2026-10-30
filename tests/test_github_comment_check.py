@@ -80,6 +80,28 @@ class GithubCommentCheckTest(unittest.TestCase):
                     policy.denied({"tool_name": name, "tool_input": {"body": "hi"}})
                 )
 
+    def test_denies_github_mcp_comment_tools(self):
+        for operation in (
+            "add_issue_comment",
+            "add_comment_to_pending_review",
+            "add_reply_to_pull_request_comment",
+            "pull_request_review_write",
+            "resolve_review_thread",
+        ):
+            with self.subTest(operation=operation):
+                self.assertTrue(
+                    policy.denied({"tool_name": "mcp__github__" + operation})
+                )
+        for name in (
+            "mcp__github__pull_request_read",
+            "mcp__github__create_pull_request",
+            "mcp__github__issue_write",
+        ):
+            with self.subTest(name=name):
+                self.assertFalse(
+                    policy.denied({"tool_name": name, "tool_input": {"body": "hi"}})
+                )
+
     def test_hook_output(self):
         result = subprocess.run(
             ["python3", str(HOOK)],
@@ -141,6 +163,19 @@ class GithubCommentCheckTest(unittest.TestCase):
                         for group in groups
                     )
                 )
+
+        groups = json.loads(render("dot_claude/settings.json.tmpl"))["hooks"][
+            "PreToolUse"
+        ]
+        mcp = [group for group in groups if group["matcher"] == "^mcp__github__.*$"]
+        self.assertEqual(
+            [
+                hook["command"].rsplit("/", 1)[-1]
+                for group in mcp
+                for hook in group["hooks"]
+            ],
+            ["pr-format-check.py", "pr-state-check.py"],
+        )
 
 
 if __name__ == "__main__":

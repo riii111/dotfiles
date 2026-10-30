@@ -46,7 +46,15 @@ class PrFormatCheckTest(unittest.TestCase):
         self.addCleanup(patcher.stop)
 
     def denies(self, command):
-        event = json.dumps({"tool_input": {"command": command}})
+        return self.denies_event({"tool_input": {"command": command}})
+
+    def denies_mcp(self, operation, tool_input):
+        return self.denies_event(
+            {"tool_name": "mcp__github__" + operation, "tool_input": tool_input}
+        )
+
+    def denies_event(self, payload):
+        event = json.dumps(payload)
         output = io.StringIO()
         with mock.patch("sys.stdin", io.StringIO(event)), redirect_stdout(output):
             self.assertEqual(self.check.main(), 0)
@@ -135,6 +143,39 @@ class PrFormatCheckTest(unittest.TestCase):
         self.use_language("en")
         body = "close #12\n\nThe log is noisy. Trimming it makes failures visible.\n"
         self.assertFalse(self.denies(create_command(body, title="ci: trim logs")))
+
+    def test_checks_a_pr_created_through_github_mcp(self):
+        good = {"title": "ci: テストのログを減らす", "body": GOOD_BODY, "draft": True}
+        self.assertFalse(self.denies_mcp("create_pull_request", good))
+        self.assertTrue(
+            self.denies_mcp("create_pull_request", {**good, "title": "trim logs"})
+        )
+        self.assertTrue(
+            self.denies_mcp(
+                "create_pull_request", {**good, "body": GOOD_BODY + "- 3\n- 4\n"}
+            )
+        )
+
+    def test_requires_a_draft_through_github_mcp(self):
+        good = {"title": "ci: テストのログを減らす", "body": GOOD_BODY}
+        self.assertTrue(self.denies_mcp("create_pull_request", good))
+        self.assertTrue(
+            self.denies_mcp("create_pull_request", {**good, "draft": False})
+        )
+
+    def test_checks_only_what_an_mcp_edit_changes(self):
+        self.assertFalse(self.denies_mcp("update_pull_request", {"pullNumber": 3}))
+        self.assertFalse(
+            self.denies_mcp("update_pull_request", {"title": "fix: 失敗を出力する"})
+        )
+        self.assertTrue(
+            self.denies_mcp("update_pull_request", {"title": "Update things"})
+        )
+
+    def test_ignores_other_mcp_tools(self):
+        self.assertFalse(
+            self.denies_mcp("pull_request_read", {"title": "anything", "body": "x"})
+        )
 
 
 if __name__ == "__main__":
