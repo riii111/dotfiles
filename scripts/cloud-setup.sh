@@ -84,7 +84,7 @@ PY
 # The skills the review cycle reads, replaced whole so a file removed upstream does not linger.
 skills="$HOME/.codex/skills"
 mkdir -p "$skills"
-for name in ai-code-review code-review task-orchestration task-review-cycle task-session-launch task-worker; do
+for name in ai-code-review code-review explain-change task-orchestration task-review-cycle task-session-launch task-worker; do
   rm -rf "${skills:?}/$name"
   cp -R "$dotfiles/dot_codex/skills/$name" "$skills/$name"
 done
@@ -99,12 +99,19 @@ cat > "$config/task.json" <<JSON
 }
 JSON
 
+# harnexus-task needs the exact Bun harnexus pins, which the image may not have; a failed build only
+# leaves it out, so the session still starts with the hooks.
 if [[ ${HARNEXUS_TASK:-} == 1 ]]; then
-  harnexus=$(mktemp -d)
-  git clone --quiet --depth 1 "${HARNEXUS_REPO:-https://github.com/riii111/harnexus.git}" "$harnexus"
-  bun_bin=$(command -v bun || echo "$HOME/.bun/bin/bun")
-  bash "$harnexus/scripts/install-cloud-task.sh" --prefix "${HARNEXUS_TASK_PREFIX:-/usr/local/bin}" --bun "$bun_bin"
-  rm -rf "$harnexus"
+  if ! (
+    harnexus=$(mktemp -d)
+    trap 'rm -rf "$harnexus"' EXIT
+    # set -e does not apply inside a condition, so each step stops the rest itself.
+    git clone --quiet --depth 1 "${HARNEXUS_REPO:-https://github.com/riii111/harnexus.git}" "$harnexus" || exit 1
+    bun_bin=$(command -v bun || echo "$HOME/.bun/bin/bun")
+    bash "$harnexus/scripts/install-cloud-task.sh" --prefix "${HARNEXUS_TASK_PREFIX:-/usr/local/bin}" --bun "$bun_bin"
+  ); then
+    echo "cloud-setup: harnexus-task was not installed; the hooks and skills were" >&2
+  fi
 fi
 
 if [[ -n ${PR_LANGUAGE:-} ]]; then

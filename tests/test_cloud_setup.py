@@ -95,6 +95,15 @@ class CloudSetupTest(unittest.TestCase):
             },
         )
 
+    def test_a_failed_harnexus_task_build_still_installs_the_rest(self):
+        settings = self.run_setup(
+            HARNEXUS_TASK="1",
+            HARNEXUS_REPO=str(self.home / "missing"),
+        )
+
+        self.assertEqual(len(settings["hooks"]["PreToolUse"]), 3)
+        self.assertTrue((self.home / ".config/harnexus/task.json").exists())
+
     def test_replaces_a_skill_whole_when_run_again(self):
         self.run_setup()
         stale = self.home / ".codex/skills/task-worker/stale.md"
