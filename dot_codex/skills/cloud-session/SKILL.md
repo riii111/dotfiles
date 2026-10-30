@@ -15,6 +15,7 @@ description: |
 3. `harnexus-task cloud --link <IDかURL> --project <projectId> --title <短い名前>`をサンドボックス外で一度実行する。
    Codexは`sandbox_permissions: require_escalated`を付け、Claudeはそのまま実行する。
    パイプ・リダイレクト・`cd`などを付けず単独で実行する。
+   許可の確認が出たら、ユーザーの承認を待つ。
 4. 成功したら、出力のthreadIdのチャットでそのセッションを見られると伝える。
    失敗したら再実行せずエラーを伝え、create_threadを直接呼ばない。
 

@@ -69,6 +69,7 @@ base branchが進んだことだけを理由にLGTMを保留しないでくだ�
 ## Claude CodeのCloud
 
 `harnexus-task environment`が`"host":"claude"`を返す場合、reviewerは同じVMのCodex CLIで動き、Appのチャットは使わない。
+この節が、手順2の「同じheadは再送しない」と手順3〜4の受け取り方に代わる。
 依頼JSONは次のとおりにする。
 
 - workerAIは`Claude`、projectIdはリポジトリ名にする（list_projectsは使わない）。
