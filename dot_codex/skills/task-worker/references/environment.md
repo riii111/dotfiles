@@ -39,18 +39,30 @@ Claudeの会話を継続する追加指示は、元のCloudタスクへ渡す。
 `--recover adopt`は`--resume`と併用し、既存セッションを継続する。
 `--recover discard`は未完了の実行記録を破棄する。
 
-## Codexへのレビュー依頼
+## Codexによる独立レビュー
 
-現在のCloud連携では、別のCodexタスクの起動は引き渡しで行う。
+Cloudの統括Codexが、組み込みの独立エージェント機能でreviewerを起動する。
+開始時に、起動・待機・追加指示のツールが利用できることを確認する。
+この環境では`spawn_agent`・`wait_agent`・`followup_task`で循環を検証した。
+機能が揃わない環境では、引き渡し文書と`needs_review`を報告して中断する。
 
-1. 候補をcommitし、`git status`で追跡ファイルの変更が保存済みか確認する。
+1. Claudeの候補をcommitし、`git status`で追跡ファイルの変更が保存済みか確認する。
    `git rev-parse`でbaseとheadのSHAを固定する。
-2. [引き渡し依頼](../../task-review-cycle/references/cloud-handoff.md)を埋め、ワークツリー外に保存する。
-   ファイル名は`review-handoff-<taskId>-<head短縮>.md`とする。
-3. `needs_review`と文書のパスを報告し、独立したCodexによるレビュー結果を待つ。
-4. 結果のbase/headを照合し、一致した候補への独立LGTMを完了条件に数える。
-   指摘は同じClaude workerへ渡し、修正後のheadで再レビューを依頼する。
-   SHAの不一致や判定保留は`needs_review`を維持する。
+2. [レビュー依頼](../../task-review-cycle/references/cloud-handoff.md)に必要な情報を記録する。
+   ワークツリー外に`review-handoff-<taskId>-<head短縮>.md`として保存する。
+3. 初回は会話履歴を継承しないCodex reviewerを起動し、依頼文書を渡す。
+   この環境では`spawn_agent`に`fork_turns="none"`を指定する。
+   reviewerは候補を読み取り専用で確認し、base/headと判定を返す。
+4. 統括Codexは待機ツールで結果を受け取り、base/headを照合する。
+   同じIssueでは同じreviewerを継続して使い、レビュー中は候補のcheckoutを保つ。
+5. 指摘があれば、同じClaude workerへ`--resume`で修正を依頼する。
+   修正後のheadを追加指示ツールでreviewerへ渡し、判定まで待つ。
+6. 一致するbase/headへの独立LGTMと、task-workerの検証条件を満たしてDraft PRを作成する。
+   SHAの不一致や判定保留は、統括Codexが理由を確認してレビューを依頼し直す。
+
+Issueごとにworkerのセッション名・reviewerのID・base/head・検証結果・PR URLを記録する。
+再開時はこの記録とGitの状態を照合し、既存のworkerとreviewerへ追加指示する。
+並行して進めるIssueはcheckoutを分け、それぞれの候補をレビューする。
 
 ## Cloudでの通知と定期実行
 

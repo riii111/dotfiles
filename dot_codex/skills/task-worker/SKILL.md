@@ -7,7 +7,7 @@ description: |
 
 # Task Worker
 
-Cloudで実行主体がCodexの場合は、自分で実装せず[実行環境の切り替え](references/environment.md)の「Claude workerの起動」でClaudeへ委任する。
+Cloudで実行主体がCodexの場合は、自分で実装せず[実行環境の切り替え](references/environment.md)の「Cloudでの実装」でClaudeへ委任する。
 
 参照文書の先頭をタスク管理元とし、対象タスク・合意・依存成果・関連規約を確認する。
 再開時は必要な文書を読み直す。

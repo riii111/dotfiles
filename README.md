@@ -89,7 +89,8 @@ The AI review bot it waits for is `reviewBots` there; to move off CodeRabbit, de
 
 The task skills run locally and in Cloud from the same files; `harnexus-task environment` picks the path (see `dot_codex/skills/task-worker/references/environment.md`).
 Claude implements and Codex reviews in both. In Cloud, Codex delegates the implementation to Claude with `harnexus-task claude` inside the current task.
-It cannot start another Codex task, so the independent review is a handoff: the work stops as `needs_review` until a Codex review of the fixed SHAs comes back.
+When the Cloud host provides independent agent tools, Codex starts a reviewer in a separate context and returns findings to the same Claude session.
+Hosts without these tools receive a review handoff marked `needs_review`.
 
 chezmoi does not run in Cloud. Install from a checkout instead:
 

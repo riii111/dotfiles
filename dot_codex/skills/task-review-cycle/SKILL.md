@@ -15,8 +15,7 @@ LGTMの後に、owner・レビュアー・reviewerから伝えられた指摘へ
 ## 依頼と結果の受取
 
 最初に[実行環境の切り替え](../task-worker/references/environment.md)に従って環境を判定する。
-Cloudでは下の手順の代わりに、その文書の「独立レビューの引き渡し」に従う。
-ClaudeによるレビューでCodexの独立レビューを代替せず、独立LGTMがなければ`needs_review`で止めて完了にしない。
+Cloudでは下の手順の代わりに、その文書の「Codexによる独立レビュー」に従う。
 
 `harnexus-task`が未導入ならユーザーに伝えて停止する。
 worktreeに`*`だけの`.gitignore`を置いた`.reviewctl/`を作り、[依頼JSON](references/request.md)を`.reviewctl/request.json`へ保存する。
