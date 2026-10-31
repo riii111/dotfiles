@@ -74,8 +74,16 @@ refresh() {
     if [[ -z $holder ]] || kill -0 "$holder" 2>/dev/null; then
       return 0
     fi
+    # Taking over goes through a second folder, so of two refreshes that saw the same dead holder
+    # only one removes the lock, and only while it still names that holder.
+    mkdir "$lock.reap" 2>/dev/null || return 0
+    if [[ $(cat "$lock/pid" 2>/dev/null) != "$holder" ]]; then
+      rmdir "$lock.reap"
+      return 0
+    fi
     rm -rf "$lock"
-    mkdir "$lock" 2>/dev/null || return 0
+    mkdir "$lock"
+    rmdir "$lock.reap"
   fi
   echo "${BASHPID:-$$}" > "$lock/pid"
   # shellcheck source=/dev/null
