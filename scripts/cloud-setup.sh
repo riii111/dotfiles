@@ -9,6 +9,9 @@
 # It also places the task review skills where the Codex CLI and harnexus-task read them, so a
 # worker can review with `harnexus-task review` there; HARNEXUS_TASK=1 builds harnexus-task too.
 #
+# Each session start runs it again in the background from the latest dotfiles, so skills, hooks and
+# harnexus-task follow main without waiting for the environment's cache to be rebuilt.
+#
 # PR_LANGUAGE sets the global `git config pr.language` the PR format hook requires, since a fresh
 # clone has none. Running it again replaces the hooks it installed and keeps other settings.
 # Left out: the inline Bash hook, which steers find, grep and cat to fd, rg and bat that a cloud
@@ -50,6 +53,60 @@ fi
 exit 0
 SH
 chmod 0755 "$hooks/codex-auth.sh"
+# The environment caches what this script installed for days, so each session start runs it again
+# from the latest dotfiles in the background, with the options it was given; nothing is printed.
+state="$HOME/.cache/cloud-setup"
+mkdir -p "$state"
+{
+  printf 'export HARNEXUS_TASK=%q\n' "${HARNEXUS_TASK:-}"
+  printf 'export DOTFILES_REPO=%q\n' "${DOTFILES_REPO:-https://github.com/riii111/dotfiles.git}"
+  printf 'export HARNEXUS_REPO=%q\n' "${HARNEXUS_REPO:-https://github.com/riii111/harnexus.git}"
+  printf 'export HARNEXUS_TASK_PREFIX=%q\n' "${HARNEXUS_TASK_PREFIX:-/usr/local/bin}"
+} > "$state/options"
+cat > "$hooks/cloud-refresh.sh" <<'SH'
+#!/usr/bin/env bash
+state="$HOME/.cache/cloud-setup"
+# One refresh runs at a time, however long it takes; a lock whose holder has died is taken over.
+refresh() {
+  lock="$state/refresh.lock"
+  if ! mkdir "$lock" 2>/dev/null; then
+    holder=$(cat "$lock/pid" 2>/dev/null)
+    if [[ -z $holder ]] || kill -0 "$holder" 2>/dev/null; then
+      return 0
+    fi
+    # Taking over goes through a second folder, so of two refreshes that saw the same dead holder
+    # only one removes the lock, and only while it still names that holder.
+    mkdir "$lock.reap" 2>/dev/null || return 0
+    if [[ $(cat "$lock/pid" 2>/dev/null) != "$holder" ]]; then
+      rmdir "$lock.reap"
+      return 0
+    fi
+    rm -rf "$lock"
+    # Another refresh may take the freed lock first; then this one leaves it to that one.
+    if ! mkdir "$lock" 2>/dev/null; then
+      rmdir "$lock.reap"
+      return 0
+    fi
+    rmdir "$lock.reap"
+  fi
+  echo "${BASHPID:-$$}" > "$lock/pid"
+  # shellcheck source=/dev/null
+  . "$state/options"
+  dotfiles=$(mktemp -d)
+  if git clone --quiet --depth 1 "$DOTFILES_REPO" "$dotfiles"; then
+    DOTFILES_DIR="$dotfiles" bash "$dotfiles/scripts/cloud-setup.sh"
+  fi
+  rm -rf "$dotfiles" "$lock"
+}
+if [[ ${CLOUD_REFRESH_FOREGROUND:-} == 1 ]]; then
+  refresh
+else
+  refresh > "$state/refresh.log" 2>&1 < /dev/null &
+  disown
+fi
+exit 0
+SH
+chmod 0755 "$hooks/cloud-refresh.sh"
 
 python3 - "$HOME/.claude/settings.json" "$hooks" <<'PY'
 import json
@@ -64,7 +121,12 @@ def command(name, timeout=5):
 
 
 start = [
-    {"hooks": [{"type": "command", "command": f"bash {hooks}/codex-auth.sh", "timeout": 10}]}
+    {
+        "hooks": [
+            {"type": "command", "command": f"bash {hooks}/codex-auth.sh", "timeout": 10},
+            {"type": "command", "command": f"bash {hooks}/cloud-refresh.sh", "timeout": 10},
+        ]
+    }
 ]
 ours = [
     {"matcher": "^(Bash|mcp__.*)$", "hooks": [command("github-comment-check")]},
@@ -126,14 +188,24 @@ JSON
 
 # harnexus-task needs the exact Bun harnexus pins, which the image may not have; a failed build only
 # leaves it out, so the session still starts with the hooks.
+# A harnexus-task built from the commit the repository's default branch points at now is kept, so a
+# session start rebuilds it only after harnexus changed.
+built="${HARNEXUS_TASK_PREFIX:-/usr/local/bin}/.harnexus-task.commit"
+latest=""
 if [[ ${HARNEXUS_TASK:-} == 1 ]]; then
+  latest=$(git ls-remote "${HARNEXUS_REPO:-https://github.com/riii111/harnexus.git}" HEAD 2>/dev/null | cut -f1) || latest=""
+fi
+if [[ ${HARNEXUS_TASK:-} == 1 && -n $latest && -x ${HARNEXUS_TASK_PREFIX:-/usr/local/bin}/harnexus-task && $(cat "$built" 2>/dev/null) == "$latest" ]]; then
+  :
+elif [[ ${HARNEXUS_TASK:-} == 1 ]]; then
   if ! (
     harnexus=$(mktemp -d)
     trap 'rm -rf "$harnexus"' EXIT
     # set -e does not apply inside a condition, so each step stops the rest itself.
     git clone --quiet --depth 1 "${HARNEXUS_REPO:-https://github.com/riii111/harnexus.git}" "$harnexus" || exit 1
     bun_bin=$(command -v bun || echo "$HOME/.bun/bin/bun")
-    bash "$harnexus/scripts/install-cloud-task.sh" --prefix "${HARNEXUS_TASK_PREFIX:-/usr/local/bin}" --bun "$bun_bin"
+    bash "$harnexus/scripts/install-cloud-task.sh" --prefix "${HARNEXUS_TASK_PREFIX:-/usr/local/bin}" --bun "$bun_bin" || exit 1
+    git -C "$harnexus" rev-parse HEAD > "$built"
   ); then
     echo "cloud-setup: harnexus-task was not installed; the hooks and skills were" >&2
   fi
