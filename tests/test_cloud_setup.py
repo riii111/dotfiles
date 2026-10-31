@@ -122,7 +122,7 @@ class CloudSetupTest(unittest.TestCase):
         settings = self.run_setup()
         self.run_setup()
         (start,) = settings["hooks"]["SessionStart"]
-        (hook,) = start["hooks"]
+        (hook,) = [h for h in start["hooks"] if "codex-auth" in h["command"]]
         login = '{"auth_mode":"chatgpt"}'
         env = {
             "PATH": os.environ["PATH"],
@@ -141,6 +141,62 @@ class CloudSetupTest(unittest.TestCase):
         self.assertEqual(auth.read_text(), "kept")
         settings = json.loads((self.home / ".claude/settings.json").read_text())
         self.assertEqual(len(settings["hooks"]["SessionStart"]), 1)
+
+    def test_runs_itself_again_from_the_latest_dotfiles_at_session_start(self):
+        settings = self.run_setup(DOTFILES_REPO=str(ROOT))
+        (start,) = settings["hooks"]["SessionStart"]
+        (hook,) = [h for h in start["hooks"] if "cloud-refresh" in h["command"]]
+        stale = self.home / ".codex/skills/task-worker/stale.md"
+        stale.write_text("removed upstream")
+
+        subprocess.run(
+            hook["command"],
+            shell=True,
+            env={
+                "PATH": os.environ["PATH"],
+                "HOME": str(self.home),
+                "GIT_CONFIG_NOSYSTEM": "1",
+                "CLOUD_REFRESH_FOREGROUND": "1",
+            },
+            check=True,
+            capture_output=True,
+        )
+
+        self.assertFalse(stale.exists())
+
+    def test_keeps_a_harnexus_task_built_from_the_current_commit(self):
+        harnexus = self.home / "harnexus"
+        subprocess.run(["git", "init", "-q", str(harnexus)], check=True)
+        subprocess.run(
+            ["git", "-C", str(harnexus), "-c", "user.name=T", "-c", "user.email=t@e",
+             "commit", "-q", "--allow-empty", "-m", "c"],
+            check=True,
+        )
+        head = subprocess.run(
+            ["git", "-C", str(harnexus), "rev-parse", "HEAD"],
+            check=True, capture_output=True, text=True,
+        ).stdout.strip()
+        prefix = self.home / "bin"
+        prefix.mkdir()
+        (prefix / "harnexus-task").write_text("built")
+        (prefix / "harnexus-task").chmod(0o755)
+        (prefix / ".harnexus-task.commit").write_text(head + "\n")
+
+        ran = subprocess.run(
+            ["bash", str(SCRIPT)],
+            env={
+                "PATH": os.environ["PATH"],
+                "HOME": str(self.home),
+                "GIT_CONFIG_NOSYSTEM": "1",
+                "HARNEXUS_TASK": "1",
+                "HARNEXUS_REPO": str(harnexus),
+                "HARNEXUS_TASK_PREFIX": str(prefix),
+            },
+            capture_output=True, text=True, check=True,
+        )
+
+        self.assertNotIn("was not installed", ran.stderr)
+        self.assertEqual((prefix / "harnexus-task").read_text(), "built")
 
     def test_clones_the_dotfiles_when_piped_into_bash(self):
         settings = self.run_setup(piped=True, DOTFILES_REPO=str(ROOT))
