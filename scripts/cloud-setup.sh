@@ -82,7 +82,11 @@ refresh() {
       return 0
     fi
     rm -rf "$lock"
-    mkdir "$lock"
+    # Another refresh may take the freed lock first; then this one leaves it to that one.
+    if ! mkdir "$lock" 2>/dev/null; then
+      rmdir "$lock.reap"
+      return 0
+    fi
     rmdir "$lock.reap"
   fi
   echo "${BASHPID:-$$}" > "$lock/pid"
