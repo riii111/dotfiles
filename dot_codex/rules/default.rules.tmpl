@@ -60,6 +60,7 @@ prefix_rule(pattern=["harnexus-task", "launch"], decision="allow", justification
 prefix_rule(pattern=["harnexus-task", "review"], decision="allow", justification="Send a generated review request through the harnexus call socket")
 prefix_rule(pattern=["harnexus-task", "state"], decision="allow", justification="Show recorded task launch and review state")
 prefix_rule(pattern=["harnexus-task", "name"], decision="allow", justification="Append the worker's PR number to its own chat title")
+prefix_rule(pattern=["harnexus-task", "cloud"], decision="allow", justification="Open a Claude chat that shows a Claude Code cloud session")
 prefix_rule(pattern=["harnexus-task", "watch", "--link"], decision="allow", justification="Link a PR to the calling chat for the PR watch")
 prefix_rule(pattern=["harnexus-task", "watch", "--sender"], decision="allow", justification="Register the calling chat as the PR watch's sender")
 prefix_rule(pattern=["harnexus-task", "watch", "--status"], decision="allow", justification="Show what the PR watch is doing")
