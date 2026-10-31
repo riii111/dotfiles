@@ -163,6 +163,26 @@ class CloudSetupTest(unittest.TestCase):
         )
 
         self.assertFalse(stale.exists())
+        self.assertFalse((self.home / ".cache/cloud-setup/refresh.lock").exists())
+
+    def test_skips_a_refresh_while_another_runs(self):
+        self.run_setup(DOTFILES_REPO=str(ROOT))
+        (self.home / ".cache/cloud-setup/refresh.lock").mkdir()
+        stale = self.home / ".codex/skills/task-worker/stale.md"
+        stale.write_text("kept while another refresh runs")
+
+        subprocess.run(
+            ["bash", str(self.home / ".claude/hooks/cloud-refresh.sh")],
+            env={
+                "PATH": os.environ["PATH"],
+                "HOME": str(self.home),
+                "CLOUD_REFRESH_FOREGROUND": "1",
+            },
+            check=True,
+            capture_output=True,
+        )
+
+        self.assertTrue(stale.exists())
 
     def test_keeps_a_harnexus_task_built_from_the_current_commit(self):
         harnexus = self.home / "harnexus"

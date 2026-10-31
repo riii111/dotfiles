@@ -66,16 +66,21 @@ mkdir -p "$state"
 cat > "$hooks/cloud-refresh.sh" <<'SH'
 #!/usr/bin/env bash
 state="$HOME/.cache/cloud-setup"
+# One refresh runs at a time; a lock left by a refresh that died is taken after ten minutes.
 refresh() {
-  exec 9>"$state/lock"
-  flock -n 9 || return 0
+  lock="$state/refresh.lock"
+  if ! mkdir "$lock" 2>/dev/null; then
+    [[ -n $(find "$lock" -maxdepth 0 -mmin +10 2>/dev/null) ]] || return 0
+    rm -rf "$lock"
+    mkdir "$lock" 2>/dev/null || return 0
+  fi
   # shellcheck source=/dev/null
   . "$state/options"
   dotfiles=$(mktemp -d)
   if git clone --quiet --depth 1 "$DOTFILES_REPO" "$dotfiles"; then
     DOTFILES_DIR="$dotfiles" bash "$dotfiles/scripts/cloud-setup.sh"
   fi
-  rm -rf "$dotfiles"
+  rm -rf "$dotfiles" "$lock"
 }
 if [[ ${CLOUD_REFRESH_FOREGROUND:-} == 1 ]]; then
   refresh
