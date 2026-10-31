@@ -167,7 +167,9 @@ class CloudSetupTest(unittest.TestCase):
 
     def test_skips_a_refresh_while_another_runs(self):
         self.run_setup(DOTFILES_REPO=str(ROOT))
-        (self.home / ".cache/cloud-setup/refresh.lock").mkdir()
+        lock = self.home / ".cache/cloud-setup/refresh.lock"
+        lock.mkdir()
+        (lock / "pid").write_text(str(os.getpid()))
         stale = self.home / ".codex/skills/task-worker/stale.md"
         stale.write_text("kept while another refresh runs")
 
@@ -183,6 +185,31 @@ class CloudSetupTest(unittest.TestCase):
         )
 
         self.assertTrue(stale.exists())
+
+    def test_takes_over_a_lock_whose_refresh_died(self):
+        self.run_setup(DOTFILES_REPO=str(ROOT))
+        lock = self.home / ".cache/cloud-setup/refresh.lock"
+        lock.mkdir()
+        dead = subprocess.Popen(["true"])
+        dead.wait()
+        (lock / "pid").write_text(str(dead.pid))
+        stale = self.home / ".codex/skills/task-worker/stale.md"
+        stale.write_text("removed upstream")
+
+        subprocess.run(
+            ["bash", str(self.home / ".claude/hooks/cloud-refresh.sh")],
+            env={
+                "PATH": os.environ["PATH"],
+                "HOME": str(self.home),
+                "GIT_CONFIG_NOSYSTEM": "1",
+                "CLOUD_REFRESH_FOREGROUND": "1",
+            },
+            check=True,
+            capture_output=True,
+        )
+
+        self.assertFalse(stale.exists())
+        self.assertFalse(lock.exists())
 
     def test_keeps_a_harnexus_task_built_from_the_current_commit(self):
         harnexus = self.home / "harnexus"

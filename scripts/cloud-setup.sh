@@ -66,14 +66,18 @@ mkdir -p "$state"
 cat > "$hooks/cloud-refresh.sh" <<'SH'
 #!/usr/bin/env bash
 state="$HOME/.cache/cloud-setup"
-# One refresh runs at a time; a lock left by a refresh that died is taken after ten minutes.
+# One refresh runs at a time, however long it takes; a lock whose holder has died is taken over.
 refresh() {
   lock="$state/refresh.lock"
   if ! mkdir "$lock" 2>/dev/null; then
-    [[ -n $(find "$lock" -maxdepth 0 -mmin +10 2>/dev/null) ]] || return 0
+    holder=$(cat "$lock/pid" 2>/dev/null)
+    if [[ -z $holder ]] || kill -0 "$holder" 2>/dev/null; then
+      return 0
+    fi
     rm -rf "$lock"
     mkdir "$lock" 2>/dev/null || return 0
   fi
+  echo "${BASHPID:-$$}" > "$lock/pid"
   # shellcheck source=/dev/null
   . "$state/options"
   dotfiles=$(mktemp -d)
