@@ -41,4 +41,6 @@ workerの完了・停止・指摘対応の報告は、各workerからの`send_me
 この報告で統括役のturnが始まるため、「親Taskの自動再開は扱わない」は当てはまらない。
 進捗は`get_session`の`status_bucket`と`list_events`で確かめる。
 `status`は失敗したturnでも`idle`と読めるため、判断に使わない。
+workerのtaskを完了または中止にしたら、`archive_session`でそのworkerのセッションを閉じる。
+閉じていないworkerがある間、Codex Appのチャットは統括役を処理中として表示し続ける。
 mcp__codex_link__のツールと、harnexus-taskのlaunch・state・resolveは使わない。
