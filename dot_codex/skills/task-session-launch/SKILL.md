@@ -51,7 +51,8 @@ workerは1つのtaskにつき1つの新しいCloudセッションとして、`cr
 - source_url：対象リポジトリのURL
 - source_revision：開始branch
   積む場合は積み先のPRのhead branch、どちらもなければ既定branchにする
-  GitHubにあるbranchだけを指定する。統括役のセッションの作業branchは、pushしていなければworkerから見えないので使わない
+  GitHubにあるbranchだけを指定する
+  統括役のセッションの作業branchは、pushしていなければworkerから見えないので使わない
 - title：`<displayName> [<owner>/<repo>#<タスクID>]`
   displayNameがなければ角括弧の部分だけにする
 - permission_mode：統括役のセッションが`auto`のときだけ`auto`を指定し、それ以外は省略する
