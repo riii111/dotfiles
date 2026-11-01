@@ -215,6 +215,5 @@ fi
 if [[ -n ${PR_LANGUAGE:-} ]]; then
 	git config --global pr.language "$PR_LANGUAGE"
 fi
-# The cloud signs with a key shared across users, which GitHub shows as Unverified for our name.
 git config --global commit.gpgsign false
 echo "installed the dotfiles hooks into $HOME/.claude and the task skills into $skills"
