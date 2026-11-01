@@ -33,7 +33,7 @@ fi
 
 hooks="$HOME/.claude/hooks"
 mkdir -p "$hooks"
-for name in github-comment-check git-force-check pr-format-check pr-state-check; do
+for name in github-comment-check git-force-check pr-format-check pr-state-check pr-footer-reset; do
 	install -m 0755 "$dotfiles/dot_claude/hooks/executable_$name.py" "$hooks/$name.py"
 done
 # The environment's variables are set only once Claude Code starts, after this script, so the Codex
@@ -143,6 +143,12 @@ ours = [
         ],
     },
 ]
+after = [
+    {
+        "matcher": "^mcp__github__create_pull_request$",
+        "hooks": [command("pr-footer-reset")],
+    },
+]
 
 settings = {}
 if os.path.exists(path):
@@ -150,7 +156,7 @@ if os.path.exists(path):
         settings = json.load(file)
 # Only the commands this script installs are taken out before they are added again, so another
 # hook, even one in the same folder or group, stays; a group left with no hooks goes.
-for event, added in (("PreToolUse", ours), ("SessionStart", start)):
+for event, added in (("PreToolUse", ours), ("PostToolUse", after), ("SessionStart", start)):
     groups = settings.setdefault("hooks", {}).setdefault(event, [])
     installed = {hook["command"] for group in added for hook in group["hooks"]}
     for group in groups:

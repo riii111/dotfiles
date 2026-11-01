@@ -78,13 +78,20 @@ class CloudSetupTest(unittest.TestCase):
         self.run_setup()
 
         skills = self.home / ".codex/skills"
-        for name in ("ai-code-review", "code-review", "task-review-cycle", "task-worker"):
+        for name in (
+            "ai-code-review",
+            "code-review",
+            "task-review-cycle",
+            "task-worker",
+        ):
             with self.subTest(name=name):
                 self.assertEqual(
                     (skills / name / "SKILL.md").read_text(),
                     (ROOT / "dot_codex/skills" / name / "SKILL.md").read_text(),
                 )
-        self.assertTrue((skills / "task-review-cycle/references/reply-Cloud.md").exists())
+        self.assertTrue(
+            (skills / "task-review-cycle/references/reply-Cloud.md").exists()
+        )
         for name in ("task-orchestration", "task-worker", "pr-watch-link"):
             with self.subTest(claude=name):
                 link = self.home / ".claude/skills" / name
@@ -130,7 +137,9 @@ class CloudSetupTest(unittest.TestCase):
             "CODEX_AUTH_B64": __import__("base64").b64encode(login.encode()).decode(),
         }
 
-        ran = subprocess.run(hook["command"], shell=True, env=env, capture_output=True, text=True)
+        ran = subprocess.run(
+            hook["command"], shell=True, env=env, capture_output=True, text=True
+        )
 
         auth = self.home / ".codex/auth.json"
         self.assertEqual([ran.returncode, ran.stdout, ran.stderr], [0, "", ""])
@@ -215,13 +224,27 @@ class CloudSetupTest(unittest.TestCase):
         harnexus = self.home / "harnexus"
         subprocess.run(["git", "init", "-q", str(harnexus)], check=True)
         subprocess.run(
-            ["git", "-C", str(harnexus), "-c", "user.name=T", "-c", "user.email=t@e",
-             "commit", "-q", "--allow-empty", "-m", "c"],
+            [
+                "git",
+                "-C",
+                str(harnexus),
+                "-c",
+                "user.name=T",
+                "-c",
+                "user.email=t@e",
+                "commit",
+                "-q",
+                "--allow-empty",
+                "-m",
+                "c",
+            ],
             check=True,
         )
         head = subprocess.run(
             ["git", "-C", str(harnexus), "rev-parse", "HEAD"],
-            check=True, capture_output=True, text=True,
+            check=True,
+            capture_output=True,
+            text=True,
         ).stdout.strip()
         prefix = self.home / "bin"
         prefix.mkdir()
@@ -239,7 +262,9 @@ class CloudSetupTest(unittest.TestCase):
                 "HARNEXUS_REPO": str(harnexus),
                 "HARNEXUS_TASK_PREFIX": str(prefix),
             },
-            capture_output=True, text=True, check=True,
+            capture_output=True,
+            text=True,
+            check=True,
         )
 
         self.assertNotIn("was not installed", ran.stderr)
@@ -277,7 +302,7 @@ class CloudSetupTest(unittest.TestCase):
 
     def test_sets_the_pr_language_only_when_given(self):
         self.run_setup()
-        self.assertFalse((self.home / ".gitconfig").exists())
+        self.assertNotIn("[pr]", (self.home / ".gitconfig").read_text())
 
         self.run_setup(PR_LANGUAGE="ja")
 
