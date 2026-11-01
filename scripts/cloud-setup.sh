@@ -23,22 +23,22 @@ set -euo pipefail
 script=${BASH_SOURCE[0]:-}
 dotfiles=${DOTFILES_DIR:-}
 if [[ -z $dotfiles && -n $script && -d $(dirname "$script")/../dot_claude/hooks ]]; then
-  dotfiles=$(cd "$(dirname "$script")/.." && pwd)
+	dotfiles=$(cd "$(dirname "$script")/.." && pwd)
 fi
 if [[ -z $dotfiles ]]; then
-  dotfiles=$(mktemp -d)
-  trap 'rm -rf "$dotfiles"' EXIT
-  git clone --quiet --depth 1 "${DOTFILES_REPO:-https://github.com/riii111/dotfiles.git}" "$dotfiles"
+	dotfiles=$(mktemp -d)
+	trap 'rm -rf "$dotfiles"' EXIT
+	git clone --quiet --depth 1 "${DOTFILES_REPO:-https://github.com/riii111/dotfiles.git}" "$dotfiles"
 fi
 
 hooks="$HOME/.claude/hooks"
 mkdir -p "$hooks"
 for name in github-comment-check git-force-check pr-format-check pr-state-check; do
-  install -m 0755 "$dotfiles/dot_claude/hooks/executable_$name.py" "$hooks/$name.py"
+	install -m 0755 "$dotfiles/dot_claude/hooks/executable_$name.py" "$hooks/$name.py"
 done
 # The environment's variables are set only once Claude Code starts, after this script, so the Codex
 # login the environment holds in CODEX_AUTH_B64 is written by a session start hook. It prints nothing.
-cat > "$hooks/codex-auth.sh" <<'SH'
+cat >"$hooks/codex-auth.sh" <<'SH'
 #!/usr/bin/env bash
 auth="${CODEX_HOME:-$HOME/.codex}/auth.json"
 [[ -s $auth || -z ${CODEX_AUTH_B64:-} ]] && exit 0
@@ -58,12 +58,12 @@ chmod 0755 "$hooks/codex-auth.sh"
 state="$HOME/.cache/cloud-setup"
 mkdir -p "$state"
 {
-  printf 'export HARNEXUS_TASK=%q\n' "${HARNEXUS_TASK:-}"
-  printf 'export DOTFILES_REPO=%q\n' "${DOTFILES_REPO:-https://github.com/riii111/dotfiles.git}"
-  printf 'export HARNEXUS_REPO=%q\n' "${HARNEXUS_REPO:-https://github.com/riii111/harnexus.git}"
-  printf 'export HARNEXUS_TASK_PREFIX=%q\n' "${HARNEXUS_TASK_PREFIX:-/usr/local/bin}"
-} > "$state/options"
-cat > "$hooks/cloud-refresh.sh" <<'SH'
+	printf 'export HARNEXUS_TASK=%q\n' "${HARNEXUS_TASK:-}"
+	printf 'export DOTFILES_REPO=%q\n' "${DOTFILES_REPO:-https://github.com/riii111/dotfiles.git}"
+	printf 'export HARNEXUS_REPO=%q\n' "${HARNEXUS_REPO:-https://github.com/riii111/harnexus.git}"
+	printf 'export HARNEXUS_TASK_PREFIX=%q\n' "${HARNEXUS_TASK_PREFIX:-/usr/local/bin}"
+} >"$state/options"
+cat >"$hooks/cloud-refresh.sh" <<'SH'
 #!/usr/bin/env bash
 state="$HOME/.cache/cloud-setup"
 # One refresh runs at a time, however long it takes; a lock whose holder has died is taken over.
@@ -159,6 +159,7 @@ for event, added in (("PreToolUse", ours), ("SessionStart", start)):
         ]
     groups[:] = [group for group in groups if group["hooks"]]
     groups.extend(added)
+settings["attribution"] = False
 with open(path, "w") as file:
     json.dump(settings, file, indent=2)
     file.write("\n")
@@ -171,13 +172,13 @@ mkdir -p "$skills"
 claude_skills="$HOME/.claude/skills"
 mkdir -p "$claude_skills"
 for name in ai-code-review code-review explain-change pr-watch-link task-orchestration task-review-cycle task-session-launch task-worker; do
-  rm -rf "${skills:?}/$name" "${claude_skills:?}/$name"
-  cp -R "$dotfiles/dot_codex/skills/$name" "$skills/$name"
-  ln -s "$skills/$name" "$claude_skills/$name"
+	rm -rf "${skills:?}/$name" "${claude_skills:?}/$name"
+	cp -R "$dotfiles/dot_codex/skills/$name" "$skills/$name"
+	ln -s "$skills/$name" "$claude_skills/$name"
 done
 config="${XDG_CONFIG_HOME:-$HOME/.config}/harnexus"
 mkdir -p "$config"
-cat > "$config/task.json" <<JSON
+cat >"$config/task.json" <<JSON
 {
   "templates": {
     "worker": "$skills/task-session-launch/references/worker.md",
@@ -193,25 +194,25 @@ JSON
 built="${HARNEXUS_TASK_PREFIX:-/usr/local/bin}/.harnexus-task.commit"
 latest=""
 if [[ ${HARNEXUS_TASK:-} == 1 ]]; then
-  latest=$(git ls-remote "${HARNEXUS_REPO:-https://github.com/riii111/harnexus.git}" HEAD 2>/dev/null | cut -f1) || latest=""
+	latest=$(git ls-remote "${HARNEXUS_REPO:-https://github.com/riii111/harnexus.git}" HEAD 2>/dev/null | cut -f1) || latest=""
 fi
 if [[ ${HARNEXUS_TASK:-} == 1 && -n $latest && -x ${HARNEXUS_TASK_PREFIX:-/usr/local/bin}/harnexus-task && $(cat "$built" 2>/dev/null) == "$latest" ]]; then
-  :
+	:
 elif [[ ${HARNEXUS_TASK:-} == 1 ]]; then
-  if ! (
-    harnexus=$(mktemp -d)
-    trap 'rm -rf "$harnexus"' EXIT
-    # set -e does not apply inside a condition, so each step stops the rest itself.
-    git clone --quiet --depth 1 "${HARNEXUS_REPO:-https://github.com/riii111/harnexus.git}" "$harnexus" || exit 1
-    bun_bin=$(command -v bun || echo "$HOME/.bun/bin/bun")
-    bash "$harnexus/scripts/install-cloud-task.sh" --prefix "${HARNEXUS_TASK_PREFIX:-/usr/local/bin}" --bun "$bun_bin" || exit 1
-    git -C "$harnexus" rev-parse HEAD > "$built"
-  ); then
-    echo "cloud-setup: harnexus-task was not installed; the hooks and skills were" >&2
-  fi
+	if ! (
+		harnexus=$(mktemp -d)
+		trap 'rm -rf "$harnexus"' EXIT
+		# set -e does not apply inside a condition, so each step stops the rest itself.
+		git clone --quiet --depth 1 "${HARNEXUS_REPO:-https://github.com/riii111/harnexus.git}" "$harnexus" || exit 1
+		bun_bin=$(command -v bun || echo "$HOME/.bun/bin/bun")
+		bash "$harnexus/scripts/install-cloud-task.sh" --prefix "${HARNEXUS_TASK_PREFIX:-/usr/local/bin}" --bun "$bun_bin" || exit 1
+		git -C "$harnexus" rev-parse HEAD >"$built"
+	); then
+		echo "cloud-setup: harnexus-task was not installed; the hooks and skills were" >&2
+	fi
 fi
 
 if [[ -n ${PR_LANGUAGE:-} ]]; then
-  git config --global pr.language "$PR_LANGUAGE"
+	git config --global pr.language "$PR_LANGUAGE"
 fi
 echo "installed the dotfiles hooks into $HOME/.claude and the task skills into $skills"
