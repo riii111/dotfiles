@@ -51,6 +51,7 @@ workerは1つのtaskにつき1つの新しいCloudセッションとして、`cr
 - source_url：対象リポジトリのURL
 - source_revision：開始branch
   積む場合は積み先のPRのhead branch、どちらもなければ既定branchにする
+  GitHubにあるbranchだけを指定する。統括役のセッションの作業branchは、pushしていなければworkerから見えないので使わない
 - title：`<displayName> [<owner>/<repo>#<タスクID>]`
   displayNameがなければ角括弧の部分だけにする
 - permission_mode：統括役のセッションが`auto`のときだけ`auto`を指定し、それ以外は省略する
@@ -63,4 +64,7 @@ workerは1つのtaskにつき1つの新しいCloudセッションとして、`cr
 一覧が続く場合は最後まで読む。
 あれば新しく作らず、そのsession IDを返す。
 displayNameだけが同じセッションは別のworkerとして扱う。
+起動したら`get_session`で状態を確かめる。
+`last_init_error`があるか状態が`failed`なら、workerは動いていない。
+原因を直せるなら直して起動し直し、直せなければそのエラーを報告して停止する。
 session IDと、`https://claude.ai/code/<session ID>`のURLを報告する。
