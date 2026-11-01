@@ -89,6 +89,10 @@ taskId・workerAI・checkoutは変えず、PRを作った後はprUrlを更新す
 判定が`LGTM`か`修正必要`だったheadは拒否されるため、修正をcommitしてから再実行する。
 判定保留なら、reviewerに足りなかった資料などを依頼JSONに足し、同じheadのまま再実行する。
 reviewerを`codex exec`で直接呼ばず、追加の依頼もすべて`harnexus-task review`を通す。
+ユーザーがAppのReviewチャットからreviewerへ送ったメッセージが届いたら、その本文をファイルに保存する。
+`harnexus-task review --request <JSON> --ask <そのファイル>`で同じreviewerへ渡し、出力の`answer`をそのまま返す。
+`--ask`は判定もレビュー済みのheadも変えない。
+回答で修正が必要になったら、通常どおり修正をcommitして再レビューする。
 出力が結果不明（`--recover discard`の案内）なら再実行せず、報告して停止する。
 reviewerを確かめたうえでownerが送り直すと決めた場合だけ、`--recover discard`を付けて実行する。
 
