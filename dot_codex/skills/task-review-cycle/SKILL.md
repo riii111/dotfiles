@@ -72,7 +72,7 @@ base branchが進んだことだけを理由にLGTMを保留しないでくだ�
 この節が、手順2の「同じheadは再送しない」と手順3〜4の受け取り方に代わる。
 依頼JSONは次のとおりにする。
 
-- workerAIは`Claude`、projectIdはリポジトリ名にする（list_projectsは使わない）。
+- workerAIは`Claude`にし、projectIdは付けない（list_projectsは使わない）。
 - checkoutはリポジトリの最上位の絶対パスでよい。
 - documentRefsは、checkout内のファイルの絶対パスかHTTPSのURLにする。
   起動依頼でリポジトリ内のパスとして渡された参照文書は、checkoutを前に付けて絶対パスにする。
