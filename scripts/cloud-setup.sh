@@ -166,10 +166,19 @@ for event, added in (("PreToolUse", ours), ("PostToolUse", after), ("SessionStar
     groups[:] = [group for group in groups if group["hooks"]]
     groups.extend(added)
 settings["attribution"] = False
+settings["includeCoAuthoredBy"] = False
 with open(path, "w") as file:
     json.dump(settings, file, indent=2)
     file.write("\n")
 PY
+
+# The cloud harness adds attribution lines unless user instructions say otherwise; settings alone do not stop it.
+cat "$dotfiles/.chezmoitemplates/agents-common.md" - >"$HOME/.claude/CLAUDE.md" <<'MD'
+
+## Claude Code Cloud
+
+- コミットメッセージとPR本文に、Co-Authored-By・Claude-Session・Generated with などの帰属行を付けない。
+MD
 
 # The skills the review cycle reads, replaced whole so a file removed upstream does not linger.
 skills="$HOME/.codex/skills"
