@@ -172,9 +172,7 @@ with open(path, "w") as file:
     file.write("\n")
 PY
 
-# The rules the local ~/.claude/CLAUDE.md holds, since a cloud session reads its own user memory only.
-# The cloud harness asks for attribution lines in commits and PRs unless the user's own instructions
-# say otherwise, which settings alone do not.
+# The cloud harness adds attribution lines unless user instructions say otherwise; settings alone do not stop it.
 cat "$dotfiles/.chezmoitemplates/agents-common.md" - >"$HOME/.claude/CLAUDE.md" <<'MD'
 
 ## Claude Code Cloud
