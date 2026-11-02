@@ -300,6 +300,17 @@ class CloudSetupTest(unittest.TestCase):
         self.assertEqual(groups[1]["hooks"], [own])
         self.assertEqual(sum(len(group["hooks"]) for group in groups), 2 + 1 + 2 + 3)
 
+    def test_brings_the_local_rules_and_drops_attribution(self):
+        settings = self.run_setup()
+
+        self.assertIs(settings["includeCoAuthoredBy"], False)
+        self.assertIs(settings["attribution"], False)
+        memory = (self.home / ".claude/CLAUDE.md").read_text()
+        self.assertTrue(
+            memory.startswith((ROOT / ".chezmoitemplates/agents-common.md").read_text())
+        )
+        self.assertIn("Co-Authored-By", memory)
+
     def test_sets_the_pr_language_only_when_given(self):
         self.run_setup()
         self.assertNotIn("[pr]", (self.home / ".gitconfig").read_text())
