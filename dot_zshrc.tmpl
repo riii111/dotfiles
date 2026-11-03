@@ -138,8 +138,6 @@ if [[ -o zle ]]; then
   # zsh-autosuggestions
   if [[ -f "${NIX_DOTFILES_SHARE}/zsh-autosuggestions/zsh-autosuggestions.zsh" ]]; then
     source "${NIX_DOTFILES_SHARE}/zsh-autosuggestions/zsh-autosuggestions.zsh"
-  elif [[ -f /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh ]]; then
-    source /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh
   fi
   ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=#888888'
   unset ZSH_AUTOSUGGEST_USE_ASYNC
@@ -249,8 +247,6 @@ if [[ -o zle ]]; then
   bindkey -e
   if [[ -f "${NIX_DOTFILES_SHARE}/fzf/key-bindings.zsh" ]]; then
     source "${NIX_DOTFILES_SHARE}/fzf/key-bindings.zsh"
-  elif [[ -f /opt/homebrew/opt/fzf/shell/key-bindings.zsh ]]; then
-    source /opt/homebrew/opt/fzf/shell/key-bindings.zsh
   fi
   bindkey '^F' forward-char
   bindkey -r '^T'              # disable Ctrl-T (conflicts with Rectangle)
@@ -322,30 +318,6 @@ _pgservice() {
   _describe -t commands 'pgservice command' commands
 }
 [[ -o zle ]] && compdef _pgservice pgservice
-
-# Launch Claude Code as implementation AI with tmux pane named "impl"
-# Usage: cc-impl [session-name] [claude options...]
-# Examples:
-#   cc-impl                → session "dev"
-#   cc-impl feat-auth      → session "feat-auth"
-#   cc-impl --resume       → session "dev", resume
-#   cc-impl feat-auth --resume → session "feat-auth", resume
-cc-impl() {
-  local session="dev"
-  # First non-flag arg is session name
-  if [[ $# -gt 0 && "$1" != -* ]]; then
-    session="$1"
-    shift
-  fi
-
-  if [[ -n "$TMUX" ]]; then
-    tmux select-pane -T impl
-  else
-    tmux new-session -s "$session" -n dev \; select-pane -T impl \; send-keys "cc-impl $session $*" Enter
-    return
-  fi
-  claude "$@"
-}
 
 {{ if eq .type "work" }}
 # ==========================================
@@ -452,12 +424,6 @@ open() {
   command open "$@"
 }
 
-# ==========================================
-# Runtime tools
-# ==========================================
-# deno
-[[ -f "$HOME/.deno/env" ]] && . "$HOME/.deno/env"
-
 {{ if eq .type "work" }}
 # ==========================================
 # Work: Rancher Desktop
@@ -486,7 +452,8 @@ fi
 _wezterm_git_status_bridge_update() {
   "${WEZTERM_GIT_STATUS_BRIDGE_BIN:-$HOME/.local/bin/wezterm-git-status-bridge}" update --pane-id "${HERDR_PANE_ID:-${WEZTERM_PANE:-shell}}" --cwd "$PWD" >/dev/null 2>&1 &!
 }
-autoload -Uz add-zsh-hook
-add-zsh-hook chpwd _wezterm_git_status_bridge_update
-add-zsh-hook precmd _wezterm_git_status_bridge_update
+if [[ -n "${WEZTERM_PANE:-}" ]]; then
+  add-zsh-hook chpwd _wezterm_git_status_bridge_update
+  add-zsh-hook precmd _wezterm_git_status_bridge_update
+fi
 # wezterm-git-status-bridge setup end
