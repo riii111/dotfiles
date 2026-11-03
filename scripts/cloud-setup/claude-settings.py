@@ -2,7 +2,9 @@ import json
 import os
 import sys
 
-path, hooks, guards = sys.argv[1], sys.argv[2], sys.argv[3]
+path, hooks = sys.argv[1], sys.argv[2]
+# Each guard comes as NAME=agent-hooks or NAME=python; a guard left out is not installed.
+guards = dict(arg.split("=", 1) for arg in sys.argv[3:])
 
 
 def command(name, timeout=5):
@@ -13,20 +15,29 @@ def command(name, timeout=5):
     }
 
 
-def guard(name):
-    if guards == "python":
-        return [command(name)]
-    if guards == "agent-hooks":
+def guard(name, timeout=5):
+    if guards.get(name) == "python":
+        return [command(name, timeout)]
+    if guards.get(name) == "agent-hooks":
         return [
-            {"type": "command", "command": f"{hooks}/agent-hooks {name}", "timeout": 5}
+            {
+                "type": "command",
+                "command": f"{hooks}/agent-hooks {name}",
+                "timeout": timeout,
+            }
         ]
     return []
 
 
 # The Python guards, taken out of settings written before the move unless they are kept.
 retired = {
-    f"python3 {hooks}/github-comment-check.py",
-    f"python3 {hooks}/git-force-check.py",
+    f"python3 {hooks}/{name}.py"
+    for name in (
+        "github-comment-check",
+        "git-force-check",
+        "pr-format-check",
+        "pr-state-check",
+    )
 }
 
 start = [
@@ -49,14 +60,14 @@ ours = [
     {"matcher": "^(Bash|mcp__.*)$", "hooks": guard("github-comment-check")},
     {
         "matcher": "^mcp__github__.*$",
-        "hooks": [command("pr-format-check"), command("pr-state-check")],
+        "hooks": [*guard("pr-format-check"), *guard("pr-state-check")],
     },
     {
         "matcher": "Bash",
         "hooks": [
             *guard("git-force-check"),
-            command("pr-format-check"),
-            command("pr-state-check", 15),
+            *guard("pr-format-check"),
+            *guard("pr-state-check", 15),
         ],
     },
 ]

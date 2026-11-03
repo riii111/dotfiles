@@ -59,24 +59,22 @@ class CloudSetupTest(unittest.TestCase):
             {
                 "^(Bash|mcp__.*)$": [("agent-hooks github-comment-check", 5)],
                 "^mcp__github__.*$": [
-                    ("pr-format-check.py", 5),
-                    ("pr-state-check.py", 5),
+                    ("agent-hooks pr-format-check", 5),
+                    ("agent-hooks pr-state-check", 5),
                 ],
                 "Bash": [
                     ("agent-hooks git-force-check", 5),
-                    ("pr-format-check.py", 5),
-                    ("pr-state-check.py", 15),
+                    ("agent-hooks pr-format-check", 5),
+                    ("agent-hooks pr-state-check", 15),
                 ],
             },
         )
-        for name in ("pr-format-check", "pr-state-check"):
-            with self.subTest(name=name):
-                hook = self.home / f".claude/hooks/{name}.py"
-                self.assertEqual(
-                    hook.read_text(),
-                    (ROOT / f"dot_claude/hooks/executable_{name}.py").read_text(),
-                )
-                self.assertTrue(os.access(hook, os.X_OK))
+        hook = self.home / ".claude/hooks/pr-footer-reset.py"
+        self.assertEqual(
+            hook.read_text(),
+            (ROOT / "dot_claude/hooks/executable_pr-footer-reset.py").read_text(),
+        )
+        self.assertTrue(os.access(hook, os.X_OK))
 
     def test_installs_the_review_skills_and_the_task_templates(self):
         self.run_setup()
@@ -346,7 +344,7 @@ class CloudSetupTest(unittest.TestCase):
         )
 
         self.assertEqual(len(settings["hooks"]["PreToolUse"]), 3)
-        self.assertTrue((self.home / ".claude/hooks/pr-state-check.py").exists())
+        self.assertTrue((self.home / ".claude/hooks/pr-footer-reset.py").exists())
 
     def test_running_again_keeps_other_hooks_and_adds_nothing_twice(self):
         own = {
@@ -372,10 +370,17 @@ class CloudSetupTest(unittest.TestCase):
         self.assertEqual(groups[1]["hooks"], [own])
         self.assertEqual(sum(len(group["hooks"]) for group in groups), 2 + 1 + 2 + 3)
 
+    GUARDS = (
+        "github-comment-check",
+        "git-force-check",
+        "pr-format-check",
+        "pr-state-check",
+    )
+
     def install_python_guards(self):
         hooks = self.home / ".claude/hooks"
         hooks.mkdir(parents=True, exist_ok=True)
-        for name in ("github-comment-check", "git-force-check"):
+        for name in self.GUARDS:
             (hooks / f"{name}.py").write_text("")
         (self.home / ".claude/settings.json").write_text(
             json.dumps(
@@ -389,10 +394,7 @@ class CloudSetupTest(unittest.TestCase):
                                         "type": "command",
                                         "command": f"python3 {hooks}/{name}.py",
                                     }
-                                    for name in (
-                                        "github-comment-check",
-                                        "git-force-check",
-                                    )
+                                    for name in self.GUARDS
                                 ],
                             }
                         ]
@@ -404,13 +406,11 @@ class CloudSetupTest(unittest.TestCase):
 
     def guard_commands(self, settings):
         return sorted(
-            command
-            for command in (
+            {
                 hook["command"].rsplit("/", 1)[-1]
                 for group in settings["hooks"]["PreToolUse"]
                 for hook in group["hooks"]
-            )
-            if "comment-check" in command or "force-check" in command
+            }
         )
 
     def failing_installer(self):
@@ -425,10 +425,10 @@ class CloudSetupTest(unittest.TestCase):
 
         self.assertEqual(
             self.guard_commands(settings),
-            ["agent-hooks git-force-check", "agent-hooks github-comment-check"],
+            sorted(f"agent-hooks {name}" for name in self.GUARDS),
         )
-        self.assertFalse((hooks / "github-comment-check.py").exists())
-        self.assertFalse((hooks / "git-force-check.py").exists())
+        for name in self.GUARDS:
+            self.assertFalse((hooks / f"{name}.py").exists(), name)
 
     def test_a_failed_build_keeps_the_python_guards(self):
         hooks = self.install_python_guards()
@@ -437,10 +437,10 @@ class CloudSetupTest(unittest.TestCase):
 
         self.assertEqual(
             self.guard_commands(settings),
-            ["git-force-check.py", "github-comment-check.py"],
+            sorted(f"{name}.py" for name in self.GUARDS),
         )
-        self.assertTrue((hooks / "github-comment-check.py").exists())
-        self.assertTrue((hooks / "git-force-check.py").exists())
+        for name in self.GUARDS:
+            self.assertTrue((hooks / f"{name}.py").exists(), name)
 
     def test_a_failed_build_keeps_a_previously_built_agent_hooks(self):
         self.run_setup()
@@ -449,8 +449,30 @@ class CloudSetupTest(unittest.TestCase):
 
         self.assertEqual(
             self.guard_commands(settings),
-            ["agent-hooks git-force-check", "agent-hooks github-comment-check"],
+            sorted(f"agent-hooks {name}" for name in self.GUARDS),
         )
+
+    def test_a_guard_the_previous_agent_hooks_lacks_keeps_its_python_copy(self):
+        hooks = self.install_python_guards()
+        # An agent-hooks built before the PR checks moved fails on their names.
+        (hooks / "agent-hooks").write_text(
+            '#!/bin/sh\ncase "$1" in pr-*) exit 1 ;; esac\n'
+        )
+        (hooks / "agent-hooks").chmod(0o755)
+
+        settings = self.run_setup(AGENT_HOOKS_INSTALLER=self.failing_installer())
+
+        self.assertEqual(
+            self.guard_commands(settings),
+            [
+                "agent-hooks git-force-check",
+                "agent-hooks github-comment-check",
+                "pr-format-check.py",
+                "pr-state-check.py",
+            ],
+        )
+        self.assertFalse((hooks / "git-force-check.py").exists())
+        self.assertTrue((hooks / "pr-state-check.py").exists())
 
     def test_a_failed_first_build_installs_the_rest_and_fails(self):
         ran = subprocess.run(
@@ -469,8 +491,8 @@ class CloudSetupTest(unittest.TestCase):
         self.assertNotEqual(ran.returncode, 0)
         self.assertIn("guards are not installed", ran.stderr)
         settings = json.loads((self.home / ".claude/settings.json").read_text())
-        self.assertEqual(self.guard_commands(settings), [])
-        self.assertTrue((self.home / ".claude/hooks/pr-state-check.py").exists())
+        self.assertEqual(settings["hooks"]["PreToolUse"], [])
+        self.assertTrue((self.home / ".claude/hooks/pr-footer-reset.py").exists())
         self.assertTrue((self.home / ".codex/skills/task-worker/SKILL.md").exists())
 
     def test_brings_the_local_rules_and_drops_attribution(self):

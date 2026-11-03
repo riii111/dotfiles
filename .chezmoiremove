@@ -63,3 +63,7 @@ bin/gh
 bin/codex-read-lines
 bin/codex-force-with-lease
 bin/lib/dot/git_trust.py
+.claude/hooks/pr-format-check.py
+.claude/hooks/pr-state-check.py
+.codex/hooks/pr-format-check.py
+.codex/hooks/pr-state-check.py

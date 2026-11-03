@@ -74,8 +74,23 @@ class AgentHooksRegistrationTest(unittest.TestCase):
                 for group in mcp
                 for hook in group["hooks"]
             ],
-            ["pr-format-check.py", "pr-state-check.py"],
+            ["agent-hooks pr-format-check", "agent-hooks pr-state-check"],
         )
+
+    def test_codex_denies_the_merges_claude_code_asks_about(self):
+        for path, expected in (
+            ("dot_claude/settings.json.tmpl", "agent-hooks pr-state-check"),
+            ("dot_codex/hooks.json.tmpl", "agent-hooks pr-state-check --deny-merge"),
+        ):
+            with self.subTest(path=path):
+                groups = json.loads(self.render(path))["hooks"]["PreToolUse"]
+                commands = {
+                    hook["command"].rsplit("/", 1)[-1]
+                    for group in groups
+                    for hook in group["hooks"]
+                    if "pr-state-check" in hook.get("command", "")
+                }
+                self.assertEqual(commands, {expected})
 
 
 if __name__ == "__main__":

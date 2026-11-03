@@ -2,6 +2,8 @@ import {
   "moonbitlang/core/env",
   "riii111/agent-hooks/git_force",
   "riii111/agent-hooks/github_comment",
+  "riii111/agent-hooks/pr_format",
+  "riii111/agent-hooks/pr_state",
   "moonbitlang/async",
   "moonbitlang/async/stdio",
 }
