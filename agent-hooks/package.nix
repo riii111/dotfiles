@@ -32,7 +32,11 @@ stdenv.mkDerivation {
       ./git_force
       ./git_trust
       ./github_comment
+      ./github_tool
+      ./pr_format
+      ./pr_state
       ./shell
+      ./text
     ];
   };
 

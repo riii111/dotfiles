@@ -328,12 +328,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 {{ .chezmoi.homeDir }}/.claude/hooks/pr-format-check.py",
+            "command": "{{ .chezmoi.homeDir }}/.nix-profile/bin/agent-hooks pr-format-check",
             "timeout": 5
           },
           {
             "type": "command",
-            "command": "python3 {{ .chezmoi.homeDir }}/.claude/hooks/pr-state-check.py",
+            "command": "{{ .chezmoi.homeDir }}/.nix-profile/bin/agent-hooks pr-state-check",
             "timeout": 5
           }
         ]
@@ -352,12 +352,12 @@
           },
           {
             "type": "command",
-            "command": "python3 {{ .chezmoi.homeDir }}/.claude/hooks/pr-format-check.py",
+            "command": "{{ .chezmoi.homeDir }}/.nix-profile/bin/agent-hooks pr-format-check",
             "timeout": 5
           },
           {
             "type": "command",
-            "command": "python3 {{ .chezmoi.homeDir }}/.claude/hooks/pr-state-check.py",
+            "command": "{{ .chezmoi.homeDir }}/.nix-profile/bin/agent-hooks pr-state-check",
             "timeout": 15
           },
           {

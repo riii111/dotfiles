@@ -29,13 +29,13 @@
           },
           {
             "type": "command",
-            "command": "python3 ~/.codex/hooks/pr-format-check.py",
+            "command": "~/.nix-profile/bin/agent-hooks pr-format-check",
             "timeout": 5,
             "statusMessage": "Checking PR format"
           },
           {
             "type": "command",
-            "command": "python3 ~/.codex/hooks/pr-state-check.py",
+            "command": "~/.nix-profile/bin/agent-hooks pr-state-check --deny-merge",
             "timeout": 15,
             "statusMessage": "Checking PR state"
           }

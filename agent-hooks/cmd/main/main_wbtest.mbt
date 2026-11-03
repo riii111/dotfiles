@@ -1,5 +1,5 @@
 ///|
-test "git-force-check asks, or denies with --deny-force-push" {
+async test "git-force-check asks, or denies with --deny-force-push" {
   let event = bash("git push -f")
   assert_eq(decision(hook_output("git-force-check", [], event)), Some("ask"))
   assert_eq(
@@ -9,7 +9,7 @@ test "git-force-check asks, or denies with --deny-force-push" {
 }
 
 ///|
-test "github-comment-check prints a PreToolUse denial" {
+async test "github-comment-check prints a PreToolUse denial" {
   let output = hook_output(
     "github-comment-check",
     [],
@@ -26,7 +26,7 @@ test "github-comment-check prints a PreToolUse denial" {
 }
 
 ///|
-test "allowed calls and events without a command print nothing" {
+async test "allowed calls and events without a command print nothing" {
   assert_true(hook_output("git-force-check", [], bash("git status")) is None)
   assert_true(
     hook_output("github-comment-check", [], bash("git status")) is None,
@@ -37,7 +37,7 @@ test "allowed calls and events without a command print nothing" {
 }
 
 ///|
-test "an unknown hook fails" {
+async test "an unknown hook fails" {
   assert_true(
     try hook_output("git-force", [], bash("git push -f")) catch {
       _ => true
