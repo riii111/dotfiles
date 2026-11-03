@@ -404,7 +404,7 @@ export PATH="$HOME/.asdf/shims:$HOME/.asdf/bin:$PATH"
 {{ end }}
 
 # ==========================================
-# open(1) routing: reuse WezTerm tab for nvim/csvlens/vd-handled files
+# open(1) routing: reuse WezTerm tab for nvim/csvlens-handled files
 # ==========================================
 # Inside a WezTerm pane, `open foo.md` runs nvim in the current tab instead
 # of going through OpenInNvim.app (which spawns a new window). Finder clicks
@@ -417,8 +417,6 @@ open() {
         command nvim "$1"; return ;;
       *.csv|*.tsv)
         command csvlens -d auto "$1"; return ;;
-      *.parquet|*.sqlite|*.sqlite3|*.db|*.ndjson|*.jsonl)
-        command vd "$1"; return ;;
     esac
   fi
   command open "$@"

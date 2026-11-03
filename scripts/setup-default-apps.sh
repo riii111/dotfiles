@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Route Finder double-clicks to OpenInNvim.app / OpenInVisiData.app.
+# Route Finder double-clicks to OpenInNvim.app / OpenInCsvLens.app.
 # Requires scripts/build-open-apps.sh to have run first.
 #
 # Registers known UTIs and the document types declared by OpenIn*.app.
@@ -14,7 +14,7 @@ command -v duti >/dev/null || {
 }
 
 readonly APPS_DIR="$HOME/Library/Application Support/open-routing"
-for app in OpenInNvim OpenInCsvLens OpenInVisiData; do
+for app in OpenInNvim OpenInCsvLens; do
 	[[ -d "$APPS_DIR/$app.app" ]] || {
 		echo "ERROR: $app.app missing under $APPS_DIR. Run scripts/build-open-apps.sh first."
 		exit 1
@@ -23,7 +23,6 @@ done
 
 readonly NVIM_ID="com.riii111.openinnvim"
 readonly CSV_ID="com.riii111.openincsvlens"
-readonly VD_ID="com.riii111.openinvisidata"
 
 assign_uti() {
 	local bundle="$1" uti="$2"
@@ -61,15 +60,6 @@ for uti in public.comma-separated-values-text public.tab-separated-values-text; 
 	assign_uti "$CSV_ID" "$uti"
 done
 duti -s "$CSV_ID" "$CSV_ID.document" all
-
-echo "Assigning parquet / sqlite / ndjson / jsonl -> OpenInVisiData (csvlens scope)"
-# VisiData handles what csvlens can't: columnar, multi-table SQLite, row-per-line JSON.
-duti -s "$VD_ID" "$VD_ID.document" all
-assign_uti "$VD_ID" public.ndjson
-
-# xlsx is opt-in: overriding it hijacks Numbers / Excel for work spreadsheets.
-# Uncomment to route .xlsx to VisiData as well.
-# assign_uti "$VD_ID" org.openxmlformats.spreadsheetml.sheet
 
 # .pdf is intentionally not touched. Preview.app remains the default.
 
