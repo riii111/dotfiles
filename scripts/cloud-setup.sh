@@ -36,11 +36,20 @@ mkdir -p "$hooks"
 for name in pr-format-check pr-state-check pr-footer-reset; do
 	install -m 0755 "$dotfiles/dot_claude/hooks/executable_$name.py" "$hooks/$name.py"
 done
-# These two hooks moved into agent-hooks; an environment cached before the move still has them.
-rm -f "$hooks/github-comment-check.py" "$hooks/git-force-check.py"
-# A failed build only leaves the two guards out, so the session still starts with the other hooks.
-if ! bash "$dotfiles/scripts/install-agent-hooks.sh" "$hooks"; then
-	echo "cloud-setup: the agent-hooks build failed; the GitHub comment and force-push guards are off" >&2
+# The GitHub comment and force-push guards moved into agent-hooks. An environment cached before the move
+# keeps their Python copies until a build succeeds, so a failed build never leaves the guards out.
+# AGENT_HOOKS_INSTALLER replaces the build in tests, which run where the Linux toolchain does not.
+guards=agent-hooks
+if bash "${AGENT_HOOKS_INSTALLER:-$dotfiles/scripts/install-agent-hooks.sh}" "$hooks"; then
+	rm -f "$hooks/github-comment-check.py" "$hooks/git-force-check.py"
+elif [[ -x $hooks/agent-hooks ]]; then
+	echo "cloud-setup: the agent-hooks build failed; the previously built agent-hooks stays" >&2
+	rm -f "$hooks/github-comment-check.py" "$hooks/git-force-check.py"
+elif [[ -f $hooks/github-comment-check.py && -f $hooks/git-force-check.py ]]; then
+	echo "cloud-setup: the agent-hooks build failed; the previous Python guards stay" >&2
+	guards=python
+else
+	guards=none
 fi
 # The environment's variables are set only once Claude Code starts, after this script, so the Codex
 # login the environment holds in CODEX_AUTH_B64 is written by a session start hook. It prints nothing.
@@ -114,23 +123,27 @@ exit 0
 SH
 chmod 0755 "$hooks/cloud-refresh.sh"
 
-python3 - "$HOME/.claude/settings.json" "$hooks" <<'PY'
+python3 - "$HOME/.claude/settings.json" "$hooks" "$guards" <<'PY'
 import json
 import os
 import sys
 
-path, hooks = sys.argv[1], sys.argv[2]
+path, hooks, guards = sys.argv[1], sys.argv[2], sys.argv[3]
 
 
 def command(name, timeout=5):
     return {"type": "command", "command": f"python3 {hooks}/{name}.py", "timeout": timeout}
 
 
-def agent_hook(name):
-    return {"type": "command", "command": f"{hooks}/agent-hooks {name}", "timeout": 5}
+def guard(name):
+    if guards == "python":
+        return [command(name)]
+    if guards == "agent-hooks":
+        return [{"type": "command", "command": f"{hooks}/agent-hooks {name}", "timeout": 5}]
+    return []
 
 
-# Commands of hooks that moved into agent-hooks, taken out of settings written before the move.
+# The Python guards, taken out of settings written before the move unless they are kept.
 retired = {f"python3 {hooks}/github-comment-check.py", f"python3 {hooks}/git-force-check.py"}
 
 start = [
@@ -142,7 +155,7 @@ start = [
     }
 ]
 ours = [
-    {"matcher": "^(Bash|mcp__.*)$", "hooks": [agent_hook("github-comment-check")]},
+    {"matcher": "^(Bash|mcp__.*)$", "hooks": guard("github-comment-check")},
     {
         "matcher": "^mcp__github__.*$",
         "hooks": [command("pr-format-check"), command("pr-state-check")],
@@ -150,12 +163,13 @@ ours = [
     {
         "matcher": "Bash",
         "hooks": [
-            agent_hook("git-force-check"),
+            *guard("git-force-check"),
             command("pr-format-check"),
             command("pr-state-check", 15),
         ],
     },
 ]
+ours = [group for group in ours if group["hooks"]]
 after = [
     {
         "matcher": "^mcp__github__create_pull_request$",
@@ -244,4 +258,9 @@ if [[ -n ${PR_LANGUAGE:-} ]]; then
 	git config --global pr.language "$PR_LANGUAGE"
 fi
 git config --global commit.gpgsign false
+# The rest is installed first, so the session can still start; the exit status reports the missing guards.
+if [[ $guards == none ]]; then
+	echo "cloud-setup: the agent-hooks build failed, so the GitHub comment and force-push guards are not installed" >&2
+	exit 1
+fi
 echo "installed the dotfiles hooks into $HOME/.claude and the task skills into $skills"
