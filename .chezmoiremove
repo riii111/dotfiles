@@ -60,3 +60,6 @@ bin/gh
 .claude/hooks/git-force-check.py
 .claude/hooks/github-comment-check.py
 .codex/hooks/github-comment-check.py
+bin/codex-read-lines
+bin/codex-force-with-lease
+bin/lib/dot/git_trust.py
