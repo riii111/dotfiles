@@ -76,6 +76,7 @@ stdenv.mkDerivation {
     install -Dm755 _build/native/release/build/cmd/codex_read_lines/codex_read_lines.exe "$out/bin/codex-read-lines"
     install -Dm755 _build/native/release/build/cmd/codex_force_with_lease/codex_force_with_lease.exe "$out/bin/codex-force-with-lease"
     install -Dm755 _build/native/release/build/cmd/claude_statusline/claude_statusline.exe "$out/bin/claude-statusline"
+    install -Dm755 _build/native/release/build/cmd/git_tree/git_tree.exe "$out/bin/git-tree"
     runHook postInstall
   '';
 
