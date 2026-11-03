@@ -68,8 +68,8 @@ prefix_rule(pattern=["harnexus-task", "watch", "--status"], decision="allow", ju
 # 名前で許可したwrapperは、絶対パス指定時にインストール先だけを照合する。
 host_executable(name="gh-loupe", paths=["{{ .chezmoi.homeDir }}/.cargo/bin/gh-loupe"])
 host_executable(name="pe", paths=["{{ .chezmoi.homeDir }}/bin/pe"])
-host_executable(name="codex-read-lines", paths=["{{ .chezmoi.homeDir }}/bin/codex-read-lines"])
-host_executable(name="codex-force-with-lease", paths=["{{ .chezmoi.homeDir }}/bin/codex-force-with-lease"])
+host_executable(name="codex-read-lines", paths=["{{ .chezmoi.homeDir }}/.nix-profile/bin/codex-read-lines"])
+host_executable(name="codex-force-with-lease", paths=["{{ .chezmoi.homeDir }}/.nix-profile/bin/codex-force-with-lease"])
 host_executable(name="harnexus-task", paths=["{{ .chezmoi.homeDir }}/.local/bin/harnexus-task"])
 
 # --- Local search and text processing ---

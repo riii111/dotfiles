@@ -2,6 +2,7 @@
   lib,
   stdenv,
   fetchurl,
+  git,
   moonbit,
 }:
 
@@ -29,6 +30,7 @@ stdenv.mkDerivation {
       ./moon.mod
       ./cmd
       ./git_force
+      ./git_trust
       ./github_comment
       ./shell
     ];
@@ -54,6 +56,8 @@ stdenv.mkDerivation {
   '';
 
   doCheck = true;
+  # The trust checks are tested against real Git checkouts.
+  nativeCheckInputs = [ git ];
   checkPhase = ''
     runHook preCheck
     moon test --target native
@@ -63,6 +67,8 @@ stdenv.mkDerivation {
   installPhase = ''
     runHook preInstall
     install -Dm755 _build/native/release/build/cmd/main/main.exe "$out/bin/agent-hooks"
+    install -Dm755 _build/native/release/build/cmd/codex_read_lines/codex_read_lines.exe "$out/bin/codex-read-lines"
+    install -Dm755 _build/native/release/build/cmd/codex_force_with_lease/codex_force_with_lease.exe "$out/bin/codex-force-with-lease"
     runHook postInstall
   '';
 
