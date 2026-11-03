@@ -32,13 +32,18 @@ async fn run(args : Array[String]) -> Int32 {
     @stdio.stderr.write("file is outside an approved root\n")
     return 1
   }
-  let lines = read_lines(file, start, end) catch {
-    error => {
-      @stdio.stderr.write("cannot read file: \{error}\n")
-      return 1
-    }
+  let output = StringBuilder()
+  let failure = try {
+    read_lines(file, start, end, output)
+    None
+  } catch {
+    error => Some(error)
   }
-  @stdio.stdout.write(lines)
+  @stdio.stdout.write(output.to_string())
+  if failure is Some(error) {
+    @stdio.stderr.write("cannot read file: \{error}\n")
+    return 1
+  }
   0
 }
 
@@ -180,37 +185,83 @@ fn is_within(path : String, root : String) -> Bool {
 }
 
 ///|
-async fn read_lines(path : String, start : Int32, end : Int32) -> String {
-  line_range(@utf8.decode(@fs.read_file(path).binary()), start, end)
+/// Appends lines `start..=end` to `output`, reading only as far as the last requested line.
+async fn read_lines(
+  path : String,
+  start : Int32,
+  end : Int32,
+  output : StringBuilder,
+) -> Unit {
+  let file = @fs.open(path, mode=ReadOnly)
+  defer file.close()
+  let lines = LineRange::new(start, end, output)
+  while file.read_some(max_len=65536) is Some(chunk) {
+    if !lines.feed(chunk) {
+      return
+    }
+  }
+  lines.finish()
 }
 
 ///|
-/// Returns lines `start..=end`.
+/// Collects a line range from bytes fed in chunks, decoding each line as UTF-8.
 /// Like Python's text mode, `\r\n` and a lone `\r` also end a line, and every line ending becomes `\n`.
-fn line_range(text : String, start : Int32, end : Int32) -> String {
-  let output = StringBuilder()
-  let mut number = 1
-  let mut line_start = 0
-  let mut index = 0
-  while index < text.length() && number <= end {
-    let unit = text.code_unit_at(index)
-    if unit != '\n' && unit != '\r' {
-      index += 1
-      continue
+/// Splitting bytes is safe because `\r` and `\n` never occur inside a multibyte UTF-8 sequence.
+priv struct LineRange {
+  start : Int32
+  end : Int32
+  output : StringBuilder
+  line : @buffer.Buffer
+  mut number : Int32
+  mut after_cr : Bool
+}
+
+///|
+fn LineRange::new(
+  start : Int32,
+  end : Int32,
+  output : StringBuilder,
+) -> LineRange {
+  { start, end, output, line: @buffer.Buffer(), number: 0, after_cr: false, }
+}
+
+///|
+/// Returns `false` once the last requested line is written, so the caller can stop reading.
+fn LineRange::feed(self : LineRange, chunk : BytesView) -> Bool raise {
+  for byte in chunk {
+    let after_cr = self.after_cr
+    self.after_cr = false
+    match byte {
+      b'\n' if after_cr => ()
+      b'\n' | b'\r' => {
+        self.after_cr = byte == b'\r'
+        if !self.end_line(newline=true) {
+          return false
+        }
+      }
+      _ => self.line.write_byte(byte)
     }
-    if number >= start {
-      output.write_view(text.view(start_offset=line_start, end_offset=index))
-      output.write_char('\n')
+  }
+  true
+}
+
+///|
+fn LineRange::finish(self : LineRange) -> Unit raise {
+  if !self.line.is_empty() {
+    ignore(self.end_line(newline=false))
+  }
+}
+
+///|
+fn LineRange::end_line(self : LineRange, newline~ : Bool) -> Bool raise {
+  let text = @utf8.decode(self.line.to_bytes())
+  self.line.reset()
+  self.number += 1
+  if self.number >= self.start {
+    self.output.write_string(text)
+    if newline {
+      self.output.write_char('\n')
     }
-    let crlf = unit == '\r' &&
-      index + 1 < text.length() &&
-      text.code_unit_at(index + 1) == '\n'
-    index += if crlf { 2 } else { 1 }
-    line_start = index
-    number += 1
   }
-  if number >= start && number <= end && line_start < text.length() {
-    output.write_view(text.view(start_offset=line_start))
-  }
-  output.to_string()
+  self.number < self.end
 }

@@ -1,6 +1,7 @@
 import {
   "moonbitlang/core/env",
   "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/buffer",
   "riii111/agent-hooks/git_trust",
   "moonbitlang/async",
   "moonbitlang/async/fs",

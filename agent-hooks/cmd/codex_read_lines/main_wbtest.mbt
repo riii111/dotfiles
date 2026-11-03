@@ -1,12 +1,53 @@
 ///|
+/// Feeds `text` in chunks of `size` bytes and returns lines `start..=end`.
+fn line_range(
+  text : Bytes,
+  start : Int32,
+  end : Int32,
+  size~ : Int32 = 3,
+) -> String raise {
+  let output = StringBuilder()
+  let lines = LineRange::new(start, end, output)
+  let mut offset = 0
+  while offset < text.length() {
+    let next = if offset + size < text.length() {
+      offset + size
+    } else {
+      text.length()
+    }
+    if !lines.feed(text[offset:next]) {
+      return output.to_string()
+    }
+    offset = next
+  }
+  lines.finish()
+  output.to_string()
+}
+
+///|
 test "line endings follow Python's text mode" {
-  let text = "a\r\nb\rc\n\r\nd"
-  assert_eq(line_range(text, 1, 10), "a\nb\nc\n\nd")
-  assert_eq(line_range(text, 2, 3), "b\nc\n")
-  assert_eq(line_range(text, 5, 5), "d")
-  assert_eq(line_range(text, 6, 9), "")
-  assert_eq(line_range("x\r", 1, 2), "x\n")
-  assert_eq(line_range("", 1, 1), "")
+  let text = b"a\r\nb\rc\n\r\nd"
+  for size in [1, 2, 3, 64] {
+    assert_eq(line_range(text, 1, 10, size~), "a\nb\nc\n\nd")
+    assert_eq(line_range(text, 2, 3, size~), "b\nc\n")
+    assert_eq(line_range(text, 5, 5, size~), "d")
+    assert_eq(line_range(text, 6, 9, size~), "")
+  }
+  assert_eq(line_range(b"x\r", 1, 2), "x\n")
+  assert_eq(line_range(b"\xe6\x97\xa5\xe6\x9c\xac\n", 1, 1, size=1), "日本\n")
+  assert_eq(line_range(b"", 1, 1), "")
+}
+
+///|
+test "reading stops at the last requested line" {
+  assert_eq(line_range(b"ok\n\xff\n", 1, 1), "ok\n")
+  let failed = try {
+    ignore(line_range(b"ok\n\xff\n", 1, 2))
+    false
+  } catch {
+    _ => true
+  }
+  assert_true(failed)
 }
 
 ///|
