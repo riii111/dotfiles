@@ -444,7 +444,6 @@
                 bashInteractive
                 chezmoi
                 git
-                go_1_27
                 jq
                 cli.dailyPython
                 ruff

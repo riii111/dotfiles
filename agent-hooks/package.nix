@@ -36,6 +36,7 @@ stdenv.mkDerivation {
       ./pr_format
       ./pr_state
       ./shell
+      ./statusline
       ./text
     ];
   };
@@ -73,6 +74,7 @@ stdenv.mkDerivation {
     install -Dm755 _build/native/release/build/cmd/main/main.exe "$out/bin/agent-hooks"
     install -Dm755 _build/native/release/build/cmd/codex_read_lines/codex_read_lines.exe "$out/bin/codex-read-lines"
     install -Dm755 _build/native/release/build/cmd/codex_force_with_lease/codex_force_with_lease.exe "$out/bin/codex-force-with-lease"
+    install -Dm755 _build/native/release/build/cmd/claude_statusline/claude_statusline.exe "$out/bin/claude-statusline"
     runHook postInstall
   '';
 

@@ -64,4 +64,3 @@ jobs:
       - name: Run repo verification
         run: |
           nix develop .#ci -c ./bin/executable_dotctl test
-          nix develop .#ci -c go -C dot_claude/statusline test ./...
