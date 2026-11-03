@@ -35,21 +35,6 @@
         });
         go = final.go_1_27;
         buildGoModule = final.buildGo127Module;
-        rustup = prev.rustup.overrideAttrs (
-          attrs: _: {
-            version = "1.29.2";
-            src = final.fetchFromGitHub {
-              owner = "rust-lang";
-              repo = "rustup";
-              tag = attrs.version;
-              hash = "sha256-vtfZNMkUAmbdXv0sv7wdm62AjCkYJY188jLx8RrmO2M=";
-            };
-            cargoDeps = final.rustPlatform.fetchCargoVendor {
-              inherit (attrs) pname version src;
-              hash = "sha256-UL6nS3SbxKXFWftJLeFY622VQEyAimhNz+YJgZsLHJc=";
-            };
-          }
-        );
         # Keep the patched verifier and managed-Python catalog in the official release.
         uv = final.stdenvNoCC.mkDerivation (attrs: {
           pname = "uv";
@@ -79,14 +64,6 @@
             runHook postInstallCheck
           '';
           meta = prev.uv.meta // { platforms = [ "aarch64-darwin" ]; };
-        });
-        # Nix's PEM consumers do not receive Firefox's OneCRL updates.
-        cacert = prev.cacert.overrideAttrs (_: {
-          version = "3.131.1";
-          src = final.fetchurl {
-            url = "https://raw.githubusercontent.com/nss-dev/nss/NSS_3_131_1_RTM/lib/ckfw/builtins/certdata.txt";
-            hash = "sha256-PsK00kDcEsdH6vRQBh24SvdXxIO72jAvninOtdcL5RA=";
-          };
         });
       };
       # The uninstaller evaluates a separate system; preserve the security overlay there too.
