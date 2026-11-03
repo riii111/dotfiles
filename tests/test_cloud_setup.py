@@ -4,6 +4,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -256,6 +257,11 @@ class CloudSetupTest(unittest.TestCase):
         self.refresh()
         self.assertTrue(stale.exists())
 
+        # Taken a moment ago and its pid not written yet.
+        (legacy / "pid").unlink()
+        self.refresh()
+        self.assertTrue(stale.exists())
+
         dead = subprocess.Popen(["true"])
         dead.wait()
         (legacy / "pid").write_text(str(dead.pid))
@@ -270,6 +276,7 @@ class CloudSetupTest(unittest.TestCase):
         # lock folder that never got a pid.
         (state / "refresh.flock").touch()
         (state / "refresh.lock").mkdir()
+        os.utime(state / "refresh.lock", (time.time() - 120,) * 2)
         stale = self.home / ".codex/skills/task-worker/stale.md"
         stale.write_text("removed upstream")
 

@@ -9,11 +9,15 @@ refresh() {
 	exec 9>"$state/refresh.flock" || return 0
 	python3 -c 'import fcntl; fcntl.flock(9, fcntl.LOCK_EX | fcntl.LOCK_NB)' 2>/dev/null || return 0
 	# An earlier version's refresh may still be writing under its directory lock after installing
-	# this hook. It wrote its pid before that, so a lock without a live pid is only left over.
+	# this hook. It writes its pid right after taking the lock, so the lock is left over only once
+	# that pid has died, or when none was written within a minute.
 	legacy="$state/refresh.lock"
 	if [[ -d $legacy ]]; then
 		holder=$(cat "$legacy/pid" 2>/dev/null)
 		if [[ -n $holder ]] && kill -0 "$holder" 2>/dev/null; then
+			return 0
+		fi
+		if [[ -z $holder && -z $(find "$legacy" -maxdepth 0 -mmin +1) ]]; then
 			return 0
 		fi
 		rm -rf "$legacy" "$legacy.reap"
