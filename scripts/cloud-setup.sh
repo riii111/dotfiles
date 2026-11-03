@@ -1,11 +1,24 @@
 #!/usr/bin/env bash
 # Installs the Claude Code hooks and task skills of these dotfiles into a Claude Code cloud
-# environment. Download it before running it, since a failed download piped into bash exits 0:
-#   curl -fsSLo /tmp/cloud-setup.sh https://raw.githubusercontent.com/riii111/dotfiles/main/scripts/cloud-setup.sh && PR_LANGUAGE=ja bash /tmp/cloud-setup.sh
-# Options:
-#   PR_LANGUAGE=ja      the PR language the PR hooks check
-#   HARNEXUS_TASK=1     also installs harnexus-task
-#   CODEX_AUTH_B64      in the environment's variables: a base64 ~/.codex/auth.json that signs the Codex CLI in
+# environment. Set up each environment, on every account, as follows.
+#
+# Network access: Limited, with these allowed domains. The OpenAI ones sign the Codex CLI in;
+# the rest build agent-hooks, and the CloudFront host is where download.mooncakes.io redirects,
+# so a failed build whose curl cannot resolve a new host means that host moved.
+#   chatgpt.com  *.chatgpt.com  auth.openai.com  api.openai.com
+#   cli.moonbitlang.com  download.mooncakes.io  d251robtodj7m8.cloudfront.net
+#
+# Setup script. This one is downloaded before it runs, since a failed download piped into bash exits 0:
+#   curl -fsSLo /tmp/cloud-setup.sh https://raw.githubusercontent.com/riii111/dotfiles/main/scripts/cloud-setup.sh && PR_LANGUAGE=ja HARNEXUS_TASK=1 bash /tmp/cloud-setup.sh
+#   npm install -g @openai/codex || true
+#   mkdir -p ~/.codex && printf 'forced_login_method = "chatgpt"\n' > ~/.codex/config.toml
+# PR_LANGUAGE sets the PR language the PR hooks check, and HARNEXUS_TASK=1 also installs harnexus-task.
+#
+# Environment variables:
+#   CODEX_AUTH_B64       base64 < ~/.codex/auth.json | tr -d '\n', after `codex login` on a trusted machine
+#   GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL, GIT_COMMITTER_NAME, GIT_COMMITTER_EMAIL
+#                        the identity the session's commits use
+#
 # Hooks that need local tools or chezmoi are not installed.
 set -euo pipefail
 
