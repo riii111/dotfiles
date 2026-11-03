@@ -11,8 +11,8 @@
     "nix-command"
     "flakes"
   ];
-  nix.settings.min-free = 30 * 1024 * 1024 * 1024;
-  nix.settings.max-free = 50 * 1024 * 1024 * 1024;
+  nix.settings.min-free = 10 * 1024 * 1024 * 1024;
+  nix.settings.max-free = 20 * 1024 * 1024 * 1024;
 
   nix.gc = {
     automatic = true;
