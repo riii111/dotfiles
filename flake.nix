@@ -359,7 +359,6 @@
             terraform
             tmux
             visidata
-            wezterm.terminfo
             yq-go # Go implementation behind the `yq` command.
             zsh-abbr
             zsh-autosuggestions
@@ -376,7 +375,6 @@
               builtins.elem name [
                 "selected-go-tools"
                 "selected-rustup-tools"
-                "wezterm-terminfo"
               ]
             then
               [ ]
@@ -388,7 +386,6 @@
             ++ [
               (mkVersionEntry "goimports" pkgs.gotools.version)
               (mkVersionEntry "rustup shims" pkgs.rustup.version)
-              (mkVersionEntry "wezterm-terminfo" pkgs.wezterm.version)
             ]
           );
           cliProfile = pkgs.buildEnv {

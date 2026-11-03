@@ -89,6 +89,7 @@
       "font-udev-gothic"
       "ghostty"
       "karabiner-elements"
+      "kitty"
       "meetingbar"
       "wezterm@nightly"
       "wireshark-app"

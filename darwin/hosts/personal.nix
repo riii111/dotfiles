@@ -53,6 +53,5 @@ in
   homebrew.casks = [
     "cursor"
     "emacs-app"
-    "kitty"
   ];
 }
