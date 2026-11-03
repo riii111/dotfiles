@@ -96,6 +96,17 @@ nix shell nixpkgs#duti --command bash ~/ghq/github.com/riii111/dotfiles/scripts/
 
 Re-run both scripts if a macOS update breaks file associations.
 
+### Claude Code cloud
+
+Add the command at the top of [cloud-setup.sh](scripts/cloud-setup.sh) to the environment's setup script to bring the PR hooks and task skills to cloud sessions.
+Later sessions follow dotfiles changes on their own.
+
+- `PR_LANGUAGE=ja`: the PR language the PR hooks check.
+- `HARNEXUS_TASK=1`: also installs harnexus-task.
+- `CODEX_AUTH_B64` in the environment's variables: a base64 `~/.codex/auth.json` that signs the Codex CLI in.
+
+Hooks that need local tools or chezmoi are not installed.
+
 ## Codex
 
 - Edit `~/.codex/config.toml` directly; the [template](dot_codex/config.toml.tmpl) is a reference and is not applied by chezmoi.
