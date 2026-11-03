@@ -1,4 +1,4 @@
-{ config, ... }:
+{ config, lib, pkgs, ... }:
 
 {
   imports = [
@@ -22,8 +22,16 @@
         Minute = 15;
       }
     ];
-    options = "--delete-older-than 7d";
   };
+
+  # nix-collect-garbage can only keep generations by age, not by count.
+  launchd.daemons.nix-gc.command = lib.mkForce (
+    pkgs.writeShellScript "nix-gc" ''
+      set -eu
+      ${config.nix.package}/bin/nix-env --delete-generations +3 --profile /nix/var/nix/profiles/system
+      exec ${config.nix.package}/bin/nix-collect-garbage
+    ''
+  );
 
   nix.optimise = {
     automatic = true;
