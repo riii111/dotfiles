@@ -61,3 +61,63 @@ fn decision(output : Json?) -> String? {
 fn bash(command : String) -> Json {
   { "tool_name": "Bash", "tool_input": { "command": command } }
 }
+
+///|
+async test "permission-request answers each Codex event in its own format" {
+  let event : Json = {
+    "tool_input": { "command": "sudo true" },
+    "cwd": "/",
+    "hook_event_name": "PreToolUse",
+  }
+  assert_eq(
+    hook_output("permission-request", [], event),
+    Some({
+      "hookSpecificOutput": {
+        "hookEventName": "PreToolUse",
+        "permissionDecision": "deny",
+        "permissionDecisionReason": "Privilege escalation and user switching are forbidden.",
+      },
+    }),
+  )
+  let event : Json = {
+    "tool_input": { "command": "sudo true" },
+    "cwd": "/",
+    "hook_event_name": "PermissionRequest",
+  }
+  assert_eq(
+    hook_output("permission-request", [], event),
+    Some({
+      "hookSpecificOutput": {
+        "hookEventName": "PermissionRequest",
+        "decision": {
+          "behavior": "deny",
+          "message": "Privilege escalation and user switching are forbidden.",
+        },
+      },
+    }),
+  )
+  assert_true(
+    hook_output("permission-request", [], { "tool_input": { "command": "ls" } })
+    is None,
+  )
+}
+
+///|
+async test "pr-footer-reset asks to send the created body again" {
+  let event : Json = {
+    "tool_name": "mcp__github__create_pull_request",
+    "tool_input": { "body": "目的" },
+  }
+  guard hook_output("pr-footer-reset", [], event)
+    is Some({ "decision": "block", "reason": String(reason), .. }) else {
+    fail("no block")
+  }
+  assert_true(reason.has_suffix("上書きする。\n\n目的"))
+  assert_true(
+    hook_output("pr-footer-reset", [], {
+      "tool_name": "mcp__github__update_pull_request",
+      "tool_input": { "body": "目的" },
+    })
+    is None,
+  )
+}

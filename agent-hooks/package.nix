@@ -33,6 +33,7 @@ stdenv.mkDerivation {
       ./git_trust
       ./github_comment
       ./github_tool
+      ./permission
       ./pr_format
       ./pr_state
       ./shell

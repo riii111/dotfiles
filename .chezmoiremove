@@ -69,3 +69,5 @@ bin/lib/dot/git_trust.py
 .codex/hooks/pr-state-check.py
 .claude/statusline
 .claude/statusline-command.sh
+.codex/hooks/permission_request.py
+.claude/hooks/pr-footer-reset.py

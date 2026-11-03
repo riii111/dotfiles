@@ -92,6 +92,23 @@ class AgentHooksRegistrationTest(unittest.TestCase):
                 }
                 self.assertEqual(commands, {expected})
 
+    def test_codex_runs_the_command_policy_for_both_bash_events(self):
+        hooks = json.loads(self.render("dot_codex/hooks.json.tmpl"))["hooks"]
+        for event in ("PreToolUse", "PermissionRequest"):
+            with self.subTest(event=event):
+                self.assertTrue(
+                    any(
+                        group["matcher"] == "^Bash$"
+                        and any(
+                            hook["command"].endswith(
+                                "/.nix-profile/bin/agent-hooks permission-request"
+                            )
+                            for hook in group["hooks"]
+                        )
+                        for group in hooks[event]
+                    )
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

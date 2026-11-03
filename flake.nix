@@ -462,6 +462,8 @@
             in
             upstream.mkShell {
               packages = with upstream; [
+                # The shell hook tests run the agent-hooks built from this checkout.
+                cli.agentHooks
                 bashInteractive
                 chezmoi
                 git

@@ -3,7 +3,7 @@ import os
 import sys
 
 path, hooks = sys.argv[1], sys.argv[2]
-# Each guard comes as NAME=agent-hooks or NAME=python; a guard left out is not installed.
+# Each hook comes as NAME=agent-hooks or NAME=python; a hook left out is not installed.
 guards = dict(arg.split("=", 1) for arg in sys.argv[3:])
 
 
@@ -29,7 +29,7 @@ def guard(name, timeout=5):
     return []
 
 
-# The Python guards, taken out of settings written before the move unless they are kept.
+# The Python hooks, taken out of settings written before the move unless they are kept.
 retired = {
     f"python3 {hooks}/{name}.py"
     for name in (
@@ -37,6 +37,7 @@ retired = {
         "git-force-check",
         "pr-format-check",
         "pr-state-check",
+        "pr-footer-reset",
     )
 }
 
@@ -75,9 +76,10 @@ ours = [group for group in ours if group["hooks"]]
 after = [
     {
         "matcher": "^mcp__github__create_pull_request$",
-        "hooks": [command("pr-footer-reset")],
+        "hooks": guard("pr-footer-reset"),
     },
 ]
+after = [group for group in after if group["hooks"]]
 
 settings = {}
 if os.path.exists(path):

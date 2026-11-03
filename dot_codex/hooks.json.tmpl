@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ~/.codex/hooks/permission_request.py",
+            "command": "~/.nix-profile/bin/agent-hooks permission-request",
             "timeout": 5,
             "statusMessage": "Checking forbidden commands"
           },
@@ -54,7 +54,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ~/.codex/hooks/permission_request.py",
+            "command": "~/.nix-profile/bin/agent-hooks permission-request",
             "timeout": 5,
             "statusMessage": "Checking command policy"
           }
