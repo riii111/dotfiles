@@ -8,8 +8,9 @@ done < <(env | sed -n 's/=.*//p' | sed -n '/^GIT_/p')
 export GIT_PAGER=cat
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
-hook="$repo_root/dot_codex/hooks/executable_permission_request.py"
-# macOS TMPDIR ends with "/", and the hook compares paths normalized by pathlib.
+# Tests the agent-hooks on PATH; the Nix dev shells build it from this checkout.
+hook="${AGENT_HOOKS:-agent-hooks}"
+# macOS TMPDIR ends with "/", and the hook compares resolved paths.
 tmp_base="${TMPDIR:-/tmp}"
 test_root="$(mktemp -d "${tmp_base%/}/codex-permission-hook-test.XXXXXX")"
 test_home="$test_root/home"
@@ -29,7 +30,7 @@ run_hook() {
 	local command="$2"
 	HOME="$test_home" jq -n --arg cwd "$tmpdir" --arg event_name "$event_name" --arg command "$command" \
 		'{cwd:$cwd,hook_event_name:$event_name,tool_input:{command:$command}}' |
-		HOME="$test_home" python3 "$hook"
+		HOME="$test_home" "$hook" permission-request
 }
 
 jq -e '.hooks.PreToolUse[0].matcher == "^Bash$"' "$hooks_config" >/dev/null

@@ -42,6 +42,13 @@ class CloudSetupTest(unittest.TestCase):
         )
         return json.loads((self.home / ".claude/settings.json").read_text())
 
+    def post_commands(self, settings):
+        return [
+            hook["command"].rsplit("/", 1)[-1]
+            for group in settings["hooks"]["PostToolUse"]
+            for hook in group["hooks"]
+        ]
+
     def commands(self, settings):
         return {
             group["matcher"]: [
@@ -69,12 +76,7 @@ class CloudSetupTest(unittest.TestCase):
                 ],
             },
         )
-        hook = self.home / ".claude/hooks/pr-footer-reset.py"
-        self.assertEqual(
-            hook.read_text(),
-            (ROOT / "dot_claude/hooks/executable_pr-footer-reset.py").read_text(),
-        )
-        self.assertTrue(os.access(hook, os.X_OK))
+        self.assertEqual(self.post_commands(settings), ["agent-hooks pr-footer-reset"])
 
     def test_installs_the_review_skills_and_the_task_templates(self):
         self.run_setup()
@@ -344,7 +346,7 @@ class CloudSetupTest(unittest.TestCase):
         )
 
         self.assertEqual(len(settings["hooks"]["PreToolUse"]), 3)
-        self.assertTrue((self.home / ".claude/hooks/pr-footer-reset.py").exists())
+        self.assertTrue((self.home / ".claude/hooks/codex-auth.sh").exists())
 
     def test_running_again_keeps_other_hooks_and_adds_nothing_twice(self):
         own = {
@@ -380,7 +382,7 @@ class CloudSetupTest(unittest.TestCase):
     def install_python_guards(self):
         hooks = self.home / ".claude/hooks"
         hooks.mkdir(parents=True, exist_ok=True)
-        for name in self.GUARDS:
+        for name in (*self.GUARDS, "pr-footer-reset"):
             (hooks / f"{name}.py").write_text("")
         (self.home / ".claude/settings.json").write_text(
             json.dumps(
@@ -427,7 +429,8 @@ class CloudSetupTest(unittest.TestCase):
             self.guard_commands(settings),
             sorted(f"agent-hooks {name}" for name in self.GUARDS),
         )
-        for name in self.GUARDS:
+        self.assertEqual(self.post_commands(settings), ["agent-hooks pr-footer-reset"])
+        for name in (*self.GUARDS, "pr-footer-reset"):
             self.assertFalse((hooks / f"{name}.py").exists(), name)
 
     def test_a_failed_build_keeps_the_python_guards(self):
@@ -439,7 +442,8 @@ class CloudSetupTest(unittest.TestCase):
             self.guard_commands(settings),
             sorted(f"{name}.py" for name in self.GUARDS),
         )
-        for name in self.GUARDS:
+        self.assertEqual(self.post_commands(settings), ["pr-footer-reset.py"])
+        for name in (*self.GUARDS, "pr-footer-reset"):
             self.assertTrue((hooks / f"{name}.py").exists(), name)
 
     def test_a_failed_build_keeps_a_previously_built_agent_hooks(self):
@@ -492,7 +496,7 @@ class CloudSetupTest(unittest.TestCase):
         self.assertIn("guards are not installed", ran.stderr)
         settings = json.loads((self.home / ".claude/settings.json").read_text())
         self.assertEqual(settings["hooks"]["PreToolUse"], [])
-        self.assertTrue((self.home / ".claude/hooks/pr-footer-reset.py").exists())
+        self.assertEqual(settings["hooks"]["PostToolUse"], [])
         self.assertTrue((self.home / ".codex/skills/task-worker/SKILL.md").exists())
 
     def test_brings_the_local_rules_and_drops_attribution(self):

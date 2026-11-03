@@ -43,23 +43,23 @@ own="$dotfiles/scripts/cloud-setup"
 
 hooks="$HOME/.claude/hooks"
 mkdir -p "$hooks"
-install -m 0755 "$dotfiles/dot_claude/hooks/executable_pr-footer-reset.py" "$hooks/pr-footer-reset.py"
-# The guards moved into agent-hooks. An environment cached before a guard moved keeps its Python copy until an
-# agent-hooks that has the guard is built, so a failed build never leaves a guard out.
+# The hooks moved into agent-hooks. An environment cached before a hook moved keeps its Python copy until an
+# agent-hooks that has the hook is built, so a failed build never leaves a guard out.
 # AGENT_HOOKS_INSTALLER replaces the build in tests, which run where the Linux toolchain does not.
 if ! bash "${AGENT_HOOKS_INSTALLER:-$dotfiles/scripts/install-agent-hooks.sh}" "$hooks"; then
 	echo "cloud-setup: the agent-hooks build failed; a previous agent-hooks or Python guard stays" >&2
 fi
 guards=()
 missing=()
-for name in github-comment-check git-force-check pr-format-check pr-state-check; do
+for name in github-comment-check git-force-check pr-format-check pr-state-check pr-footer-reset; do
 	# A hook name that agent-hooks does not know makes it fail, while a known one lets an empty event through.
 	if [[ -x $hooks/agent-hooks ]] && printf '{}' | "$hooks/agent-hooks" "$name" >/dev/null 2>&1; then
 		guards+=("$name=agent-hooks")
 		rm -f "$hooks/$name.py"
 	elif [[ -f $hooks/$name.py ]]; then
 		guards+=("$name=python")
-	else
+	elif [[ $name != pr-footer-reset ]]; then
+		# Without pr-footer-reset, only the PR body keeps the footer the server adds, so the setup still succeeds.
 		missing+=("$name")
 	fi
 done

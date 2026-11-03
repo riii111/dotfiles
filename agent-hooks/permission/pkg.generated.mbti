@@ -1,0 +1,27 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "riii111/agent-hooks/permission"
+
+// Values
+pub async fn decide(String, String, String, Map[String, String]) -> Decision?
+
+pub async fn denial_reason(String, async (String) -> Bool) -> String?
+
+pub fn direct_command(String) -> (String, Array[String])?
+
+pub fn has_shell_syntax(String) -> Bool
+
+pub fn has_unsafe_ambient_git_environment(Map[String, String]) -> Bool
+
+pub fn has_unsafe_environment_override(String) -> Bool
+
+// Errors
+
+// Types and methods
+pub(all) enum Decision {
+  Allow
+  Deny(String)
+}
+
+// Type aliases
+
+// Traits
