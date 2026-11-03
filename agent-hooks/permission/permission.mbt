@@ -112,7 +112,7 @@ async fn safe_git_request(
   git_denial_reason(subcommand, subargs) is None &&
   !unsafe_git_arguments(subcommand, subargs, target) &&
   !unsafe_git_configuration(subcommand, subargs, git_config_probe(target)) &&
-  @git_trust.trusted_repository(target) is Some(_)
+  @git_trust.trusted_repository(target, ignore_case=true) is Some(_)
 }
 
 ///|
@@ -230,7 +230,9 @@ async fn safe_push(
     !protected_branches.contains(branch) else {
     return false
   }
-  guard @git_trust.trusted_repository(cwd) is Some(_) else { return false }
+  guard @git_trust.trusted_repository(cwd, ignore_case=true) is Some(_) else {
+    return false
+  }
   if unsafe_git_configuration("push", ["origin", "HEAD"], git_config_probe(cwd)) {
     return false
   }

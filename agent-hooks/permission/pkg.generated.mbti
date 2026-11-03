@@ -10,10 +10,6 @@ pub fn direct_command(String) -> (String, Array[String])?
 
 pub fn has_shell_syntax(String) -> Bool
 
-pub fn has_unsafe_ambient_git_environment(Map[String, String]) -> Bool
-
-pub fn has_unsafe_environment_override(String) -> Bool
-
 // Errors
 
 // Types and methods

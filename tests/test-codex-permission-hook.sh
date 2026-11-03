@@ -329,4 +329,15 @@ expect_silent permission_request 'git push origin HEAD'
 git -C "$tmpdir" switch -q -c main
 expect_silent permission_request 'git push origin HEAD'
 
+# The owner and repository of a checkout match its remote in any case.
+tmpdir="$test_home/ghq/github.com/Riii111/Upper"
+mkdir -p "$tmpdir"
+git -C "$tmpdir" init -q
+git -C "$tmpdir" switch -q -c feat/test
+git -C "$tmpdir" remote add origin git@github.com:riii111/upper.git
+permission_request 'git status' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
+permission_request 'git push origin HEAD' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
+git -C "$tmpdir" remote set-url origin git@github.com:riii111/other.git
+expect_silent permission_request 'git status'
+
 printf 'codex permission hook tests passed\n'

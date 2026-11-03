@@ -122,9 +122,19 @@ pub fn relative_parts(path : String, base : String) -> Array[String]? {
 
 ///|
 /// Returns the checkout root when it is a ghq checkout whose every origin fetch and push URL is the matching GitHub repository.
-/// `home` defaults to `$HOME`.
-pub async fn trusted_repository(cwd : String, home? : String) -> String? {
-  guard checkout(cwd, home) is Some((root, expected)) else { return None }
+/// `home` defaults to `$HOME`. Remote names are always lowercased; `ignore_case` lowercases the checkout's too, as the
+/// Codex command policy always did, while the Codex wrappers keep the case-sensitive match they had in Python.
+pub async fn trusted_repository(
+  cwd : String,
+  home? : String,
+  ignore_case~ : Bool = false,
+) -> String? {
+  guard checkout(cwd, home) is Some((root, (owner, repo))) else { return None }
+  let expected = if ignore_case {
+    (owner.to_lower(), repo.to_lower())
+  } else {
+    (owner, repo)
+  }
   for push in [false, true] {
     let args = ["remote", "get-url"]
     if push {

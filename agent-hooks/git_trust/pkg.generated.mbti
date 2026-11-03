@@ -18,7 +18,7 @@ pub async fn repository_root(String, home? : String) -> String?
 
 pub async fn run_git(String, Array[String]) -> GitOutput
 
-pub async fn trusted_repository(String, home? : String) -> String?
+pub async fn trusted_repository(String, home? : String, ignore_case? : Bool) -> String?
 
 // Errors
 
