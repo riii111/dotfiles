@@ -1,7 +1,7 @@
 // Ported from the Python hook with its parsing kept: `shlex` for words and Python's regex semantics for the
 // three pattern checks, so a command the hook used to deny or allow gets the same answer.
-// Deny checks fail open when the command is not a single parseable invocation; the allow checks in
-// permission.mbt instead require exact forms and fail closed.
+// Deny checks go on to the compound check when the command is not a single invocation, and pass a command
+// that cannot be split; the allow checks in permission.mbt instead require exact forms and fail closed.
 
 ///|
 let shell_syntax_chars : String = "\n\r`<>;&|()"

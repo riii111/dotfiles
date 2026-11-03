@@ -77,7 +77,7 @@ fn is_task_dispatch_lock_release(command : String, home : String) -> Bool {
 }
 
 ///|
-let read_only_git : Array[String] = [
+let allowed_git_subcommands : Array[String] = [
   "status", "diff", "log", "show", "rev-parse", "ls-files", "switch", "add", "commit",
   "merge", "rebase", "cherry-pick",
 ]
@@ -106,7 +106,7 @@ async fn safe_git_request(
     ("branch", []) => true
     ("branch", [option]) => listing_branch_options.contains(option)
     ("fetch" | "ls-remote", ["origin"]) => true
-    (name, _) => read_only_git.contains(name)
+    (name, _) => allowed_git_subcommands.contains(name)
   }
   allowed &&
   git_denial_reason(subcommand, subargs) is None &&
