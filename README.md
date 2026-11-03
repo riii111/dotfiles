@@ -96,6 +96,24 @@ nix shell nixpkgs#duti --command bash ~/ghq/github.com/riii111/dotfiles/scripts/
 
 Re-run both scripts if a macOS update breaks file associations.
 
+### Claude Code cloud
+
+Cloud environments start with empty user settings and are not managed by chezmoi.
+Add [cloud-setup.sh](scripts/cloud-setup.sh) to the environment's setup script as its header shows.
+It installs the PR and Git hooks, the task review skills for Claude Code and the Codex CLI, and the harnexus-task templates.
+Each session start runs it again in the background from a cached checkout of the latest dotfiles; the log is `~/.cache/cloud-setup/refresh.log`.
+
+Setup script variables:
+
+- `PR_LANGUAGE`: sets the global `git config pr.language`, which the PR format hook requires.
+- `HARNEXUS_TASK=1`: also builds harnexus-task into `HARNEXUS_TASK_PREFIX` (default `/usr/local/bin`), rebuilt only after harnexus changes.
+  A failed build leaves the hooks and skills installed.
+- `DOTFILES_REPO` and `HARNEXUS_REPO`: the repositories to install from.
+
+Set `CODEX_AUTH_B64` to a base64 Codex `auth.json` in the environment's variables to sign the Codex CLI in at session start; an existing login is kept.
+
+Left out of the cloud: the inline Bash hook, whose fd, rg and bat steering needs tools the VM lacks and whose terraform and publish guards need credentials it rarely holds; the prompt hooks, which need chezmoi templates and see only gh while cloud sessions use GitHub MCP; and the hooks that only log or set up local worktrees.
+
 ## Codex
 
 - Edit `~/.codex/config.toml` directly; the [template](dot_codex/config.toml.tmpl) is a reference and is not applied by chezmoi.

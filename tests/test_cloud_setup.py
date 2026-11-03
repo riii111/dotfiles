@@ -1,5 +1,7 @@
+import fcntl
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -151,16 +153,9 @@ class CloudSetupTest(unittest.TestCase):
         settings = json.loads((self.home / ".claude/settings.json").read_text())
         self.assertEqual(len(settings["hooks"]["SessionStart"]), 1)
 
-    def test_runs_itself_again_from_the_latest_dotfiles_at_session_start(self):
-        settings = self.run_setup(DOTFILES_REPO=str(ROOT))
-        (start,) = settings["hooks"]["SessionStart"]
-        (hook,) = [h for h in start["hooks"] if "cloud-refresh" in h["command"]]
-        stale = self.home / ".codex/skills/task-worker/stale.md"
-        stale.write_text("removed upstream")
-
+    def refresh(self):
         subprocess.run(
-            hook["command"],
-            shell=True,
+            ["bash", str(self.home / ".claude/hooks/cloud-refresh.sh")],
             env={
                 "PATH": os.environ["PATH"],
                 "HOME": str(self.home),
@@ -171,54 +166,100 @@ class CloudSetupTest(unittest.TestCase):
             capture_output=True,
         )
 
-        self.assertFalse(stale.exists())
-        self.assertFalse((self.home / ".cache/cloud-setup/refresh.lock").exists())
+    def dotfiles_repo(self, name):
+        repo = self.home / name
+        files = subprocess.run(
+            ["git", "-C", str(ROOT), "ls-files", "-co", "--exclude-standard", "-z"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.split("\0")
+        for file in filter(None, files):
+            if (ROOT / file).is_file():
+                (repo / file).parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(ROOT / file, repo / file)
+        subprocess.run(["git", "init", "-q", str(repo)], check=True)
+        self.commit(repo, "worker", "dotfiles")
+        return repo
+
+    def commit(self, repo, skill, text):
+        (repo / f"dot_codex/skills/task-{skill}/SKILL.md").write_text(text)
+        for args in (["add", "-A"], ["commit", "-q", "-m", text]):
+            subprocess.run(
+                ["git", "-C", str(repo), "-c", "user.name=T", "-c", "user.email=t@e"]
+                + args,
+                check=True,
+            )
+
+    def test_runs_itself_again_from_the_latest_dotfiles_at_session_start(self):
+        repo = self.dotfiles_repo("dotfiles")
+        settings = self.run_setup(DOTFILES_REPO=str(repo))
+        (start,) = settings["hooks"]["SessionStart"]
+        (hook,) = [h for h in start["hooks"] if "cloud-refresh" in h["command"]]
+        skill = self.home / ".codex/skills/task-worker/SKILL.md"
+        stale = skill.parent / "stale.md"
+
+        for version in ("dotfiles", "dotfiles", "updated"):
+            with self.subTest(version=version):
+                if version == "updated":
+                    self.commit(repo, "worker", "updated")
+                stale.write_text("removed upstream")
+                subprocess.run(
+                    hook["command"],
+                    shell=True,
+                    env={
+                        "PATH": os.environ["PATH"],
+                        "HOME": str(self.home),
+                        "GIT_CONFIG_NOSYSTEM": "1",
+                        "CLOUD_REFRESH_FOREGROUND": "1",
+                    },
+                    check=True,
+                    capture_output=True,
+                )
+
+                self.assertFalse(stale.exists())
+                self.assertEqual(skill.read_text(), version)
+
+    def test_a_refresh_follows_the_repository_set_again(self):
+        first = self.dotfiles_repo("first")
+        self.run_setup(DOTFILES_REPO=str(first))
+        self.refresh()
+        second = self.home / "second"
+        subprocess.run(["git", "clone", "-q", str(first), str(second)], check=True)
+        self.commit(second, "worker", "second")
+
+        self.run_setup(DOTFILES_REPO=str(second))
+        self.refresh()
+
+        skill = self.home / ".codex/skills/task-worker/SKILL.md"
+        self.assertEqual(skill.read_text(), "second")
 
     def test_skips_a_refresh_while_another_runs(self):
-        self.run_setup(DOTFILES_REPO=str(ROOT))
-        lock = self.home / ".cache/cloud-setup/refresh.lock"
-        lock.mkdir()
-        (lock / "pid").write_text(str(os.getpid()))
+        self.run_setup(DOTFILES_REPO=str(self.dotfiles_repo("dotfiles")))
         stale = self.home / ".codex/skills/task-worker/stale.md"
         stale.write_text("kept while another refresh runs")
 
-        subprocess.run(
-            ["bash", str(self.home / ".claude/hooks/cloud-refresh.sh")],
-            env={
-                "PATH": os.environ["PATH"],
-                "HOME": str(self.home),
-                "CLOUD_REFRESH_FOREGROUND": "1",
-            },
-            check=True,
-            capture_output=True,
-        )
+        with open(self.home / ".cache/cloud-setup/refresh.flock", "w") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            self.refresh()
 
         self.assertTrue(stale.exists())
 
-    def test_takes_over_a_lock_whose_refresh_died(self):
-        self.run_setup(DOTFILES_REPO=str(ROOT))
-        lock = self.home / ".cache/cloud-setup/refresh.lock"
-        lock.mkdir()
-        dead = subprocess.Popen(["true"])
-        dead.wait()
-        (lock / "pid").write_text(str(dead.pid))
+    def test_a_refresh_that_ended_early_does_not_stop_the_next(self):
+        self.run_setup(DOTFILES_REPO=str(self.dotfiles_repo("dotfiles")))
+        state = self.home / ".cache/cloud-setup"
+        # What an interrupted refresh leaves: the lock file, and an earlier version's
+        # lock folder that never got a pid.
+        (state / "refresh.flock").touch()
+        (state / "refresh.lock").mkdir()
         stale = self.home / ".codex/skills/task-worker/stale.md"
         stale.write_text("removed upstream")
 
-        subprocess.run(
-            ["bash", str(self.home / ".claude/hooks/cloud-refresh.sh")],
-            env={
-                "PATH": os.environ["PATH"],
-                "HOME": str(self.home),
-                "GIT_CONFIG_NOSYSTEM": "1",
-                "CLOUD_REFRESH_FOREGROUND": "1",
-            },
-            check=True,
-            capture_output=True,
-        )
+        self.refresh()
+        self.refresh()
 
         self.assertFalse(stale.exists())
-        self.assertFalse(lock.exists())
+        self.assertFalse((state / "refresh.lock").exists())
 
     def test_keeps_a_harnexus_task_built_from_the_current_commit(self):
         harnexus = self.home / "harnexus"
@@ -271,7 +312,9 @@ class CloudSetupTest(unittest.TestCase):
         self.assertEqual((prefix / "harnexus-task").read_text(), "built")
 
     def test_clones_the_dotfiles_when_piped_into_bash(self):
-        settings = self.run_setup(piped=True, DOTFILES_REPO=str(ROOT))
+        settings = self.run_setup(
+            piped=True, DOTFILES_REPO=str(self.dotfiles_repo("dotfiles"))
+        )
 
         self.assertEqual(len(settings["hooks"]["PreToolUse"]), 3)
         self.assertTrue((self.home / ".claude/hooks/pr-state-check.py").exists())
