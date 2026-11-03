@@ -23,9 +23,24 @@ own="$dotfiles/scripts/cloud-setup"
 
 hooks="$HOME/.claude/hooks"
 mkdir -p "$hooks"
-for name in github-comment-check git-force-check pr-format-check pr-state-check pr-footer-reset; do
+for name in pr-format-check pr-state-check pr-footer-reset; do
 	install -m 0755 "$dotfiles/dot_claude/hooks/executable_$name.py" "$hooks/$name.py"
 done
+# The GitHub comment and force-push guards moved into agent-hooks. An environment cached before the move
+# keeps their Python copies until a build succeeds, so a failed build never leaves the guards out.
+# AGENT_HOOKS_INSTALLER replaces the build in tests, which run where the Linux toolchain does not.
+guards=agent-hooks
+if bash "${AGENT_HOOKS_INSTALLER:-$dotfiles/scripts/install-agent-hooks.sh}" "$hooks"; then
+	rm -f "$hooks/github-comment-check.py" "$hooks/git-force-check.py"
+elif [[ -x $hooks/agent-hooks ]]; then
+	echo "cloud-setup: the agent-hooks build failed; the previously built agent-hooks stays" >&2
+	rm -f "$hooks/github-comment-check.py" "$hooks/git-force-check.py"
+elif [[ -f $hooks/github-comment-check.py && -f $hooks/git-force-check.py ]]; then
+	echo "cloud-setup: the agent-hooks build failed; the previous Python guards stay" >&2
+	guards=python
+else
+	guards=none
+fi
 install -m 0755 "$own/codex-auth.sh" "$hooks/codex-auth.sh"
 install -m 0755 "$own/refresh.sh" "$hooks/cloud-refresh.sh"
 state="$HOME/.cache/cloud-setup"
@@ -36,7 +51,7 @@ mkdir -p "$state"
 	printf 'export HARNEXUS_REPO=%q\n' "$harnexus_repo"
 	printf 'export HARNEXUS_TASK_PREFIX=%q\n' "$harnexus_prefix"
 } >"$state/options"
-python3 "$own/claude-settings.py" "$HOME/.claude/settings.json" "$hooks"
+python3 "$own/claude-settings.py" "$HOME/.claude/settings.json" "$hooks" "$guards"
 
 # The cloud harness adds attribution lines unless user instructions say otherwise; settings alone do not stop it.
 cat "$dotfiles/.chezmoitemplates/agents-common.md" - >"$HOME/.claude/CLAUDE.md" <<'MD'
@@ -91,4 +106,9 @@ if [[ -n ${PR_LANGUAGE:-} ]]; then
 	git config --global pr.language "$PR_LANGUAGE"
 fi
 git config --global commit.gpgsign false
+# The rest is installed first, so the session can still start; the exit status reports the missing guards.
+if [[ $guards == none ]]; then
+	echo "cloud-setup: the agent-hooks build failed, so the GitHub comment and force-push guards are not installed" >&2
+	exit 1
+fi
 echo "installed the dotfiles hooks into $HOME/.claude and the task skills into $skills"

@@ -18,6 +18,11 @@ class CloudSetupTest(unittest.TestCase):
         home = tempfile.TemporaryDirectory()
         self.addCleanup(home.cleanup)
         self.home = Path(home.name)
+        # Stands in for the agent-hooks build, which needs Linux x86_64.
+        self.installer = self.home / "fake-install-agent-hooks.sh"
+        self.installer.write_text(
+            'printf "#!/bin/sh\\n" > "$1/agent-hooks" && chmod +x "$1/agent-hooks"\n'
+        )
 
     def run_setup(self, piped=False, **env):
         subprocess.run(
@@ -28,6 +33,7 @@ class CloudSetupTest(unittest.TestCase):
                 "PATH": os.environ["PATH"],
                 "HOME": str(self.home),
                 "GIT_CONFIG_NOSYSTEM": "1",
+                "AGENT_HOOKS_INSTALLER": str(self.installer),
                 **env,
             },
             capture_output=True,
@@ -51,24 +57,19 @@ class CloudSetupTest(unittest.TestCase):
         self.assertEqual(
             self.commands(settings),
             {
-                "^(Bash|mcp__.*)$": [("github-comment-check.py", 5)],
+                "^(Bash|mcp__.*)$": [("agent-hooks github-comment-check", 5)],
                 "^mcp__github__.*$": [
                     ("pr-format-check.py", 5),
                     ("pr-state-check.py", 5),
                 ],
                 "Bash": [
-                    ("git-force-check.py", 5),
+                    ("agent-hooks git-force-check", 5),
                     ("pr-format-check.py", 5),
                     ("pr-state-check.py", 15),
                 ],
             },
         )
-        for name in (
-            "github-comment-check",
-            "git-force-check",
-            "pr-format-check",
-            "pr-state-check",
-        ):
+        for name in ("pr-format-check", "pr-state-check"):
             with self.subTest(name=name):
                 hook = self.home / f".claude/hooks/{name}.py"
                 self.assertEqual(
@@ -161,6 +162,7 @@ class CloudSetupTest(unittest.TestCase):
                 "PATH": os.environ["PATH"],
                 "HOME": str(self.home),
                 "GIT_CONFIG_NOSYSTEM": "1",
+                "AGENT_HOOKS_INSTALLER": str(self.installer),
                 "CLOUD_REFRESH_FOREGROUND": "1",
             },
             check=True,
@@ -212,6 +214,7 @@ class CloudSetupTest(unittest.TestCase):
                         "PATH": os.environ["PATH"],
                         "HOME": str(self.home),
                         "GIT_CONFIG_NOSYSTEM": "1",
+                        "AGENT_HOOKS_INSTALLER": str(self.installer),
                         "CLOUD_REFRESH_FOREGROUND": "1",
                     },
                     check=True,
@@ -324,6 +327,7 @@ class CloudSetupTest(unittest.TestCase):
                 "PATH": os.environ["PATH"],
                 "HOME": str(self.home),
                 "GIT_CONFIG_NOSYSTEM": "1",
+                "AGENT_HOOKS_INSTALLER": str(self.installer),
                 "HARNEXUS_TASK": "1",
                 "HARNEXUS_REPO": str(harnexus),
                 "HARNEXUS_TASK_PREFIX": str(prefix),
@@ -367,6 +371,107 @@ class CloudSetupTest(unittest.TestCase):
         self.assertEqual(groups[0]["hooks"], [own])
         self.assertEqual(groups[1]["hooks"], [own])
         self.assertEqual(sum(len(group["hooks"]) for group in groups), 2 + 1 + 2 + 3)
+
+    def install_python_guards(self):
+        hooks = self.home / ".claude/hooks"
+        hooks.mkdir(parents=True, exist_ok=True)
+        for name in ("github-comment-check", "git-force-check"):
+            (hooks / f"{name}.py").write_text("")
+        (self.home / ".claude/settings.json").write_text(
+            json.dumps(
+                {
+                    "hooks": {
+                        "PreToolUse": [
+                            {
+                                "matcher": "Bash",
+                                "hooks": [
+                                    {
+                                        "type": "command",
+                                        "command": f"python3 {hooks}/{name}.py",
+                                    }
+                                    for name in (
+                                        "github-comment-check",
+                                        "git-force-check",
+                                    )
+                                ],
+                            }
+                        ]
+                    }
+                }
+            )
+        )
+        return hooks
+
+    def guard_commands(self, settings):
+        return sorted(
+            command
+            for command in (
+                hook["command"].rsplit("/", 1)[-1]
+                for group in settings["hooks"]["PreToolUse"]
+                for hook in group["hooks"]
+            )
+            if "comment-check" in command or "force-check" in command
+        )
+
+    def failing_installer(self):
+        installer = self.home / "failing-install-agent-hooks.sh"
+        installer.write_text("exit 1\n")
+        return str(installer)
+
+    def test_a_built_agent_hooks_replaces_the_python_guards(self):
+        hooks = self.install_python_guards()
+
+        settings = self.run_setup()
+
+        self.assertEqual(
+            self.guard_commands(settings),
+            ["agent-hooks git-force-check", "agent-hooks github-comment-check"],
+        )
+        self.assertFalse((hooks / "github-comment-check.py").exists())
+        self.assertFalse((hooks / "git-force-check.py").exists())
+
+    def test_a_failed_build_keeps_the_python_guards(self):
+        hooks = self.install_python_guards()
+
+        settings = self.run_setup(AGENT_HOOKS_INSTALLER=self.failing_installer())
+
+        self.assertEqual(
+            self.guard_commands(settings),
+            ["git-force-check.py", "github-comment-check.py"],
+        )
+        self.assertTrue((hooks / "github-comment-check.py").exists())
+        self.assertTrue((hooks / "git-force-check.py").exists())
+
+    def test_a_failed_build_keeps_a_previously_built_agent_hooks(self):
+        self.run_setup()
+
+        settings = self.run_setup(AGENT_HOOKS_INSTALLER=self.failing_installer())
+
+        self.assertEqual(
+            self.guard_commands(settings),
+            ["agent-hooks git-force-check", "agent-hooks github-comment-check"],
+        )
+
+    def test_a_failed_first_build_installs_the_rest_and_fails(self):
+        ran = subprocess.run(
+            ["bash", str(SCRIPT)],
+            cwd=self.home,
+            env={
+                "PATH": os.environ["PATH"],
+                "HOME": str(self.home),
+                "GIT_CONFIG_NOSYSTEM": "1",
+                "AGENT_HOOKS_INSTALLER": self.failing_installer(),
+            },
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertNotEqual(ran.returncode, 0)
+        self.assertIn("guards are not installed", ran.stderr)
+        settings = json.loads((self.home / ".claude/settings.json").read_text())
+        self.assertEqual(self.guard_commands(settings), [])
+        self.assertTrue((self.home / ".claude/hooks/pr-state-check.py").exists())
+        self.assertTrue((self.home / ".codex/skills/task-worker/SKILL.md").exists())
 
     def test_brings_the_local_rules_and_drops_attribution(self):
         settings = self.run_setup()

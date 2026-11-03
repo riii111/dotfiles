@@ -2,7 +2,7 @@ import json
 import os
 import sys
 
-path, hooks = sys.argv[1], sys.argv[2]
+path, hooks, guards = sys.argv[1], sys.argv[2], sys.argv[3]
 
 
 def command(name, timeout=5):
@@ -12,6 +12,22 @@ def command(name, timeout=5):
         "timeout": timeout,
     }
 
+
+def guard(name):
+    if guards == "python":
+        return [command(name)]
+    if guards == "agent-hooks":
+        return [
+            {"type": "command", "command": f"{hooks}/agent-hooks {name}", "timeout": 5}
+        ]
+    return []
+
+
+# The Python guards, taken out of settings written before the move unless they are kept.
+retired = {
+    f"python3 {hooks}/github-comment-check.py",
+    f"python3 {hooks}/git-force-check.py",
+}
 
 start = [
     {
@@ -30,7 +46,7 @@ start = [
     }
 ]
 ours = [
-    {"matcher": "^(Bash|mcp__.*)$", "hooks": [command("github-comment-check")]},
+    {"matcher": "^(Bash|mcp__.*)$", "hooks": guard("github-comment-check")},
     {
         "matcher": "^mcp__github__.*$",
         "hooks": [command("pr-format-check"), command("pr-state-check")],
@@ -38,12 +54,13 @@ ours = [
     {
         "matcher": "Bash",
         "hooks": [
-            command("git-force-check"),
+            *guard("git-force-check"),
             command("pr-format-check"),
             command("pr-state-check", 15),
         ],
     },
 ]
+ours = [group for group in ours if group["hooks"]]
 after = [
     {
         "matcher": "^mcp__github__create_pull_request$",
@@ -64,7 +81,9 @@ for event, added in (
     ("SessionStart", start),
 ):
     groups = settings.setdefault("hooks", {}).setdefault(event, [])
-    installed = {hook["command"] for group in added for hook in group["hooks"]}
+    installed = retired | {
+        hook["command"] for group in added for hook in group["hooks"]
+    }
     for group in groups:
         group["hooks"] = [
             hook

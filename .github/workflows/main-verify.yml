@@ -58,6 +58,9 @@ jobs:
         run: |
           nix run --print-build-logs .#python3 -- -I -c 'import ensurepip; assert ensurepip.version() == "26.2.2"'
 
+      - name: Build and test agent-hooks
+        run: nix build --print-build-logs .#agent-hooks
+
       - name: Run repo verification
         run: |
           nix develop .#ci -c ./bin/executable_dotctl test

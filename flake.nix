@@ -304,6 +304,10 @@
                 makeWrapper "${pkgs.lib.getBin curlWithRustls}/bin/curl" "$out/bin/curl" \
                   --set-default CURL_CA_BUNDLE "${pkgs.cacert}/etc/ssl/certs/ca-no-trust-rules-bundle.crt"
               '';
+          # Build with unpatched nixpkgs: the overlay's Brotli reaches fetchurl via curl and would rebuild the fetcher chain.
+          upstream = nixpkgs.legacyPackages.${system};
+          moonbit = upstream.callPackage ./nix/moonbit.nix { };
+          agentHooks = upstream.callPackage ./agent-hooks/package.nix { inherit moonbit; };
           mkVersionEntry = name: value: { inherit name value; };
           dailyCliPackages = with pkgs; [
             # Editor-integrated tooling that should exist in the normal shell too.
@@ -319,6 +323,7 @@
             zls
 
             # Daily CLI tools owned by Nix.
+            agentHooks
             asdf-vm
             bat
             chezmoi
@@ -400,6 +405,8 @@
         {
           inherit
             pkgs
+            agentHooks
+            moonbit
             toolVersions
             dailyCliPackages
             dailyCurl
@@ -418,6 +425,8 @@
         in
         {
           cli = cli.cliProfile;
+          agent-hooks = cli.agentHooks;
+          moonbit = cli.moonbit;
           uv = cli.pkgs.uv;
           curl = cli.dailyCurl;
           python3 = cli.dailyPython;
