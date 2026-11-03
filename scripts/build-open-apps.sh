@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Build .app wrappers that forward Finder "Open" events to Kitty running
-# nvim / vd / csvlens. Installs under ~/Library/Application Support/ so the
+# nvim / csvlens. Installs under ~/Library/Application Support/ so the
 # wrappers stay out of Launchpad, and re-registers with LaunchServices so duti
 # can target them by bundle ID.
 #
@@ -15,8 +15,6 @@ KITTY="$(command -v kitty || true)"
 readonly KITTY
 NVIM="$(command -v nvim || true)"
 readonly NVIM
-VD="$(command -v vd || true)"
-readonly VD
 CSVLENS="$(command -v csvlens || true)"
 readonly CSVLENS
 
@@ -26,10 +24,6 @@ readonly CSVLENS
 }
 [[ -n "$NVIM" ]] || {
 	echo "ERROR: nvim not found in PATH"
-	exit 1
-}
-[[ -n "$VD" ]] || {
-	echo "ERROR: vd not found in PATH"
 	exit 1
 }
 [[ -n "$CSVLENS" ]] || {
@@ -116,8 +110,6 @@ build_app "OpenInNvim" "com.riii111.openinnvim" "$NVIM" public.plain-text \
 	md mdx txt json yaml yml toml sh bash zsh rs go kt kts py lua tf hcl sql conf ini env log xml graphql proto
 build_app "OpenInCsvLens" "com.riii111.openincsvlens" "$CSVLENS -d auto" public.plain-text \
 	csv tsv
-build_app "OpenInVisiData" "com.riii111.openinvisidata" "$VD" public.data \
-	parquet sqlite sqlite3 db ndjson jsonl
 
 cat <<EOF
 

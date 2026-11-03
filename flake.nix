@@ -296,8 +296,6 @@
             shellcheck
             shfmt
             stylua
-            zig
-            zls
 
             # Daily CLI tools owned by Nix.
             agentHooks
@@ -318,7 +316,6 @@
             google-cloud-sdk
             git
             go
-            golangci-lint
             gopls
             graphviz
             selectedGoTools
@@ -329,18 +326,15 @@
             nix-direnv
             dailyNode
             pgcli
-            pngpaste
             pnpm
             postgresql_18
             pspg
             ripgrep
             rust-analyzer
             selectedRustupTools
-            sqlfluff
             sqruff
             terraform
             tmux
-            visidata
             yq-go # Go implementation behind the `yq` command.
             zsh-abbr
             zsh-autosuggestions
