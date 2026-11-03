@@ -245,6 +245,24 @@ class CloudSetupTest(unittest.TestCase):
 
         self.assertTrue(stale.exists())
 
+    def test_waits_for_a_refresh_of_an_earlier_version_to_end(self):
+        self.run_setup(DOTFILES_REPO=str(self.dotfiles_repo("dotfiles")))
+        legacy = self.home / ".cache/cloud-setup/refresh.lock"
+        legacy.mkdir()
+        (legacy / "pid").write_text(str(os.getpid()))
+        stale = self.home / ".codex/skills/task-worker/stale.md"
+        stale.write_text("removed upstream")
+
+        self.refresh()
+        self.assertTrue(stale.exists())
+
+        dead = subprocess.Popen(["true"])
+        dead.wait()
+        (legacy / "pid").write_text(str(dead.pid))
+        self.refresh()
+        self.assertFalse(stale.exists())
+        self.assertFalse(legacy.exists())
+
     def test_a_refresh_that_ended_early_does_not_stop_the_next(self):
         self.run_setup(DOTFILES_REPO=str(self.dotfiles_repo("dotfiles")))
         state = self.home / ".cache/cloud-setup"

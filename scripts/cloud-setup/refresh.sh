@@ -8,8 +8,16 @@ refresh() {
 	# of them still writes and ends however they exit. One refresh runs at a time; another skips.
 	exec 9>"$state/refresh.flock" || return 0
 	python3 -c 'import fcntl; fcntl.flock(9, fcntl.LOCK_EX | fcntl.LOCK_NB)' 2>/dev/null || return 0
-	# Left by the directory lock of earlier versions.
-	rm -rf "$state/refresh.lock" "$state/refresh.lock.reap"
+	# An earlier version's refresh may still be writing under its directory lock after installing
+	# this hook. It wrote its pid before that, so a lock without a live pid is only left over.
+	legacy="$state/refresh.lock"
+	if [[ -d $legacy ]]; then
+		holder=$(cat "$legacy/pid" 2>/dev/null)
+		if [[ -n $holder ]] && kill -0 "$holder" 2>/dev/null; then
+			return 0
+		fi
+		rm -rf "$legacy" "$legacy.reap"
+	fi
 	# shellcheck source=/dev/null
 	. "$state/options"
 	checkout="$state/dotfiles"
