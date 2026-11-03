@@ -1,40 +1,41 @@
 // The hooks moved here from Python keep its Unicode-aware `\w`, `\d` and `str.splitlines()`, which the MoonBit regex lacks.
-// A full Unicode table would take hundreds of ranges, so non-ASCII word characters are approximated by excluding the
-// punctuation, symbol and mark blocks that appear in commands and Japanese or English PR text.
 
 ///|
-/// Approximates Python's `\w`: letters, digits and `_`.
+/// Matches Python's `\w`: letters, digits and `_`.
 pub fn is_word_char(char : Char) -> Bool {
   if char.is_ascii() {
-    return char.is_ascii_alphabetic() || char.is_ascii_digit() || char == '_'
-  }
-  if @shell.is_python_whitespace(char) {
-    return false
-  }
-  match char.to_int() {
-    0xAA | 0xB2 | 0xB3 | 0xB5 | 0xB9 | 0xBA | 0xBC..<=0xBE => true
-    0x80..<=0xBF | 0xD7 | 0xF7 => false
-    0x0300..<=0x036F => false
-    0x2000..<=0x206F => false
-    0x2460..<=0x24FF => true
-    0x2190..<=0x2BFF => false
-    0x3005..<=0x3007 | 0x3021..<=0x3029 | 0x3031..<=0x3035 | 0x3038..<=0x303C =>
-      true
-    0x3000..<=0x303F => false
-    0x3099..<=0x309C | 0x30A0 | 0x30FB => false
-    0xFE30..<=0xFE4F => false
-    0xFF01..<=0xFF0F | 0xFF1A..<=0xFF20 | 0xFF3B..<=0xFF40 | 0xFF5B..<=0xFF65 =>
-      false
-    0xFFE0..<=0xFFEF => false
-    0x1F000..<=0x1FAFF => false
-    _ => true
+    char.is_ascii_alphabetic() || char.is_ascii_digit() || char == '_'
+  } else {
+    in_ranges(word_ranges, char.to_int())
   }
 }
 
 ///|
-/// Approximates Python's `\d` with the ASCII and full-width digits.
+/// Matches Python's `\d`: the Unicode decimal digits.
 pub fn is_decimal(char : Char) -> Bool {
-  char.is_ascii_digit() || (char >= '０' && char <= '９')
+  if char.is_ascii() {
+    char.is_ascii_digit()
+  } else {
+    in_ranges(decimal_ranges, char.to_int())
+  }
+}
+
+///|
+/// Binary search over inclusive start and end pairs.
+fn in_ranges(ranges : FixedArray[Int32], code : Int32) -> Bool {
+  let mut low = 0
+  let mut high = ranges.length() / 2
+  while low < high {
+    let middle = (low + high) / 2
+    if code < ranges[middle * 2] {
+      high = middle
+    } else if code > ranges[middle * 2 + 1] {
+      low = middle + 1
+    } else {
+      return true
+    }
+  }
+  false
 }
 
 ///|

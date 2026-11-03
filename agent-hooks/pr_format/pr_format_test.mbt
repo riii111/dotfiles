@@ -225,3 +225,16 @@ test "titles follow Conventional Commits" {
     assert_true(!@pr_format.check_title(title).is_empty())
   }
 }
+
+///|
+test "references and bullets use Python's Unicode word and digit classes" {
+  let reference = "IssueやPRの番号を文中に埋め込まない。Issueは先頭の `Close #N` の行に書き、PRの番号は書かない"
+  for body in ["#12™ を見る", "#12\u{FE0F} を見る", "#١ を見る"] {
+    assert_true(@pr_format.check_body(body).contains(reference))
+  }
+  assert_true(
+    @pr_format.check_body("١. one\n٢. two\n٣. three\n٤. four").contains(
+      "箇条書きが4個ある。3個以内に統合する",
+    ),
+  )
+}
