@@ -455,6 +455,21 @@ def command_sync_nix_profile(_: argparse.Namespace) -> int:
             print_process_failure("nix profile add", result)
             return 1
 
+    # The root nix-gc daemon only prunes profiles under /nix/var/nix/profiles.
+    result = run_command(
+        [
+            str(Path(nix).with_name("nix-env")),
+            "--delete-generations",
+            "+3",
+            "--profile",
+            str(NIX_DOTFILES_PROFILE),
+        ],
+        repo_root,
+    )
+    if result.returncode != 0:
+        print_process_failure("nix-env --delete-generations", result)
+        return 1
+
     notify_affected_after_apply()
     print(f"Nix CLI profile synced: {NIX_DOTFILES_PROFILE}")
     return 0
