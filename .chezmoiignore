@@ -7,6 +7,8 @@ flake.nix
 flake.lock
 tests
 scripts
+agent-hooks
+nix
 config/pi
 
 # Python runtime artifacts

@@ -1,0 +1,17 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "riii111/agent-hooks/git_force"
+
+// Values
+pub fn decide(String, deny_force_push~ : Bool) -> Decision?
+
+// Errors
+
+// Types and methods
+pub enum Decision {
+  Ask(String)
+  Deny(String)
+}
+
+// Type aliases
+
+// Traits

@@ -318,7 +318,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 {{ .chezmoi.homeDir }}/.claude/hooks/github-comment-check.py",
+            "command": "{{ .chezmoi.homeDir }}/.nix-profile/bin/agent-hooks github-comment-check",
             "timeout": 5
           }
         ]
@@ -347,7 +347,7 @@
           },
           {
             "type": "command",
-            "command": "python3 {{ .chezmoi.homeDir }}/.claude/hooks/git-force-check.py{{ if eq .type "work" }} --deny-force-push{{ end }}",
+            "command": "{{ .chezmoi.homeDir }}/.nix-profile/bin/agent-hooks git-force-check{{ if eq .type "work" }} --deny-force-push{{ end }}",
             "timeout": 5
           },
           {

@@ -1,0 +1,11 @@
+import {
+  "moonbitlang/core/env",
+  "riii111/agent-hooks/git_force",
+  "riii111/agent-hooks/github_comment",
+  "moonbitlang/async",
+  "moonbitlang/async/stdio",
+}
+
+supported_targets = "+native"
+
+pkgtype(kind: "executable")

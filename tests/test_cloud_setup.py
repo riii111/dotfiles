@@ -48,24 +48,19 @@ class CloudSetupTest(unittest.TestCase):
         self.assertEqual(
             self.commands(settings),
             {
-                "^(Bash|mcp__.*)$": [("github-comment-check.py", 5)],
+                "^(Bash|mcp__.*)$": [("agent-hooks github-comment-check", 5)],
                 "^mcp__github__.*$": [
                     ("pr-format-check.py", 5),
                     ("pr-state-check.py", 5),
                 ],
                 "Bash": [
-                    ("git-force-check.py", 5),
+                    ("agent-hooks git-force-check", 5),
                     ("pr-format-check.py", 5),
                     ("pr-state-check.py", 15),
                 ],
             },
         )
-        for name in (
-            "github-comment-check",
-            "git-force-check",
-            "pr-format-check",
-            "pr-state-check",
-        ):
+        for name in ("pr-format-check", "pr-state-check"):
             with self.subTest(name=name):
                 hook = self.home / f".claude/hooks/{name}.py"
                 self.assertEqual(
@@ -299,6 +294,40 @@ class CloudSetupTest(unittest.TestCase):
         self.assertEqual(groups[0]["hooks"], [own])
         self.assertEqual(groups[1]["hooks"], [own])
         self.assertEqual(sum(len(group["hooks"]) for group in groups), 2 + 1 + 2 + 3)
+
+    def test_removes_the_python_hooks_that_moved_into_agent_hooks(self):
+        hooks = self.home / ".claude/hooks"
+        hooks.mkdir(parents=True)
+        retired = [
+            {"type": "command", "command": f"python3 {hooks}/{name}.py"}
+            for name in ("github-comment-check", "git-force-check")
+        ]
+        for name in ("github-comment-check", "git-force-check"):
+            (hooks / f"{name}.py").write_text("")
+        (self.home / ".claude/settings.json").write_text(
+            json.dumps(
+                {"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": retired}]}}
+            )
+        )
+
+        settings = self.run_setup()
+
+        commands = [
+            hook["command"]
+            for group in settings["hooks"]["PreToolUse"]
+            for hook in group["hooks"]
+        ]
+        self.assertFalse(
+            any(
+                command.endswith("check.py") and "force" in command
+                for command in commands
+            )
+        )
+        self.assertFalse(
+            any("github-comment-check.py" in command for command in commands)
+        )
+        self.assertFalse((hooks / "github-comment-check.py").exists())
+        self.assertFalse((hooks / "git-force-check.py").exists())
 
     def test_brings_the_local_rules_and_drops_attribution(self):
         settings = self.run_setup()

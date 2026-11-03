@@ -33,9 +33,15 @@ fi
 
 hooks="$HOME/.claude/hooks"
 mkdir -p "$hooks"
-for name in github-comment-check git-force-check pr-format-check pr-state-check pr-footer-reset; do
+for name in pr-format-check pr-state-check pr-footer-reset; do
 	install -m 0755 "$dotfiles/dot_claude/hooks/executable_$name.py" "$hooks/$name.py"
 done
+# These two hooks moved into agent-hooks; an environment cached before the move still has them.
+rm -f "$hooks/github-comment-check.py" "$hooks/git-force-check.py"
+# A failed build only leaves the two guards out, so the session still starts with the other hooks.
+if ! bash "$dotfiles/scripts/install-agent-hooks.sh" "$hooks"; then
+	echo "cloud-setup: the agent-hooks build failed; the GitHub comment and force-push guards are off" >&2
+fi
 # The environment's variables are set only once Claude Code starts, after this script, so the Codex
 # login the environment holds in CODEX_AUTH_B64 is written by a session start hook. It prints nothing.
 cat >"$hooks/codex-auth.sh" <<'SH'
@@ -120,6 +126,13 @@ def command(name, timeout=5):
     return {"type": "command", "command": f"python3 {hooks}/{name}.py", "timeout": timeout}
 
 
+def agent_hook(name):
+    return {"type": "command", "command": f"{hooks}/agent-hooks {name}", "timeout": 5}
+
+
+# Commands of hooks that moved into agent-hooks, taken out of settings written before the move.
+retired = {f"python3 {hooks}/github-comment-check.py", f"python3 {hooks}/git-force-check.py"}
+
 start = [
     {
         "hooks": [
@@ -129,7 +142,7 @@ start = [
     }
 ]
 ours = [
-    {"matcher": "^(Bash|mcp__.*)$", "hooks": [command("github-comment-check")]},
+    {"matcher": "^(Bash|mcp__.*)$", "hooks": [agent_hook("github-comment-check")]},
     {
         "matcher": "^mcp__github__.*$",
         "hooks": [command("pr-format-check"), command("pr-state-check")],
@@ -137,7 +150,7 @@ ours = [
     {
         "matcher": "Bash",
         "hooks": [
-            command("git-force-check"),
+            agent_hook("git-force-check"),
             command("pr-format-check"),
             command("pr-state-check", 15),
         ],
@@ -158,7 +171,7 @@ if os.path.exists(path):
 # hook, even one in the same folder or group, stays; a group left with no hooks goes.
 for event, added in (("PreToolUse", ours), ("PostToolUse", after), ("SessionStart", start)):
     groups = settings.setdefault("hooks", {}).setdefault(event, [])
-    installed = {hook["command"] for group in added for hook in group["hooks"]}
+    installed = retired | {hook["command"] for group in added for hook in group["hooks"]}
     for group in groups:
         group["hooks"] = [
             hook for hook in group.get("hooks", []) if hook.get("command") not in installed
