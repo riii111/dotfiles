@@ -67,3 +67,4 @@ bin/lib/dot/git_trust.py
 .claude/hooks/pr-state-check.py
 .codex/hooks/pr-format-check.py
 .codex/hooks/pr-state-check.py
+bin/affected-agent
