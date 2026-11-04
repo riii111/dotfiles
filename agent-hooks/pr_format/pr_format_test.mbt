@@ -238,3 +238,81 @@ test "references and bullets use Python's Unicode word and digit classes" {
     ),
   )
 }
+
+///|
+/// Returns the folder whose `pr.language` the check reads for `event`, with the session in `/work/session`.
+async fn language_folder(event : Json, home : String) -> String {
+  let folder = Ref("")
+  let _ = @pr_format.check(
+    event,
+    "/work/session",
+    path => {
+      folder.val = path
+      Some("ja")
+    },
+    home~,
+  )
+  folder.val
+}
+
+///|
+fn pr_event(prefix : String, args : String) -> Json {
+  {
+    "tool_input": {
+      "command": prefix +
+      "gh pr " +
+      args +
+      " --title \"ci: 軽くする\" --body \"$(cat <<'EOF'\n--repo other/repo\nEOF\n)\"",
+    },
+  }
+}
+
+///|
+async test "the language is read from the pull request's repository" {
+  let home = @fs.realpath(@fs.tmpdir(prefix="pr-format-"))
+  let checkout = home + "/ghq/github.com/acme/app"
+  @fs.mkdir(checkout, recursive=true)
+  for
+    args in [
+      "create --repo acme/app", "create -R acme/app", "create --repo=acme/app", "create -Racme/app",
+      "create --repo 'https://github.com/acme/app.git'", "edit 3 --repo github.com/acme/app",
+      "edit https://github.com/acme/app/pull/3",
+    ] {
+    assert_eq(language_folder(pr_event("", args), home), checkout)
+  }
+  assert_eq(
+    language_folder(
+      pr_event("cd ~/ghq/github.com/acme/app && ", "create"),
+      home,
+    ),
+    checkout,
+  )
+  assert_eq(
+    language_folder(pr_event("cd /srv && cd app; ", "create"), home),
+    "/srv/app",
+  )
+  assert_eq(
+    language_folder(pr_event("cd /srv && ", "create --repo acme/app"), home),
+    checkout,
+  )
+  assert_eq(language_folder(pr_event("", "create"), home), "/work/session")
+  assert_eq(
+    language_folder(pr_event("", "create --repo acme/missing"), home),
+    home,
+  )
+  assert_eq(
+    language_folder(
+      {
+        "tool_name": "mcp__github__create_pull_request",
+        "tool_input": {
+          "owner": "acme",
+          "repo": "app",
+          "title": "ci: 軽くする",
+        },
+      },
+      home,
+    ),
+    checkout,
+  )
+  @fs.rmdir(home, recursive=true)
+}
