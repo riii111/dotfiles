@@ -1,5 +1,5 @@
 // Finds the repository a pull request belongs to, so its `pr.language` is read there rather than in the session's folder.
-// A command names it by `--repo`, by a `cd` before `gh`, or by a pull request URL, in that order.
+// A command names it by a pull request URL, by `--repo`, or by a `cd` before `gh`, in that order, as `gh` itself would.
 // A named repository is read from its ghq checkout; without one, only the global setting applies.
 
 ///|
@@ -25,26 +25,20 @@ fn target(event : Json, cwd : String, home : String) -> Target {
     pr_command(command) is Some((start, verb)) else {
     return Folder(cwd)
   }
-  // A heredoc holds the body, whose text must not name the repository.
-  let arguments = command.view(start_offset=start).to_owned()
-  let arguments = match arguments.find("<<") {
-    Some(end) => arguments.view(end_offset=end).to_owned()
-    None => arguments
+  let words = gh_arguments(command.view(start_offset=start).to_owned())
+  if verb == "edit" {
+    for word in words.positional {
+      if pull_request_url(word) is Some(found) {
+        return found
+      }
+    }
   }
-  if repo_flag(arguments) is Some(value) &&
-    parse_repository(value) is Some(found) {
+  if words.repo is Some(value) && parse_repository(value) is Some(found) {
     return found
   }
   if cd_folder(command.view(end_offset=start).to_owned(), cwd, home)
     is Some(folder) {
     return Folder(folder)
-  }
-  if verb == "edit" {
-    for word in @shell.split_on_whitespace(arguments) {
-      if pull_request_url(unquote(word)) is Some(found) {
-        return found
-      }
-    }
   }
   Folder(cwd)
 }
@@ -68,20 +62,128 @@ async fn language_folder(target : Target, home : String) -> String {
 }
 
 ///|
-/// The value of `--repo`, `-R VALUE`, `-R=VALUE` or `-RVALUE`, unless the shell would change it.
-fn repo_flag(arguments : String) -> String? {
-  let value = match flag_value(arguments, ["--repo", "-R"]) {
-    Some(value) => Some(value)
-    None =>
-      @shell.split_on_whitespace(arguments)
-      .iter()
-      .find_first(word => word.has_prefix("-R") && word.length() > 2)
-      .map(word => word.view(start_offset=2).to_owned())
+/// The `--repo` value and the positional arguments of a `gh pr` command.
+priv struct GhArguments {
+  repo : String?
+  positional : Array[String]
+}
+
+///|
+/// Options of `gh pr create` and `gh pr edit` whose value is the next word.
+let value_options : Array[String] = [
+  "-t", "--title", "-b", "--body", "-F", "--body-file", "-B", "--base", "-H", "--head",
+  "-a", "--assignee", "-l", "--label", "-m", "--milestone", "-p", "--project", "-r",
+  "--reviewer", "-T", "--template", "--recover", "--add-assignee", "--remove-assignee",
+  "--add-label", "--remove-label", "--add-project", "--remove-project", "--add-reviewer",
+  "--remove-reviewer",
+]
+
+///|
+/// Reads the arguments of the `gh pr` command at the start of `command`, up to the first control operator.
+/// Heredoc bodies and option values are skipped, so a body that mentions `--repo` or a URL names nothing.
+/// Arguments the shell would expand, or a command it cannot split, name nothing either.
+fn gh_arguments(command : String) -> GhArguments {
+  let words = @shell.split_words(
+    without_heredoc_bodies(command),
+    punctuation="();&|",
+    comments=false,
+  ) catch {
+    _ => return { repo: None, positional: [], }
   }
-  match value {
-    Some(value) if !is_expanded_by_shell(value) => Some(unquote(value))
-    _ => None
+  let mut repo = None
+  let positional = []
+  // The first three words are `gh pr VERB`.
+  let mut index = 3
+  while index < words.length() {
+    let word = words[index]
+    if is_control(word) {
+      break
+    }
+    index += 1
+    let value = if word == "--repo" || word == "-R" {
+      let value = words.get(index)
+      index += 1
+      value
+    } else if word.strip_prefix("--repo=") is Some(value) {
+      Some(value.to_owned())
+    } else if word.has_prefix("-R") && word.length() > 2 {
+      let value = word.view(start_offset=2)
+      Some(value.strip_prefix("=").unwrap_or(value).to_owned())
+    } else {
+      if value_options.contains(word) {
+        index += 1
+      } else if !word.has_prefix("-") && !word.contains_any(chars="$`") {
+        positional.push(word)
+      }
+      continue
+    }
+    repo = match value {
+      Some(value) if !value.contains_any(chars="$`") && !is_control(value) =>
+        Some(value)
+      _ => None
+    }
   }
+  { repo, positional, }
+}
+
+///|
+fn is_control(word : String) -> Bool {
+  word != "" && word.iter().all(char => "();&|".contains_char(char))
+}
+
+///|
+/// Drops the lines of each heredoc body and its closing delimiter, keeping the rest of the command.
+fn without_heredoc_bodies(command : String) -> String {
+  let kept = []
+  let mut delimiters : Array[String] = []
+  for line in command.split("\n") {
+    let line = line.to_owned()
+    if delimiters is [delimiter, ..] {
+      if line.trim(chars=" \t") == delimiter {
+        delimiters = delimiters[1:].to_owned()
+      }
+      continue
+    }
+    kept.push(line)
+    delimiters = heredoc_delimiters(line)
+  }
+  kept.join("\n")
+}
+
+///|
+/// The delimiters of the heredocs a line opens, in order.
+fn heredoc_delimiters(line : String) -> Array[String] {
+  let delimiters = []
+  let mut from = 0
+  while line.view(start_offset=from).find("<<") is Some(offset) {
+    let mut index = from + offset + 2
+    from = index
+    // `<<<` is a here-string, which has no body.
+    if line.view(start_offset=index).has_prefix("<") {
+      from = index + 1
+      continue
+    }
+    if line.view(start_offset=index).has_prefix("-") {
+      index += 1
+    }
+    while line.get_char(index) is Some(char) &&
+          @shell.is_python_whitespace(char) {
+      index += char.utf16_len()
+    }
+    if line.get_char(index) is Some('\'' | '"') {
+      index += 1
+    }
+    let name_start = index
+    while line.get_char(index) is Some(char) && @text.is_word_char(char) {
+      index += char.utf16_len()
+    }
+    if index > name_start {
+      delimiters.push(
+        line.view(start_offset=name_start, end_offset=index).to_owned(),
+      )
+    }
+  }
+  delimiters
 }
 
 ///|

@@ -295,6 +295,44 @@ async test "the language is read from the pull request's repository" {
     language_folder(pr_event("cd /srv && ", "create --repo acme/app"), home),
     checkout,
   )
+  assert_eq(
+    language_folder(
+      pr_event("cd /srv && ", "edit https://github.com/acme/app/pull/3"),
+      home,
+    ),
+    checkout,
+  )
+  let command = (text : String) => {
+    let event : Json = { "tool_input": { "command": text } }
+    event
+  }
+  assert_eq(
+    language_folder(
+      command(
+        "gh pr create --body \"$(cat <<'EOF'\nDescription\nEOF\n)\" --repo acme/app --title \"fix: 直す\"",
+      ),
+      home,
+    ),
+    checkout,
+  )
+  assert_eq(
+    language_folder(
+      command(
+        "gh pr create --body 'Use --repo acme/other here' --repo acme/app --title 'fix: 直す'",
+      ),
+      home,
+    ),
+    checkout,
+  )
+  assert_eq(
+    language_folder(
+      command(
+        "gh pr create --title 'fix: 直す' && gh repo view --repo acme/app",
+      ),
+      home,
+    ),
+    "/work/session",
+  )
   assert_eq(language_folder(pr_event("", "create"), home), "/work/session")
   assert_eq(
     language_folder(pr_event("", "create --repo acme/missing"), home),
