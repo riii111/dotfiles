@@ -311,7 +311,7 @@
           # Build with unpatched nixpkgs: the overlay's Brotli reaches fetchurl via curl and would rebuild the fetcher chain.
           upstream = nixpkgs.legacyPackages.${system};
           moonbit = upstream.callPackage ./nix/moonbit.nix { };
-          agentHooks = upstream.callPackage ./agent-hooks/package.nix { inherit moonbit; };
+          dotTools = upstream.callPackage ./dot-tools/package.nix { inherit moonbit; };
           mkVersionEntry = name: value: { inherit name value; };
           dailyCliPackages = with pkgs; [
             # Editor-integrated tooling that should exist in the normal shell too.
@@ -325,7 +325,7 @@
             stylua
 
             # Daily CLI tools owned by Nix.
-            agentHooks
+            dotTools
             asdf-vm
             bat
             chezmoi
@@ -403,7 +403,7 @@
         {
           inherit
             pkgs
-            agentHooks
+            dotTools
             moonbit
             toolVersions
             dailyCliPackages
@@ -423,7 +423,7 @@
         in
         {
           cli = cli.cliProfile;
-          agent-hooks = cli.agentHooks;
+          dot-tools = cli.dotTools;
           moonbit = cli.moonbit;
           uv = cli.pkgs.uv;
           curl = cli.dailyCurl;
@@ -462,8 +462,8 @@
             in
             upstream.mkShell {
               packages = with upstream; [
-                # The shell hook tests run the agent-hooks built from this checkout.
-                cli.agentHooks
+                # The shell hook tests run the agent-hooks command built from this checkout.
+                cli.dotTools
                 bashInteractive
                 chezmoi
                 git
