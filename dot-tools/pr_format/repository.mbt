@@ -84,7 +84,7 @@ let value_options : Array[String] = [
 /// Arguments the shell would expand, or a command it cannot split, name nothing either.
 fn gh_arguments(command : String) -> GhArguments {
   let words = @shell.split_words(
-    without_heredoc_bodies(command),
+    first_line(without_heredoc_bodies(command)),
     punctuation="();&|",
     comments=false,
   ) catch {
@@ -124,6 +124,27 @@ fn gh_arguments(command : String) -> GhArguments {
     }
   }
   { repo, positional, }
+}
+
+///|
+/// The text up to the first newline that ends a command: one outside quotes and not escaped.
+fn first_line(command : String) -> String {
+  let mut quote = None
+  let mut escaped = false
+  for index, char in command.to_array() {
+    if escaped {
+      escaped = false
+      continue
+    }
+    match (quote, char) {
+      (None, '\n') => return String::from_array(command.to_array()[:index])
+      (None, '\'' | '"') => quote = Some(char)
+      (None, '\\') | (Some('"'), '\\') => escaped = true
+      (Some(open), _) if open == char => quote = None
+      _ => ()
+    }
+  }
+  command
 }
 
 ///|
@@ -290,6 +311,11 @@ fn cd_folder(prefix : String, cwd : String, home : String) -> String? {
     } else {
       target
     }
+    // A `cd` in a pipeline or in the background runs in a subprocess.
+    if is_subprocess(words.get(index - 1)) ||
+      is_subprocess(words.get(operand + 1)) {
+      continue
+    }
     let base = folder.unwrap_or(cwd)
     folder = Some(
       if target.has_prefix("/") {
@@ -300,6 +326,16 @@ fn cd_folder(prefix : String, cwd : String, home : String) -> String? {
     )
   }
   folder
+}
+
+///|
+/// Tells whether a control operator puts the command next to it in a pipeline or in the background.
+fn is_subprocess(word : String?) -> Bool {
+  guard word is Some(word) && is_control(word) else { return false }
+  let operator = word.trim(chars="()")
+  (operator.contains("|") && operator != "||") ||
+  operator == "&" ||
+  operator == "|&"
 }
 
 ///|

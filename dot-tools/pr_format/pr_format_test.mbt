@@ -343,9 +343,20 @@ async test "the language is read from the pull request's repository" {
     checkout,
   )
   assert_eq(
-    language_folder(pr_event("(cd /other && make); ", "create"), home),
+    language_folder(
+      command(
+        "gh pr create --title 'fix: 直す'\ngh repo view --repo acme/app",
+      ),
+      home,
+    ),
     "/work/session",
   )
+  for prefix in ["(cd /other && make); ", "cd /other | cat; ", "cd /other & "] {
+    assert_eq(
+      language_folder(pr_event(prefix, "create"), home),
+      "/work/session",
+    )
+  }
   assert_eq(
     language_folder(
       pr_event("cd /srv && (cd /other && make) && ", "create"),
