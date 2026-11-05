@@ -66,6 +66,8 @@ stdenv.mkDerivation {
   nativeCheckInputs = [ git ];
   checkPhase = ''
     runHook preCheck
+    moon fmt --check
+    moon check --target native --deny-warn
     moon test --target native
     runHook postCheck
   '';
