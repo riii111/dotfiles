@@ -333,6 +333,32 @@ async test "the language is read from the pull request's repository" {
     ),
     "/work/session",
   )
+  assert_eq(
+    language_folder(
+      command(
+        "gh pr create --body 'Explain <<EOF'\\\n --repo acme/app --title 'fix: 直す'",
+      ),
+      home,
+    ),
+    checkout,
+  )
+  assert_eq(
+    language_folder(pr_event("(cd /other && make); ", "create"), home),
+    "/work/session",
+  )
+  assert_eq(
+    language_folder(
+      pr_event("cd /srv && (cd /other && make) && ", "create"),
+      home,
+    ),
+    "/srv",
+  )
+  for
+    prefix in [
+      "cd -- /srv/app && ", "cd -P /srv/app && ", "cd -LP -- /srv/app; ",
+    ] {
+    assert_eq(language_folder(pr_event(prefix, "create"), home), "/srv/app")
+  }
   assert_eq(language_folder(pr_event("", "create"), home), "/work/session")
   assert_eq(
     language_folder(pr_event("", "create --repo acme/missing"), home),

@@ -136,8 +136,8 @@ fn is_control(word : String) -> Bool {
 fn without_heredoc_bodies(command : String) -> String {
   let kept = []
   let mut delimiters : Array[String] = []
-  for line in command.split("\n") {
-    let line = line.to_owned()
+  let lines = command.split("\n").map(line => line.to_owned()).collect()
+  for index, line in lines {
     if delimiters is [delimiter, ..] {
       if line.trim(chars=" \t") == delimiter {
         delimiters = delimiters[1:].to_owned()
@@ -145,7 +145,12 @@ fn without_heredoc_bodies(command : String) -> String {
       continue
     }
     kept.push(line)
-    delimiters = heredoc_delimiters(line)
+    // `<<WORD` inside quoted text opens nothing; without a closing line it is taken as such text.
+    delimiters = heredoc_delimiters(line).filter(delimiter => {
+      lines[index + 1:]
+      .iter()
+      .any(later => later.trim(chars=" \t") == delimiter)
+    })
   }
   kept.join("\n")
 }
@@ -242,22 +247,39 @@ fn is_name(part : String) -> Bool {
 
 ///|
 /// Follows each `cd DIR` in the commands before `gh`, returning the folder they end in, or `None` when there is none.
-/// A directory the shell would expand, other than a leading `~`, makes the folder unknown.
+/// A `cd` inside a subshell that has closed does not apply. A directory the shell would expand, other than a leading
+/// `~`, makes the folder unknown.
 fn cd_folder(prefix : String, cwd : String, home : String) -> String? {
   let words = @shell.split_words(prefix, punctuation="();&|", comments=false) catch {
     _ => return None
   }
   let mut folder = None
+  let outer = []
   for index, word in words {
-    guard word == "cd" &&
-      (
-        index == 0 ||
-        words[index - 1].iter().all(char => "();&|".contains_char(char))
-      ) else {
+    if is_control(word) {
+      for char in word {
+        if char == '(' {
+          outer.push(folder)
+        } else if char == ')' {
+          guard outer.pop() is Some(previous) else { return None }
+          folder = previous
+        }
+      }
       continue
     }
-    guard words.get(index + 1) is Some(target) &&
-      !target.iter().all(char => "();&|".contains_char(char)) &&
+    guard word == "cd" && (index == 0 || is_control(words[index - 1])) else {
+      continue
+    }
+    let mut operand = index + 1
+    while words.get(operand) is Some(option) && is_cd_option(option) {
+      operand += 1
+      if option == "--" {
+        break
+      }
+    }
+    guard words.get(operand) is Some(target) &&
+      !is_control(target) &&
+      target != "-" &&
       !target.contains_any(chars="$`") else {
       return None
     }
@@ -278,4 +300,15 @@ fn cd_folder(prefix : String, cwd : String, home : String) -> String? {
     )
   }
   folder
+}
+
+///|
+/// `--` or a group of the `-L`, `-P`, `-e` and `-@` options of `cd`.
+fn is_cd_option(word : String) -> Bool {
+  word == "--" ||
+  (
+    word.length() > 1 &&
+    word.has_prefix("-") &&
+    word.view(start_offset=1).iter().all(char => "LPe@".contains_char(char))
+  )
 }
