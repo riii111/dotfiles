@@ -7,7 +7,7 @@ flake.nix
 flake.lock
 tests
 scripts
-agent-hooks
+dot-tools
 nix
 config/pi
 

@@ -1,0 +1,36 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "riii111/dot-tools/pr_state"
+
+// Values
+pub async fn check(String, String, merge~ : Decision, async (Lookup) -> String) -> (Decision, String)?
+
+pub fn mcp_check(String, Json, merge~ : Decision) -> (Decision, String)?
+
+pub let merge_reason : String
+
+pub async fn run_lookup(Lookup) -> String
+
+pub fn segments(String) -> Array[Array[String]] raise Uncertain
+
+// Errors
+pub suberror Uncertain {
+  Uncertain(String)
+}
+
+// Types and methods
+pub(all) enum Decision {
+  Ask
+  Deny
+}
+
+pub(all) struct Lookup {
+  gh : String
+  args : Array[String]
+  cwd : String
+  environment : Map[String, String]
+  timeout_ms : Int32
+}
+
+// Type aliases
+
+// Traits

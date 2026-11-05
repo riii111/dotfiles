@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Builds agent-hooks into the given folder for a Claude Code cloud environment, which has no Nix.
 # The MoonBit release, its core library and the async package are pinned by version and SHA-256; keep them in sync with
-# nix/moonbit.nix and agent-hooks/package.nix.
+# nix/moonbit.nix and dot-tools/package.nix.
 set -euo pipefail
 
 dest=$1
-source_dir=$(cd "$(dirname "$0")/../agent-hooks" && pwd)
+source_dir=$(cd "$(dirname "$0")/../dot-tools" && pwd)
 
 if [[ $(uname -sm) != "Linux x86_64" ]]; then
 	echo "install-agent-hooks: only Linux x86_64 is supported" >&2
@@ -55,6 +55,6 @@ cp -R "$source_dir" "$work/src"
 rm -rf "$work/src/_build" "$work/src/.mooncakes"
 moon -C "$work/src" build --release --target native
 # A hook that starts during a background refresh must never find the binary missing or half written.
-install -m 0755 "$work/src/_build/native/release/build/cmd/main/main.exe" "$dest/.agent-hooks.new"
+install -m 0755 "$work/src/_build/native/release/build/cmd/agent_hooks/agent_hooks.exe" "$dest/.agent-hooks.new"
 mv -f "$dest/.agent-hooks.new" "$dest/agent-hooks"
 echo "$source_hash" >"$stamp"
