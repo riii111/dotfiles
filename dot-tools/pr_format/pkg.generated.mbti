@@ -1,0 +1,32 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "riii111/dot-tools/pr_format"
+
+// Values
+pub async fn check(Json, String, async (String) -> String?) -> Array[String]
+
+pub fn check_body(String) -> Array[String]
+
+pub fn check_language(String, String?, String?) -> Array[String]
+
+pub fn check_title(String) -> Array[String]
+
+pub let denial_header : String
+
+pub fn denial_reason(Array[String]) -> String
+
+pub fn read_command(String) -> CommandPr?
+
+pub async fn read_language(String) -> String?
+
+// Errors
+
+// Types and methods
+pub(all) struct CommandPr {
+  title : String?
+  body : String?
+  unreadable_body : Bool
+}
+
+// Type aliases
+
+// Traits

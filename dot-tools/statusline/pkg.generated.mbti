@@ -1,0 +1,37 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "riii111/dot-tools/statusline"
+
+// Values
+pub async fn current_branch(String) -> String
+
+pub fn parse_input(String) -> Input?
+
+pub fn render(Input, String, Int32, Double) -> String
+
+pub fn terminal_width() -> Int32
+
+pub let unknown : String
+
+// Errors
+
+// Types and methods
+pub(all) struct Input {
+  model : String
+  context_percentage : Double
+  lines_added : Int64
+  lines_removed : Int64
+  cwd : String
+  worktree : String
+  original_branch : String
+  five_hour : RateLimit
+  seven_day : RateLimit
+}
+
+pub(all) struct RateLimit {
+  used_percentage : Double?
+  resets_at : Double?
+}
+
+// Type aliases
+
+// Traits

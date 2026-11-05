@@ -1,0 +1,9 @@
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/process",
+  "riii111/dot-tools/github_tool",
+  "riii111/dot-tools/shell",
+  "riii111/dot-tools/text",
+}
+
+supported_targets = "+native"
