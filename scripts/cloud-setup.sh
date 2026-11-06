@@ -30,8 +30,7 @@ set -euo pipefail
 
 dotfiles_repo=${DOTFILES_REPO:-https://github.com/riii111/dotfiles.git}
 taskctl_repo=${TASKCTL_REPO:-https://github.com/riii111/taskctl.git}
-# TODO: the head of riii111/taskctl#2; replace with its merged commit.
-taskctl_rev=${TASKCTL_REV:-048cb1e1b96857b84e41f61da9e0ee6ceeacfa57}
+taskctl_rev=${TASKCTL_REV:-9069255654571b28bb5e2b46d48b5e3f129035fc}
 # The last harnexus that builds harnexus-task, kept for rolling back; later commits drop its installer.
 harnexus_repo=${HARNEXUS_REPO:-https://github.com/riii111/harnexus.git}
 harnexus_rev=${HARNEXUS_REV:-8127612dfd009025c6ee95f6f3c1dba5663935ee}
