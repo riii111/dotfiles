@@ -35,16 +35,17 @@ test "denies GitHub connector comment tools" {
     "add_reply_to_pull_request_comment", "pull_request_review_write", "resolve_review_thread",
   ]
   for operation in operations {
-    assert_true(
-      @github_comment.is_comment_request({
-        "tool_name": "mcp__codex_apps__github_\{operation}",
-      }),
-      msg=operation,
-    )
+    for separator in ["_", "."] {
+      let name = "mcp__codex_apps__github\{separator}\{operation}"
+      assert_true(
+        @github_comment.is_comment_request({ "tool_name": name }),
+        msg=name,
+      )
+    }
   }
   let names = [
     "mcp__codex_apps__github_fetch_pr_comments", "mcp__codex_apps__github_create_pull_request",
-    "mcp__codex_app__send_message_to_thread",
+    "mcp__codex_apps__github.fetch_pr_comments", "mcp__codex_app__send_message_to_thread",
   ]
   for name in names {
     assert_false(
@@ -73,6 +74,7 @@ test "denies GitHub MCP comment tools" {
   }
   let names = [
     "mcp__github__pull_request_read", "mcp__github__create_pull_request", "mcp__github__issue_write",
+    "mcp__linear__add_issue_comment",
   ]
   for name in names {
     assert_false(

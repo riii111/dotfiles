@@ -30,8 +30,15 @@ async fn denies(command : String, language~ : String? = Some("ja")) -> Bool {
 }
 
 ///|
-async fn denies_mcp(operation : String, input : Json) -> Bool {
-  !problems({ "tool_name": "mcp__github__" + operation, "tool_input": input }).is_empty()
+async fn denies_mcp(
+  operation : String,
+  input : Json,
+  language~ : String? = Some("ja"),
+) -> Bool {
+  !problems(
+    { "tool_name": "mcp__github__" + operation, "tool_input": input },
+    language~,
+  ).is_empty()
 }
 
 ///|
@@ -52,6 +59,7 @@ async test "a conforming pull request and other commands pass" {
   assert_false(denies(create_command(good_body)))
   assert_false(denies("git status"))
   assert_false(denies("gh pr edit 1 --add-label bug"))
+  assert_false(denies("gh pr create --draft --fill", language=None))
 }
 
 ///|
@@ -66,10 +74,18 @@ async test "a body the command does not contain is denied" {
 
 ///|
 async test "a heredoc passed to --body-file is read" {
-  let command = "gh pr create --title \"ci: 軽くする\" --body-file - <<'EOF'\n" +
-    good_body +
-    "- 補足（理由）\nEOF\n"
-  assert_true(denies(command))
+  let event = (body : String) => {
+    let event : Json = {
+      "tool_input": {
+        "command": "gh pr create --title \"ci: 軽くする\" --body-file - <<'EOF'\n\{body}EOF\n",
+      },
+    }
+    event
+  }
+  assert_eq(problems(event(good_body)), [])
+  assert_eq(problems(event(good_body + "- 補足（理由）\n")), [
+    "カッコによる補足を使わない。補足は別の文にする",
+  ])
 }
 
 ///|
@@ -91,7 +107,7 @@ async test "the configured language is required and followed" {
   }
   assert_true(denies(create_command(good_body, title="ci: trim test logs")))
   assert_true(denies(create_command(good_body), language=Some("en")))
-  let english = "close #12\n\nPassing tests flood the log and hide failures.\n"
+  let english = "close #12\n\nThe log is noisy. Trimming it makes failures visible.\n"
   assert_false(
     denies(
       create_command(english, title="ci: trim test logs"),
@@ -119,10 +135,6 @@ async test "Japanese sentences end with a predicate and hold one clause" {
         ),
       ),
     ),
-  )
-  let english = "close #12\n\nThe log is noisy. Trimming it makes failures visible.\n"
-  assert_false(
-    denies(create_command(english, title="ci: trim logs"), language=Some("en")),
   )
 }
 
@@ -165,7 +177,9 @@ async test "a pull request through GitHub MCP is checked and must be a draft" {
 
 ///|
 async test "a GitHub MCP edit is checked only for what it changes" {
-  assert_false(denies_mcp("update_pull_request", { "pullNumber": 3 }))
+  assert_false(
+    denies_mcp("update_pull_request", { "pullNumber": 3 }, language=None),
+  )
   assert_false(
     denies_mcp("update_pull_request", { "title": "fix: 失敗を出力する" }),
   )
@@ -379,19 +393,28 @@ async test "the language is read from the pull request's repository" {
     language_folder(pr_event("", "create --repo acme/missing"), home),
     home,
   )
-  assert_eq(
-    language_folder(
-      {
-        "tool_name": "mcp__github__create_pull_request",
-        "tool_input": {
-          "owner": "acme",
-          "repo": "app",
-          "title": "ci: 軽くする",
-        },
+  let mcp_create = (owner : String, repo : String) => {
+    let event : Json = {
+      "tool_name": "mcp__github__create_pull_request",
+      "tool_input": {
+        "owner": owner,
+        "repo": repo,
+        "title": "ci: 軽くする",
       },
-      home,
-    ),
-    checkout,
-  )
+    }
+    event
+  }
+  assert_eq(language_folder(mcp_create("acme", "app"), home), checkout)
+  assert_eq(language_folder(mcp_create("acme", "missing"), home), home)
+  // Both identities would reach this folder through the checkout path, so it is created to show that neither is probed.
+  @fs.mkdir(home + "/ghq/elsewhere")
+  for identity in [("..", "elsewhere"), ("acme", "../../elsewhere")] {
+    let (owner, repo) = identity
+    assert_eq(
+      language_folder(mcp_create(owner, repo), home),
+      "/work/session",
+      msg="\{owner}/\{repo}",
+    )
+  }
   @fs.rmdir(home, recursive=true)
 }
