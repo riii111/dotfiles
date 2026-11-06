@@ -123,7 +123,6 @@ fn check_run(run : Array[Comment], result : Array[Finding]) -> Unit {
 let sentence_ends : String = "。．.!?！？:：;；"
 
 ///|
-/// A line continues into the next when it ends mid-sentence and the next is not a list item or a new paragraph.
 fn continues(current : String, next : String) -> Bool {
   guard current.length() > 0 && next.length() > 0 else { return false }
   guard current.get_char(current.length() - 1) is Some(last) &&
@@ -136,6 +135,7 @@ fn continues(current : String, next : String) -> Bool {
   next.has_prefix("* ") ||
   next.has_prefix("|") ||
   next.has_prefix("TODO") ||
+  next.has_prefix("@") ||
   next.get_char(0).map(Char::is_ascii_digit).unwrap_or(false) ||
   is_divider(next) ||
   is_divider(current))
@@ -210,7 +210,7 @@ fn without_code(text : String) -> String {
 ///|
 let change_history_phrases : Array[String] = [
   "以前は", "から変更した", "に変更した", "no longer", "previously",
-  "used to", "changed from", "anymore",
+  "changed from", "anymore",
 ]
 
 ///|

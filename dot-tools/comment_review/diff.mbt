@@ -22,7 +22,6 @@ priv struct FileChanges {
 }
 
 ///|
-/// Reads the comments that `git diff -U0` adds, file by file, skipping files with no known comment syntax.
 fn added_comments(diff : String) -> Array[FileChanges] {
   let files = []
   let mut current : FileChanges? = None
@@ -126,7 +125,6 @@ fn syntax_for(path : String) -> Syntax? {
 }
 
 ///|
-/// Returns the comment kind, its text without markers, and the kind of a block comment that stays open after the line.
 fn classify(
   syntax : Syntax,
   content : String,

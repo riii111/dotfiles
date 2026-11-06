@@ -114,6 +114,7 @@ test "each rule" {
   assert_eq(rule_ids(["ユーザーが追加した設定を優先する。"]), [])
   assert_eq(rule_ids(["新たに接続を張らず既存を使う。"]), [])
   assert_eq(rule_ids(["The cache is no longer shared."]), ["change-history"])
+  assert_eq(rule_ids(["The key used to sign requests."]), [])
   assert_eq(rule_ids(["念のため再試行する。"]), ["filler"])
   assert_eq(rule_ids(["Note that the order matters."]), ["filler"])
   assert_eq(rule_ids(["TODO"]), ["bare-todo"])
@@ -191,7 +192,7 @@ let jsdoc : String =
 test "a multi-line JSDoc stays a doc comment" {
   let files = added_comments(jsdoc)
   assert_true(files[0].comments.iter().all(comment => comment.kind is Doc))
-  assert_eq(findings(files).map(finding => finding.rule.id()), [
-    "broken-sentence", "broken-sentence", "broken-sentence",
+  assert_eq(findings(files).map(finding => (finding.rule.id(), finding.line)), [
+    ("broken-sentence", 4),
   ])
 }

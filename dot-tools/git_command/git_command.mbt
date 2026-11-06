@@ -1,5 +1,3 @@
-// Hooks that check git commands read the arguments of each simple command, since permission rules only match prefixes.
-
 ///|
 let separators : Array[String] = [";", "&&", "||", "|", "&", "|&", "(", ")"]
 

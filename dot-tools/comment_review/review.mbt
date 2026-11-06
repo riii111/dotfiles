@@ -1,4 +1,3 @@
-// The commit is stopped once per set of added comments: the same list again means the agent reviewed them and kept the comments.
 // Any failure to read the repository lets the commit through, since this review only advises.
 
 ///|
@@ -18,6 +17,7 @@ pub async fn review(
   let listing = render_comments(files, found)
   let state = state_path(commit.dir) catch { _ => return None }
   let previous = @fs.read_file(state).text() catch { _ => "" }
+  // The same list as last time means the agent reviewed it and kept the comments.
   let outcome = if previous == listing { "passed" } else { "blocked" }
   if outcome == "blocked" {
     @fs.write_file(state, listing, create_mode=CreateOrTruncate) catch {
@@ -75,13 +75,13 @@ async fn git(dir : String, args : Array[String]) -> (Int32, String) {
 let max_listed : Int32 = 30
 
 ///|
-/// Lists every added comment, with the rules a script found on it, so the agent also reviews the ones no rule caught.
 fn render_comments(
   files : Array[FileChanges],
   found : Array[Finding],
 ) -> String {
   let lines = []
   let mut total = 0
+  // Comments no rule caught are listed too, since whether one restates the code is the agent's call.
   for changes in files {
     for comment in changes.comments {
       total += 1
@@ -113,10 +113,10 @@ let guidance_lead : String =
   #|commit前に、追加したコメントを1件ずつ見直す。各コメントを消すか直すか残すかを決めてから、もう一度commitする。一覧が同じままのcommitは通す。[ ]はスクリプトが見つけた該当箇所。
 
 ///|
-/// The owner's line between a needed and a needless comment is hard to state in words, so one contrasting pair shows it.
+/// Every denial carries this text, so a single contrasting pair shows where a needless comment begins without lengthening it.
 let guidance : String =
   #|判断の基準: 関数直上の役割は、名前だけで伝わらない場合に限り残す。それ以外のコメントは、名前や型から自然に考えつく別の書き方を退ける理由を1つ挙げられなければ消す。詳しくは指示文の「コメント規律」に従う。
-  #|- 消す: `/// Returns the -C directory, the subcommand and its arguments.`（戻り値の型と名前で分かる）
+  #|- 消す: `fn parse(...) -> Value` の上の `/// Returns the parsed value.`（名前と型で内容がすべて分かる）
   #|- 残す: `// A submodule's .git is a file, so is_dir would miss it`（`is_dir` を使う自然な案を退ける）
 
 ///|

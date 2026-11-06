@@ -55,7 +55,6 @@ let commit_options_with_value : Array[String] = [
 let short_value_flags : String = "mFCct"
 
 ///|
-/// Returns whether the commit takes unstaged changes, or `None` when it records nothing.
 fn commit_options(args : ArrayView[String]) -> Bool? {
   let mut widens = false
   let mut skip_value = false
