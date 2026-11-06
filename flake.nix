@@ -53,6 +53,9 @@
           # Skip the slow or load-sensitive ones; each already rebuilds, so no cached package is lost.
           nodejs-slim_24 = prev.nodejs-slim_24.overrideAttrs { doCheck = false; };
           harfbuzz = prev.harfbuzz.overrideAttrs { doCheck = false; };
+          # Nix fails to build only the missing outputs of PostgreSQL, and GC had removed some.
+          # Changing the derivation forces one full build; drop this once nixpkgs changes it.
+          postgresql_18 = prev.postgresql_18.overrideAttrs { dotfilesFullRebuild = 1; };
           pythonPackagesExtensions = prev.pythonPackagesExtensions ++ [
             (_: pyPrev: {
               requests-cache = pyPrev.requests-cache.overridePythonAttrs { doCheck = false; };
@@ -398,6 +401,10 @@
               "/bin"
               "/share"
             ];
+            # Keep every PostgreSQL output alive through GC; Nix cannot rebuild only the removed ones.
+            postBuild = ''
+              printf '%s\n' ${nixpkgs.lib.escapeShellArgs pkgs.postgresql_18.all} > "$out/gc-roots"
+            '';
           };
         in
         {
