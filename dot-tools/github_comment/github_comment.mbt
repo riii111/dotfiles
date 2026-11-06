@@ -14,7 +14,8 @@ pub fn is_comment_request(event : Json) -> Bool {
     _ => ""
   }
   if name.has_prefix("mcp__") {
-    return is_comment_tool(name)
+    return @github_tool.operation(name) is Some(operation) &&
+      comment_tools.contains(operation)
   }
 
   match fields.get("tool_input") {
@@ -34,24 +35,6 @@ let comment_tools : Array[String] = [
   "update_review_comment", "add_issue_comment", "add_comment_to_pending_review",
   "add_reply_to_pull_request_comment", "pull_request_review_write", "resolve_review_thread",
 ]
-
-///|
-fn is_comment_tool(name : String) -> Bool {
-  if !name.contains("github") {
-    return false
-  }
-  let operation = match name.rev_find("__") {
-    Some(index) => name.view(start_offset=index + 2).to_owned()
-    None => name
-  }
-  let operation = if operation.has_prefix("github_") ||
-    operation.has_prefix("github.") {
-    operation.view(start_offset=7).to_owned()
-  } else {
-    operation
-  }
-  comment_tools.contains(operation)
-}
 
 ///|
 fn posts_comment(command : String) -> Bool {

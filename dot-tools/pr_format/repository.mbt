@@ -17,8 +17,8 @@ fn target(event : Json, cwd : String, home : String) -> Target {
     _ => {}
   }
   if input is { "owner": String(owner), "repo": String(repo), .. } &&
-    owner != "" &&
-    repo != "" {
+    is_name(owner) &&
+    is_name(repo) {
     return Repository(host="github.com", owner~, repo~)
   }
   guard input is { "command": String(command), .. } &&

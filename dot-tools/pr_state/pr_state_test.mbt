@@ -167,20 +167,16 @@ async test "an unknown draft state or a dynamic identity is denied" {
 
 ///|
 async test "a merge asks outside personal repositories" {
-  let commands = [
-    "gh pr merge 42 --merge", "gh pr merge --auto --squash -R org/repo 42", "git status && gh pr merge 42 --subject 'fix: x' -b body",
+  let cases : Array[(String, Array[String])] = [
+    ("gh pr merge 42 --merge", []),
+    ("gh pr merge --auto --squash -R org/repo 42", ["--repo", "org/repo"]),
+    ("git status && gh pr merge 42 --subject 'fix: x' -b body", []),
   ]
-  for command in commands {
+  for case in cases {
+    let (command, repo) = case
     let requests = []
     assert_eq(decide(command, Some(url("sansaninc")), requests~), Some("ask"))
-    assert_eq(requests[0].args[:3].to_owned(), [
-      "pr",
-      "view",
-      requests[0].args[2],
-    ])
-    assert_eq(requests[0].args[requests[0].args.length() - 2:].to_owned(), [
-      "--json", "url",
-    ])
+    assert_eq(requests[0].args, ["pr", "view", "42", ..repo, "--json", "url"])
     assert_eq(decide(command, Some(url("riii111"))), None)
   }
   for

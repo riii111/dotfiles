@@ -1,3 +1,4 @@
 import {
+  "riii111/dot-tools/github_tool",
   "riii111/dot-tools/shell",
 }

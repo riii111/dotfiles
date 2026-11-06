@@ -45,17 +45,10 @@ pub async fn check(
     if operation == "create_pull_request" && !(input is { "draft": True, .. }) {
       problems.push("PRはDraftで作る。`draft: true` を指定する")
     }
-    if title is Some(title) {
-      problems.push_iter(check_title(title).iter())
-    }
-    if body is Some(body) {
-      problems.push_iter(check_body(body).iter())
-    }
-    if title is Some(_) || body is Some(_) {
-      problems.push_iter(
-        language_problems(folder, title, body, read_language).iter(),
-      )
-    }
+    problems.push_iter(format_problems(title, body).iter())
+    problems.push_iter(
+      language_problems(folder, title, body, read_language).iter(),
+    )
     return problems
   }
 
@@ -63,19 +56,24 @@ pub async fn check(
     read_command(command) is Some(pr) else {
     return []
   }
-  let problems = []
-  if pr.title is Some(title) {
-    problems.push_iter(check_title(title).iter())
-  }
-  if pr.body is Some(body) {
-    problems.push_iter(check_body(body).iter())
-  } else if pr.unreadable_body {
+  let problems = format_problems(pr.title, pr.body)
+  if pr.unreadable_body {
     problems.push(unreadable_body)
   }
-  if pr.title is Some(_) || pr.body is Some(_) {
-    problems.push_iter(
-      language_problems(folder, pr.title, pr.body, read_language).iter(),
-    )
+  problems.push_iter(
+    language_problems(folder, pr.title, pr.body, read_language).iter(),
+  )
+  problems
+}
+
+///|
+fn format_problems(title : String?, body : String?) -> Array[String] {
+  let problems = []
+  if title is Some(title) {
+    problems.push_iter(check_title(title).iter())
+  }
+  if body is Some(body) {
+    problems.push_iter(check_body(body).iter())
   }
   problems
 }
@@ -99,6 +97,7 @@ async fn language_problems(
   body : String?,
   read_language : async (String) -> String?,
 ) -> Array[String] {
+  guard title is Some(_) || body is Some(_) else { return [] }
   match read_language(folder()) {
     Some("ja" | "en" as language) => check_language(language, title, body)
     _ => [unset_language]
