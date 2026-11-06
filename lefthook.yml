@@ -26,4 +26,7 @@ pre-commit:
 post-merge:
   commands:
     chezmoi-apply:
+      # Captured PTY output cannot receive replies to terminal queries.
+      env:
+        TERM: dumb
       run: chezmoi apply --force < /dev/null
