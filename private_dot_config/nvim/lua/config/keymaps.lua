@@ -55,7 +55,7 @@ for key, direction in pairs({
 	end, { silent = true, desc = "Resize " .. direction })
 end
 
--- Work around Rex's unsupported JIS yen binding while keeping Option as Alt.
+-- Rex cannot bind the JIS yen key, so translate its Alt sequence here.
 if vim.env.TERM_PROGRAM == "rex" then
 	vim.keymap.set({ "i", "c" }, "<M-¥>", "\\", { desc = "Insert backslash from Option+yen" })
 end
