@@ -1,5 +1,3 @@
-// The review reads the changes the commit will record, so a command that also stages or commits unstaged files widens what it reads.
-
 ///|
 priv struct Commit {
   dir : String
@@ -7,7 +5,6 @@ priv struct Commit {
 }
 
 ///|
-/// A `git add` earlier in the same command, `-a`, or a path argument makes the commit take unstaged changes of tracked files.
 fn find_commit(command : String, cwd : String) -> Commit? {
   let mut dir = cwd
   let mut staged_here = false
@@ -24,12 +21,17 @@ fn find_commit(command : String, cwd : String) -> Commit? {
       None => dir
     }
     if subcommand == "add" {
+      // Files this command stages are not in the index yet when the hook reads it, so the review reads unstaged changes too.
       staged_here = true
       continue
     }
     guard subcommand == "commit" else { continue }
-    guard commit_options(args) is Some(widens) else { return None }
-    return Some({ dir: run_dir, includes_unstaged: staged_here || widens, })
+    let includes_unstaged = match commit_scope(args) {
+      NothingRecorded => return None
+      Staged => staged_here
+      WithUnstaged => true
+    }
+    return Some({ dir: run_dir, includes_unstaged, })
   }
   None
 }
@@ -51,11 +53,14 @@ let commit_options_with_value : Array[String] = [
 ]
 
 ///|
-/// Short options whose value may follow in the same word, as in `-am "message"`.
-let short_value_flags : String = "mFCct"
+priv enum CommitScope {
+  Staged
+  WithUnstaged
+  NothingRecorded
+}
 
 ///|
-fn commit_options(args : ArrayView[String]) -> Bool? {
+fn commit_scope(args : ArrayView[String]) -> CommitScope {
   let mut widens = false
   let mut skip_value = false
   let mut paths_only = false
@@ -70,7 +75,7 @@ fn commit_options(args : ArrayView[String]) -> Bool? {
     }
     match arg {
       "--" => paths_only = true
-      "--dry-run" | "-h" | "--help" => return None
+      "--dry-run" | "-h" | "--help" => return NothingRecorded
       "--all" | "--include" | "--only" => widens = true
       _ if commit_options_with_value.contains(arg) => skip_value = true
       _ if arg.has_prefix("--") => ()
@@ -79,12 +84,16 @@ fn commit_options(args : ArrayView[String]) -> Bool? {
           if char == 'a' || char == 'i' || char == 'o' {
             widens = true
           }
-          if short_value_flags.contains_char(char) {
+          if commit_options_with_value.contains("-" + char.to_string()) {
             skip_value = arg.has_suffix(char.to_string())
             break
           }
         }
     }
   }
-  Some(widens)
+  if widens {
+    WithUnstaged
+  } else {
+    Staged
+  }
 }

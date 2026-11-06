@@ -46,7 +46,7 @@ fn added_comments(diff : String) -> Array[FileChanges] {
       continue
     }
     if raw.has_prefix("@@ ") {
-      line = hunk_start(raw)
+      line = new_start_line(raw)
       open_block = None
       continue
     }
@@ -55,7 +55,7 @@ fn added_comments(diff : String) -> Array[FileChanges] {
       let content = raw.view(start_offset=1).to_owned()
       changes.added += 1
       match classify(syntax, content, open_block) {
-        Some((kind, text, still_open)) => {
+        Some({ kind, text, open_block: still_open, }) => {
           open_block = still_open
           if text != "" {
             changes.comments.push({ path: changes.path, line, kind, text, })
@@ -72,8 +72,7 @@ fn added_comments(diff : String) -> Array[FileChanges] {
 }
 
 ///|
-/// The new-file start line of a hunk header such as `@@ -3,0 +4,2 @@`.
-fn hunk_start(header : String) -> Int32 {
+fn new_start_line(header : String) -> Int32 {
   guard header.find(" +") is Some(index) else { return 0 }
   let mut start = 0
   for char in header.view(start_offset=index + 2) {
@@ -97,7 +96,6 @@ let c_like : Syntax = { line: ["//"], doc: [], block: true, }
 let hash : Syntax = { line: ["#"], doc: [], block: false, }
 
 ///|
-/// Generated files and documents have no entry, or are matched by name, so they are never reviewed.
 fn syntax_for(path : String) -> Syntax? {
   let name = match path.rev_find("/") {
     Some(index) => path.view(start_offset=index + 1).to_owned()
@@ -125,11 +123,18 @@ fn syntax_for(path : String) -> Syntax? {
 }
 
 ///|
+priv struct Classified {
+  kind : CommentKind
+  text : String
+  open_block : CommentKind?
+}
+
+///|
 fn classify(
   syntax : Syntax,
   content : String,
   open_block : CommentKind?,
-) -> (CommentKind, String, CommentKind?)? {
+) -> Classified? {
   let trimmed = @text.strip(content)
   if open_block is Some(kind) {
     let closed = trimmed.contains("*/")
@@ -137,9 +142,15 @@ fn classify(
       .replace_all(old="*/", new="")
       .trim_start(chars="*")
       .to_owned()
-    return Some(
-      (kind, @text.strip(text), if closed { None } else { Some(kind) }),
-    )
+    return Some({
+      kind,
+      text: @text.strip(text),
+      open_block: if closed {
+        None
+      } else {
+        Some(kind)
+      },
+    })
   }
   if trimmed.has_prefix("#!") {
     return None
@@ -151,9 +162,11 @@ fn classify(
       } else {
         None
       }
-      return Some(
-        (Doc, strip_markers(trimmed.view(start_offset=marker.length())), open),
-      )
+      return Some({
+        kind: Doc,
+        text: strip_markers(trimmed.view(start_offset=marker.length())),
+        open_block: open,
+      })
     }
   }
   if trimmed.has_prefix("///|") {
@@ -161,18 +174,20 @@ fn classify(
   }
   for marker in syntax.line {
     if trimmed.has_prefix(marker) {
-      return Some(
-        (
-          Normal,
-          strip_markers(trimmed.view(start_offset=marker.length())),
-          None,
-        ),
-      )
+      return Some({
+        kind: Normal,
+        text: strip_markers(trimmed.view(start_offset=marker.length())),
+        open_block: None,
+      })
     }
   }
   if syntax.block && trimmed.has_prefix("/*") {
     let open = if trimmed.contains("*/") { None } else { Some(Normal) }
-    return Some((Normal, strip_markers(trimmed.view(start_offset=2)), open))
+    return Some({
+      kind: Normal,
+      text: strip_markers(trimmed.view(start_offset=2)),
+      open_block: open,
+    })
   }
   None
 }

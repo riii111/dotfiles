@@ -179,12 +179,12 @@ fn is_divider(text : String) -> Bool {
 let divider_marks : Array[String] = ["---", "===", "***", "###", "~~~", "___"]
 
 ///|
-/// A call such as `run()` has empty parentheses; an aside has words inside them.
 fn has_parenthetical(text : String) -> Bool {
   let text = without_code(text)
   if text.contains("（") && text.contains("）") {
     return true
   }
+  // An aside follows a space, so a call such as `run()` never matches.
   guard text.find(" (") is Some(open) else { return false }
   guard text.view(start_offset=open + 2).find(")") is Some(close) else {
     return false
@@ -193,7 +193,6 @@ fn has_parenthetical(text : String) -> Bool {
 }
 
 ///|
-/// Drops `code` spans, whose parentheses belong to the code they quote.
 fn without_code(text : String) -> String {
   let builder = StringBuilder()
   let mut in_code = false
