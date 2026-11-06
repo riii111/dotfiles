@@ -122,6 +122,23 @@ class AgentHooksRegistrationTest(unittest.TestCase):
         codex = json.loads(self.render("dot_codex/hooks.json.tmpl"))["hooks"]
         self.assertNotIn("reply-reminder", json.dumps(codex))
 
+    def test_only_claude_code_reviews_comments_on_commit(self):
+        groups = json.loads(self.render("dot_claude/settings.json.tmpl"))["hooks"][
+            "PreToolUse"
+        ]
+        self.assertIn(
+            "agent-hooks comment-review-check",
+            [
+                hook["command"].rsplit("/", 1)[-1]
+                for group in groups
+                if group["matcher"] == "Bash"
+                for hook in group["hooks"]
+                if "command" in hook
+            ],
+        )
+        codex = json.loads(self.render("dot_codex/hooks.json.tmpl"))["hooks"]
+        self.assertNotIn("comment-review-check", json.dumps(codex))
+
 
 if __name__ == "__main__":
     unittest.main()

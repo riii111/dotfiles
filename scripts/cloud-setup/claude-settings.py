@@ -69,6 +69,7 @@ ours = [
             *guard("git-force-check"),
             *guard("pr-format-check"),
             *guard("pr-state-check", 15),
+            *guard("comment-review-check", 10),
         ],
     },
 ]

@@ -1,0 +1,15 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "riii111/dot-tools/git_command"
+
+// Values
+pub fn segments(String) -> Array[Array[String]]
+
+pub fn subcommand(Array[String]) -> (String?, String, ArrayView[String])?
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

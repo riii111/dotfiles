@@ -11,8 +11,10 @@ pub enum Decision {
 /// Finds the first forced `git push` or `git add` in a Bash command.
 /// `--force-with-lease` passes, while `--force`, `-f` and `+` refspecs ask, or are denied when `deny_force_push` is set.
 pub fn decide(command : String, deny_force_push~ : Bool) -> Decision? {
-  for segment in split_segments(command) {
-    guard git_subcommand(segment) is Some((subcommand, args)) else { continue }
+  for segment in @git_command.segments(command) {
+    guard @git_command.subcommand(segment) is Some((_, subcommand, args)) else {
+      continue
+    }
 
     if subcommand == "add" && is_forced_add(args) {
       return Some(
@@ -35,47 +37,6 @@ pub fn decide(command : String, deny_force_push~ : Bool) -> Decision? {
     }
   }
   None
-}
-
-///|
-let separators : Array[String] = [";", "&&", "||", "|", "&", "|&", "(", ")"]
-
-///|
-fn split_segments(command : String) -> Array[Array[String]] {
-  let normalized = command.replace_all(old="\n", new=" ; ")
-  let words = @shell.split_words(normalized, punctuation=";&|()", comments=true) catch {
-    _ => @shell.split_on_whitespace(normalized)
-  }
-
-  let segments = [[]]
-  for word in words {
-    if separators.contains(word) {
-      segments.push([])
-    } else {
-      segments.last().unwrap().push(word)
-    }
-  }
-  segments.filter(segment => !segment.is_empty())
-}
-
-///|
-let git_options_with_value : Array[String] = [
-  "-C", "-c", "--git-dir", "--work-tree", "--namespace",
-]
-
-///|
-fn git_subcommand(segment : Array[String]) -> (String, ArrayView[String])? {
-  guard segment.search_by(word => word == "git" || word.has_suffix("/git"))
-    is Some(git) else {
-    None
-  }
-
-  let mut index = git + 1
-  while index < segment.length() && segment[index].has_prefix("-") {
-    index += if git_options_with_value.contains(segment[index]) { 2 } else { 1 }
-  }
-  guard index < segment.length() else { None }
-  Some((segment[index], segment[index + 1:]))
 }
 
 ///|

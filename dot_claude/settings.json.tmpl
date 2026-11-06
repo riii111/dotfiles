@@ -388,6 +388,11 @@
             "timeout": 15
           },
           {
+            "type": "command",
+            "command": "{{ .chezmoi.homeDir }}/.nix-profile/bin/agent-hooks comment-review-check",
+            "timeout": 10
+          },
+          {
             "type": "prompt",
             "if": "Bash(gh pr create *)",
             "prompt": {{ includeTemplate "pr-format-judge.txt" . | toJson }},
