@@ -362,7 +362,13 @@ class CloudSetupTest(unittest.TestCase):
 
         settings = self.run_setup()
 
-        self.assertEqual(settings["permissions"], {"deny": ["SearchPlugins"]})
+        self.assertEqual(
+            settings["permissions"],
+            {
+                "deny": ["SearchPlugins"],
+                "allow": ["Bash(git push --force-with-lease *)"],
+            },
+        )
         groups = settings["hooks"]["PreToolUse"]
         self.assertEqual(
             [group["matcher"] for group in groups],
@@ -504,6 +510,9 @@ class CloudSetupTest(unittest.TestCase):
 
         self.assertIs(settings["includeCoAuthoredBy"], False)
         self.assertIs(settings["attribution"], False)
+        self.assertEqual(
+            settings["permissions"]["allow"], ["Bash(git push --force-with-lease *)"]
+        )
         memory = (self.home / ".claude/CLAUDE.md").read_text()
         self.assertTrue(
             memory.startswith((ROOT / ".chezmoitemplates/agents-common.md").read_text())

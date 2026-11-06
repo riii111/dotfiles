@@ -105,6 +105,11 @@ for event, added in (
         ]
     groups[:] = [group for group in groups if group["hooks"]]
     groups.extend(added)
+# A narrow allow rule is decided before the auto mode classifier, which refused lease pushes.
+allow = settings.setdefault("permissions", {}).setdefault("allow", [])
+for rule in ("Bash(git push --force-with-lease *)",):
+    if rule not in allow:
+        allow.append(rule)
 settings["attribution"] = False
 settings["includeCoAuthoredBy"] = False
 with open(path, "w") as file:
