@@ -22,7 +22,10 @@ def select(paths: list[str]) -> set[str]:
     selected: set[str] = set()
     for path in paths:
         if path.endswith(".md"):
-            continue  # ai-docs always runs; Markdown is not a shell template.
+            # These Markdown files are consumed by cloud setup, not just read as docs.
+            if path.startswith((".chezmoitemplates/", "dot_codex/skills/")):
+                selected.add("cloud")
+            continue  # ai-docs always runs.
         if path in REPO_ONLY:
             selected.add("repo")
         elif path.startswith("dot-tools/"):
@@ -65,7 +68,7 @@ def main() -> None:
                 if path
             ]
         )
-    for name in sorted(ALL):
+    for name in sorted(ALL | {"cloud"}):
         print(f"{name}={str(name in selected).lower()}")
 
 

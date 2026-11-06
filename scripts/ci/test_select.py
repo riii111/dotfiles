@@ -17,7 +17,9 @@ spec.loader.exec_module(selector)
 class SelectionTests(unittest.TestCase):
     def test_path_categories_and_combinations(self):
         cases = [
-            (["dot_codex/skills/example/SKILL.md"], set()),
+            (["README.md"], set()),
+            (["dot_codex/skills/example/SKILL.md"], {"cloud"}),
+            ([".chezmoitemplates/agents-common.md"], {"cloud"}),
             (["flake.nix"], selector.ALL),
             (["nix/moonbit.nix"], selector.ALL),
             (["dot-tools/permission/policy.mbt"], {"dot_tools", "repo", "hooks"}),
@@ -63,7 +65,7 @@ class SelectionTests(unittest.TestCase):
             )
             self.assertEqual(
                 set(result.stdout.splitlines()),
-                {f"{name}=true" for name in selector.ALL},
+                {f"{name}=true" for name in selector.ALL} | {"cloud=false"},
             )
             result = subprocess.run(
                 [sys.executable, str(SELECTOR_PATH), "--base", "bad-base"],
@@ -71,6 +73,24 @@ class SelectionTests(unittest.TestCase):
                 capture_output=True,
             )
             self.assertNotEqual(result.returncode, 0)
+
+            template = repo / ".chezmoitemplates/agents-common.md"
+            template.parent.mkdir()
+            template.write_text("template\n")
+            git("add", ".")
+            git("commit", "-qm", "add template")
+            base = git("rev-parse", "HEAD").stdout.decode().strip()
+            git("rm", str(template.relative_to(repo)))
+            git("commit", "-qm", "remove template")
+            result = subprocess.run(
+                [sys.executable, str(SELECTOR_PATH), "--base", base],
+                cwd=repo,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            self.assertIn("cloud=true", result.stdout.splitlines())
+            self.assertIn("repo=false", result.stdout.splitlines())
 
 
 class RepoCommandTests(unittest.TestCase):
