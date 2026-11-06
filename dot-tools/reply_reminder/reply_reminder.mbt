@@ -50,7 +50,7 @@ async fn read_tail(path : String) -> Array[String] {
     let file = @fs.open(path, mode=ReadOnly)
     defer file.close()
     let size = file.size()
-    // A cut read starts one byte early, so the piece before its first LF is empty when a record begins exactly at the budget, and a cut record otherwise.
+    // A record that begins exactly at the budget is whole, so a cut read starts one byte early to include the LF before it.
     let start = if size > budget { size - budget - 1L } else { 0L }
     let bytes = file.read_exactly_at((size - start).to_int(), position=start)
     (@utf8.decode_lossy(bytes), size > budget)
