@@ -239,6 +239,10 @@ if [[ -o zle ]]; then
   bindkey -r '^T'              # disable Ctrl-T (conflicts with Rectangle)
   # Ctrl+; belongs to the terminal/multiplexer; a forwarded prefix must not become text.
   bindkey -s '^[[59;5u' ''
+  # Rex cannot bind the JIS yen key, so translate its Alt sequence here.
+  if [[ "${TERM_PROGRAM:-}" == "rex" ]]; then
+    bindkey -s $'\e¥' '\\'
+  fi
 fi
 
 # ==========================================
