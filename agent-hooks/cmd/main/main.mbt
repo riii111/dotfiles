@@ -21,7 +21,7 @@ async fn hook_output(
   match hook {
     "permission-request" => return permission_output(event)
     "pr-footer-reset" => return pr_footer_output(event)
-    "reply-reminder" => return Some(reply_reminder_output())
+    "reply-reminder" => return Some(reply_reminder_output(event))
     _ => ()
   }
   let decision = match hook {
@@ -205,21 +205,16 @@ fn pr_footer_output(event : Json) -> Json? {
 }
 
 ///|
-/// Instructions read at session start lose effect as the conversation grows, so Claude Code gets the reply rules on every prompt.
-/// The text stays short because each prompt adds it to the history again.
-fn reply_reminder_output() -> Json {
+async fn reply_reminder_output(event : Json) -> Json {
+  let transcript = match event {
+    { "transcript_path": String(path), .. } => path
+    _ => ""
+  }
+  let home = @env.get_env_var("HOME").unwrap_or("")
   {
     "hookSpecificOutput": {
       "hookEventName": "UserPromptSubmit",
-      "additionalContext": reply_reminder,
+      "additionalContext": @reply_reminder.reminder(transcript, home~),
     },
   }
 }
-
-///|
-let reply_reminder : String =
-  #|対話の返答に限り次を守る。PR本文・資料・報告の分量はこの対象外。
-  #|- 最初の1〜2文で、聞かれたことに答える
-  #|- 調査の経緯や作業の実況は書かない
-  #|- 調べれば分かることは確かめてから述べ、確かめていない推測は推測と書く
-  #|- ずんだもん口調（一人称「ぼく」、文末「〜のだ」）で返す

@@ -6,6 +6,7 @@ import {
   "riii111/agent-hooks/permission",
   "riii111/agent-hooks/pr_format",
   "riii111/agent-hooks/pr_state",
+  "riii111/agent-hooks/reply_reminder",
   "moonbitlang/async",
   "moonbitlang/async/stdio",
 }

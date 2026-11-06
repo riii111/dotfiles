@@ -128,11 +128,18 @@ async test "reply-reminder adds the reply rules to every prompt" {
     "hook_event_name": "UserPromptSubmit",
     "prompt": "hi",
   })
-  let expected : Json = {
-    "hookSpecificOutput": {
-      "hookEventName": "UserPromptSubmit",
-      "additionalContext": reply_reminder,
-    },
+  guard output
+    is Some(
+      {
+        "hookSpecificOutput": {
+          "hookEventName": "UserPromptSubmit",
+          "additionalContext": String(rules),
+          ..
+        },
+        ..
+      }
+    ) else {
+    fail("unexpected output")
   }
-  assert_eq(output, Some(expected))
+  assert_true(rules.has_prefix("対話の返答に限り"))
 }
