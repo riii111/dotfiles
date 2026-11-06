@@ -51,15 +51,15 @@ if ! bash "${AGENT_HOOKS_INSTALLER:-$dotfiles/scripts/install-agent-hooks.sh}" "
 fi
 guards=()
 missing=()
-for name in github-comment-check git-force-check pr-format-check pr-state-check pr-footer-reset reply-reminder; do
+for name in github-comment-check git-force-check pr-format-check pr-state-check pr-footer-reset reply-reminder comment-review-check; do
 	# A hook name that agent-hooks does not know makes it fail, while a known one lets an empty event through.
 	if [[ -x $hooks/agent-hooks ]] && printf '{}' | "$hooks/agent-hooks" "$name" >/dev/null 2>&1; then
 		guards+=("$name=agent-hooks")
 		rm -f "$hooks/$name.py"
 	elif [[ -f $hooks/$name.py ]]; then
 		guards+=("$name=python")
-	elif [[ $name != pr-footer-reset && $name != reply-reminder ]]; then
-		# pr-footer-reset and reply-reminder only adjust Claude's output and guard nothing, so the setup still succeeds without them.
+	elif [[ $name != pr-footer-reset && $name != reply-reminder && $name != comment-review-check ]]; then
+		# These only adjust Claude's output or advise it and guard nothing, so the setup still succeeds without them.
 		missing+=("$name")
 	fi
 done

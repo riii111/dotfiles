@@ -34,9 +34,10 @@ async fn hook_output(
       }
     "pr-state-check" => pr_state_decision(event, options, @pr_state.run_lookup)
     "pr-format-check" => pr_format_decision(event, @pr_format.read_language)
+    "comment-review-check" => comment_review_decision(event)
     _ =>
       fail(
-        "usage: agent-hooks git-force-check [--deny-force-push] | github-comment-check | pr-state-check [--deny-merge] | pr-format-check | permission-request | pr-footer-reset | reply-reminder",
+        "usage: agent-hooks git-force-check [--deny-force-push] | github-comment-check | pr-state-check [--deny-merge] | pr-format-check | comment-review-check | permission-request | pr-footer-reset | reply-reminder",
       )
   }
 
@@ -124,6 +125,21 @@ async fn pr_format_decision(
   } else {
     Some(("deny", @pr_format.denial_reason(problems)))
   }
+}
+
+///|
+async fn comment_review_decision(event : Json) -> (String, String)? {
+  guard event is { "tool_input": { "command": String(command), .. }, .. } else {
+    return None
+  }
+  let session = match event {
+    { "session_id": String(id), .. } => id
+    _ => ""
+  }
+  let home = @env.get_env_var("HOME").unwrap_or("")
+  @comment_review.review(command, event_cwd(event), session~, home~).map(reason => {
+    ("deny", reason)
+  })
 }
 
 ///|

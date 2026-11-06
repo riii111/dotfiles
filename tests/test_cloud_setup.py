@@ -73,6 +73,7 @@ class CloudSetupTest(unittest.TestCase):
                     ("agent-hooks git-force-check", 5),
                     ("agent-hooks pr-format-check", 5),
                     ("agent-hooks pr-state-check", 15),
+                    ("agent-hooks comment-review-check", 10),
                 ],
             },
         )
@@ -378,7 +379,7 @@ class CloudSetupTest(unittest.TestCase):
         )
         self.assertEqual(groups[0]["hooks"], [own])
         self.assertEqual(groups[1]["hooks"], [own])
-        self.assertEqual(sum(len(group["hooks"]) for group in groups), 2 + 1 + 2 + 3)
+        self.assertEqual(sum(len(group["hooks"]) for group in groups), 2 + 1 + 2 + 4)
 
     GUARDS = (
         "github-comment-check",
@@ -435,7 +436,9 @@ class CloudSetupTest(unittest.TestCase):
 
         self.assertEqual(
             self.guard_commands(settings),
-            sorted(f"agent-hooks {name}" for name in self.GUARDS),
+            sorted(
+                f"agent-hooks {name}" for name in (*self.GUARDS, "comment-review-check")
+            ),
         )
         self.assertEqual(self.post_commands(settings), ["agent-hooks pr-footer-reset"])
         for name in (*self.GUARDS, "pr-footer-reset"):
@@ -461,7 +464,9 @@ class CloudSetupTest(unittest.TestCase):
 
         self.assertEqual(
             self.guard_commands(settings),
-            sorted(f"agent-hooks {name}" for name in self.GUARDS),
+            sorted(
+                f"agent-hooks {name}" for name in (*self.GUARDS, "comment-review-check")
+            ),
         )
 
     def test_a_guard_the_previous_agent_hooks_lacks_keeps_its_python_copy(self):
@@ -477,6 +482,7 @@ class CloudSetupTest(unittest.TestCase):
         self.assertEqual(
             self.guard_commands(settings),
             [
+                "agent-hooks comment-review-check",
                 "agent-hooks git-force-check",
                 "agent-hooks github-comment-check",
                 "pr-format-check.py",
