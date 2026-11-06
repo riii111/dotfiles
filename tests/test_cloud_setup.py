@@ -18,10 +18,11 @@ class CloudSetupTest(unittest.TestCase):
         home = tempfile.TemporaryDirectory()
         self.addCleanup(home.cleanup)
         self.home = Path(home.name)
-        # Stands in for the agent-hooks build, which needs Linux x86_64.
+        # Stands in for the agent-hooks build, which needs Linux x86_64. It reads the event as the real one does,
+        # since exiting first would fail the setup's pipe into it.
         self.installer = self.home / "fake-install-agent-hooks.sh"
         self.installer.write_text(
-            'printf "#!/bin/sh\\n" > "$1/agent-hooks" && chmod +x "$1/agent-hooks"\n'
+            'printf "#!/bin/sh\\ncat >/dev/null\\n" > "$1/agent-hooks" && chmod +x "$1/agent-hooks"\n'
         )
 
     def run_setup(self, piped=False, **env):
@@ -119,14 +120,16 @@ class CloudSetupTest(unittest.TestCase):
             },
         )
 
-    def test_a_failed_harnexus_task_build_still_installs_the_rest(self):
+    def test_a_failed_first_taskctl_build_still_installs_the_rest(self):
         settings = self.run_setup(
             HARNEXUS_TASK="1",
-            HARNEXUS_REPO=str(self.home / "missing"),
+            HARNEXUS_TASK_PREFIX=str(self.home / "bin"),
+            TASKCTL_REPO=str(self.home / "missing"),
         )
 
         self.assertEqual(len(settings["hooks"]["PreToolUse"]), 3)
         self.assertTrue((self.home / ".config/harnexus/task.json").exists())
+        self.assertTrue((self.home / ".codex/skills/task-worker/SKILL.md").exists())
 
     def test_replaces_a_skill_whole_when_run_again(self):
         self.run_setup()
@@ -297,38 +300,59 @@ class CloudSetupTest(unittest.TestCase):
         self.assertFalse(stale.exists())
         self.assertFalse((state / "refresh.lock").exists())
 
-    def test_keeps_a_harnexus_task_built_from_the_current_commit(self):
-        harnexus = self.home / "harnexus"
-        subprocess.run(["git", "init", "-q", str(harnexus)], check=True)
-        subprocess.run(
-            [
-                "git",
-                "-C",
-                str(harnexus),
-                "-c",
-                "user.name=T",
-                "-c",
-                "user.email=t@e",
-                "commit",
-                "-q",
-                "--allow-empty",
-                "-m",
-                "c",
-            ],
-            check=True,
-        )
-        head = subprocess.run(
-            ["git", "-C", str(harnexus), "rev-parse", "HEAD"],
+    def source_repo(self, name, files):
+        repo = self.home / name
+        for path, text in files.items():
+            (repo / path).parent.mkdir(parents=True, exist_ok=True)
+            (repo / path).write_text(text)
+        subprocess.run(["git", "init", "-q", str(repo)], check=True)
+        for args in (["add", "-A"], ["commit", "-q", "-m", name]):
+            subprocess.run(
+                ["git", "-C", str(repo), "-c", "user.name=T", "-c", "user.email=t@e"]
+                + args,
+                check=True,
+            )
+        return repo, subprocess.run(
+            ["git", "-C", str(repo), "rev-parse", "HEAD"],
             check=True,
             capture_output=True,
             text=True,
         ).stdout.strip()
-        prefix = self.home / "bin"
-        prefix.mkdir()
-        (prefix / "harnexus-task").write_text("built")
-        (prefix / "harnexus-task").chmod(0o755)
-        (prefix / ".harnexus-task.commit").write_text(head + "\n")
 
+    # Fills the worker template task.json names, as the real check renders every template.
+    TASKCTL = (
+        "#!/bin/sh\n"
+        'case $1 in check) w=$(sed -n \'s/.*"worker": "\\(.*\\)".*/\\1/p\' '
+        '"${XDG_CONFIG_HOME:-$HOME/.config}/harnexus/task.json") && test -f "$w" ;; esac\n'
+    )
+
+    def taskctl_repo(self, name="taskctl", taskctl=TASKCTL):
+        # Stands in for taskctl's installer, which builds with Bun: it records how it was called and switches as
+        # the real one does, only after the new binary passes its check.
+        installer = (
+            "set -e\n"
+            "while [ $# -gt 0 ]; do case $1 in\n"
+            "  --prefix) prefix=$2; shift 2 ;; --repo) repo=$2; shift 2 ;;\n"
+            "  --rev) rev=$2; shift 2 ;; --bun) shift 2 ;; *) mode=$1; shift ;;\n"
+            "esac; done\n"
+            'new=$(mktemp); cp "$repo/taskctl" "$new"; chmod +x "$new"; "$new" check\n'
+            'printf "%s\\n" "$rev" "$mode" >"$prefix/installer.log"\n'
+            'mv "$new" "$prefix/taskctl"\n'
+            'if [ ! -L "$prefix/harnexus-task" ]; then\n'
+            '  if [ -e "$prefix/harnexus-task" ]; then\n'
+            '    [ ! -e "$prefix/harnexus-task.pre-taskctl" ] || exit 1\n'
+            '    mv "$prefix/harnexus-task" "$prefix/harnexus-task.pre-taskctl"\n'
+            "  fi\n"
+            '  ln -s taskctl "$prefix/harnexus-task"\n'
+            "fi\n"
+        )
+        return self.source_repo(
+            name, {"scripts/install.sh": installer, "taskctl": taskctl}
+        )
+
+    def run_task_setup(self, check=True, **env):
+        prefix = self.home / "bin"
+        prefix.mkdir(exist_ok=True)
         ran = subprocess.run(
             ["bash", str(SCRIPT)],
             env={
@@ -337,16 +361,148 @@ class CloudSetupTest(unittest.TestCase):
                 "GIT_CONFIG_NOSYSTEM": "1",
                 "AGENT_HOOKS_INSTALLER": str(self.installer),
                 "HARNEXUS_TASK": "1",
-                "HARNEXUS_REPO": str(harnexus),
                 "HARNEXUS_TASK_PREFIX": str(prefix),
+                **env,
             },
             capture_output=True,
             text=True,
-            check=True,
+        )
+        if check:
+            self.assertEqual(ran.returncode, 0, ran.stderr)
+        return prefix, ran
+
+    def test_installs_taskctl_with_harnexus_task_linked_to_it(self):
+        repo, rev = self.taskctl_repo()
+        prefix = self.home / "bin"
+        prefix.mkdir()
+        (prefix / "harnexus-task").write_text("built from harnexus")
+
+        self.run_task_setup(TASKCTL_REPO=str(repo), TASKCTL_REV=rev)
+
+        self.assertEqual(
+            (prefix / "installer.log").read_text().split(),
+            [rev, "--replace-harnexus-task"],
+        )
+        self.assertEqual(os.readlink(prefix / "harnexus-task"), "taskctl")
+        self.assertEqual(
+            (prefix / "harnexus-task.pre-taskctl").read_text(), "built from harnexus"
+        )
+        self.assertEqual((prefix / ".taskctl.commit").read_text().strip(), rev)
+        self.assertTrue((self.home / ".codex/skills/task-worker/SKILL.md").exists())
+
+    def test_keeps_a_taskctl_built_from_the_pinned_commit(self):
+        repo, rev = self.taskctl_repo()
+        prefix, _ = self.run_task_setup(TASKCTL_REPO=str(repo), TASKCTL_REV=rev)
+        (prefix / "installer.log").unlink()
+
+        # The pinned commit needs no fetch, so a repository that is gone does not matter.
+        self.run_task_setup(TASKCTL_REPO=str(self.home / "missing"), TASKCTL_REV=rev)
+
+        self.assertFalse((prefix / "installer.log").exists())
+        self.assertEqual(os.readlink(prefix / "harnexus-task"), "taskctl")
+
+    def test_a_failed_taskctl_update_keeps_the_previous_set(self):
+        repo, rev = self.taskctl_repo()
+        self.run_task_setup(TASKCTL_REPO=str(repo), TASKCTL_REV=rev)
+        broken, broken_rev = self.taskctl_repo("broken", taskctl="#!/bin/sh\nexit 1\n")
+        skill = self.home / ".codex/skills/task-worker"
+        (skill / "kept.md").write_text("the set in use")
+
+        for name, env in (
+            ("check fails", {"TASKCTL_REPO": str(broken), "TASKCTL_REV": broken_rev}),
+            ("not a full commit", {"TASKCTL_REPO": str(repo), "TASKCTL_REV": rev[:12]}),
+        ):
+            with self.subTest(name):
+                prefix, ran = self.run_task_setup(**env)
+
+                self.assertIn(
+                    "previous skills, task.json and task CLI stay", ran.stderr
+                )
+                self.assertTrue((skill / "kept.md").exists())
+                self.assertEqual((prefix / ".taskctl.commit").read_text().strip(), rev)
+
+    def test_an_installed_taskctl_that_cannot_fill_the_new_templates_keeps_the_set(
+        self,
+    ):
+        repo, rev = self.taskctl_repo()
+        prefix, _ = self.run_task_setup(TASKCTL_REPO=str(repo), TASKCTL_REV=rev)
+        (prefix / "taskctl").write_text("#!/bin/sh\nexit 1\n")
+        kept = self.home / ".codex/skills/task-worker/kept.md"
+        kept.write_text("the set in use")
+
+        _, ran = self.run_task_setup(TASKCTL_REPO=str(repo), TASKCTL_REV=rev)
+
+        self.assertIn("previous skills, task.json and task CLI stay", ran.stderr)
+        self.assertTrue(kept.exists())
+
+    def legacy_repo(self):
+        installer = (
+            "set -e\n"
+            "while [ $# -gt 0 ]; do case $1 in --prefix) prefix=$2; shift 2 ;; *) shift 2 ;; esac; done\n"
+            # Replaces the file as the real one does, so a link left at harnexus-task is not written through.
+            'new=$(mktemp "$prefix/.new.XXXXXX")\n'
+            'printf "#!/bin/sh\\necho legacy\\n" >"$new"\n'
+            'chmod +x "$new" && mv -f "$new" "$prefix/harnexus-task"\n'
+        )
+        return self.source_repo(
+            "harnexus", {"scripts/install-cloud-task.sh": installer}
         )
 
-        self.assertNotIn("was not installed", ran.stderr)
-        self.assertEqual((prefix / "harnexus-task").read_text(), "built")
+    def test_rolls_back_to_the_pinned_harnexus_task_and_forward_again(self):
+        repo, rev = self.taskctl_repo()
+        harnexus, harnexus_rev = self.legacy_repo()
+        pins = {
+            "TASKCTL_REPO": str(repo),
+            "TASKCTL_REV": rev,
+            "HARNEXUS_REPO": str(harnexus),
+            "HARNEXUS_REV": harnexus_rev,
+        }
+        prefix, _ = self.run_task_setup(**pins)
+
+        self.run_task_setup(TASK_CLI="legacy", **pins)
+
+        self.assertFalse((prefix / "harnexus-task").is_symlink())
+        self.assertEqual(os.readlink(prefix / "taskctl"), "harnexus-task")
+        self.assertEqual(
+            subprocess.run(
+                [str(prefix / "taskctl")], capture_output=True, text=True
+            ).stdout,
+            "legacy\n",
+        )
+        self.assertEqual(
+            (prefix / ".harnexus-task.commit").read_text().strip(), harnexus_rev
+        )
+
+        self.run_task_setup(**pins)
+
+        self.assertEqual(os.readlink(prefix / "harnexus-task"), "taskctl")
+        self.assertFalse((prefix / "taskctl").is_symlink())
+
+    def test_keeps_the_commits_only_when_given(self):
+        repo, rev = self.taskctl_repo()
+        self.run_task_setup(TASKCTL_REPO=str(repo), TASKCTL_REV=rev, TASK_CLI="taskctl")
+        options = self.home / ".cache/cloud-setup/options"
+        saved = subprocess.run(
+            [
+                "bash",
+                "-c",
+                f'. "{options}"; echo "$TASKCTL_REV $TASK_CLI $HARNEXUS_REV."',
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+
+        self.assertEqual(saved, f"{rev} taskctl .\n")
+
+        self.run_setup()
+        saved = subprocess.run(
+            ["bash", "-c", f'. "{options}"; echo "$TASKCTL_REV.$HARNEXUS_TASK."'],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+        self.assertEqual(saved, "..\n")
 
     def test_clones_the_dotfiles_when_piped_into_bash(self):
         settings = self.run_setup(
