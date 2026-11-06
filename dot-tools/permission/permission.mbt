@@ -16,7 +16,8 @@ pub async fn decide(
   cwd : String,
   environment : Map[String, String],
 ) -> Decision? {
-  if denial_reason(command, git_config_probe(cwd)) is Some(reason) {
+  let has_config = git_config_probe(cwd)
+  if denial_reason(command, has_config) is Some(reason) {
     return Some(Deny(reason))
   }
   guard event_name == "PermissionRequest" else { return None }
@@ -24,7 +25,7 @@ pub async fn decide(
   if is_safe_auth_status(command) ||
     is_task_dispatch_lock_release(command, home) ||
     safe_git_request(command, cwd, environment) ||
-    safe_push(command, cwd, environment) {
+    safe_push(command, cwd, environment, has_config) {
     Some(Allow)
   } else {
     None
@@ -33,18 +34,30 @@ pub async fn decide(
 
 ///|
 /// Tells whether the effective Git configuration in `cwd` has a key matching a pattern; a failed lookup counts as a match.
+/// Answers are kept for the probe's lifetime, so a probe must not outlive one decision.
 fn git_config_probe(cwd : String) -> async (String) -> Bool {
+  let answers : Map[String, Bool] = Map([])
   async fn(pattern) {
-    let result = @git_trust.run_git(cwd, [
-      "config", "--null", "--get-regexp", pattern,
-    ]) catch {
-      _ => return true
+    if answers.get(pattern) is Some(answer) {
+      return answer
     }
-    if result.status != 0 && result.status != 1 {
-      return true
-    }
-    result.stdout != ""
+    let answer = has_git_config(cwd, pattern)
+    answers[pattern] = answer
+    answer
   }
+}
+
+///|
+async fn has_git_config(cwd : String, pattern : String) -> Bool {
+  let result = @git_trust.run_git(cwd, [
+    "config", "--null", "--get-regexp", pattern,
+  ]) catch {
+    _ => return true
+  }
+  if result.status != 0 && result.status != 1 {
+    return true
+  }
+  result.stdout != ""
 }
 
 ///|
@@ -221,8 +234,15 @@ async fn safe_push(
   command : String,
   cwd : String,
   environment : Map[String, String],
+  has_config : async (String) -> Bool,
 ) -> Bool {
-  guard exact_words(command) is Some(words) else { return false }
+  guard exact_words(command)
+    is Some(
+      ["git", "push", "origin", "HEAD"]
+      | ["git", "push", "-u" | "--set-upstream", "origin", "HEAD"]
+    ) else {
+    return false
+  }
   if has_unsafe_ambient_git_environment(environment) {
     return false
   }
@@ -233,12 +253,7 @@ async fn safe_push(
   guard @git_trust.trusted_repository(cwd, ignore_case=true) is Some(_) else {
     return false
   }
-  if unsafe_git_configuration("push", ["origin", "HEAD"], git_config_probe(cwd)) {
-    return false
-  }
-  words
-  is (["git", "push", "origin", "HEAD"]
-  | ["git", "push", "-u" | "--set-upstream", "origin", "HEAD"])
+  !unsafe_git_configuration("push", ["origin", "HEAD"], has_config)
 }
 
 ///|
