@@ -18,10 +18,11 @@ class CloudSetupTest(unittest.TestCase):
         home = tempfile.TemporaryDirectory()
         self.addCleanup(home.cleanup)
         self.home = Path(home.name)
-        # Stands in for the agent-hooks build, which needs Linux x86_64.
+        # Stands in for the agent-hooks build, which needs Linux x86_64. It reads the event as the real one does,
+        # since exiting first would fail the setup's pipe into it.
         self.installer = self.home / "fake-install-agent-hooks.sh"
         self.installer.write_text(
-            'printf "#!/bin/sh\\n" > "$1/agent-hooks" && chmod +x "$1/agent-hooks"\n'
+            'printf "#!/bin/sh\\ncat >/dev/null\\n" > "$1/agent-hooks" && chmod +x "$1/agent-hooks"\n'
         )
 
     def run_setup(self, piped=False, **env):
