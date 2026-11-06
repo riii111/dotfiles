@@ -1,8 +1,8 @@
 // Denies `gh pr create` and `gh pr edit` when the title or body breaks the mechanical format rules.
 // A pull request the GitHub MCP server creates or edits, as in Claude Code cloud sessions, is checked the same way from
 // its structured title and body, and must be created as a draft.
-// The language comes from `git config pr.language` (ja or en). The user sets it per repository, so an unset value blocks
-// the pull request instead of being guessed.
+// The language comes from `git config pr.language` (ja or en) of the pull request's repository, not of the session's
+// folder. The user sets it per repository, so an unset value blocks the pull request instead of being guessed.
 
 ///|
 pub let denial_header : String = "PRのタイトルか本文を次のとおり直し、同じコマンドを再実行してください。"
@@ -16,11 +16,18 @@ let unreadable_body : String = "本文をコマンド内に直接書く。`--bod
 ///|
 /// Returns the problems of the pull request a PreToolUse event creates or edits.
 /// `read_language` returns `git config pr.language` for a folder; an error it raises is passed on.
+/// `home` defaults to `$HOME`.
 pub async fn check(
   event : Json,
   cwd : String,
   read_language : async (String) -> String?,
+  home? : String,
 ) -> Array[String] {
+  let home = match home {
+    Some(home) => home
+    None => @env.get_env_var("HOME").unwrap_or("")
+  }
+  let folder = () => language_folder(target(event, cwd, home), home)
   let name = match event {
     { "tool_name": String(name), .. } => name
     _ => ""
@@ -46,7 +53,7 @@ pub async fn check(
     }
     if title is Some(_) || body is Some(_) {
       problems.push_iter(
-        language_problems(cwd, title, body, read_language).iter(),
+        language_problems(folder, title, body, read_language).iter(),
       )
     }
     return problems
@@ -67,7 +74,7 @@ pub async fn check(
   }
   if pr.title is Some(_) || pr.body is Some(_) {
     problems.push_iter(
-      language_problems(cwd, pr.title, pr.body, read_language).iter(),
+      language_problems(folder, pr.title, pr.body, read_language).iter(),
     )
   }
   problems
@@ -87,12 +94,12 @@ fn text_field(input : Json, key : String) -> String? {
 
 ///|
 async fn language_problems(
-  cwd : String,
+  folder : async () -> String,
   title : String?,
   body : String?,
   read_language : async (String) -> String?,
 ) -> Array[String] {
-  match read_language(cwd) {
+  match read_language(folder()) {
     Some("ja" | "en" as language) => check_language(language, title, body)
     _ => [unset_language]
   }

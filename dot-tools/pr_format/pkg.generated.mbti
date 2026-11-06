@@ -2,7 +2,7 @@
 package "riii111/dot-tools/pr_format"
 
 // Values
-pub async fn check(Json, String, async (String) -> String?) -> Array[String]
+pub async fn check(Json, String, async (String) -> String?, home? : String) -> Array[String]
 
 pub fn check_body(String) -> Array[String]
 
