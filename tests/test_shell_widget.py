@@ -89,7 +89,17 @@ bindkey '^Y' backward-char
                                 output += os.read(master, 65536)
                         self.assertIn(b"WIDGET-READY> ", output)
                         selection_key = b"\x07" if key == "repository" else b"\x02"
-                        os.write(master, b": abcdef\x19\x19" + selection_key + b"\x18")
+                        # Ctrl+; can reach zsh from the terminal's multiplexer prefix.
+                        # Exercise it both before the first text input and while editing.
+                        prefix = b"\x1b[59;5u"
+                        os.write(
+                            master,
+                            prefix
+                            + b": abcdef\x19\x19"
+                            + prefix
+                            + selection_key
+                            + b"\x18",
+                        )
                         while (
                             not (home / "result").exists()
                             and time.monotonic() < deadline

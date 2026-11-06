@@ -237,6 +237,8 @@ if [[ -o zle ]]; then
   fi
   bindkey '^F' forward-char
   bindkey -r '^T'              # disable Ctrl-T (conflicts with Rectangle)
+  # Ctrl+; belongs to the terminal/multiplexer; a forwarded prefix must not become text.
+  bindkey -s '^[[59;5u' ''
 fi
 
 # ==========================================
