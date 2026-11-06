@@ -18,12 +18,12 @@ class RepositoryWidgetTest(unittest.TestCase):
         for machine in ("personal", "work"):
             for cancel in (False, True):
                 with self.subTest(machine=machine, cancel=cancel), tempfile.TemporaryDirectory() as directory:
-                    home = Path(directory)
+                    home = Path(directory).resolve()
                     destination = home / "ghq/repo with spaces"
                     destination.mkdir(parents=True)
                     env = {
-                        "HOME": directory,
-                        "ZDOTDIR": directory,
+                        "HOME": str(home),
+                        "ZDOTDIR": str(home),
                         "PATH": os.environ.get("PATH", os.defpath),
                         "TERM": "xterm",
                         "CANCEL": str(int(cancel)),
