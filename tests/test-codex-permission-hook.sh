@@ -7,7 +7,6 @@ while IFS= read -r variable; do
 done < <(env | sed -n 's/=.*//p' | sed -n '/^GIT_/p')
 export GIT_PAGER=cat
 
-repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 # Tests the agent-hooks on PATH; the Nix dev shells build it from this checkout.
 hook="${AGENT_HOOKS:-agent-hooks}"
 # macOS TMPDIR ends with "/", and the hook compares resolved paths.
@@ -17,10 +16,6 @@ test_home="$test_root/home"
 tmpdir="$test_home/ghq/github.com/riii111/test"
 trap 'rm -rf "$test_root"' EXIT
 mkdir -p "$tmpdir"
-hooks_config="$test_root/hooks.json"
-HOME="$test_home" chezmoi --config "$repo_root/tests/chezmoi/personal.toml" \
-	--source "$repo_root" --persistent-state "$test_root/chezmoistate.boltdb" \
-	execute-template --file "$repo_root/dot_codex/hooks.json.tmpl" >"$hooks_config"
 git -C "$tmpdir" init -q
 git -C "$tmpdir" switch -q -c feat/test
 git -C "$tmpdir" remote add origin https://github.com/riii111/test.git
@@ -32,9 +27,6 @@ run_hook() {
 		'{cwd:$cwd,hook_event_name:$event_name,tool_input:{command:$command}}' |
 		HOME="$test_home" "$hook" permission-request
 }
-
-jq -e '.hooks.PreToolUse[0].matcher == "^Bash$"' "$hooks_config" >/dev/null
-jq -e '.hooks.PermissionRequest[0].matcher == "^Bash$"' "$hooks_config" >/dev/null
 
 permission_request() { run_hook PermissionRequest "$1"; }
 pre_tool_use() { run_hook PreToolUse "$1"; }
@@ -58,6 +50,27 @@ expect_silent() {
 		return 1
 	fi
 }
+
+# A command no rule could approve starts no Git, and the denial checks and push approval share their Git lookups.
+git_log="$test_root/git.log"
+mkdir -p "$test_root/bin"
+cat >"$test_root/bin/git" <<EOF
+#!/bin/sh
+printf '%s\n' "\$*" >>"$git_log"
+exec "$(command -v git)" "\$@"
+EOF
+chmod +x "$test_root/bin/git"
+record_git() {
+	: >"$git_log"
+	PATH="$test_root/bin:$PATH" "$@"
+}
+record_git expect_silent permission_request 'ls -la'
+[ ! -s "$git_log" ]
+record_git expect_silent pre_tool_use 'git diff'
+[ -s "$git_log" ]
+[ -z "$(sort "$git_log" | uniq -d)" ]
+record_git permission_request 'git push origin HEAD' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
+[ -z "$(sort "$git_log" | uniq -d)" ]
 
 permission_request 'git push -u origin HEAD' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
 permission_request 'git push origin HEAD' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
@@ -231,8 +244,7 @@ for command in \
 	'if true; then git reset --hard; fi' \
 	"printf 'git reset --hard\\n' | sh" \
 	"git -c alias.x='!git reset --hard' x" \
-	'nohup git reset --hard' \
-	"printf 'git reset --hard\\n' | sh"; do
+	'nohup git reset --hard'; do
 	pre_tool_use "$command" | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
 done
 

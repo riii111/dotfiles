@@ -40,12 +40,11 @@ async fn hierarchy(root : String) -> String {
 }
 
 ///|
-async test "branches are nested under the branch they forked from" {
+async test "branches are nested under their fork point, colored only when current or in another worktree" {
   let root = @fs.realpath(@fs.tmpdir(prefix="git-tree-"))
   let repository = hierarchy(root)
-  let tree = branch_tree(Git::new(Some(repository)), color=false)
   assert_eq(
-    tree,
+    branch_tree(Git::new(Some(repository)), color=false),
     Some(
       (
         #|
@@ -59,17 +58,24 @@ async test "branches are nested under the branch they forked from" {
       ),
     ),
   )
-  @fs.rmdir(root, recursive=true)
-}
-
-///|
-async test "colors mark the current branch and branches in other worktrees" {
-  let root = @fs.realpath(@fs.tmpdir(prefix="git-tree-"))
-  let repository = hierarchy(root)
-  let tree = branch_tree(Git::new(Some(repository)), color=true).unwrap()
-  assert_true(tree.contains("\u{1b}[1;32mc (+1) ★\u{1b}[0m"))
-  assert_true(tree.contains("\u{1b}[36md (+1) ● other\u{1b}[0m"))
-  assert_true(tree.contains("  main\n"))
+  let current = "\u{1b}[1;32m"
+  let worktree = "\u{1b}[36m"
+  let reset = "\u{1b}[0m"
+  assert_eq(
+    branch_tree(Git::new(Some(repository)), color=true),
+    Some(
+      (
+        $|
+        $|  main
+        $|  ├── a (+1)
+        $|  │   ├── \{current}c (+1) ★\{reset}
+        $|  │   └── b (+2)
+        $|  └── \{worktree}d (+1) ● other\{reset}
+        $|
+        $|
+      ),
+    ),
+  )
   @fs.rmdir(root, recursive=true)
 }
 
