@@ -84,7 +84,7 @@ let value_options : Array[String] = [
 /// Arguments the shell would expand, or a command it cannot split, name nothing either.
 fn gh_arguments(command : String) -> GhArguments {
   let words = @shell.split_words(
-    first_line(without_heredoc_bodies(command)),
+    command_lines(without_heredoc_bodies(command))[0],
     punctuation="();&|",
     comments=false,
   ) catch {
@@ -127,24 +127,31 @@ fn gh_arguments(command : String) -> GhArguments {
 }
 
 ///|
-/// The text up to the first newline that ends a command: one outside quotes and not escaped.
-fn first_line(command : String) -> String {
+/// Splits `command` at each newline that ends a command: one outside quotes and not escaped.
+fn command_lines(command : String) -> Array[String] {
+  let chars = command.to_array()
+  let lines = []
+  let mut start = 0
   let mut quote = None
   let mut escaped = false
-  for index, char in command.to_array() {
+  for index, char in chars {
     if escaped {
       escaped = false
       continue
     }
     match (quote, char) {
-      (None, '\n') => return String::from_array(command.to_array()[:index])
+      (None, '\n') => {
+        lines.push(String::from_array(chars[start:index]))
+        start = index + 1
+      }
       (None, '\'' | '"') => quote = Some(char)
       (None, '\\') | (Some('"'), '\\') => escaped = true
       (Some(open), _) if open == char => quote = None
       _ => ()
     }
   }
-  command
+  lines.push(String::from_array(chars[start:]))
+  lines
 }
 
 ///|
@@ -271,7 +278,11 @@ fn is_name(part : String) -> Bool {
 /// A `cd` inside a subshell that has closed does not apply. A directory the shell would expand, other than a leading
 /// `~`, makes the folder unknown.
 fn cd_folder(prefix : String, cwd : String, home : String) -> String? {
-  let words = @shell.split_words(prefix, punctuation="();&|", comments=false) catch {
+  let words = @shell.split_words(
+    command_lines(prefix).join(";"),
+    punctuation="();&|",
+    comments=false,
+  ) catch {
     _ => return None
   }
   let mut folder = None

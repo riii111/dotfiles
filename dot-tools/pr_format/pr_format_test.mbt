@@ -351,6 +351,10 @@ async test "the language is read from the pull request's repository" {
     ),
     "/work/session",
   )
+  assert_eq(
+    language_folder(pr_event("cd /srv\ncd app\n", "create"), home),
+    "/srv/app",
+  )
   for prefix in ["(cd /other && make); ", "cd /other | cat; ", "cd /other & "] {
     assert_eq(
       language_folder(pr_event(prefix, "create"), home),
