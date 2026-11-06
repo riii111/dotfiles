@@ -160,13 +160,21 @@ install_taskctl() {
 	)
 }
 
+# The old harnexus-task has no template check, so starting it is all that is checked before the switch.
 install_legacy_harnexus_task() {
-	if [[ ! -x $task_prefix/harnexus-task || -L $task_prefix/harnexus-task ||
-		$(cat "$task_prefix/.harnexus-task.commit" 2>/dev/null) != "$harnexus_rev" ]]; then
+	if [[ -x $task_prefix/harnexus-task && ! -L $task_prefix/harnexus-task &&
+		$(cat "$task_prefix/.harnexus-task.commit" 2>/dev/null) == "$harnexus_rev" ]]; then
+		"$task_prefix/harnexus-task" environment >/dev/null || return 1
+	else
 		(
 			source="$stage/harnexus"
+			built="$stage/legacy"
 			fetch_commit "$source" "$harnexus_repo" "$harnexus_rev" || exit 1
-			bash "$source/scripts/install-cloud-task.sh" --prefix "$task_prefix" --bun "$bun_bin" || exit 1
+			bash "$source/scripts/install-cloud-task.sh" --prefix "$built" --bun "$bun_bin" || exit 1
+			"$built/harnexus-task" environment >/dev/null || exit 1
+			mkdir -p "$task_prefix"
+			staged=$(mktemp "$task_prefix/.harnexus-task.XXXXXX")
+			install -m 0755 "$built/harnexus-task" "$staged" && mv -f "$staged" "$task_prefix/harnexus-task" || exit 1
 			printf '%s\n' "$harnexus_rev" >"$task_prefix/.harnexus-task.commit"
 		) || return 1
 	fi

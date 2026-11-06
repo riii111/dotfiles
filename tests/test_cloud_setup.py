@@ -435,18 +435,33 @@ class CloudSetupTest(unittest.TestCase):
         self.assertIn("previous skills, task.json and task CLI stay", ran.stderr)
         self.assertTrue(kept.exists())
 
-    def legacy_repo(self):
+    def legacy_repo(self, name="harnexus", body="echo legacy"):
         installer = (
             "set -e\n"
             "while [ $# -gt 0 ]; do case $1 in --prefix) prefix=$2; shift 2 ;; *) shift 2 ;; esac; done\n"
+            'mkdir -p "$prefix"\n'
             # Replaces the file as the real one does, so a link left at harnexus-task is not written through.
             'new=$(mktemp "$prefix/.new.XXXXXX")\n'
-            'printf "#!/bin/sh\\necho legacy\\n" >"$new"\n'
+            f'printf "#!/bin/sh\\n{body}\\n" >"$new"\n'
             'chmod +x "$new" && mv -f "$new" "$prefix/harnexus-task"\n'
         )
-        return self.source_repo(
-            "harnexus", {"scripts/install-cloud-task.sh": installer}
+        return self.source_repo(name, {"scripts/install-cloud-task.sh": installer})
+
+    def test_a_legacy_harnexus_task_that_does_not_start_keeps_the_set(self):
+        repo, rev = self.taskctl_repo()
+        prefix, _ = self.run_task_setup(TASKCTL_REPO=str(repo), TASKCTL_REV=rev)
+        broken, broken_rev = self.legacy_repo("broken", body="exit 1")
+        kept = self.home / ".codex/skills/task-worker/kept.md"
+        kept.write_text("the set in use")
+
+        _, ran = self.run_task_setup(
+            TASK_CLI="legacy", HARNEXUS_REPO=str(broken), HARNEXUS_REV=broken_rev
         )
+
+        self.assertIn("previous skills, task.json and task CLI stay", ran.stderr)
+        self.assertTrue(kept.exists())
+        self.assertEqual(os.readlink(prefix / "harnexus-task"), "taskctl")
+        self.assertFalse((prefix / "taskctl").is_symlink())
 
     def test_rolls_back_to_the_pinned_harnexus_task_and_forward_again(self):
         repo, rev = self.taskctl_repo()
