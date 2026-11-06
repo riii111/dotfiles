@@ -5,6 +5,7 @@ import {
   "riii111/dot-tools/permission",
   "riii111/dot-tools/pr_format",
   "riii111/dot-tools/pr_state",
+  "riii111/dot-tools/reply_reminder",
   "moonbitlang/async",
   "moonbitlang/async/stdio",
 }

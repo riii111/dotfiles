@@ -109,6 +109,19 @@ class AgentHooksRegistrationTest(unittest.TestCase):
                     )
                 )
 
+    def test_only_claude_code_gets_the_reply_reminder(self):
+        hooks = json.loads(self.render("dot_claude/settings.json.tmpl"))["hooks"]
+        self.assertEqual(
+            [
+                hook["command"].rsplit("/", 1)[-1]
+                for group in hooks["UserPromptSubmit"]
+                for hook in group["hooks"]
+            ],
+            ["agent-hooks reply-reminder"],
+        )
+        codex = json.loads(self.render("dot_codex/hooks.json.tmpl"))["hooks"]
+        self.assertNotIn("reply-reminder", json.dumps(codex))
+
 
 if __name__ == "__main__":
     unittest.main()

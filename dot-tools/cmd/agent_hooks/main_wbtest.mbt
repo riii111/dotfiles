@@ -121,3 +121,25 @@ async test "pr-footer-reset asks to send the created body again" {
     is None,
   )
 }
+
+///|
+async test "reply-reminder adds the reply rules to every prompt" {
+  let output = hook_output("reply-reminder", [], {
+    "hook_event_name": "UserPromptSubmit",
+    "prompt": "hi",
+  })
+  guard output
+    is Some(
+      {
+        "hookSpecificOutput": {
+          "hookEventName": "UserPromptSubmit",
+          "additionalContext": String(rules),
+          ..
+        },
+        ..
+      }
+    ) else {
+    fail("unexpected output")
+  }
+  assert_true(rules.has_prefix("対話の返答に限り"))
+}

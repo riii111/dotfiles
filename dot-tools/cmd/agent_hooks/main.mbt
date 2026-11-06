@@ -21,6 +21,7 @@ async fn hook_output(
   match hook {
     "permission-request" => return permission_output(event)
     "pr-footer-reset" => return pr_footer_output(event)
+    "reply-reminder" => return Some(reply_reminder_output(event))
     _ => ()
   }
   let decision = match hook {
@@ -35,7 +36,7 @@ async fn hook_output(
     "pr-format-check" => pr_format_decision(event, @pr_format.read_language)
     _ =>
       fail(
-        "usage: agent-hooks git-force-check [--deny-force-push] | github-comment-check | pr-state-check [--deny-merge] | pr-format-check | permission-request | pr-footer-reset",
+        "usage: agent-hooks git-force-check [--deny-force-push] | github-comment-check | pr-state-check [--deny-merge] | pr-format-check | permission-request | pr-footer-reset | reply-reminder",
       )
   }
 
@@ -185,4 +186,19 @@ fn pr_footer_output(event : Json) -> Json? {
     "reason": "作成したPRの本文に、GitHub側でClaude Codeの署名とセッションのリンクが追記された。`mcp__github__update_pull_request` で、本文を次の内容に上書きする。\n\n" +
     body,
   })
+}
+
+///|
+async fn reply_reminder_output(event : Json) -> Json {
+  let transcript = match event {
+    { "transcript_path": String(path), .. } => path
+    _ => ""
+  }
+  let home = @env.get_env_var("HOME").unwrap_or("")
+  {
+    "hookSpecificOutput": {
+      "hookEventName": "UserPromptSubmit",
+      "additionalContext": @reply_reminder.reminder(transcript, home~),
+    },
+  }
 }

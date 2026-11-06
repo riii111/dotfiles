@@ -77,6 +77,14 @@ class CloudSetupTest(unittest.TestCase):
             },
         )
         self.assertEqual(self.post_commands(settings), ["agent-hooks pr-footer-reset"])
+        self.assertEqual(
+            [
+                hook["command"].rsplit("/", 1)[-1]
+                for group in settings["hooks"]["UserPromptSubmit"]
+                for hook in group["hooks"]
+            ],
+            ["agent-hooks reply-reminder"],
+        )
 
     def test_installs_the_review_skills_and_the_task_templates(self):
         self.run_setup()
@@ -503,6 +511,7 @@ class CloudSetupTest(unittest.TestCase):
         settings = json.loads((self.home / ".claude/settings.json").read_text())
         self.assertEqual(settings["hooks"]["PreToolUse"], [])
         self.assertEqual(settings["hooks"]["PostToolUse"], [])
+        self.assertEqual(settings["hooks"]["UserPromptSubmit"], [])
         self.assertTrue((self.home / ".codex/skills/task-worker/SKILL.md").exists())
 
     def test_brings_the_local_rules_and_drops_attribution(self):

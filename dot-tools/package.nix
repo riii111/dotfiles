@@ -36,6 +36,7 @@ stdenv.mkDerivation {
       ./permission
       ./pr_format
       ./pr_state
+      ./reply_reminder
       ./shell
       ./statusline
       ./text

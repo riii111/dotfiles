@@ -312,6 +312,17 @@
     "codex@openai-codex": true
   },
   "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "{{ .chezmoi.homeDir }}/.nix-profile/bin/agent-hooks reply-reminder",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "^(Bash|mcp__.*)$",
