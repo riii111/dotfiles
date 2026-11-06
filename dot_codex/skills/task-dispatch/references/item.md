@@ -73,7 +73,7 @@ idleだけで停止と判断しない。
 
 ### 起動結果の確認
 
-`running`で`worker_thread`が空なら、起動結果を記録する前に止まった項目として`harnexus-task state --request requests/<file>.json`を見る。
+`running`で`worker_thread`が空なら、起動結果を記録する前に止まった項目として`taskctl state --request requests/<file>.json`を見る。
 `workerThreadId`があれば書いて`launched`を追記する。
 `pending`があれば`needs_decision`にし、Appで確認する内容を`next_action`に書く。
 どちらもなければ`ready`に戻す。

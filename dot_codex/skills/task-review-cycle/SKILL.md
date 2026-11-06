@@ -7,7 +7,8 @@ description: |
 
 # Task Review Cycle
 
-`harnexus-task environment`が`"host":"claude"`を返す場合は、先に末尾の「Claude CodeのCloud」を読む。
+`taskctl`が未導入なら、互換入口の`harnexus-task`を同じ引数で使う。
+`taskctl environment`が`"host":"claude"`を返す場合は、先に末尾の「Claude CodeのCloud」を読む。
 
 commit済み候補をfreshなCodex reviewerへ渡し、以後は同じreview Taskで続ける。
 修正・検証・review基点・完了条件は[task-worker](../task-worker/SKILL.md)に従う。
@@ -16,21 +17,21 @@ LGTMの後に、owner・レビュアー・reviewerから伝えられた指摘へ
 
 ## 依頼と結果の受取
 
-`harnexus-task`が未導入ならユーザーに伝えて停止する。
+`taskctl`と`harnexus-task`がどちらも未導入ならユーザーに伝えて停止する。
 worktreeに`*`だけの`.gitignore`を置いた`.reviewctl/`を作り、[依頼JSON](references/request.md)を`.reviewctl/request.json`へ保存する。
 候補はcommit済みで、追跡ファイルに未commitの変更がないことを`git status`で確認する。
 
-1. `harnexus-task review --request <worktree>/.reviewctl/request.json`をサンドボックス外で一度実行する。
+1. `taskctl review --request <worktree>/.reviewctl/request.json`をサンドボックス外で一度実行する。
    Codexは`sandbox_permissions: require_escalated`を付け、Claudeはそのまま実行する（サンドボックス対象外）。
    パイプ・リダイレクト・`cd`などを付けず単独で実行する（付けると対象外にならない）。
    ユーザーがモデル設定を指定した場合だけ`--model`・`--thinking`を渡す。
-2. harnexus-taskがbase/head SHAを固定し、初回はreviewerを作成、以後は同じreviewerへ送る。
+2. taskctlがbase/head SHAを固定し、初回はreviewerを作成、以後は同じreviewerへ送る。
    同じheadは再送しない。
    失敗時は出力の理由を報告し、create_thread・send_message_to_threadを直接呼ばない。
 3. 結果を受け取る。
    Codexはturnを終了し、reviewerの返信で次turnを始める。
    Claudeはharnexusの`wait_threads` / `read_thread`で待つ。
-4. 最終回答のbase/headが`harnexus-task state --request <JSON>`の`base`・`head`と一致することを確認する。
+4. 最終回答のbase/headが`taskctl state --request <JSON>`の`base`・`head`と一致することを確認する。
    修正後は同じJSONのPR URL・参照文書を必要に応じて更新し、手順1から繰り返す。
    LGTM後の指摘への修正では繰り返さない。
    判定保留なら不足を解消する。
@@ -43,11 +44,11 @@ Claudeモデルを指定された場合は、対応するモデルの指定を�
 
 結果不明・モデル不一致では再実行しても送信されない。
 ユーザーがAppで確認した結果だけを、承認を得て記録する。
-送信済みなら`harnexus-task resolve --request <JSON> --sent [--thread-id <ID>]`、未送信なら`--not-sent`で記録する。
+送信済みなら`taskctl resolve --request <JSON> --sent [--thread-id <ID>]`、未送信なら`--not-sent`で記録する。
 
 ## 再開と基点更新
 
-`harnexus-task state --request <JSON>`の出力は平らなJSONで、次のキーを最上位から読む。
+`taskctl state --request <JSON>`の出力は平らなJSONで、次のキーを最上位から読む。
 
 - `reviewerThreadId`
 - `base`・`head`
@@ -68,7 +69,7 @@ base branchが進んだことだけを理由にLGTMを保留しないでくだ�
 
 ## Claude CodeのCloud
 
-`harnexus-task environment`が`"host":"claude"`を返す場合、reviewerは同じVMのCodex CLIで動き、Appのチャットは使わない。
+`taskctl environment`が`"host":"claude"`を返す場合、reviewerは同じVMのCodex CLIで動き、Appのチャットは使わない。
 この節が、手順2の「同じheadは再送しない」と手順3〜4の受け取り方に代わる。
 依頼JSONは次のとおりにする。
 
@@ -79,7 +80,7 @@ base branchが進んだことだけを理由にLGTMを保留しないでくだ�
 - GitHubのIssueやPRの本文は、reviewerのsandboxから読めないことがある。
   本文を取得して`.reviewctl/`に保存し、そのファイルの絶対パスを渡す。
 
-`harnexus-task review --request <JSON>`はレビューが終わるまで戻らず、1〜2分かかる。
+`taskctl review --request <JSON>`はレビューが終わるまで戻らず、1〜2分かかる。
 Bashのtimeoutは最大10分で、`HARNEXUS_REVIEW_TIMEOUT_MS`（既定30分）に届かないため、バックグラウンドで実行して終了を待つ。
 出力の`status`が`completed`なら、`verdict`・`answer`・`base`・`head`をそのまま結果として扱う。
 `verdict`が`null`なら`answer`を読み、判定の行がなければ判定保留として扱う。
@@ -88,9 +89,9 @@ Bashのtimeoutは最大10分で、`HARNEXUS_REVIEW_TIMEOUT_MS`（既定30分）�
 taskId・workerAI・checkoutは変えず、PRを作った後はprUrlを更新する。
 判定が`LGTM`か`修正必要`だったheadは拒否されるため、修正をcommitしてから再実行する。
 判定保留なら、reviewerに足りなかった資料などを依頼JSONに足し、同じheadのまま再実行する。
-reviewerを`codex exec`で直接呼ばず、追加の依頼もすべて`harnexus-task review`を通す。
+reviewerを`codex exec`で直接呼ばず、追加の依頼もすべて`taskctl review`を通す。
 ユーザーがAppのReviewチャットからreviewerへ送ったメッセージが届いたら、その本文をファイルに保存する。
-`harnexus-task review --request <JSON> --ask <そのファイル>`で同じreviewerへ渡し、出力の`answer`をそのまま返す。
+`taskctl review --request <JSON> --ask <そのファイル>`で同じreviewerへ渡し、出力の`answer`をそのまま返す。
 `--ask`は判定もレビュー済みのheadも変えない。
 回答で修正が必要になったら、通常どおり修正をcommitして再レビューする。
 出力が結果不明（`--recover discard`の案内）なら再実行せず、報告して停止する。

@@ -18,7 +18,7 @@ workerAIはCodexまたはClaudeで、reviewerの返却方法を決める。
 taskIdは管理元内の対象識別子。
 documentRefsは管理元を先頭に置く絶対パス・HTTPS URLの配列で、合意・規約・判断記録も文書として参照する。
 資料本文や補足文をJSONへ入れない。
-workerのチャットIDはharnexus-taskが`CODEX_THREAD_ID`から取得する。
+workerのチャットIDはtaskctlが`CODEX_THREAD_ID`から取得する。
 checkoutは`~/.codex/worktrees/`配下のworker worktreeに限る。
 
 baseBranchはローカルまたはremote追跡branch名。
@@ -34,6 +34,6 @@ displayNameは任意で、スレッド一覧で仕事が分かる一行の名前
 起動依頼のdisplayNameやIssueのタイトルを使う。
 指定するとreviewerのスレッド名は`Review｜<displayName>`、省略時は`Review <taskId>`になる。
 
-stateはharnexus-taskが`~/.local/state/taskctl/`に保存する。
+stateはtaskctlが`~/.local/state/taskctl/`に保存する。
 reviewctlの`.reviewctl/state.json`に確定済みreviewerがあれば読み取り、同じreviewerで再開する。
 作成待ちのまま残った旧stateは拒否されるため、Appで確認してreviewerがなければ削除する。

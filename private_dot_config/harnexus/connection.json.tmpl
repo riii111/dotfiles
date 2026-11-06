@@ -1,0 +1,12 @@
+{{- /* The adapter is started by the app at its next launch, so it is registered only after the switch sets harnexus_adapter ("observe" or "write") in the chezmoi data. */ -}}
+{
+  "cloudSkills": ["cloud-session"]
+{{- if hasKey . "harnexus_adapter" }},
+  "externalConversationAdapter": {
+    "id": "taskctl",
+    "command": "{{ .chezmoi.homeDir }}/.local/bin/taskctl",
+    "args": ["adapter", "serve", "--id", "taskctl"],
+    "mode": {{ .harnexus_adapter | quote }}
+  }
+{{- end }}
+}
