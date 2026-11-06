@@ -5,7 +5,7 @@
 }:
 
 # nixpkgs has no MoonBit, so this pins the official release and its core library by hash.
-# Keep the version and hashes in sync with scripts/install-agent-hooks.sh, which builds agent-hooks in cloud sessions.
+# Keep the version and hashes in sync with scripts/install-agent-hooks.sh, which builds the agent-hooks command in cloud sessions.
 stdenv.mkDerivation (attrs: {
   pname = "moonbit";
   version = "0.10.17+d971670cd";

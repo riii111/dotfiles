@@ -79,6 +79,23 @@ class ShellEnvironmentTest(unittest.TestCase):
                 paths.index("/nix/var/nix/profiles/default/bin"),
             )
 
+    def test_homebrew_setup_is_idempotent_and_keeps_project_paths(self):
+        values = self.run_zsh(
+            'MANPATH=/custom/man:; INFOPATH=/custom/info; '
+            '_dotfiles_homebrew_env prepend; _dotfiles_place_nix_path; '
+            '_dotfiles_homebrew_env; _dotfiles_place_nix_path; '
+            'print -rl -- "$PATH" "$MANPATH" "$INFOPATH" '
+            '"$HOMEBREW_PREFIX" "$HOMEBREW_CELLAR" "$HOMEBREW_REPOSITORY"'
+        )
+        paths = values[0].split(":")
+        self.assertLess(paths.index(str(self.project)), paths.index(str(self.profile / "bin")))
+        self.assertLess(paths.index(str(self.cargo)), paths.index(str(self.profile / "bin")))
+        self.assertLess(paths.index(str(self.profile / "bin")), paths.index("/opt/homebrew/bin"))
+        self.assertEqual(paths.count("/opt/homebrew/bin"), 1)
+        self.assertEqual(values[1].split(":").count("/opt/homebrew/share/man"), 1)
+        self.assertEqual(values[2].split(":").count("/opt/homebrew/share/info"), 1)
+        self.assertEqual(values[3:], ["/opt/homebrew", "/opt/homebrew/Cellar", "/opt/homebrew"])
+
     def test_clients_share_the_managed_ca_bundle(self):
         bundle = self.profile / "share/dotfiles/ca-bundle.crt"
         bundle.touch()
