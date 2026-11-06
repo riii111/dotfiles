@@ -131,6 +131,7 @@ if [[ -o zle ]]; then
   zstyle ':completion:*' matcher-list 'm:{[:lower:][:upper:]}={[:upper:][:lower:]}'
 
   # zsh-autosuggestions
+  ZSH_AUTOSUGGEST_MANUAL_REBIND=1
   if [[ -f "${NIX_DOTFILES_SHARE}/zsh-autosuggestions/zsh-autosuggestions.zsh" ]]; then
     source "${NIX_DOTFILES_SHARE}/zsh-autosuggestions/zsh-autosuggestions.zsh"
   fi
@@ -263,7 +264,14 @@ git-switch-fzf() {
   git swf
 }
 # Overrides backward-char; kept for reachability because Ctrl-B is not used for cursor movement here.
-[[ -o zle ]] && bindkey -s '^B' 'git-switch-fzf\n'
+if [[ -o zle ]]; then
+  _git_switch_fzf_widget() {
+    git-switch-fzf
+    zle reset-prompt
+  }
+  zle -N _git_switch_fzf_widget
+  bindkey '^B' _git_switch_fzf_widget
+fi
 
 # ==========================================
 # PostgreSQL service file
