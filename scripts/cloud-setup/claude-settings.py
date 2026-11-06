@@ -105,6 +105,12 @@ for event, added in (
         ]
     groups[:] = [group for group in groups if group["hooks"]]
     groups.extend(added)
+# Cloud sessions run in auto mode with no allow rules, so its classifier refused even the lease push the
+# git-force-check hook lets through; a narrow allow rule is decided before the classifier.
+allow = settings.setdefault("permissions", {}).setdefault("allow", [])
+for rule in ("Bash(git push --force-with-lease *)",):
+    if rule not in allow:
+        allow.append(rule)
 settings["attribution"] = False
 settings["includeCoAuthoredBy"] = False
 with open(path, "w") as file:
