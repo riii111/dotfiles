@@ -335,7 +335,7 @@ def check_shell_template(repo_root: Path, template: Path, shell_path: str) -> li
     return failures
 
 
-def command_test(_: argparse.Namespace) -> int:
+def command_test(args: argparse.Namespace) -> int:
     repo_root = resolve_repo_root()
     failures = 0
 
@@ -358,6 +358,12 @@ def command_test(_: argparse.Namespace) -> int:
 
     bash = shutil.which("bash")
     for test_path in sorted((repo_root / "tests").glob("test-*.sh")):
+        if args.skip_agent_hooks and test_path.name in {
+            "test-codex-permission-hook.sh",
+            "test-comment-review-hook.sh",
+        }:
+            print(f"Skipping agent-hooks integration: {test_path.name}")
+            continue
         label = f"shell test ({test_path.relative_to(repo_root)})"
         if bash is None:
             failures += 1
@@ -567,6 +573,10 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     test_parser = subparsers.add_parser("test", help="run repo verification")
+    test_parser.add_argument(
+        "--skip-agent-hooks", action="store_true",
+        help="skip agent-hooks integration scripts (for selective CI only)",
+    )
     test_parser.set_defaults(func=command_test)
 
     lint_staged_shell_parser = subparsers.add_parser(

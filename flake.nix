@@ -469,13 +469,11 @@
             in
             upstream.mkShell {
               packages = with upstream; [
-                # The shell hook tests run the agent-hooks command built from this checkout.
-                cli.dotTools
                 bashInteractive
                 chezmoi
                 git
                 jq
-                cli.dailyPython
+                python3
                 ruff
               ];
             };
