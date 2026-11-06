@@ -24,3 +24,6 @@ sourceDir = "{{ .chezmoi.homeDir }}/ghq/github.com/riii111/dotfiles"
     gcp_project = {{ promptStringOnce . "gcp_project" "GCP project for prod-errors" | quote }}
     work_project = {{ promptStringOnce . "work_project" "Main project name for work" | quote }}
 {{- end }}
+{{- if hasKey . "harnexus_adapter" }}
+    harnexus_adapter = {{ .harnexus_adapter | quote }}
+{{- end }}

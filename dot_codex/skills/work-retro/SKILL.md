@@ -24,12 +24,16 @@ description: |
 - 各所見の変更先は、次の順で選ぶ。
   - hook・設定・スクリプト：dotfiles（`chezmoi source-path`で管理元を調べる）
   - harnexusの拡張：`~/ghq/github.com/riii111/harnexus`。
-    スレッド間の受け渡し、`harnexus-task`のコマンド、外部の出来事を起点にしたworkerへの送信など、AppとAIの境界にある処理
+    スレッド間の受け渡し、`harnexus cloud`・`harnexus call`など、AppとAIの境界にある処理
+  - タスクのコマンド：`~/ghq/github.com/riii111/taskctl`。
+    `taskctl`（互換入口`harnexus-task`）の起動・レビュー・状態の記録
+  - PRの監視と通知：`~/ghq/github.com/riii111/pr-wake`。
+    外部の出来事を起点にしたworkerへの送信
   - skillの手順：`task-*`などの該当skill
   - 指示文（CLAUDE.md・AGENTS.md）：上のどれでも解消できない場合だけとし、確実性が低いと明記する
 
 ## 制約
 
-- 定期実行では提案と報告の作成だけを行い、dotfiles・harnexus・skill・`patterns.json`は変更しない。
+- 定期実行では提案と報告の作成だけを行い、dotfiles・harnexus・taskctl・pr-wake・skill・`patterns.json`は変更しない。
   変更は、会話でownerが提案を選んだ場合だけ行う。
 - 最終回答は報告の本文だけにする。

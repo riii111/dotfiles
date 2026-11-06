@@ -84,7 +84,7 @@ OK済みの項目は翌朝の早朝の実行で起動する。
 | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | 1. `worker_thread`が空である                                                                                                                                                            | 新規起動にせず、[続行の送信](continue.md)の理由`resume`で既存workerへの続行として扱う            |
 | 2. Issueに`owner`以外の担当者や、紐づく未mergeのPRがない                                                                                                                                | `needs_decision`                                                                                 |
-| 3. `harnexus-task state`（`--request`なし）の記録に、同じIssueを指す別のlaunchがない。taskIdが別の書き方（`#456`・`456`など）のものと、documentRefsに同じIssueのURLを含むものも探す     | `needs_decision`                                                                                 |
+| 3. `taskctl state`（`--request`なし）の記録に、同じIssueを指す別のlaunchがない。taskIdが別の書き方（`#456`・`456`など）のものと、documentRefsに同じIssueのURLを含むものも探す           | `needs_decision`                                                                                 |
 | 4. 依存先（blocked by）がすべて完了している、または未完了の依存先が積み先のPRだけである。Issueが今も`sources`のクエリか`add`に当たるか、有効なOKのnoteが`担当外でOK`で、`exclude`にない | 依存先が未完了なら`ready`のまま`next_action`に依存先を書く。候補から外れていれば`needs_decision` |
 | 5. `codex_app__list_projects`を一度呼び、パスの`git remote get-url origin`がIssueのリポジトリと一致するprojectが1つだけある                                                             | `needs_decision`                                                                                 |
 | 6. 積み先を選んだ場合（起動直前は`planned`のnoteの積み先）、積み先のPRがopenで、mainから2段目までにあり、そのbranchをbaseにするopenのPRがない                                           | 積まずに起動せず、`plan_cancelled`で閉じる。積み方は次の予定で決め直す                           |
@@ -104,7 +104,7 @@ OKのない`planned`は起動せず、そのまま残す。
 1. `requests/<file>.json`を[起動依頼JSON](../../task-session-launch/references/request.md)の書式で作る。
    - `taskId`：keyから`gh:`を除いた値（例：`org/repo#456`）。
      `manual:`のkeyは`:`を`/`に置き換える（例：`manual/andon-triage-2026-10-16`）。
-     `harnexus-task`は`:`を含むtaskIdを受け付けない。
+     `taskctl`は`:`を含むtaskIdを受け付けない。
    - `documentRefs`：子IssueのURL、umbrella IssueのURLの順。
      umbrellaがなければ子IssueのURLだけ。
      積み先があれば、その後に積み先のPRのURLを加える。
@@ -118,7 +118,7 @@ OKのない`planned`は起動せず、そのまま残す。
    - `displayName`：子Issueのタイトル。
      `manual:`の項目は、依頼の内容を短く言い表した名前にする。
 2. 台帳を`running`にし、`attempts`に`launch_requested`を追記してファイルへ書く。
-3. [task-session-launch](../../task-session-launch/SKILL.md)の手順3・4で`harnexus-task launch`を実行する。
+3. [task-session-launch](../../task-session-launch/SKILL.md)の手順3・4で`taskctl launch`を実行する。
    同じprojectIdとtaskIdなら既存workerが返るため、同じkeyは同じworkerになる。
 4. 出力の`threadId`を`worker_thread`に書き、`attempts`に`launched`を`threadId`付きで追記してファイルへ書く。
 5. 結果不明・モデル不一致・起動失敗は再実行しない。
