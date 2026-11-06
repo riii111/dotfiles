@@ -46,6 +46,7 @@
 
   # ~/.zshrc runs a cached compinit; the global one would run it a second time.
   programs.zsh.enableGlobalCompInit = false;
+  programs.zsh.promptInit = "setopt prompt_sp";
 
   security.pam.services.sudo_local.enable = false;
 
