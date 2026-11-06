@@ -52,14 +52,9 @@ export MANPAGER='nvim +Man!'
 unset DOCKER_HOST
 
 # ==========================================
-# Homebrew (static: replaces slow `eval "$(brew shellenv)"`)
+# Homebrew
 # ==========================================
-export HOMEBREW_PREFIX="/opt/homebrew"
-export HOMEBREW_CELLAR="/opt/homebrew/Cellar"
-export HOMEBREW_REPOSITORY="/opt/homebrew"
-export MANPATH="${MANPATH:+$MANPATH:}/opt/homebrew/share/man:"
-[[ "$INFOPATH" != */opt/homebrew/share/info* ]] && \
-  export INFOPATH="/opt/homebrew/share/info:${INFOPATH:-}"
+_dotfiles_homebrew_env
 
 # ==========================================
 # PATH Configuration
@@ -155,38 +150,29 @@ _deferred_abbr_init() {
 
   source "$zsh_abbr_script"
 
-  # Modern CLI Tools (--force: override same-name system commands)
-  abbr -S -qq --force cat='bat'
-  abbr -S -qq --force ls='eza'
-  abbr -S -qq ll='eza -hl'
-  abbr -S -qq la='eza -hla'
-  abbr -S -qq lt='eza --tree'
-  abbr -S -qq llg='eza -hlFg'
-
-  # Basic
-  abbr -S -qq --force vim='nvim'
-  abbr -S -qq v='nvim'
-  abbr -S -qq nv='nvim'
-  abbr -S -qq clr='clear'
-  abbr -S -qq --force o='open'
-  abbr -S -qq lg='lazygit'
-  abbr -S -qq --force mkdir='mkdir -p'
-  abbr -S -qq mkd='mkdir -p'
-
-  # Docker
-  abbr -S -qq --force dc='docker compose'
-  abbr -S -qq dcb='docker compose build'
-  abbr -S -qq dcbn='docker compose build --no-cache'
-  abbr -S -qq dcu='docker compose up -d'
-  abbr -S -qq dcub='docker compose up --build -d'
-  abbr -S -qq dcd='docker compose down -v'
-  abbr -S -qq dcr='docker compose restart'
-  abbr -S -qq dps='docker ps'
-  abbr -S -qq dpa='docker ps -a'
-
-  # Clipboard
-  abbr -S -qq cpf='pbcopy <'
-  abbr -S -qq paf='pbpaste >'
+  # Keep these as session abbreviations, ahead of any user definitions. zsh-abbr
+  # stores quoted keys and values in its session map; batch setup avoids calling
+  # its command parser once for each definition on the first keystroke.
+  local -A defaults=(
+    cat 'bat' ls 'eza' ll 'eza -hl' la 'eza -hla' lt 'eza --tree' llg 'eza -hlFg'
+    vim 'nvim' v 'nvim' nv 'nvim' clr 'clear' o 'open' lg 'lazygit'
+    mkdir 'mkdir -p' mkd 'mkdir -p'
+    dc 'docker compose' dcb 'docker compose build' dcbn 'docker compose build --no-cache'
+    dcu 'docker compose up -d' dcub 'docker compose up --build -d' dcd 'docker compose down -v'
+    dcr 'docker compose restart' dps 'docker ps' dpa 'docker ps -a'
+    cpf 'pbcopy <' paf 'pbpaste >'
+  )
+  local -A forced=(cat 1 ls 1 vim 1 o 1 mkdir 1 dc 1)
+  local name key
+  (( ABBR_DRY_RUN )) && return
+  for name in ${(k)defaults}; do
+    key=${(qqq)name}
+    if (( ! ${+forced[$name]} && ! ABBR_FORCE )); then
+      (( ${+ABBR_REGULAR_SESSION_ABBREVIATIONS[$key]} )) && continue
+      (( ${+commands[$name]} && ! ${+aliases[$name]} )) && continue
+    fi
+    ABBR_REGULAR_SESSION_ABBREVIATIONS[$key]=${(qqq)defaults[$name]}
+  done
 }
 
 typeset -gi _ABBR_INITIALIZED=${_ABBR_INITIALIZED:-0}
@@ -263,7 +249,14 @@ cghq() {
   repo="$(ghq list | fzf --preview 'eza --tree --level=3 --icons --color=always $(ghq root)/{}')" || return
   cd "$(ghq root)/$repo"
 }
-[[ -o zle ]] && bindkey -s '^G' 'cghq\n'
+if [[ -o zle ]]; then
+  _cghq_widget() {
+    cghq
+    zle reset-prompt
+  }
+  zle -N _cghq_widget
+  bindkey '^G' _cghq_widget
+fi
 
 # git switch branch with fzf (Ctrl-B)
 git-switch-fzf() {
