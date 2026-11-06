@@ -34,6 +34,58 @@ let tool_result : String = entry({
 })
 
 ///|
+fn byte_length(value : String) -> Int32 {
+  @utf8.encode(value).length()
+}
+
+///|
+/// An assistant record of the given size in bytes, without its newline.
+fn assistant_of_bytes(size : Int32) -> String raise {
+  let record = assistant([
+    text("a".repeat(size - byte_length(assistant([text("")])))),
+  ])
+  assert_eq(byte_length(record), size)
+  record
+}
+
+///|
+async fn tail_of(path : String, records : Array[String]) -> Array[String] {
+  @fs.write_file(path, records.join("\n") + "\n", create_mode=CreateOrTruncate)
+  read_tail(path)
+}
+
+///|
+async test "read_tail keeps only the records that start inside the byte budget" {
+  let dir = @fs.tmpdir(prefix="reply-reminder-")
+  defer @fs.rmdir(dir, recursive=true)
+  let path = dir + "/transcript.jsonl"
+  let fitting = assistant_of_bytes(tail_bytes - 1)
+  assert_eq(tail_of(path, [fitting]), [fitting, ""])
+  assert_eq(tail_of(path, [prompt("q"), fitting]), [fitting, ""])
+  let overflowing = assistant_of_bytes(tail_bytes)
+  assert_eq(tail_of(path, [prompt("q"), overflowing]), [""])
+  let answer = assistant([text("answer")])
+  let cut = prompt("長".repeat(tail_bytes / 3))
+  assert_eq(tail_of(path, [cut, answer]), [answer, ""])
+}
+
+///|
+async test "read_tail splits records only at newlines" {
+  let dir = @fs.tmpdir(prefix="reply-reminder-")
+  defer @fs.rmdir(dir, recursive=true)
+  let path = dir + "/transcript.jsonl"
+  let reply = "a\u{2028}b\u{2029}c\u{85}d"
+  let record = assistant([text(reply)])
+  assert_true(record.contains(reply))
+  @fs.write_file(
+    path,
+    prompt("q") + "\r\n" + record + "\r\n",
+    create_mode=CreateOrTruncate,
+  )
+  assert_eq(last_reply(read_tail(path)), Some(reply))
+}
+
+///|
 test "last_reply takes the text after the last tool call" {
   let lines = [
     prompt("first"),
@@ -95,8 +147,9 @@ test "sections joins the named sections in order" {
 
 ///|
 async test "reminder gives the full rules only after a long reply" {
-  let dir = "_build/reply_reminder_test"
-  @fs.mkdir(dir + "/home/.claude", recursive=true, allow_exist=true)
+  let dir = @fs.tmpdir(prefix="reply-reminder-")
+  defer @fs.rmdir(dir, recursive=true)
+  @fs.mkdir(dir + "/home/.claude", recursive=true)
   @fs.write_file(
     dir + "/home/.claude/CLAUDE.md",
     document,

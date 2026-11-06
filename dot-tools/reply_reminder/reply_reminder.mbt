@@ -45,26 +45,24 @@ let tail_bytes : Int32 = 262144
 ///|
 async fn read_tail(path : String) -> Array[String] {
   guard path != "" else { return [] }
-  let content = try {
+  let budget = tail_bytes.to_int64()
+  let (content, cut) = try {
     let file = @fs.open(path, mode=ReadOnly)
     defer file.close()
     let size = file.size()
-    let start = if size > tail_bytes.to_int64() {
-      size - tail_bytes.to_int64()
-    } else {
-      0L
-    }
+    // A cut read starts one byte early, so the piece before its first LF is empty when a record begins exactly at the budget, and a cut record otherwise.
+    let start = if size > budget { size - budget - 1L } else { 0L }
     let bytes = file.read_exactly_at((size - start).to_int(), position=start)
-    @utf8.decode_lossy(bytes)
+    (@utf8.decode_lossy(bytes), size > budget)
   } catch {
     _ => return []
   }
-  // The first line of a tail read is usually cut in the middle.
-  let lines = @text.split_lines(content)
-  if content.length() >= tail_bytes && lines.length() > 0 {
-    lines.remove(0) |> ignore
+  // JSON strings can hold U+2028 and other line separators unescaped, so records split only at LF.
+  let records = content.split("\n").map(record => record.to_owned()).collect()
+  if cut {
+    records.remove(0) |> ignore
   }
-  lines
+  records
 }
 
 ///|
@@ -125,10 +123,10 @@ fn reply_length(reply : String) -> Int32 {
 ///|
 /// Joins the `## name` sections of a Markdown document in the given order, or `None` when one is missing.
 fn sections(document : String, names : Array[String]) -> String? {
+  let lines = @text.split_lines(document)
   let found = []
   for name in names {
     let heading = "## " + name
-    let lines = @text.split_lines(document)
     guard lines.search(heading) is Some(start) else { return None }
     let body = [heading]
     for line in lines[start + 1:] {
