@@ -7,7 +7,42 @@ on:
     branches:
       - main
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  select:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      nix: ${{ steps.paths.outputs.nix }}
+      dot_tools: ${{ steps.paths.outputs.dot_tools }}
+      repo: ${{ steps.paths.outputs.repo }}
+      hooks: ${{ steps.paths.outputs.hooks }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Test path selection
+        run: python3 -m unittest discover -s scripts/ci -p "test_*.py"
+      - id: paths
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$EVENT_NAME" = push ]; then
+            python3 scripts/ci/selection.py --full >> "$GITHUB_OUTPUT"
+          else
+            python3 scripts/ci/selection.py --base "$BASE_SHA" >> "$GITHUB_OUTPUT"
+          fi
+      # The full repo suite already includes these tests.
+      - name: Verify cloud setup for operational Markdown
+        if: steps.paths.outputs.cloud == 'true' && steps.paths.outputs.repo != 'true'
+        run: python3 -m unittest discover -s tests -p "test_cloud_setup.py"
+
   ai-docs:
     runs-on: ubuntu-latest
     permissions:
@@ -19,17 +54,17 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: "22"
-
       - run: npm ci --ignore-scripts --no-fund --no-audit
       - run: npm run links
       - run: npm run fmt -- --all --check
       - run: npm run lint
 
-  test:
+  verify:
+    needs: select
+    if: needs.select.outputs.nix == 'true' || needs.select.outputs.dot_tools == 'true' || needs.select.outputs.repo == 'true'
     runs-on: macos-latest
     permissions:
       contents: read
@@ -37,30 +72,52 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-
-      # No store cache: the CI shell comes from cache.nixos.org, and restoring a cached store cost more than it saved.
+      # No store cache: restoring a cached store cost more than it saved.
       - uses: nixbuild/nix-quick-install-action@9f63be77f412a248c9d9a65a4c82cf066cdf8f0c # v35
-
       - name: Evaluate Go and both Darwin configurations
+        if: needs.select.outputs.nix == 'true'
         run: |
           nix eval --json .#lib.toolVersions.aarch64-darwin.go \
             --apply 'v: builtins.compareVersions v "1.27.3" >= 0' | grep -qx true
           nix eval --raw .#darwinConfigurations.personal.config.system.build.toplevel.drvPath
           nix eval --raw .#darwinConfigurations.work.config.system.build.toplevel.drvPath
-
       - name: Verify patched uv
+        if: needs.select.outputs.nix == 'true'
         shell: bash
         run: |
           nix run --print-build-logs .#uv -- --version | tee /tmp/uv-version
           grep -Eq '^uv 0\.13\.5( \(.*\))?$' /tmp/uv-version
-
       - name: Verify patched Python and ensurepip
+        if: needs.select.outputs.nix == 'true'
         run: |
           nix run --print-build-logs .#python3 -- -I -c 'import ensurepip; assert ensurepip.version() == "26.2.2"'
-
       - name: Build and test dot-tools
+        if: needs.select.outputs.dot_tools == 'true'
         run: nix build --print-build-logs .#dot-tools
-
+      - name: Run repo verification and agent-hooks integration
+        if: needs.select.outputs.repo == 'true' && needs.select.outputs.hooks == 'true'
+        run: nix develop .#ci -c nix shell .#dot-tools -c ./bin/executable_dotctl test
       - name: Run repo verification
+        if: needs.select.outputs.repo == 'true' && needs.select.outputs.hooks != 'true'
+        run: nix develop .#ci -c ./bin/executable_dotctl test --skip-agent-hooks
+
+  # Keep the required status stable and fail if selection or selected work failed.
+  test:
+    needs: [select, verify]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - env:
+          SELECT_RESULT: ${{ needs.select.result }}
+          VERIFY_RESULT: ${{ needs.verify.result }}
+          NIX: ${{ needs.select.outputs.nix }}
+          DOT_TOOLS: ${{ needs.select.outputs.dot_tools }}
+          REPO: ${{ needs.select.outputs.repo }}
         run: |
-          nix develop .#ci -c ./bin/executable_dotctl test
+          [ "$SELECT_RESULT" = success ]
+          if [ "$NIX" = true ] || [ "$DOT_TOOLS" = true ] || [ "$REPO" = true ]; then
+            [ "$VERIFY_RESULT" = success ]
+          else
+            [ "$VERIFY_RESULT" = skipped ]
+          fi

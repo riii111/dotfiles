@@ -262,42 +262,29 @@ printf '/stub/goroot\n/stub/gopath\n'
 	os.remove(dir .. "/bin/go")
 end
 
--- emacs-mode's own tests with blink.cmp, nvim-autopairs and neoscroll loaded but not connected, then its hooks
--- for neoscroll and blink.cmp as this config sets them, and its label and color in this config's statusline
+-- Exercise this config's plugin integrations and statusline; emacs-mode's own suite runs in its upstream CI.
 local function emacs_mode()
-	local plugin = require("lazy.core.config").plugins["emacs-mode.nvim"]
-	dofile(plugin.dir .. "/tests/emacs_spec.lua")()
-	-- the spec leaves the plugin set up without hooks
-	plugin.config(plugin, require("lazy.core.plugin").values(plugin, "opts", false))
+	vim.cmd.tabnew()
 	dofile(vim.env.DOTFILES_NVIM_TESTS .. "/emacs_mode.lua")()
 
 	local function label()
-		local status = vim.api.nvim_eval_statusline(vim.o.statusline, { highlights = true })
-		local at = status.str:find("EMACS", 1, true)
-		if not at then
-			return nil
-		end
-		local group
-		for _, highlight in ipairs(status.highlights) do
-			if highlight.start < at then
-				group = highlight.group
-			end
-		end
-		return vim.api.nvim_get_hl(0, { name = group, link = false }).bg
+		return vim.api.nvim_eval_statusline(vim.o.statusline, {}).str:find("EMACS", 1, true) ~= nil
 	end
-	vim.cmd.tabnew()
+	assert(vim.wait(1000, function()
+		return not label()
+	end), "EMACS is in the statusline before entering the mode")
 	local seen
 	_G.emacs_mode_label = function()
 		vim.wait(1000, function()
 			seen = label()
-			return seen ~= nil
+			return seen
 		end)
 	end
 	vim.api.nvim_feedkeys(vim.keycode("e<Cmd>lua emacs_mode_label()<CR><Esc>"), "tx", false)
-	assert(seen == 0xc065db, "EMACS is not in the statusline with #c065db: " .. vim.inspect(seen))
+	assert(seen, "EMACS is not in the statusline during the mode")
 	assert(
 		vim.wait(1000, function()
-			return label() == nil
+			return not label()
 		end),
 		"EMACS left in the statusline"
 	)

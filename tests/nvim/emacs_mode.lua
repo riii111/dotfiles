@@ -1,5 +1,4 @@
--- The hooks of plugins/emacs-mode.lua with the real neoscroll.nvim and blink.cmp. They are configured as in the
--- config when this runs.
+-- Exercise the configured hooks and interaction with the real plugins.
 local check = {}
 _G.emacs_mode_check = check
 
@@ -154,7 +153,17 @@ local function completion()
 	eq({ original, 3 }, { check.next.lines, check.next.row }, "C-n with a previewed item")
 end
 
+local function autopairs()
+	window({ "" })
+	feed("e(<Cmd>lua emacs_mode_check.snap('pair')<CR><C-a>X<Cmd>lua emacs_mode_check.snap('edited')<CR><Esc>")
+	eq({ true, { "()" }, 2 }, { check.pair.active, check.pair.lines, check.pair.col }, "autopairs in the mode")
+	eq({ true, { "X()" } }, { check.edited.active, check.edited.lines }, "C-a after autopairs")
+	vim.cmd("bwipeout!")
+end
+
 return function()
+	feed("<Esc>")
 	smooth_scrolling()
 	completion()
+	autopairs()
 end
