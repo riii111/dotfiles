@@ -10,8 +10,8 @@ node_modules/
 
 # Built binaries
 dot_claude/statusline/executable_statusline-go
-/agent-hooks/_build/
-/agent-hooks/.mooncakes/
+/dot-tools/_build/
+/dot-tools/.mooncakes/
 
 # Nix build symlink
 result
