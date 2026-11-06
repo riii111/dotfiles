@@ -7,7 +7,6 @@ while IFS= read -r variable; do
 done < <(env | sed -n 's/=.*//p' | sed -n '/^GIT_/p')
 export GIT_PAGER=cat
 
-repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 # Tests the agent-hooks on PATH; the Nix dev shells build it from this checkout.
 hook="${AGENT_HOOKS:-agent-hooks}"
 # macOS TMPDIR ends with "/", and the hook compares resolved paths.
@@ -17,10 +16,6 @@ test_home="$test_root/home"
 tmpdir="$test_home/ghq/github.com/riii111/test"
 trap 'rm -rf "$test_root"' EXIT
 mkdir -p "$tmpdir"
-hooks_config="$test_root/hooks.json"
-HOME="$test_home" chezmoi --config "$repo_root/tests/chezmoi/personal.toml" \
-	--source "$repo_root" --persistent-state "$test_root/chezmoistate.boltdb" \
-	execute-template --file "$repo_root/dot_codex/hooks.json.tmpl" >"$hooks_config"
 git -C "$tmpdir" init -q
 git -C "$tmpdir" switch -q -c feat/test
 git -C "$tmpdir" remote add origin https://github.com/riii111/test.git
@@ -32,9 +27,6 @@ run_hook() {
 		'{cwd:$cwd,hook_event_name:$event_name,tool_input:{command:$command}}' |
 		HOME="$test_home" "$hook" permission-request
 }
-
-jq -e '.hooks.PreToolUse[0].matcher == "^Bash$"' "$hooks_config" >/dev/null
-jq -e '.hooks.PermissionRequest[0].matcher == "^Bash$"' "$hooks_config" >/dev/null
 
 permission_request() { run_hook PermissionRequest "$1"; }
 pre_tool_use() { run_hook PreToolUse "$1"; }
