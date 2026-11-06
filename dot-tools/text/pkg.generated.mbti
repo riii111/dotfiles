@@ -1,0 +1,27 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "riii111/dot-tools/text"
+
+// Values
+pub fn char_before(String, Int32) -> Char?
+
+pub fn has_word(String, String, from? : Int32) -> Bool
+
+pub fn is_boundary(String, Int32) -> Bool
+
+pub fn is_decimal(Char) -> Bool
+
+pub fn is_word_char(Char) -> Bool
+
+pub fn split_lines(String) -> Array[String]
+
+pub fn strip(StringView) -> String
+
+pub fn word_at(String, String, from? : Int32) -> Int32?
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

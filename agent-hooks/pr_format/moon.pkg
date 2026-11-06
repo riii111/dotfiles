@@ -1,9 +1,0 @@
-import {
-  "moonbitlang/async",
-  "moonbitlang/async/process",
-  "riii111/agent-hooks/github_tool",
-  "riii111/agent-hooks/shell",
-  "riii111/agent-hooks/text",
-}
-
-supported_targets = "+native"

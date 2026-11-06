@@ -11,6 +11,13 @@ pre-commit:
       glob: "*.lua"
       stage_fixed: true
       run: stylua {staged_files}
+    moonbit-format:
+      root: dot-tools/
+      glob: "*.{mbt,pkg}"
+      stage_fixed: true
+      # The pinned toolchain keeps the output identical to the check in the dot-tools build.
+      # moon fmt formats every file of the packages that contain the given files.
+      run: nix shell ..#moonbit --command moon fmt {staged_files}
     ai-docs-format:
       glob: "dot_{codex,claude}/skills/**/*.md"
       stage_fixed: true
@@ -19,4 +26,7 @@ pre-commit:
 post-merge:
   commands:
     chezmoi-apply:
+      # Captured PTY output cannot receive replies to terminal queries.
+      env:
+        TERM: dumb
       run: chezmoi apply --force < /dev/null

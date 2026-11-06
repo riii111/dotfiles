@@ -22,6 +22,32 @@ typeset -gU path PATH
 [[ -d "$HOME/.local/bin" ]] && path=("$HOME/.local/bin" "${path[@]}")
 export PATH
 
+_dotfiles_homebrew_env() {
+  export HOMEBREW_PREFIX=/opt/homebrew
+  export HOMEBREW_CELLAR=/opt/homebrew/Cellar
+  export HOMEBREW_REPOSITORY=/opt/homebrew
+  typeset -gU path PATH
+  local -i i
+  path=("${(@)path:#/opt/homebrew/bin}")
+  path=("${(@)path:#/opt/homebrew/sbin}")
+  for (( i = 1; i <= ${#path}; i++ )); do
+    case "${path[$i]}" in
+      /usr/local/bin|/usr/bin|/bin|/usr/sbin|/sbin) break ;;
+    esac
+  done
+  path=("${(@)path[1,i-1]}" /opt/homebrew/bin /opt/homebrew/sbin "${(@)path[i,-1]}")
+  if [[ ":${MANPATH:-}:" != *:/opt/homebrew/share/man:* ]]; then
+    if [[ "$1" == prepend ]]; then
+      export MANPATH="/opt/homebrew/share/man:${MANPATH:-}:"
+    else
+      export MANPATH="${MANPATH:+$MANPATH:}/opt/homebrew/share/man:"
+    fi
+  fi
+  [[ "$INFOPATH" != */opt/homebrew/share/info* ]] && \
+    export INFOPATH="/opt/homebrew/share/info:${INFOPATH:-}"
+  export PATH MANPATH
+}
+
 _dotfiles_place_nix_path() {
   local -a nix_paths
   local -a lower_priority_paths
