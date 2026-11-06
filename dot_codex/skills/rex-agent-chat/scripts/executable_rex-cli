@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if rex_cli=$(command -v rex) && [[ -x $rex_cli ]]; then
+	exec "$rex_cli" --autostart=false "$@"
+fi
+
+for app in "/Applications/Rex.app" "/Applications/Rex Beta.app" \
+	"$HOME/Applications/Rex.app" "$HOME/Applications/Rex Beta.app"; do
+	rex_cli="$app/Contents/Helpers/Rex Server.rex/Contents/MacOS/rex"
+	if [[ -x $rex_cli ]]; then
+		exec "$rex_cli" --autostart=false "$@"
+	fi
+done
+
+echo 'rex-agent-chat: Rex CLI was not found on PATH or in the Mac apps.' >&2
+exit 127
