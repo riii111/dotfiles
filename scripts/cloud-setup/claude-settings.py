@@ -80,6 +80,8 @@ after = [
     },
 ]
 after = [group for group in after if group["hooks"]]
+prompt = [{"hooks": guard("reply-reminder")}]
+prompt = [group for group in prompt if group["hooks"]]
 
 settings = {}
 if os.path.exists(path):
@@ -91,6 +93,7 @@ if os.path.exists(path):
 for event, added in (
     ("PreToolUse", ours),
     ("PostToolUse", after),
+    ("UserPromptSubmit", prompt),
     ("SessionStart", start),
 ):
     groups = settings.setdefault("hooks", {}).setdefault(event, [])

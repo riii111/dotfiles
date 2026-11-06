@@ -121,3 +121,18 @@ async test "pr-footer-reset asks to send the created body again" {
     is None,
   )
 }
+
+///|
+async test "reply-reminder adds the reply rules to every prompt" {
+  let output = hook_output("reply-reminder", [], {
+    "hook_event_name": "UserPromptSubmit",
+    "prompt": "hi",
+  })
+  let expected : Json = {
+    "hookSpecificOutput": {
+      "hookEventName": "UserPromptSubmit",
+      "additionalContext": reply_reminder,
+    },
+  }
+  assert_eq(output, Some(expected))
+}
