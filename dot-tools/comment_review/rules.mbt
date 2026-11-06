@@ -125,6 +125,8 @@ let sentence_ends : String = "。．.!?！？:：;；"
 ///|
 fn continues(current : String, next : String) -> Bool {
   guard current.length() > 0 && next.length() > 0 else { return false }
+  // Japanese comments often omit the final period, so a missing one says nothing about a broken sentence.
+  guard current.iter().all(Char::is_ascii) else { return false }
   guard current.get_char(current.length() - 1) is Some(last) &&
     !sentence_ends.contains_char(last) &&
     last != ')' &&

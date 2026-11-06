@@ -99,6 +99,7 @@ fn rule_ids(texts : Array[String]) -> Array[String] {
 ///|
 test "each rule" {
   assert_eq(rule_ids(["a.", "b.", "c.", "d."]), ["long-block"])
+  assert_eq(rule_ids(["キャッシュを読む", "古ければ捨てる"]), [])
   assert_eq(rule_ids(["Reads the file (the cached one)."]), ["parenthetical"])
   assert_eq(
     rule_ids(["キャッシュを読む（古い場合は捨てる）。"]),
