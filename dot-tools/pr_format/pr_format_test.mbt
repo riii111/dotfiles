@@ -406,7 +406,7 @@ async test "the language is read from the pull request's repository" {
   }
   assert_eq(language_folder(mcp_create("acme", "app"), home), checkout)
   assert_eq(language_folder(mcp_create("acme", "missing"), home), home)
-  // Both identities would resolve to this folder if they were joined into the checkout path.
+  // Both identities would reach this folder through the checkout path, so it is created to show that neither is probed.
   @fs.mkdir(home + "/ghq/elsewhere")
   for identity in [("..", "elsewhere"), ("acme", "../../elsewhere")] {
     let (owner, repo) = identity
