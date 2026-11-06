@@ -48,7 +48,6 @@ priv struct Finding {
   rule : Rule
   path : String
   line : Int32
-  text : String
 }
 
 ///|
@@ -72,19 +71,13 @@ fn findings(files : Array[FileChanges]) -> Array[Finding] {
         rule: Dense,
         path: changes.path,
         line: changes.comments[0].line,
-        text: "追加\{changes.added}行のうちコメント\{count}行",
       })
     }
   }
   for changes in files {
     for comment in changes.comments {
       if seen.get(normalized(comment.text)) is Some(times) && times > 1 {
-        result.push({
-          rule: Duplicate,
-          path: comment.path,
-          line: comment.line,
-          text: comment.text,
-        })
+        result.push({ rule: Duplicate, path: comment.path, line: comment.line, })
       }
     }
   }
@@ -95,7 +88,6 @@ fn findings(files : Array[FileChanges]) -> Array[Finding] {
 let dense_minimum : Int32 = 5
 
 ///|
-/// Splits comments into runs of consecutive lines of the same kind.
 fn runs(comments : Array[Comment]) -> Array[Array[Comment]] {
   let result : Array[Array[Comment]] = []
   for comment in comments {
@@ -112,12 +104,7 @@ fn runs(comments : Array[Comment]) -> Array[Array[Comment]] {
 fn check_run(run : Array[Comment], result : Array[Finding]) -> Unit {
   let first = run[0]
   if first.kind is Normal && run.length() >= 4 {
-    result.push({
-      rule: LongBlock,
-      path: first.path,
-      line: first.line,
-      text: "\{run.length()}行: \{first.text}",
-    })
+    result.push({ rule: LongBlock, path: first.path, line: first.line, })
   }
   for index in 0..<(run.length() - 1) {
     let current = run[index]
@@ -127,7 +114,6 @@ fn check_run(run : Array[Comment], result : Array[Finding]) -> Unit {
         rule: BrokenSentence,
         path: current.path,
         line: current.line,
-        text: current.text,
       })
     }
   }
@@ -158,12 +144,7 @@ fn continues(current : String, next : String) -> Bool {
 ///|
 fn check_text(comment : Comment, result : Array[Finding]) -> Unit {
   let push = rule => {
-    result.push({
-      rule,
-      path: comment.path,
-      line: comment.line,
-      text: comment.text,
-    })
+    result.push({ rule, path: comment.path, line: comment.line, })
   }
   let text = comment.text
   if is_divider(text) {
@@ -228,16 +209,14 @@ fn without_code(text : String) -> String {
 
 ///|
 let change_history_phrases : Array[String] = [
-  "になった", "に変更", "変更した", "以前は", "新たに", "追加した",
-  "修正した", "no longer", "previously", "used to", "changed to", "changed from",
-  "was added", "has been added", "anymore", "is now", "are now",
+  "以前は", "から変更した", "に変更した", "no longer", "previously",
+  "used to", "changed from", "anymore",
 ]
 
 ///|
 let filler_phrases : Array[String] = [
-  "ここでは", "念のため", "することが重要", "が重要です", "がポイント",
-  "注意してください", "note that", "here we", "just in case", "it is important",
-  "basically", "make sure to",
+  "念のため", "することが重要", "が重要です", "note that", "just in case",
+  "it is important",
 ]
 
 ///|

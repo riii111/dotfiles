@@ -66,4 +66,12 @@ expect_silent 'git commit -m "feat: divider"'
 expect_denied 'git commit -am "feat: divider"' '区切り線の見出し'
 expect_silent 'git add -A && git commit -m "feat: divider"'
 
+git -C "$repo" commit -qam divider
+
+# A comment that no rule flags is still listed once for review.
+printf '# Returns the total.\nw = 4\n' >>"$repo/a.py"
+git -C "$repo" add a.py
+expect_denied 'git commit -m "feat: w"' 'a.py:6 Returns the total.'
+expect_silent 'git commit -m "feat: w"'
+
 expect_silent 'git status'

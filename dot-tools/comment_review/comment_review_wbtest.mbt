@@ -108,9 +108,11 @@ test "each rule" {
   assert_eq(rule_ids(["Mirrors `^(?:[-*+]) (x)`."]), [])
   assert_eq(rule_ids(["----------"]), ["divider"])
   assert_eq(rule_ids(["=== Setup ==="]), ["divider"])
-  assert_eq(rule_ids(["ヘルメットが必須になった。"]), [
+  assert_eq(rule_ids(["以前はキャッシュを共有していた。"]), [
     "change-history",
   ])
+  assert_eq(rule_ids(["ユーザーが追加した設定を優先する。"]), [])
+  assert_eq(rule_ids(["新たに接続を張らず既存を使う。"]), [])
   assert_eq(rule_ids(["The cache is no longer shared."]), ["change-history"])
   assert_eq(rule_ids(["念のため再試行する。"]), ["filler"])
   assert_eq(rule_ids(["Note that the order matters."]), ["filler"])
@@ -160,11 +162,36 @@ test "a file that is mostly comments is dense" {
 }
 
 ///|
-test "the reason lists the findings and the checklist" {
-  let found = findings(comments(["TODO"]))
-  let listing = render_findings(found)
-  assert_eq(listing, "- a.py:1 [着手条件のないTODO] TODO")
+test "the reason lists every added comment and marks the findings" {
+  let files = comments(["Reads the config.", "TODO"])
+  let listing = render_comments(files, findings(files))
+  assert_eq(
+    listing, "- a.py:1 Reads the config.\n- a.py:2 [着手条件のないTODO] TODO",
+  )
   let reason = denial_reason(listing)
   assert_true(reason.contains(listing))
-  assert_true(reason.contains("関数の直上には"))
+  assert_true(reason.contains("コメント規律"))
+}
+
+///|
+let jsdoc : String =
+  #|diff --git a/a.ts b/a.ts
+  #|--- a/a.ts
+  #|+++ b/a.ts
+  #|@@ -1,0 +1,6 @@
+  #|+/**
+  #|+ * Parses the header
+  #|+ * @param raw the line
+  #|+ * @returns the value
+  #|+ * and its offset.
+  #|+ */
+  #|
+
+///|
+test "a multi-line JSDoc stays a doc comment" {
+  let files = added_comments(jsdoc)
+  assert_true(files[0].comments.iter().all(comment => comment.kind is Doc))
+  assert_eq(findings(files).map(finding => finding.rule.id()), [
+    "broken-sentence", "broken-sentence", "broken-sentence",
+  ])
 }

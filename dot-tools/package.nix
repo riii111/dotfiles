@@ -30,6 +30,7 @@ stdenv.mkDerivation {
       ./moon.mod
       ./cmd
       ./comment_review
+      ./git_command
       ./git_force
       ./git_trust
       ./github_comment

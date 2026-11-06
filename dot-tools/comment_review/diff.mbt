@@ -28,7 +28,7 @@ fn added_comments(diff : String) -> Array[FileChanges] {
   let mut current : FileChanges? = None
   let mut syntax : Syntax? = None
   let mut line = 0
-  let mut in_block = false
+  let mut open_block : CommentKind? = None
   for raw in @text.split_lines(diff) {
     if raw.has_prefix("diff --git ") {
       current = None
@@ -48,21 +48,21 @@ fn added_comments(diff : String) -> Array[FileChanges] {
     }
     if raw.has_prefix("@@ ") {
       line = hunk_start(raw)
-      in_block = false
+      open_block = None
       continue
     }
     guard current is Some(changes) && syntax is Some(syntax) else { continue }
     if raw.has_prefix("+") {
       let content = raw.view(start_offset=1).to_owned()
       changes.added += 1
-      match classify(syntax, content, in_block) {
+      match classify(syntax, content, open_block) {
         Some((kind, text, still_open)) => {
-          in_block = still_open
+          open_block = still_open
           if text != "" {
             changes.comments.push({ path: changes.path, line, kind, text, })
           }
         }
-        None => in_block = false
+        None => open_block = None
       }
       line += 1
     } else if raw.has_prefix(" ") {
@@ -126,27 +126,33 @@ fn syntax_for(path : String) -> Syntax? {
 }
 
 ///|
-/// Returns the comment kind, its text without markers, and whether a block comment stays open after the line.
+/// Returns the comment kind, its text without markers, and the kind of a block comment that stays open after the line.
 fn classify(
   syntax : Syntax,
   content : String,
-  in_block : Bool,
-) -> (CommentKind, String, Bool)? {
+  open_block : CommentKind?,
+) -> (CommentKind, String, CommentKind?)? {
   let trimmed = @text.strip(content)
-  if in_block {
+  if open_block is Some(kind) {
     let closed = trimmed.contains("*/")
     let text = trimmed
       .replace_all(old="*/", new="")
       .trim_start(chars="*")
       .to_owned()
-    return Some((Normal, @text.strip(text), !closed))
+    return Some(
+      (kind, @text.strip(text), if closed { None } else { Some(kind) }),
+    )
   }
   if trimmed.has_prefix("#!") {
     return None
   }
   for marker in syntax.doc {
     if trimmed.has_prefix(marker) && !trimmed.has_prefix("///|") {
-      let open = marker == "/**" && !trimmed.contains("*/")
+      let open = if marker == "/**" && !trimmed.contains("*/") {
+        Some(Doc)
+      } else {
+        None
+      }
       return Some(
         (Doc, strip_markers(trimmed.view(start_offset=marker.length())), open),
       )
@@ -161,13 +167,13 @@ fn classify(
         (
           Normal,
           strip_markers(trimmed.view(start_offset=marker.length())),
-          false,
+          None,
         ),
       )
     }
   }
   if syntax.block && trimmed.has_prefix("/*") {
-    let open = !trimmed.contains("*/")
+    let open = if trimmed.contains("*/") { None } else { Some(Normal) }
     return Some((Normal, strip_markers(trimmed.view(start_offset=2)), open))
   }
   None

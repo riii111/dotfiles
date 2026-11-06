@@ -1,8 +1,7 @@
-// The commit is stopped once per set of findings: the same findings again mean the agent reviewed them and kept the comments.
+// The commit is stopped once per set of added comments: the same list again means the agent reviewed them and kept the comments.
 // Any failure to read the repository lets the commit through, since this review only advises.
 
 ///|
-/// Returns the reason to stop the commit, or `None` to let it through.
 pub async fn review(
   command : String,
   cwd : String,
@@ -12,9 +11,11 @@ pub async fn review(
   guard find_commit(command, cwd) is Some(commit) else { return None }
   let diff = staged_diff(commit) catch { _ => return None }
   let files = added_comments(diff)
+  guard files.iter().any(changes => !changes.comments.is_empty()) else {
+    return None
+  }
   let found = findings(files)
-  guard !found.is_empty() else { return None }
-  let listing = render_findings(found)
+  let listing = render_comments(files, found)
   let state = state_path(commit.dir) catch { _ => return None }
   let previous = @fs.read_file(state).text() catch { _ => "" }
   let outcome = if previous == listing { "passed" } else { "blocked" }
@@ -74,41 +75,49 @@ async fn git(dir : String, args : Array[String]) -> (Int32, String) {
 let max_listed : Int32 = 30
 
 ///|
-fn render_findings(found : Array[Finding]) -> String {
-  let lines = found
-    .iter()
-    .take(max_listed)
-    .map(finding => {
-      "- \{finding.path}:\{finding.line} [\{finding.rule.label()}] \{finding.text}"
-    })
-    .collect()
-  if found.length() > max_listed {
-    lines.push("- ほか\{found.length() - max_listed}件")
+/// Lists every added comment, with the rules a script found on it, so the agent also reviews the ones no rule caught.
+fn render_comments(
+  files : Array[FileChanges],
+  found : Array[Finding],
+) -> String {
+  let lines = []
+  let mut total = 0
+  for changes in files {
+    for comment in changes.comments {
+      total += 1
+      guard lines.length() < max_listed else { continue }
+      let labels = found
+        .iter()
+        .filter(finding => {
+          finding.path == comment.path && finding.line == comment.line
+        })
+        .map(finding => finding.rule.label())
+        .collect()
+      let note = if labels.is_empty() { "" } else { "[\{labels.join("・")}] " }
+      lines.push("- \{comment.path}:\{comment.line} \{note}\{comment.text}")
+    }
+  }
+  if total > max_listed {
+    lines.push("- ほか\{total - max_listed}件")
   }
   lines.join("\n")
 }
 
 ///|
 fn denial_reason(listing : String) -> String {
-  "追加したコメントに、コメント規律に当たる可能性がある箇所がある。各箇所を直すか残すかを決めてから、もう一度commitする。指摘が同じままのcommitは通す。\n\n" +
-  listing +
-  "\n\n" +
-  checklist
+  guidance_lead + "\n\n" + listing + "\n\n" + guidance
 }
 
 ///|
-let checklist : String =
-  #|指摘以外の追加したコメントも、次の基準で見直す。
-  #|- 関数の直上には、名前だけでは伝わらない役割を短く書く。理由や設計意図は書かない
-  #|- 理由は該当する分岐・計算・設定のそばに、「理由のため、判断・処理をする」の順で書く
-  #|- 挙動の説明や、名前・式の言い換えを書かない
-  #|- 説明する対象の直前に書く
-  #|- 呼び出し元や、そのモジュールの責務外の事情を書かない
-  #|- 近くのコードに出てこない用語を使わない
-  #|- 読み手に新しい疑問を残さない
-  #|- 仕様の変更履歴はコミットメッセージやPRに書く
-  #|- 公開APIのドキュメントコメントは、型や名前だけでは伝わらない契約があるときだけ書く
-  #|- 1文は1行に書き、前置きや強調で膨らませない
+let guidance_lead : String =
+  #|commit前に、追加したコメントを1件ずつ見直す。各コメントを消すか直すか残すかを決めてから、もう一度commitする。一覧が同じままのcommitは通す。[ ]はスクリプトが見つけた該当箇所。
+
+///|
+/// The owner's line between a needed and a needless comment is hard to state in words, so one contrasting pair shows it.
+let guidance : String =
+  #|判断の基準: 関数直上の役割は、名前だけで伝わらない場合に限り残す。それ以外のコメントは、名前や型から自然に考えつく別の書き方を退ける理由を1つ挙げられなければ消す。詳しくは指示文の「コメント規律」に従う。
+  #|- 消す: `/// Returns the -C directory, the subcommand and its arguments.`（戻り値の型と名前で分かる）
+  #|- 残す: `// A submodule's .git is a file, so is_dir would miss it`（`is_dir` を使う自然な案を退ける）
 
 ///|
 fn event_record(

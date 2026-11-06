@@ -7,17 +7,16 @@ priv struct Commit {
 }
 
 ///|
-/// Finds the first `git commit` in a Bash command and the directory it runs in.
 /// A `git add` earlier in the same command, `-a`, or a path argument makes the commit take unstaged changes of tracked files.
 fn find_commit(command : String, cwd : String) -> Commit? {
   let mut dir = cwd
   let mut staged_here = false
-  for segment in split_segments(command) {
+  for segment in @git_command.segments(command) {
     if segment is ["cd", target] {
       dir = join(dir, target)
       continue
     }
-    guard git_subcommand(segment) is Some((git_dir, subcommand, args)) else {
+    guard @git_command.subcommand(segment) is Some((git_dir, subcommand, args)) else {
       continue
     }
     let run_dir = match git_dir {
@@ -36,58 +35,12 @@ fn find_commit(command : String, cwd : String) -> Commit? {
 }
 
 ///|
-let separators : Array[String] = [";", "&&", "||", "|", "&", "|&", "(", ")"]
-
-///|
-fn split_segments(command : String) -> Array[Array[String]] {
-  let normalized = command.replace_all(old="\n", new=" ; ")
-  let words = @shell.split_words(normalized, punctuation=";&|()", comments=true) catch {
-    _ => @shell.split_on_whitespace(normalized)
-  }
-  let segments = [[]]
-  for word in words {
-    if separators.contains(word) {
-      segments.push([])
-    } else {
-      segments.last().unwrap().push(word)
-    }
-  }
-  segments.filter(segment => !segment.is_empty())
-}
-
-///|
 fn join(base : String, path : String) -> String {
   if path.has_prefix("/") {
     path
   } else {
     base + "/" + path
   }
-}
-
-///|
-let git_options_with_value : Array[String] = [
-  "-C", "-c", "--git-dir", "--work-tree", "--namespace",
-]
-
-///|
-/// Returns the `-C` directory, the subcommand and its arguments.
-fn git_subcommand(
-  segment : Array[String],
-) -> (String?, String, ArrayView[String])? {
-  guard segment.search_by(word => word == "git" || word.has_suffix("/git"))
-    is Some(git) else {
-    None
-  }
-  let mut dir = None
-  let mut index = git + 1
-  while index < segment.length() && segment[index].has_prefix("-") {
-    if segment[index] == "-C" && index + 1 < segment.length() {
-      dir = Some(segment[index + 1])
-    }
-    index += if git_options_with_value.contains(segment[index]) { 2 } else { 1 }
-  }
-  guard index < segment.length() else { None }
-  Some((dir, segment[index], segment[index + 1:]))
 }
 
 ///|
