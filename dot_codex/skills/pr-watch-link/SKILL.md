@@ -7,10 +7,12 @@ description: |
 
 # PR Watch Link
 
+`taskctl`が未導入なら、互換入口の`harnexus-task`を同じ引数で使う。
 `taskctl environment`が`"host":"claude"`を返す場合は、先に末尾の「Claude CodeのCloud」を読む。
 
 1. `pr-wake watch link <PRのURL>`をサンドボックス外で一度実行する。
-   `pr-wake`が未導入か`watch`を持たない場合は、代わりに互換入口の`harnexus-task watch --link <PRのURL>`を使う。
+   先に引数なしの`pr-wake watch`で使い方を表示する。
+   `pr-wake`が未導入か、使い方に`watch link`がなければ、互換入口の`harnexus-task watch --link <PRのURL>`を使う。
    Codexは`sandbox_permissions: require_escalated`を付け、Claudeはそのまま実行する。
    パイプ・リダイレクト・`cd`などを付けず単独で実行する。
 2. 成功したら、出力の`watched`のURLを伝える。
