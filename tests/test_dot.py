@@ -1,3 +1,4 @@
+import os
 import shutil
 import subprocess
 import sys
@@ -233,6 +234,10 @@ class AgentHookTestsTest(unittest.TestCase):
                     [sys.executable, str(dotctl), "test", *args],
                     cwd=root,
                     capture_output=True,
+                    # An inherited GIT_DIR would point dotctl at this checkout instead.
+                    env={
+                        k: v for k, v in os.environ.items() if not k.startswith("GIT_")
+                    },
                 )
                 self.assertEqual(result.returncode, expected, args)
 
