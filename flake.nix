@@ -465,7 +465,7 @@
           }
         )
         // {
-          # Only what `dotctl test` runs; the daily shell builds unfree tools like terraform from source in CI.
+          # Only what `dotctl test` and its on-demand tests run; the daily shell builds unfree tools like terraform from source in CI.
           # Take the tools from unpatched nixpkgs: the overlay's Brotli reaches rustc via curl, so git and ruff rebuild Rust.
           ci =
             let
@@ -477,6 +477,7 @@
                 chezmoi
                 git
                 jq
+                lefthook
                 # The hook tests resolve SSH remotes with `ssh -G`; Linux runners lack zsh.
                 openssh
                 python3
