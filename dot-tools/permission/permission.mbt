@@ -65,20 +65,22 @@ fn git_config_probe(cwd : String) -> async (String) -> Bool {
 /// The patterns the policy asks, with a matcher for the keys Git prints, whose section and variable are lowercased.
 let config_patterns : Array[(String, (String) -> Bool)] = [
   ("^diff\\.external$", key => key == "diff.external"),
-  (
-    "^filter\\..*\\.textconv$",
-    key => {
-      key.length() >= "filter..textconv".length() &&
-      key.has_prefix("filter.") &&
-      key.has_suffix(".textconv")
-    },
-  ),
+  ("^diff\\..*\\.command$", key => driver_key(key, "diff", "command")),
+  ("^diff\\..*\\.textconv$", key => driver_key(key, "diff", "textconv")),
   ("^core\\.sshcommand$", key => key == "core.sshcommand"),
   ("^core\\.gitproxy$", key => key == "core.gitproxy"),
 ]
 
 ///|
-let combined_pattern : String = "^(diff\\.external|filter\\..*\\.textconv|core\\.sshcommand|core\\.gitproxy)$"
+/// Matches `<section>.<driver>.<variable>`, where the driver may contain dots.
+fn driver_key(key : String, section : String, variable : String) -> Bool {
+  key.length() >= section.length() + variable.length() + 2 &&
+  key.has_prefix(section + ".") &&
+  key.has_suffix("." + variable)
+}
+
+///|
+let combined_pattern : String = "^(diff\\.external|diff\\..*\\.command|diff\\..*\\.textconv|core\\.sshcommand|core\\.gitproxy)$"
 
 ///|
 /// The keys set in `cwd` that match `pattern`, or `None` when Git fails.

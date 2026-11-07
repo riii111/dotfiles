@@ -144,6 +144,9 @@ done
 git -C "$tmpdir" config diff.external 'touch /tmp/outside'
 expect_denied 'git diff'
 git -C "$tmpdir" config --unset-all diff.external
+git -C "$tmpdir" config diff.x.textconv 'touch /tmp/outside'
+expect_denied 'git log -p'
+git -C "$tmpdir" config --unset-all diff.x.textconv
 git -C "$tmpdir" config core.sshCommand 'touch /tmp/outside'
 expect_denied 'git fetch origin'
 git -C "$tmpdir" config --unset-all core.sshCommand

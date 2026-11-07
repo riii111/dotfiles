@@ -162,6 +162,12 @@ async test "a configured helper is denied unless the command turns it off" {
     Some("Unsafe Git configuration is forbidden."),
   )
   assert_eq(reason("git diff --no-ext-diff", configured=external), None)
+  let driver = ["^diff\\..*\\.command$"]
+  assert_true(reason("git diff", configured=driver) is Some(_))
+  assert_eq(reason("git diff --no-ext-diff", configured=driver), None)
+  let textconv = ["^diff\\..*\\.textconv$"]
+  assert_true(reason("git show", configured=textconv) is Some(_))
+  assert_eq(reason("git show --no-textconv", configured=textconv), None)
   assert_eq(
     reason("git fetch origin", configured=["^core\\.sshcommand$"]),
     Some("Unsafe Git configuration is forbidden."),
@@ -182,7 +188,9 @@ async test "one configuration lookup finds each helper" {
   assert_true(decide("git diff") is None)
   let cases = [
     ("diff.external", "x", "git diff"),
-    ("filter.a.textconv", "x", "git log -p"),
+    ("diff.a.textconv", "x", "git log -p"),
+    ("diff.a.b.textconv", "x", "git show"),
+    ("diff.a.command", "x", "git diff"),
     ("core.sshCommand", "x", "git fetch origin"),
     ("core.gitProxy", "x", "git ls-remote origin"),
   ]

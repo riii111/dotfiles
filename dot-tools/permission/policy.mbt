@@ -163,6 +163,7 @@ fn has_external_helper_config(args : ArrayView[String]) -> Bool {
     if value is Some(value) &&
       (
         value.has_prefix("diff.external=") ||
+        (value.has_prefix("diff.") && value.contains(".command=")) ||
         value.has_prefix("filter.") ||
         value.contains(".textconv=")
       ) {
@@ -205,10 +206,13 @@ async fn unsafe_git_configuration(
   has_config : async (String) -> Bool,
 ) -> Bool {
   if subcommand == "diff" || subcommand == "show" || subcommand == "log" {
-    if has_config("^diff\\.external$") && !has_option(subargs, "--no-ext-diff") {
+    // gitattributes(5): `diff.<driver>.command` and `diff.external` are external diff drivers, which
+    // --no-ext-diff turns off; `diff.<driver>.textconv` runs unless --no-textconv.
+    if (has_config("^diff\\.external$") || has_config("^diff\\..*\\.command$")) &&
+      !has_option(subargs, "--no-ext-diff") {
       return true
     }
-    if has_config("^filter\\..*\\.textconv$") &&
+    if has_config("^diff\\..*\\.textconv$") &&
       !has_option(subargs, "--no-textconv") {
       return true
     }
