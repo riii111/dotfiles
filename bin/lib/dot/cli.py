@@ -350,17 +350,6 @@ def darwin_ondemand_tests(repo_root: Path) -> set[str]:
 
 def run_ondemand_tests(repo_root: Path, paths: list[str]) -> int:
     ondemand = repo_root / "tests/ondemand"
-    tests = sorted(ondemand.glob("test_*.py"))
-    if not paths and sys.platform != "darwin":
-        # They skip off macOS, and a skip fails the run; one named explicitly still runs and fails.
-        darwin = darwin_ondemand_tests(repo_root)
-        left_out = [test.name for test in tests if test.name in darwin]
-        if left_out:
-            print(
-                f"Left out macOS-only on-demand tests: {', '.join(left_out)}",
-                file=sys.stderr,
-            )
-        tests = [test for test in tests if test.name not in darwin]
     if paths:
         tests = []
         for path in paths:
@@ -375,6 +364,18 @@ def run_ondemand_tests(repo_root: Path, paths: list[str]) -> int:
                 print(f"Not an on-demand test: {path}", file=sys.stderr)
                 return 1
             tests.append(test)
+    else:
+        tests = sorted(ondemand.glob("test_*.py"))
+        if sys.platform != "darwin":
+            # They skip off macOS, and a skip fails the run; one named explicitly still runs and fails.
+            darwin = darwin_ondemand_tests(repo_root)
+            left_out = [test.name for test in tests if test.name in darwin]
+            if left_out:
+                print(
+                    f"Left out macOS-only on-demand tests: {', '.join(left_out)}",
+                    file=sys.stderr,
+                )
+            tests = [test for test in tests if test.name not in darwin]
     if not tests:
         # Bare unittest would discover from the repo root and exit 5 with "NO TESTS RAN".
         print("No on-demand tests to run")
