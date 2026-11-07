@@ -29,9 +29,10 @@ class SelectionTests(unittest.TestCase):
             (["darwin/hosts/personal.nix"], {"nix", "repo", "hooks", ACTIVATION}),
             (["bin/lib/dot/cli.py"], {"repo", INTEGRATION}),
             (["flake.lock"], selector.full()),
-            # An on-demand test change runs only that test, not the whole suite.
-            ([INTEGRATION], {INTEGRATION}),
-            (["tests/ondemand/test_new.py"], {"tests/ondemand/test_new.py"}),
+            # An on-demand test change runs that test and the repo checks that lint it.
+            ([INTEGRATION], {INTEGRATION, "repo"}),
+            (["tests/ondemand/test_new.py"], {"tests/ondemand/test_new.py", "repo"}),
+            (["tests/ondemand/fixture.json"], selector.full()),
         ]
         for paths, expected in cases:
             with self.subTest(paths=paths):

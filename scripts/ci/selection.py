@@ -58,9 +58,9 @@ def select(paths: list[str]) -> set[str]:
         for name, targets in ONDEMAND.items():
             if matches(path, targets):
                 selected.add(ONDEMAND_DIR + name)
-        if path.startswith(ONDEMAND_DIR):
-            if path.endswith(".py"):
-                selected.add(path)
+        if path.startswith(ONDEMAND_DIR) and path.endswith(".py"):
+            # The repo checks lint these, and dotctl test skips running them.
+            selected.update({path, "repo"})
             continue
         if path.endswith(".md"):
             # These Markdown files are consumed by cloud setup, not just read as docs.
