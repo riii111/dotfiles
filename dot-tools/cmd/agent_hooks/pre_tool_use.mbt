@@ -33,12 +33,15 @@ async fn pre_tool_use_output(
     { "tool_input": { "command": String(command), .. }, .. } => Some(command)
     _ => None
   }
-  // Opt-in: cloud images lack fd and bat, so cloud-setup leaves these rules out as it always did.
-  if bash && options.contains("--command-rules") && command is Some(command) {
+  // The safety rules always run for Claude Code (Codex has its own policy); the fd/rg/bat nudges are opt-in,
+  // since cloud images lack fd and bat. `--command-rules` is the old name of `--steer-tools`, kept for older settings.
+  if bash && !codex && command is Some(command) {
     add(
       command_rule_denial(
         command,
         require_draft=options.contains("--require-draft"),
+        steer=options.contains("--steer-tools") ||
+          options.contains("--command-rules"),
       ).map(reason => ("deny", reason)),
     )
   }

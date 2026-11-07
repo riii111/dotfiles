@@ -61,8 +61,8 @@ start = [
     }
 ]
 if guards.get("pre-tool-use") == "agent-hooks":
-    # One process runs every check on the tools its own hook matched, as in the local settings. The fd/bat
-    # rules stay off, since the cloud image has neither.
+    # One process runs every check on the tools its own hook matched, as in the local settings. No
+    # --steer-tools: the cloud image has neither fd nor bat. The safety rules run without a flag.
     ours = [{"matcher": "^(Bash|mcp__.*)$", "hooks": guard("pre-tool-use", 30)}]
 else:
     ours = [

@@ -178,7 +178,7 @@ async test "pre-tool-use answers with the strongest decision of its checks" {
     combined(bash("git push -f && gh pr comment 1 -b hi"), []),
     Some(("deny", @github_comment.denial_reason)),
   )
-  let rules = ["--command-rules"]
+  let rules = ["--steer-tools"]
   guard combined(bash("find . && gh pr comment 1 -b hi"), rules)
     is Some(("deny", reason)) else {
     fail("no denial")
@@ -188,8 +188,18 @@ async test "pre-tool-use answers with the strongest decision of its checks" {
     reason.has_suffix("\n\n" + @github_comment.denial_reason),
   )
   assert_eq(combined(bash("find ."), []), None)
+  // The old flag name still turns the nudges on.
+  assert_eq(
+    combined(bash("find ."), ["--command-rules"]).map(pair => pair.0),
+    Some("deny"),
+  )
   assert_eq(combined(bash("git commit -m 'terraform plan'"), rules), None)
-  guard combined(bash("gh pr create --title t"), [..rules, "--require-draft"])
+  // The safety rules need no flag, as cloud sessions pass none.
+  guard combined(bash("terraform apply"), []) is Some(("deny", reason)) else {
+    fail("no denial")
+  }
+  assert_true(reason.contains("terraform apply"))
+  guard combined(bash("gh pr create --title t"), ["--require-draft"])
     is Some(("deny", reason)) else {
     fail("no denial")
   }

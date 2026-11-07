@@ -64,7 +64,7 @@ class AgentHooksRegistrationTest(unittest.TestCase):
         expected = {
             ("personal", "dot_claude/settings.json.tmpl"): {
                 "PreToolUse": [
-                    (combined, None, "agent-hooks pre-tool-use --command-rules")
+                    (combined, None, "agent-hooks pre-tool-use --steer-tools")
                 ],
                 "PostToolUse": [
                     (
@@ -88,7 +88,7 @@ class AgentHooksRegistrationTest(unittest.TestCase):
                     (
                         combined,
                         None,
-                        "agent-hooks pre-tool-use --command-rules"
+                        "agent-hooks pre-tool-use --steer-tools"
                         " --require-draft --deny-force-push",
                     )
                 ],

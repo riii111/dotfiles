@@ -64,6 +64,7 @@ class CloudSetupTest(unittest.TestCase):
     def test_a_first_run_installs_the_hooks_skills_and_rules(self):
         settings = self.run_setup(PR_LANGUAGE="ja")
 
+        # No --steer-tools, as the image lacks fd and bat; the safety rules need no flag.
         self.assertEqual(
             self.commands(settings),
             {"^(Bash|mcp__.*)$": [("agent-hooks pre-tool-use", 30)]},

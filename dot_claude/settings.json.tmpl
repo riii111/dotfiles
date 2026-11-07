@@ -345,7 +345,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "{{ .chezmoi.homeDir }}/.nix-profile/bin/agent-hooks pre-tool-use --command-rules{{ if eq .type "work" }} --require-draft --deny-force-push{{ end }}",
+            "command": "{{ .chezmoi.homeDir }}/.nix-profile/bin/agent-hooks pre-tool-use --steer-tools{{ if eq .type "work" }} --require-draft --deny-force-push{{ end }}",
             "timeout": 30
           }
         ]

@@ -50,7 +50,7 @@ async fn hook_output(
     "comment-review-check" => comment_review_decision(event)
     _ =>
       fail(
-        "usage: agent-hooks pre-tool-use [--codex] [--command-rules [--require-draft]] [--deny-force-push] | git-force-check [--deny-force-push] | github-comment-check | pr-state-check [--deny-merge] | pr-format-check | comment-review-check | permission-request | pr-footer-reset | reply-reminder | worktree-post-add | permission-log",
+        "usage: agent-hooks pre-tool-use [--codex] [--steer-tools] [--require-draft] [--deny-force-push] | git-force-check [--deny-force-push] | github-comment-check | pr-state-check [--deny-merge] | pr-format-check | comment-review-check | permission-request | pr-footer-reset | reply-reminder | worktree-post-add | permission-log",
       )
   }
 
