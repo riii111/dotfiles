@@ -6,8 +6,13 @@ state="$HOME/.cache/cloud-setup"
 refresh() {
 	# flock belongs to the open file, which the setup's children inherit, so the lock lasts while any
 	# of them still writes and ends however they exit. One refresh runs at a time; another skips.
-	exec 9>"$state/refresh.flock" || return 0
 	# util-linux flock is on every Ubuntu image, and starts faster than Python.
+	# Without it the refresh is skipped, as an unlocked one could race another, but not silently.
+	if ! command -v flock >/dev/null; then
+		echo "cloud-setup refresh: skipped, flock is not installed" >&2
+		return 0
+	fi
+	exec 9>"$state/refresh.flock" || return 0
 	flock -n 9 || return 0
 	# A refresh from before flock may still be writing under its directory lock during the upgrade.
 	# It writes its pid right after taking the lock, so the lock is left over only once that pid
