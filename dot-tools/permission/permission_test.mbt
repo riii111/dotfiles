@@ -87,3 +87,32 @@ async test "a configured helper is denied unless the command turns it off" {
     Some("Unsafe Git configuration is forbidden."),
   )
 }
+
+///|
+async test "one configuration lookup finds each helper" {
+  let repo = @fs.tmpdir(prefix="permission-config")
+  defer @fs.rmdir(repo, recursive=true)
+  let git = async fn(args : Array[String]) {
+    guard @git_trust.run_git(repo, args).status == 0 else { fail("git failed") }
+  }
+  git(["init", "-q"])
+  let decide = async fn(command) {
+    @permission.decide("PreToolUse", command, repo, {})
+  }
+  assert_true(decide("git diff") is None)
+  let cases = [
+    ("diff.external", "x", "git diff"),
+    ("filter.a.textconv", "x", "git log -p"),
+    ("core.sshCommand", "x", "git fetch origin"),
+    ("core.gitProxy", "x", "git ls-remote origin"),
+  ]
+  for case in cases {
+    let (key, value, command) = case
+    git(["config", key, value])
+    assert_true(decide(command) is Some(Deny(_)), msg=key)
+    git(["config", "--unset", key])
+  }
+  // A key that only contains a pattern's name is not that helper.
+  git(["config", "diff.externalx", "x"])
+  assert_true(decide("git diff") is None)
+}

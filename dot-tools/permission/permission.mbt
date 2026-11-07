@@ -24,7 +24,7 @@ pub async fn decide(
   let home = environment.get("HOME").unwrap_or("")
   if is_safe_auth_status(command) ||
     is_task_dispatch_lock_release(command, home) ||
-    safe_git_request(command, cwd, environment) ||
+    safe_git_request(command, cwd, environment, has_config) ||
     safe_push(command, cwd, environment, has_config) {
     Some(Allow)
   } else {
@@ -38,26 +38,72 @@ pub async fn decide(
 fn git_config_probe(cwd : String) -> async (String) -> Bool {
   let answers : Map[String, Bool] = Map([])
   async fn(pattern) {
+    if answers.is_empty() {
+      // One Git start answers every pattern the policy asks, instead of one per pattern.
+      let keys = configured_keys(cwd, combined_pattern)
+      for known in config_patterns {
+        let (name, matches) = known
+        answers[name] = match keys {
+          Some(keys) => keys.iter().any(matches)
+          None => true
+        }
+      }
+    }
     if answers.get(pattern) is Some(answer) {
       return answer
     }
-    let answer = has_git_config(cwd, pattern)
+    let answer = match configured_keys(cwd, pattern) {
+      Some(keys) => !keys.is_empty()
+      None => true
+    }
     answers[pattern] = answer
     answer
   }
 }
 
 ///|
-async fn has_git_config(cwd : String, pattern : String) -> Bool {
+/// The patterns the policy asks, with a matcher for the keys Git prints, whose section and variable are lowercased.
+let config_patterns : Array[(String, (String) -> Bool)] = [
+  ("^diff\\.external$", key => key == "diff.external"),
+  (
+    "^filter\\..*\\.textconv$",
+    key => {
+      key.length() >= "filter..textconv".length() &&
+      key.has_prefix("filter.") &&
+      key.has_suffix(".textconv")
+    },
+  ),
+  ("^core\\.sshcommand$", key => key == "core.sshcommand"),
+  ("^core\\.gitproxy$", key => key == "core.gitproxy"),
+]
+
+///|
+let combined_pattern : String = "^(diff\\.external|filter\\..*\\.textconv|core\\.sshcommand|core\\.gitproxy)$"
+
+///|
+/// The keys set in `cwd` that match `pattern`, or `None` when Git fails.
+async fn configured_keys(cwd : String, pattern : String) -> Array[String]? {
   let result = @git_trust.run_git(cwd, [
     "config", "--null", "--get-regexp", pattern,
   ]) catch {
-    _ => return true
+    _ => return None
   }
   if result.status != 0 && result.status != 1 {
-    return true
+    return None
   }
-  result.stdout != ""
+  // With --null each entry is the key, a newline and the value, ended by NUL.
+  Some(
+    result.stdout
+    .split("\u{0}")
+    .filter(entry => entry != "")
+    .map(entry => {
+      match entry.split_once("\n") {
+        Some((key, _)) => key.to_owned()
+        None => entry.to_owned()
+      }
+    })
+    .collect(),
+  )
 }
 
 ///|
@@ -105,6 +151,7 @@ async fn safe_git_request(
   command : String,
   cwd : String,
   environment : Map[String, String],
+  has_config : async (String) -> Bool,
 ) -> Bool {
   guard direct_command(command) is Some(("git", args)) else { return false }
   if has_unsafe_environment_override(command) ||
@@ -121,10 +168,18 @@ async fn safe_git_request(
     ("fetch" | "ls-remote", ["origin"]) => true
     (name, _) => allowed_git_subcommands.contains(name)
   }
+  // The denial check already read the configuration of `cwd`, which is the usual target.
+  let same_dir = target == cwd ||
+    (@fs.realpath(cwd) catch { _ => "" }) == target
+  let target_config = if same_dir {
+    has_config
+  } else {
+    git_config_probe(target)
+  }
   allowed &&
   git_denial_reason(subcommand, subargs) is None &&
   !unsafe_git_arguments(subcommand, subargs, target) &&
-  !unsafe_git_configuration(subcommand, subargs, git_config_probe(target)) &&
+  !unsafe_git_configuration(subcommand, subargs, target_config) &&
   @git_trust.trusted_repository(target, ignore_case=true) is Some(_)
 }
 
@@ -176,8 +231,16 @@ async fn unsafe_git_arguments(
   }
   for index, arg in subargs {
     if arg == "--" {
-      for path in subargs[index + 1:] {
-        if !path_is_within_worktree(cwd, path) {
+      let paths = subargs[index + 1:]
+      guard !paths.is_empty() else { return false }
+      // The worktree root is the same for every path, so Git is asked once.
+      guard worktree_root(cwd) is Some((root, base)) else { return true }
+      for path in paths {
+        if path.has_prefix("/") {
+          return true
+        }
+        let resolved = resolve_leniently(base, path)
+        if resolved != root && !resolved.has_prefix(root + "/") {
           return true
         }
       }
@@ -188,16 +251,15 @@ async fn unsafe_git_arguments(
 }
 
 ///|
-async fn path_is_within_worktree(cwd : String, path : String) -> Bool {
-  guard !path.has_prefix("/") else { return false }
+/// The resolved worktree root and the resolved `cwd`.
+async fn worktree_root(cwd : String) -> (String, String)? {
   let result = @git_trust.run_git(cwd, ["rev-parse", "--show-toplevel"]) catch {
-    _ => return false
+    _ => return None
   }
-  guard result.status == 0 else { return false }
-  let root = @fs.realpath(result.stdout.trim()) catch { _ => return false }
-  let base = @fs.realpath(cwd) catch { _ => return false }
-  let resolved = resolve_leniently(base, path)
-  resolved == root || resolved.has_prefix(root + "/")
+  guard result.status == 0 else { return None }
+  let root = @fs.realpath(result.stdout.trim()) catch { _ => return None }
+  let base = @fs.realpath(cwd) catch { _ => return None }
+  Some((root, base))
 }
 
 ///|
