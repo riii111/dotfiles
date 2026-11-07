@@ -42,8 +42,17 @@ jobs:
           nix eval --json ".#lib.toolVersions.${SYSTEM}" > "$RUNNER_TEMP/tool-versions-after.json"
           echo "path=$RUNNER_TEMP/tool-versions-after.json" >> "$GITHUB_OUTPUT"
 
+      # Overrides that nixpkgs caught up with only warn, so the PR lists them for removal there.
       - name: Validate updated flake
-        run: nix flake check --no-build
+        id: validate
+        run: |
+          log="$RUNNER_TEMP/flake-check.log"
+          status=0
+          nix flake check --no-build 2> "$log" || status=$?
+          cat "$log" >&2
+          [ "$status" -eq 0 ]
+          { grep -o 'obsolete override: .*' "$log" || true; } | sort -u > "$RUNNER_TEMP/obsolete-overrides.txt"
+          echo "obsolete_path=$RUNNER_TEMP/obsolete-overrides.txt" >> "$GITHUB_OUTPUT"
 
       - name: Build tool version summary
         id: tool-summary
@@ -82,6 +91,7 @@ jobs:
         env:
           UPDATED_PATH: ${{ steps.tool-summary.outputs.updated_path }}
           NEOVIM_CHANGED: ${{ steps.tool-summary.outputs.neovim_changed }}
+          OBSOLETE_PATH: ${{ steps.validate.outputs.obsolete_path }}
         run: |
           body="$RUNNER_TEMP/update-flake-lock-body.md"
           {
@@ -91,6 +101,12 @@ jobs:
             echo
             cat "$UPDATED_PATH"
             echo
+            if [ -s "$OBSOLETE_PATH" ]; then
+              echo '## 不要になった上書き'
+              echo
+              sed 's/^obsolete override: /- /' "$OBSOLETE_PATH"
+              echo
+            fi
             if [ "$NEOVIM_CHANGED" = "true" ]; then
               echo 'Before applying locally, run a focused Neovim smoke check:'
               echo

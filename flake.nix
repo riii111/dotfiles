@@ -16,11 +16,13 @@
       ...
     }:
     let
-      # Fail evaluation once nixpkgs catches up, so an obsolete security override gets removed.
-      stillNeeded =
+      # Warn once nixpkgs catches up: a throw would stop the flake.lock update before its Draft PR,
+      # which lists these warnings so the obsolete security override is removed there.
+      warnIfObsolete =
         name: upstream: pinned:
-        !nixpkgs.lib.versionAtLeast upstream pinned
-        || throw "nixpkgs ${name} ${upstream} reaches ${pinned}; remove its override from flake.nix";
+        nixpkgs.lib.warnIf (nixpkgs.lib.versionAtLeast upstream pinned)
+          "obsolete override: nixpkgs ${name} ${upstream} reaches ${pinned}; remove its override from flake.nix"
+          true;
       # CVE-2026-111943: rebuild Go CLIs, not just the compiler on PATH.
       securityOverlay =
         final: prev:
@@ -43,7 +45,7 @@
           # CVE-2026-111497: also rebuild shared-library and Python consumers.
           # The cached build-tool inherits above and the doCheck overrides below go with it.
           brotli =
-            assert stillNeeded "brotli" prev.brotli.version "1.2.1";
+            assert warnIfObsolete "brotli" prev.brotli.version "1.2.1";
             prev.brotli.overrideAttrs (
               attrs: _: {
                 version = "1.2.1";
@@ -68,7 +70,7 @@
             })
           ];
           go =
-            assert stillNeeded "go" prev.go.version "1.27.3";
+            assert warnIfObsolete "go" prev.go.version "1.27.3";
             final.go_1_27;
           buildGoModule = final.buildGo127Module;
         };
@@ -164,7 +166,7 @@
           # Patch ensurepip in a copied runtime; retain Nix Python's TLS backend and CA defaults.
           # Python 3.14.9 bundles pip 26.2.2; check its ensurepip when this fires.
           dailyPython =
-            assert stillNeeded "python3" pkgs.python3.version "3.14.9";
+            assert warnIfObsolete "python3" pkgs.python3.version "3.14.9";
             pkgs.stdenvNoCC.mkDerivation {
               pname = "python3";
               inherit (pkgs.python3) version;
@@ -201,7 +203,7 @@
             };
           # Keep the security release and its patched bundled libraries together.
           dailyNode =
-            assert stillNeeded "nodejs_24" pkgs.nodejs_24.version "24.22.1";
+            assert warnIfObsolete "nodejs_24" pkgs.nodejs_24.version "24.22.1";
             pkgs.stdenvNoCC.mkDerivation (attrs: {
               pname = "nodejs";
               version = "24.22.1";
