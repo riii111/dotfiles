@@ -55,6 +55,8 @@ async fn permission_log(event : Json, home~ : String) -> Unit {
     create_mode=OpenOrCreate,
     permission=0o600,
     append=true,
+    // write_file syncs every write by default; the Python append it replaced did not, and a lost line is harmless.
+    sync=NoSync,
   ) catch {
     _ => ()
   }
