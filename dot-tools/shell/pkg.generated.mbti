@@ -2,6 +2,8 @@
 package "riii111/dot-tools/shell"
 
 // Values
+pub fn basename(String) -> String
+
 pub fn is_python_whitespace(Char) -> Bool
 
 pub fn split_on_whitespace(String) -> Array[String]

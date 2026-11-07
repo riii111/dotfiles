@@ -79,7 +79,7 @@ fn is_comment_invocation(words : Array[String]) -> Bool {
   }
   guard start < words.length() else { return false }
 
-  let executable = basename(words[start])
+  let executable = @shell.basename(words[start])
   let args = words[start + 1:]
   if shells.contains(executable) &&
     args.length() >= 2 &&
@@ -224,14 +224,6 @@ fn is_assignment(word : String) -> Bool {
     }
   }
   false
-}
-
-///|
-fn basename(path : String) -> String {
-  match path.rev_find("/") {
-    Some(index) => path.view(start_offset=index + 1).to_owned()
-    None => path
-  }
 }
 
 ///|

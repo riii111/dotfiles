@@ -108,14 +108,6 @@ fn assignment(token : String) -> (String, String)? {
 }
 
 ///|
-fn last_path_part(path : String) -> String {
-  match path.rev_split_once("/") {
-    Some((_, name)) => name.to_owned()
-    None => path
-  }
-}
-
-///|
 /// Finds the Git subcommand after the global options.
 fn git_command(args : ArrayView[String]) -> (String, Array[String])? {
   let index = @git_command.subcommand_index(args)
@@ -413,7 +405,7 @@ async fn words_denial_reason(
   has_config : async (String) -> Bool,
 ) -> String? {
   if direct_invocation(words) is Some((executable, args)) {
-    let name = last_path_part(executable)
+    let name = @shell.basename(executable)
     let reason = match name {
       "git" => direct_git_denial_reason(words.unwrap(), args, has_config)
       _ => tool_denial_reason(name, args)
@@ -524,7 +516,7 @@ async fn compound_denial_reason(
     _ => return None
   }
   for index, token in tokens {
-    guard last_path_part(token) == "git" else { continue }
+    guard @shell.basename(token) == "git" else { continue }
     let segment = []
     for candidate in tokens[index + 1:] {
       if segment_breaks.contains(candidate) {

@@ -195,13 +195,14 @@ async fn check_segments(
 }
 
 ///|
+/// Python's `\w+=`, looser than a shell name, so a word read as an assignment only exposes more of the command.
 fn is_assignment(word : String) -> Bool {
   guard word.find("=") is Some(index) && index > 0 else { return false }
   word.view(end_offset=index).iter().all(@text.is_word_char)
 }
 
 ///|
-/// The last component of a path, like Python's `Path.name`.
+/// The last component of a path, like Python's `Path.name`, which drops a trailing `/` unlike `@shell.basename`.
 fn base_name(path : String) -> String {
   let trimmed = path.trim_end(chars="/").to_owned()
   match trimmed.rev_split_once("/") {

@@ -43,6 +43,15 @@ pub fn split_on_whitespace(text : String) -> Array[String] {
 }
 
 ///|
+/// The part of a command word after its last `/`, which names the program it runs.
+pub fn basename(path : String) -> String {
+  match path.rev_split_once("/") {
+    Some((_, name)) => name.to_owned()
+    None => path
+  }
+}
+
+///|
 /// Matches Python's `str.isspace()`, which `str.split()` and the `\s` regex class use.
 pub fn is_python_whitespace(char : Char) -> Bool {
   match char.to_int() {
