@@ -279,3 +279,26 @@ async test "a slow check that never returns does not drop the others' decisions"
     Some(("deny", "force")),
   ])
 }
+
+///|
+async test "a check cancelled at the deadline is reported as the deadline, not as a failure" {
+  let logged : Array[String] = []
+  let checks : Array[async () -> (String, String)?] = [
+    () => {
+      @async.sleep(1000000)
+      None
+    },
+    // Cleanup that raises while cancelled, as a killed child process may.
+    () => {
+      if @async.handle_cancellation(() => @async.sleep(1000000)) is None {
+        fail("killed")
+      }
+      None
+    },
+  ]
+  let results = run_slow_checks(checks, deadline_ms=100, log=message => {
+    logged.push(message)
+  })
+  assert_eq(results, [None, None])
+  assert_eq(logged, ["slow checks passed the 100ms deadline"])
+}

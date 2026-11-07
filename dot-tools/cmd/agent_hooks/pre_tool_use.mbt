@@ -99,6 +99,7 @@ async fn pre_tool_use_output(
 async fn run_slow_checks(
   checks : Array[async () -> (String, String)?],
   deadline_ms~ : Int32 = 20000,
+  log~ : async (String) -> Unit = log_check_failure,
 ) -> Array[(String, String)?] {
   let results : Array[(String, String)?] = Array::make(checks.length(), None)
   let finished = @async.with_timeout_opt(deadline_ms, () => {
@@ -106,8 +107,11 @@ async fn run_slow_checks(
       for index, check in checks {
         group.spawn_bg(() => {
           results[index] = check() catch {
+            // An error raised while the deadline cancels the check (a killed process, a cleanup) is
+            // the deadline's doing, not a failed check; re-raised, it ends in the deadline message below.
+            error if @async.is_being_cancelled() => raise error
             error => {
-              log_check_failure("a check failed: \{error}")
+              log("a check failed: \{error}")
               None
             }
           }
@@ -118,7 +122,7 @@ async fn run_slow_checks(
     _ => None
   }
   if finished is None {
-    log_check_failure("slow checks passed the \{deadline_ms}ms deadline")
+    log("slow checks passed the \{deadline_ms}ms deadline")
   }
   results
 }
