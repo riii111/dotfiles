@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 import re
@@ -336,9 +337,30 @@ def check_shell_template(repo_root: Path, template: Path, shell_path: str) -> li
     return failures
 
 
+def darwin_ondemand_tests(repo_root: Path) -> set[str]:
+    """The on-demand tests that need macOS, as the CI selection lists them."""
+    path = repo_root / "scripts/ci/selection.py"
+    if not path.is_file():
+        return set()
+    spec = importlib.util.spec_from_file_location("dotfiles_ci_selection", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return set(module.DARWIN_ONDEMAND)
+
+
 def run_ondemand_tests(repo_root: Path, paths: list[str]) -> int:
     ondemand = repo_root / "tests/ondemand"
     tests = sorted(ondemand.glob("test_*.py"))
+    if not paths and sys.platform != "darwin":
+        # They skip off macOS, and a skip fails the run; one named explicitly still runs and fails.
+        darwin = darwin_ondemand_tests(repo_root)
+        left_out = [test.name for test in tests if test.name in darwin]
+        if left_out:
+            print(
+                f"Left out macOS-only on-demand tests: {', '.join(left_out)}",
+                file=sys.stderr,
+            )
+        tests = [test for test in tests if test.name not in darwin]
     if paths:
         tests = []
         for path in paths:

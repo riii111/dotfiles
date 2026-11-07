@@ -175,6 +175,48 @@ class OndemandTestsTest(unittest.TestCase):
                 written = "".join(call.args[0] for call in stderr.write.call_args_list)
                 self.assertIn("test_x", written)
 
+    def test_leaves_darwin_tests_out_on_linux_unless_named(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "tests/ondemand").mkdir(parents=True)
+            (root / "scripts/ci").mkdir(parents=True)
+            (root / "scripts/ci/selection.py").write_text(
+                'DARWIN_ONDEMAND = {"test_mac.py"}\n'
+            )
+            for name in ("test_mac.py", "test_x.py"):
+                (root / "tests/ondemand" / name).write_text("")
+            for platform, paths, expected, notice in (
+                ("linux", [], ["tests/ondemand/test_x.py"], True),
+                (
+                    "darwin",
+                    [],
+                    ["tests/ondemand/test_mac.py", "tests/ondemand/test_x.py"],
+                    False,
+                ),
+                (
+                    "linux",
+                    ["tests/ondemand/test_mac.py"],
+                    ["tests/ondemand/test_mac.py"],
+                    False,
+                ),
+            ):
+                with (
+                    self.subTest(platform=platform, paths=paths),
+                    mock.patch.object(cli.sys, "platform", platform),
+                    mock.patch.object(cli.subprocess, "Popen") as popen,
+                    mock.patch("sys.stderr") as stderr,
+                    mock.patch("sys.stdout"),
+                ):
+                    process = popen.return_value.__enter__.return_value
+                    process.stderr = ["OK\n"]
+                    process.returncode = 0
+                    self.assertEqual(cli.run_ondemand_tests(root, paths), 0)
+                    self.assertEqual(popen.call_args.args[0][4:], expected)
+                    written = "".join(
+                        call.args[0] for call in stderr.write.call_args_list
+                    )
+                    self.assertEqual("test_mac.py" in written, notice)
+
 
 if __name__ == "__main__":
     unittest.main()
