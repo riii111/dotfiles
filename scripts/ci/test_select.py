@@ -33,6 +33,8 @@ class SelectionTests(unittest.TestCase):
             ([INTEGRATION], {INTEGRATION, "repo"}),
             (["tests/ondemand/test_new.py"], {"tests/ondemand/test_new.py", "repo"}),
             (["tests/ondemand/fixture.json"], selector.full()),
+            # A helper is no test, and the tests importing it are unknown.
+            (["tests/ondemand/helpers.py"], selector.all_ondemand() | {"repo"}),
         ]
         for paths, expected in cases:
             with self.subTest(paths=paths):

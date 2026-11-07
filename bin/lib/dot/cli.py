@@ -343,7 +343,13 @@ def run_ondemand_tests(repo_root: Path, paths: list[str]) -> int:
         tests = []
         for path in paths:
             test = (repo_root / path).resolve()
-            if test.parent != ondemand or not test.is_file():
+            # unittest finds no tests in a helper and exits 5.
+            if (
+                test.parent != ondemand
+                or not test.is_file()
+                or not test.name.startswith("test_")
+                or test.suffix != ".py"
+            ):
                 print(f"Not an on-demand test: {path}", file=sys.stderr)
                 return 1
             tests.append(test)

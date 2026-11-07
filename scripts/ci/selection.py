@@ -60,7 +60,12 @@ def select(paths: list[str]) -> set[str]:
                 selected.add(ONDEMAND_DIR + name)
         if path.startswith(ONDEMAND_DIR) and path.endswith(".py"):
             # The repo checks lint these, and dotctl test skips running them.
-            selected.update({path, "repo"})
+            selected.add("repo")
+            if Path(path).name.startswith("test_"):
+                selected.add(path)
+            else:
+                # Any on-demand test may import a helper.
+                selected.update(all_ondemand())
             continue
         if path.endswith(".md"):
             # Cloud setup and the reply reminder consume these Markdown files, not just people.
@@ -80,8 +85,12 @@ def select(paths: list[str]) -> set[str]:
     return selected
 
 
+def all_ondemand() -> set[str]:
+    return {ONDEMAND_DIR + name for name in ONDEMAND}
+
+
 def full() -> set[str]:
-    return ALL | {ONDEMAND_DIR + name for name in ONDEMAND}
+    return ALL | all_ondemand()
 
 
 def ondemand_lists(selected: set[str]) -> tuple[list[str], list[str]]:

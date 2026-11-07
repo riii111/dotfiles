@@ -139,5 +139,20 @@ class ShellTemplateTest(unittest.TestCase):
                 self.assertCountEqual(actual_checked, checked)
 
 
+class OndemandTestsTest(unittest.TestCase):
+    def test_rejects_paths_that_are_not_tests(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "tests/ondemand").mkdir(parents=True)
+            (root / "tests/ondemand/helpers.py").write_text("")
+            with (
+                mock.patch.object(cli.subprocess, "Popen") as popen,
+                mock.patch("sys.stderr"),
+            ):
+                code = cli.run_ondemand_tests(root, ["tests/ondemand/helpers.py"])
+            self.assertEqual(code, 1)
+            popen.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
