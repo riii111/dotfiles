@@ -40,11 +40,12 @@ let raw_guarded : Array[String] = [
 ]
 
 ///|
-/// Reproduces the grep rules in their order; `--draft` anywhere in the text spared `gh pr create`.
+/// Reproduces the grep rules in their order; a draft flag anywhere in the text spares `gh pr create`,
+/// since the parsed rule still requires it on the command itself.
 fn raw_denial(command : String, require_draft~ : Bool) -> String? {
   if require_draft &&
     command.contains("gh pr create") &&
-    !command.contains("--draft") {
+    !has_draft_word(command) {
     return Some(ready_pr_reason)
   }
   for pattern in raw_guarded {
@@ -53,6 +54,27 @@ fn raw_denial(command : String, require_draft~ : Bool) -> String? {
     }
   }
   None
+}
+
+///|
+/// `--draft` anywhere, or `-d` as a whole word: gh's short form, which a bare substring would find in `--body-file -d.md`.
+fn has_draft_word(command : String) -> Bool {
+  if command.contains("--draft") {
+    return true
+  }
+  let chars = command.to_array()
+  let boundary = (c : Char) => {
+    c is (' ' | '\t' | '\n' | '\'' | '"' | ';' | '&' | '|' | '(' | ')')
+  }
+  for i in 0..<(chars.length() - 1) {
+    if chars[i] == '-' &&
+      chars[i + 1] == 'd' &&
+      (i == 0 || boundary(chars[i - 1])) &&
+      (i + 2 == chars.length() || boundary(chars[i + 2])) {
+      return true
+    }
+  }
+  false
 }
 
 ///|

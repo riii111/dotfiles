@@ -72,8 +72,13 @@ test "denies by the parsed command or by the old raw substring" {
     ("gh pr create --title t", true, Some("--draft")),
     ("gh pr create --title t", false, None),
     ("gh pr create --draft --title t", true, None),
-    // The grep wanted the literal `--draft`, so `-d` is an accepted false positive.
-    ("gh pr create -d --title t", true, Some("--draft")),
+    ("gh pr create -d --title t", true, None),
+    ("gh pr create --title t -d", true, None),
+    ("gh pr create --draft=true --title t", true, None),
+    ("gh pr create --title t --body-file -d.md", true, Some("--draft")),
+    ("gh pr create --title t-d", true, Some("--draft")),
+    // `-d` anywhere spares the raw rule, but the parsed rule still wants it on gh.
+    ("gh pr create --title t; rm -d x", true, Some("--draft")),
     ("git commit -m 'gh pr create'", true, Some("--draft")),
     // `--draft` anywhere in the text spared the grep, so only the parsed rule catches this one.
     ("gh pr create --title t; echo --draft", true, Some("--draft")),
