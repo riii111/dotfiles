@@ -239,22 +239,11 @@
               ln -s "$bundle" "$out/share/dotfiles/ca-bundle.crt"
             '';
           # Only this curl uses the verifier that blocks compromised intermediate keys.
-          # rustls-ffi 0.15.6 pins rustls-webpki 0.103.16.
-          curlRustlsFfi = pkgs.rustls-ffi.overrideAttrs (
-            attrs: _: {
-              version = "0.15.6";
-              src = pkgs.fetchFromGitHub {
-                owner = "rustls";
-                repo = "rustls-ffi";
-                tag = "v${attrs.version}";
-                hash = "sha256-qVsadtAxS+yTt9FZMszwxql0CBTuz9ofpTto1hw9Kzg=";
-              };
-              cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
-                inherit (attrs) pname version src;
-                hash = "sha256-rALR92Ia+I2axVTMVjI9UyNiiS4e6QuN5QU9JfM0UY8=";
-              };
-            }
-          );
+          # nixpkgs' rustls-ffi 0.15.7 pins rustls-webpki 0.103.16 and fixes GHSA-rc3f-4j82-cmrg.
+          curlRustlsFfi =
+            assert pkgs.lib.assertMsg (pkgs.lib.versionAtLeast pkgs.rustls-ffi.version "0.15.7")
+              "rustls-ffi ${pkgs.rustls-ffi.version} predates the rustls-webpki and GHSA-rc3f-4j82-cmrg fixes";
+            pkgs.rustls-ffi;
           curlWithRustls = pkgs.curl.override {
             opensslSupport = false;
             rustlsSupport = true;
