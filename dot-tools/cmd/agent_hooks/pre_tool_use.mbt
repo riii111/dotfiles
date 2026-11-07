@@ -71,13 +71,7 @@ async fn pre_tool_use_output(
   // Separate hooks used to run these in parallel; running them together keeps that latency, and the
   // results are added in list order so the joined reasons do not depend on which finished first.
   if !has("deny") {
-    let results : Array[(String, String)?] = Array::make(slow.length(), None)
-    @async.with_task_group(group => {
-      for index, check in slow {
-        group.spawn_bg(() => results[index] = check())
-      }
-    })
-    results.each(add)
+    run_slow_checks(slow).each(add)
   }
   let behavior = if has("deny") {
     "deny"
@@ -92,6 +86,30 @@ async fn pre_tool_use_output(
     .map(verdict => verdict.reason)
     .collect()
   Some(pre_tool_use_decision(behavior, reasons.join("\n\n")))
+}
+
+///|
+/// Runs the checks concurrently, with the results in list order.
+/// A failed check decides nothing: raised in the group, it would cancel the rest and lose a decision another one found.
+async fn run_slow_checks(
+  checks : Array[async () -> (String, String)?],
+) -> Array[(String, String)?] {
+  let results : Array[(String, String)?] = Array::make(checks.length(), None)
+  @async.with_task_group(group => {
+    for index, check in checks {
+      group.spawn_bg(() => {
+        results[index] = check() catch {
+          error => {
+            @stdio.stderr.write("pre-tool-use: a check failed: \{error}\n") catch {
+              _ => ()
+            }
+            None
+          }
+        }
+      })
+    }
+  })
+  results
 }
 
 ///|

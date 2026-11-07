@@ -245,3 +245,12 @@ async test "pre-tool-use skips the slow checks once a cheap one denies" {
   let _ = pre_tool_use_output(bash("gh pr merge 1"), [], lookup)
   assert_true(looked_up.val)
 }
+
+///|
+async test "a slow check that fails does not drop the others' decisions" {
+  let checks : Array[async () -> (String, String)?] = [
+    () => fail("lookup failed"),
+    () => Some(("ask", "merge")),
+  ]
+  assert_eq(run_slow_checks(checks), [None, Some(("ask", "merge"))])
+}
