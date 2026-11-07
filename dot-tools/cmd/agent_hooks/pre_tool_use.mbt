@@ -1,6 +1,6 @@
 // One process for every PreToolUse check, where one hook per check cost a process start each on every Bash call.
 // Each check still runs on the tools its own hook matched. The pure checks run first, and a deny skips the slow ones,
-// so a hook killed by its timeout cannot drop a deny already found.
+// so a hook killed by its timeout cannot drop a deny already found. The slow ones run concurrently.
 
 ///|
 priv struct Verdict {
@@ -51,9 +51,10 @@ async fn pre_tool_use_output(
   let has = (behavior : String) => {
     verdicts.iter().any(verdict => verdict.behavior == behavior)
   }
-  // The hook timeout (30s in both agents' settings) stays above these budgets: Claude Code 22s (pr.language 3s,
-  // PR lookup 10s, comment-review's three Git calls 3s each), Codex 15s (ssh -G 2s, 3s, 10s).
-  // A denied call never runs, so skipping comment-review then only defers its review to the next attempt.
+  // The hook timeout (30s in both agents' settings) stays above the longest budget, the 10s PR lookup; run in sequence
+  // they would take 22s for Claude Code (pr.language 3s, comment-review's three Git calls 3s each) and 15s for Codex (ssh -G 2s).
+  // A denied call never runs, so skipping comment-review after a pure deny only defers its review to the next attempt;
+  // a slow deny shows comment-review's listing too, so recording it as reviewed loses nothing.
   let slow : Array[async () -> (String, String)?] = []
   if bash && codex {
     slow.push(() => codex_policy_denial(event))
@@ -67,11 +68,16 @@ async fn pre_tool_use_output(
   if bash && !codex {
     slow.push(() => comment_review_decision(event))
   }
-  for check in slow {
-    if has("deny") {
-      break
-    }
-    add(check())
+  // Separate hooks used to run these in parallel; running them together keeps that latency, and the
+  // results are added in list order so the joined reasons do not depend on which finished first.
+  if !has("deny") {
+    let results : Array[(String, String)?] = Array::make(slow.length(), None)
+    @async.with_task_group(group => {
+      for index, check in slow {
+        group.spawn_bg(() => results[index] = check())
+      }
+    })
+    results.each(add)
   }
   let behavior = if has("deny") {
     "deny"
