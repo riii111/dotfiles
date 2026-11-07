@@ -16,6 +16,11 @@
       ...
     }:
     let
+      # Fail evaluation once nixpkgs catches up, so an obsolete security override gets removed.
+      stillNeeded =
+        name: upstream: pinned:
+        !nixpkgs.lib.versionAtLeast upstream pinned
+        || throw "nixpkgs ${name} ${upstream} reaches ${pinned}; remove its override from flake.nix";
       # CVE-2026-111943: rebuild Go CLIs, not just the compiler on PATH.
       securityOverlay =
         final: prev:
@@ -36,17 +41,20 @@
             gitMinimal
             ;
           # CVE-2026-111497: also rebuild shared-library and Python consumers.
-          brotli = prev.brotli.overrideAttrs (
-            attrs: _: {
-              version = "1.2.1";
-              src = final.fetchFromGitHub {
-                owner = "google";
-                repo = "brotli";
-                tag = "v${attrs.version}";
-                hash = "sha256-llY72cYffDv0ugsH0p89xIPEbElV4L8u7U/Fe8hT3gI=";
-              };
-            }
-          );
+          # The cached build-tool inherits above and the doCheck overrides below go with it.
+          brotli =
+            assert stillNeeded "brotli" prev.brotli.version "1.2.1";
+            prev.brotli.overrideAttrs (
+              attrs: _: {
+                version = "1.2.1";
+                src = final.fetchFromGitHub {
+                  owner = "google";
+                  repo = "brotli";
+                  tag = "v${attrs.version}";
+                  hash = "sha256-llY72cYffDv0ugsH0p89xIPEbElV4L8u7U/Fe8hT3gI=";
+                };
+              }
+            );
           # Brotli consumers rebuild locally, so their upstream tests run on this Mac instead of on Hydra.
           # Skip the slow or load-sensitive ones; each already rebuilds, so no cached package is lost.
           nodejs-slim_24 = prev.nodejs-slim_24.overrideAttrs { doCheck = false; };
@@ -59,7 +67,9 @@
               requests-cache = pyPrev.requests-cache.overridePythonAttrs { doCheck = false; };
             })
           ];
-          go = final.go_1_27;
+          go =
+            assert stillNeeded "go" prev.go.version "1.27.3";
+            final.go_1_27;
           buildGoModule = final.buildGo127Module;
         };
       # The uninstaller evaluates a separate system; preserve the security overlay there too.
@@ -138,71 +148,76 @@
             done
           '';
           # Patch ensurepip in a copied runtime; retain Nix Python's TLS backend and CA defaults.
-          dailyPython = pkgs.stdenvNoCC.mkDerivation {
-            pname = "python3";
-            inherit (pkgs.python3) version;
-            pipWheel = pkgs.fetchurl {
-              url = "https://files.pythonhosted.org/packages/3f/06/3e4420302363fbb71be3c7f35ce042f54bfca330e3e66b3a2e3c4cca579f/pip-26.2.2-py3-none-any.whl";
-              hash = "sha256-/X9N+oGQ4BQBO58I8+lz9OTCb/0XmiBIlVM6clSBOnA=";
+          # Python 3.14.9 bundles pip 26.2.2; check its ensurepip when this fires.
+          dailyPython =
+            assert stillNeeded "python3" pkgs.python3.version "3.14.9";
+            pkgs.stdenvNoCC.mkDerivation {
+              pname = "python3";
+              inherit (pkgs.python3) version;
+              pipWheel = pkgs.fetchurl {
+                url = "https://files.pythonhosted.org/packages/3f/06/3e4420302363fbb71be3c7f35ce042f54bfca330e3e66b3a2e3c4cca579f/pip-26.2.2-py3-none-any.whl";
+                hash = "sha256-/X9N+oGQ4BQBO58I8+lz9OTCb/0XmiBIlVM6clSBOnA=";
+              };
+              dontUnpack = true;
+              dontConfigure = true;
+              dontBuild = true;
+              dontStrip = true;
+              dontPatchShebangs = true;
+              installPhase = ''
+                runHook preInstall
+                mkdir -p "$out"
+                cp -R "${pkgs.python3}/." "$out/"
+                chmod -R u+w "$out"
+                ensurepip="$out/lib/python3.14/ensurepip"
+                substituteInPlace "$ensurepip/__init__.py" \
+                  --replace-fail '_PIP_VERSION = "26.2.1"' '_PIP_VERSION = "26.2.2"'
+                rm "$ensurepip/_bundled/pip-26.2.1-py3-none-any.whl"
+                cp "$pipWheel" "$ensurepip/_bundled/pip-26.2.2-py3-none-any.whl"
+                runHook postInstall
+              '';
+              doInstallCheck = true;
+              installCheckPhase = ''
+                runHook preInstallCheck
+                "$out/bin/python3" -I -c 'import sys, ssl, sqlite3, ensurepip; assert ensurepip.__file__.startswith(sys.argv[1]); assert ensurepip.version() == "26.2.2"' "$out/"
+                "$out/bin/python3" -I -m venv "$TMPDIR/verify-venv"
+                "$TMPDIR/verify-venv/bin/python" -I -m pip --version | grep -F "pip 26.2.2 "
+                runHook postInstallCheck
+              '';
+              meta = pkgs.python3.meta;
             };
-            dontUnpack = true;
-            dontConfigure = true;
-            dontBuild = true;
-            dontStrip = true;
-            dontPatchShebangs = true;
-            installPhase = ''
-              runHook preInstall
-              mkdir -p "$out"
-              cp -R "${pkgs.python3}/." "$out/"
-              chmod -R u+w "$out"
-              ensurepip="$out/lib/python3.14/ensurepip"
-              substituteInPlace "$ensurepip/__init__.py" \
-                --replace-fail '_PIP_VERSION = "26.2.1"' '_PIP_VERSION = "26.2.2"'
-              rm "$ensurepip/_bundled/pip-26.2.1-py3-none-any.whl"
-              cp "$pipWheel" "$ensurepip/_bundled/pip-26.2.2-py3-none-any.whl"
-              runHook postInstall
-            '';
-            doInstallCheck = true;
-            installCheckPhase = ''
-              runHook preInstallCheck
-              "$out/bin/python3" -I -c 'import sys, ssl, sqlite3, ensurepip; assert ensurepip.__file__.startswith(sys.argv[1]); assert ensurepip.version() == "26.2.2"' "$out/"
-              "$out/bin/python3" -I -m venv "$TMPDIR/verify-venv"
-              "$TMPDIR/verify-venv/bin/python" -I -m pip --version | grep -F "pip 26.2.2 "
-              runHook postInstallCheck
-            '';
-            meta = pkgs.python3.meta;
-          };
           # Keep the security release and its patched bundled libraries together.
-          dailyNode = pkgs.stdenvNoCC.mkDerivation (attrs: {
-            pname = "nodejs";
-            version = "24.22.1";
-            src = pkgs.fetchurl {
-              url = "https://nodejs.org/dist/v${attrs.version}/node-v${attrs.version}-darwin-arm64.tar.gz";
-              hash = "sha256-icaCWT12zUQjP6U7FWMmTn3py7GJytFpE1xbT637wKc=";
-            };
-            dontConfigure = true;
-            dontBuild = true;
-            dontStrip = true;
-            dontPatchShebangs = true;
-            installPhase = ''
-              runHook preInstall
-              mkdir -p "$out"
-              cp -R bin include lib share "$out/"
-              runHook postInstall
-            '';
-            doInstallCheck = true;
-            installCheckPhase = ''
-              runHook preInstallCheck
-              test "$("$out/bin/node" --version)" = "v${attrs.version}"
-              "$out/bin/node" "$out/lib/node_modules/npm/bin/npm-cli.js" --version
-              runHook postInstallCheck
-            '';
-            meta = {
-              homepage = "https://nodejs.org/";
-              license = pkgs.lib.licenses.mit;
-              platforms = [ "aarch64-darwin" ];
-            };
-          });
+          dailyNode =
+            assert stillNeeded "nodejs_24" pkgs.nodejs_24.version "24.22.1";
+            pkgs.stdenvNoCC.mkDerivation (attrs: {
+              pname = "nodejs";
+              version = "24.22.1";
+              src = pkgs.fetchurl {
+                url = "https://nodejs.org/dist/v${attrs.version}/node-v${attrs.version}-darwin-arm64.tar.gz";
+                hash = "sha256-icaCWT12zUQjP6U7FWMmTn3py7GJytFpE1xbT637wKc=";
+              };
+              dontConfigure = true;
+              dontBuild = true;
+              dontStrip = true;
+              dontPatchShebangs = true;
+              installPhase = ''
+                runHook preInstall
+                mkdir -p "$out"
+                cp -R bin include lib share "$out/"
+                runHook postInstall
+              '';
+              doInstallCheck = true;
+              installCheckPhase = ''
+                runHook preInstallCheck
+                test "$("$out/bin/node" --version)" = "v${attrs.version}"
+                "$out/bin/node" "$out/lib/node_modules/npm/bin/npm-cli.js" --version
+                runHook postInstallCheck
+              '';
+              meta = {
+                homepage = "https://nodejs.org/";
+                license = pkgs.lib.licenses.mit;
+                platforms = [ "aarch64-darwin" ];
+              };
+            });
           cliTrust =
             let
               certificates = pkgs.cacert.override {
