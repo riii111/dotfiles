@@ -20,10 +20,8 @@
       securityOverlay =
         final: prev:
         let
-          upstream = import nixpkgs {
-            inherit (prev.stdenv.hostPlatform) system;
-            inherit (prev) config;
-          };
+          # The shared instance avoids a second nixpkgs evaluation; these packages are not unfree.
+          upstream = nixpkgs.legacyPackages.${prev.stdenv.hostPlatform.system};
         in
         {
           # The patched Brotli reaches these build tools only through their curl,
@@ -421,12 +419,14 @@
             cliTrust
             ;
         };
+      # Evaluate each system's package set once for every output.
+      cliFor = forAllSystems mkCli;
     in
     {
       packages = forAllSystems (
         system:
         let
-          cli = mkCli system;
+          cli = cliFor.${system};
         in
         {
           cli = cli.cliProfile;
@@ -445,7 +445,7 @@
       devShells = forAllSystems (
         system:
         let
-          cli = mkCli system;
+          cli = cliFor.${system};
         in
         {
           default = cli.pkgs.mkShell {
@@ -483,7 +483,7 @@
       formatter = forAllSystems (
         system:
         let
-          cli = mkCli system;
+          cli = cliFor.${system};
         in
         cli.pkgs.nixfmt-tree
       );
@@ -491,7 +491,7 @@
       lib.toolVersions = forAllSystems (
         system:
         let
-          cli = mkCli system;
+          cli = cliFor.${system};
         in
         cli.toolVersions
       );
