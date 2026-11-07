@@ -66,6 +66,10 @@ test "denies by the parsed command, not by text inside arguments" {
     ("gh --repo owner/repo pr create", true, Some("--draft")),
     ("gh --hostname h pr new --title t", true, Some("--draft")),
     ("gh pr new --draft", true, None),
+    // The draft reason wins wherever it is found, as it did with a pass of its own.
+    ("npm publish && gh pr create --title t", true, Some("--draft")),
+    ("bash -c 'cargo publish'; bash -c 'gh pr new'", true, Some("--draft")),
+    ("npm publish && gh pr create --title t", false, Some("npm publish")),
     // Here-document bodies are input, not commands.
     ("git commit -F - <<'EOF'\nnpm publish docs\nEOF", false, None),
     (

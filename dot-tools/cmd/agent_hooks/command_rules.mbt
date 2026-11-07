@@ -21,11 +21,25 @@ fn command_rule_denial(command : String, require_draft~ : Bool) -> String? {
       )
     _ => ()
   }
-  if require_draft &&
-    find_command(segments, depth=0, ready_pr_denial) is Some(reason) {
-    return Some(reason)
+  // One walk for both rules, since each walk re-parses nested scripts; it goes on past a guarded verb
+  // so that the draft reason still wins wherever it appears.
+  let mut guarded_reason = None
+  let check = (words : ArrayView[String]) => {
+    if require_draft && ready_pr_denial(words) is Some(reason) {
+      return Some(reason)
+    }
+    if guarded_reason is None {
+      guarded_reason = guarded_denial(words)
+      if !require_draft {
+        return guarded_reason
+      }
+    }
+    None
   }
-  find_command(segments, depth=0, guarded_denial)
+  match find_command(segments, depth=0, check) {
+    Some(reason) => Some(reason)
+    None => guarded_reason
+  }
 }
 
 ///|
