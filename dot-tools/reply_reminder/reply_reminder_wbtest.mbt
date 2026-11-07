@@ -121,40 +121,9 @@ test "reply_length counts prose without code blocks and whitespace" {
 }
 
 ///|
-let document : String =
-  #|# Title
-  #|
-  #|## 対話
-  #|
-  #|- 短く
-  #|
-  #|## 作業
-  #|
-  #|- 進める
-  #|
-  #|## 共通の表現
-  #|
-  #|- 平易に
-
-///|
-test "sections joins the named sections in order" {
-  assert_eq(
-    sections(document, ["対話", "共通の表現"]),
-    Some("## 対話\n\n- 短く\n\n## 共通の表現\n\n- 平易に"),
-  )
-  assert_eq(sections(document, ["対話", "missing"]), None)
-}
-
-///|
-async test "reminder gives the full rules only after a long reply" {
+async test "reminder quotes the length rules only after a long reply" {
   let dir = @fs.tmpdir(prefix="reply-reminder-")
   defer @fs.rmdir(dir, recursive=true)
-  @fs.mkdir(dir + "/home/.claude", recursive=true)
-  @fs.write_file(
-    dir + "/home/.claude/CLAUDE.md",
-    document,
-    create_mode=CreateOrTruncate,
-  )
   let transcript = dir + "/transcript.jsonl"
   async fn write(reply : String) -> Unit {
     @fs.write_file(
@@ -164,11 +133,8 @@ async test "reminder gives the full rules only after a long reply" {
     )
   }
   write("短い返答")
-  assert_eq(reminder(transcript, home=dir + "/home"), short_rules)
+  assert_eq(reminder(transcript), short_rules)
   write("長".repeat(601))
-  let full = reminder(transcript, home=dir + "/home")
-  assert_true(full.has_prefix(full_rules_lead))
-  assert_true(full.contains("## 共通の表現"))
-  assert_eq(reminder(transcript, home=dir + "/missing"), short_rules)
-  assert_eq(reminder("", home=dir + "/home"), short_rules)
+  assert_eq(reminder(transcript), short_rules + "\n" + long_rules)
+  assert_eq(reminder(""), short_rules)
 }

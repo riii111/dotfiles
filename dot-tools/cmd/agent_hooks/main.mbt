@@ -223,11 +223,10 @@ async fn reply_reminder_output(event : Json) -> Json {
     { "transcript_path": String(path), .. } => path
     _ => ""
   }
-  let home = @env.get_env_var("HOME").unwrap_or("")
   {
     "hookSpecificOutput": {
       "hookEventName": "UserPromptSubmit",
-      "additionalContext": @reply_reminder.reminder(transcript, home~),
+      "additionalContext": @reply_reminder.reminder(transcript),
     },
   }
 }

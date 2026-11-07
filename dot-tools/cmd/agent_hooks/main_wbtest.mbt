@@ -141,7 +141,7 @@ async test "reply-reminder adds the reply rules to every prompt" {
     ) else {
     fail("unexpected output")
   }
-  assert_true(rules.has_prefix("対話の返答に限り"))
+  assert_true(rules.has_prefix("対話の返答はCLAUDE.md"))
 }
 
 ///|
