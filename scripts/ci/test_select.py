@@ -37,6 +37,16 @@ class SelectionTests(unittest.TestCase):
             with self.subTest(paths=paths):
                 self.assertEqual(selector.select(paths), expected)
 
+    def test_darwin_only_ondemand_tests_are_listed_separately(self):
+        selected = {ACTIVATION, INTEGRATION, "tests/ondemand/test_new.py"}
+        self.assertEqual(
+            selector.ondemand_lists(selected),
+            (
+                [INTEGRATION, "tests/ondemand/test_new.py"],
+                [ACTIVATION],
+            ),
+        )
+
     def test_diff_against_base_and_push_before(self):
         with tempfile.TemporaryDirectory() as directory:
             repo = Path(directory)
@@ -78,6 +88,7 @@ class SelectionTests(unittest.TestCase):
                     self.assertIn("repo=true", lines)
                     # Only on-demand tests present in the checkout are listed.
                     self.assertIn("ondemand=", lines)
+                    self.assertIn("ondemand_darwin=", lines)
 
 
 if __name__ == "__main__":

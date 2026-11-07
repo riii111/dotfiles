@@ -39,6 +39,8 @@ ONDEMAND = {
     ),
     "test_terminal_queries.py": ("lefthook.yml",),
 }
+# These evaluate the Darwin configurations, which only a macOS runner can import.
+DARWIN_ONDEMAND = {"test_affected_activation.py"}
 # A push event carries this "before" for a new branch.
 NULL_SHA = re.compile(r"0{40}")
 
@@ -80,6 +82,13 @@ def select(paths: list[str]) -> set[str]:
 
 def full() -> set[str]:
     return ALL | {ONDEMAND_DIR + name for name in ONDEMAND}
+
+
+def ondemand_lists(selected: set[str]) -> tuple[list[str], list[str]]:
+    """Split the selected on-demand tests into Linux and macOS runs."""
+    tests = sorted(name for name in selected if name.startswith(ONDEMAND_DIR))
+    darwin = [name for name in tests if Path(name).name in DARWIN_ONDEMAND]
+    return [name for name in tests if name not in darwin], darwin
 
 
 def is_commit(revision: str) -> bool:
@@ -128,12 +137,15 @@ def main() -> None:
     for name in sorted(ALL | {"cloud"}):
         print(f"{name}={str(name in selected).lower()}")
     # A deleted on-demand test has nothing left to run.
-    ondemand = sorted(
-        name
-        for name in selected
-        if name.startswith(ONDEMAND_DIR) and Path(name).is_file()
+    linux, darwin = ondemand_lists(
+        {
+            name
+            for name in selected
+            if not name.startswith(ONDEMAND_DIR) or Path(name).is_file()
+        }
     )
-    print("ondemand=" + " ".join(ondemand))
+    print("ondemand=" + " ".join(linux))
+    print("ondemand_darwin=" + " ".join(darwin))
 
 
 if __name__ == "__main__":
