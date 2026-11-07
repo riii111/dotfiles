@@ -31,8 +31,13 @@ ONDEMAND = {
     "test_shell_widget.py": (),
     "test_terminal_queries.py": (),
 }
-# These evaluate the Darwin configurations, which only a macOS runner can import.
-DARWIN_ONDEMAND = {"test_affected_activation.py"}
+# The tests mark themselves, so a new macOS-only test needs no entry here.
+REQUIRES_DARWIN = re.compile(r"^REQUIRES_DARWIN = True$", re.M)
+DARWIN_ONDEMAND = {
+    test.name
+    for test in (Path(__file__).resolve().parents[2] / ONDEMAND_DIR).glob("test_*.py")
+    if REQUIRES_DARWIN.search(test.read_text())
+}
 # A push event carries this "before" for a new branch.
 NULL_SHA = re.compile(r"0{40}")
 

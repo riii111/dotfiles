@@ -179,12 +179,8 @@ class OndemandTestsTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "tests/ondemand").mkdir(parents=True)
-            (root / "scripts/ci").mkdir(parents=True)
-            (root / "scripts/ci/selection.py").write_text(
-                'DARWIN_ONDEMAND = {"test_mac.py"}\n'
-            )
-            for name in ("test_mac.py", "test_x.py"):
-                (root / "tests/ondemand" / name).write_text("")
+            (root / "tests/ondemand/test_mac.py").write_text("REQUIRES_DARWIN = True\n")
+            (root / "tests/ondemand/test_x.py").write_text("REQUIRES_DARWIN = False\n")
             for platform, paths, expected, notice in (
                 ("linux", [], ["tests/ondemand/test_x.py"], True),
                 (

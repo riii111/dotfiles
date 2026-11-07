@@ -9,6 +9,9 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
+# It evaluates the Darwin configurations, which only a macOS runner can import.
+# dotctl and scripts/ci/selection.py read this line to run it on macOS only.
+REQUIRES_DARWIN = True
 
 
 @unittest.skipUnless(shutil.which("nix"), "nix is not installed")
