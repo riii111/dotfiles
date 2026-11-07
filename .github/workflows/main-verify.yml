@@ -76,15 +76,12 @@ jobs:
           persist-credentials: false
       # No store cache: restoring a cached store cost more than it saved.
       - uses: nixbuild/nix-quick-install-action@9f63be77f412a248c9d9a65a4c82cf066cdf8f0c # v35
-      # Pure evaluation, so Linux covers the Darwin configurations too.
       # The Go floor guards the CVE-2026-111943 rebuild against a nixpkgs update.
-      - name: Evaluate Go and both Darwin configurations
+      - name: Evaluate the Go version
         if: needs.select.outputs.nix == 'true'
         run: |
           nix eval --json .#lib.toolVersions.aarch64-darwin.go \
             --apply 'v: builtins.compareVersions v "1.27.3" >= 0' | grep -qx true
-          nix eval --raw .#darwinConfigurations.personal.config.system.build.toplevel.drvPath
-          nix eval --raw .#darwinConfigurations.work.config.system.build.toplevel.drvPath
       - name: Build and test dot-tools
         if: needs.select.outputs.dot_tools == 'true'
         run: nix build --print-build-logs .#dot-tools
@@ -105,7 +102,7 @@ jobs:
           nix develop .#ci -c nix shell --inputs-from . nixpkgs#lefthook \
             -c ./bin/executable_dotctl test --ondemand $ONDEMAND
 
-  # Only what must build or run aarch64-darwin binaries.
+  # Only what must build, run or import aarch64-darwin derivations.
   darwin:
     needs: select
     if: needs.select.outputs.nix == 'true'
@@ -117,6 +114,11 @@ jobs:
         with:
           persist-credentials: false
       - uses: nixbuild/nix-quick-install-action@9f63be77f412a248c9d9a65a4c82cf066cdf8f0c # v35
+      # The patched uninstaller source is imported from an aarch64-darwin build, so Linux cannot evaluate these.
+      - name: Evaluate both Darwin configurations
+        run: |
+          nix eval --raw .#darwinConfigurations.personal.config.system.build.toplevel.drvPath
+          nix eval --raw .#darwinConfigurations.work.config.system.build.toplevel.drvPath
       - name: Verify patched Python and ensurepip
         run: |
           nix run --print-build-logs .#python3 -- -I -c 'import ensurepip; assert ensurepip.version() == "26.2.2"'
