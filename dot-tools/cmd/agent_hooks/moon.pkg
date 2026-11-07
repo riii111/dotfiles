@@ -1,16 +1,29 @@
 import {
   "moonbitlang/core/env",
   "riii111/dot-tools/comment_review",
+  "riii111/dot-tools/git_command",
   "riii111/dot-tools/git_force",
+  "riii111/dot-tools/git_trust",
   "riii111/dot-tools/github_comment",
   "riii111/dot-tools/permission",
   "riii111/dot-tools/pr_format",
   "riii111/dot-tools/pr_state",
   "riii111/dot-tools/reply_reminder",
+  "riii111/dot-tools/shell",
   "moonbitlang/async",
+  "moonbitlang/async/fs",
   "moonbitlang/async/stdio",
 }
+
+import {
+  "moonbitlang/core/json",
+  "moonbitlang/async/process",
+} for "wbtest"
 
 supported_targets = "+native"
 
 pkgtype(kind: "executable")
+
+options(
+  "native-stub": [ "local_time.c" ],
+)

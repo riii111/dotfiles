@@ -7,6 +7,13 @@ test "denies comment posting commands" {
     "gh api repos/a/b/issues/1/comments -f body=hi", "gh api -X POST repos/a/b/pulls/1/comments --input draft.json",
     "gh api repos/a/b/pulls/1/comments/2/replies -f body=hi", "gh api --method PATCH repos/a/b/issues/comments/2 -f body=hi",
     "gh api -XPOST repos/a/b/pulls/1/reviews/2/events -f event=COMMENT", "gh api graphql -f 'query=mutation { addComment(input: {}) { clientMutationId } }'",
+    "bash -o pipefail -c 'gh pr comment 1 -b hi'", "dash -c 'gh pr comment 1 -b hi'",
+    "eval 'gh pr comment 1 -b hi'",
+    // A body fed to a shell runs as commands.
+     "bash <<'EOF'\ngh pr comment 12 --body done\nEOF", "cat <<EOF | sudo sh\ngh pr comment 1 -b hi\nEOF",
+    "ssh h <<EOF\ngh pr comment 1 --body x\nEOF",
+    // Accepted false positive: a body that only quotes a comment command is still denied.
+     "gh pr create --draft --body-file - <<'EOF'\ngh pr comment 1 -b hi\nEOF",
   ]
   for command in commands {
     assert_true(@github_comment.is_comment_request(bash(command)), msg=command)
@@ -28,62 +35,36 @@ test "allows reads and unrelated commands" {
 }
 
 ///|
-test "denies GitHub connector comment tools" {
-  let operations = [
-    "add_comment_to_issue", "add_review_to_pr", "reply_to_review_comment", "update_issue_comment",
-    "update_review_comment", "add_issue_comment", "add_comment_to_pending_review",
-    "add_reply_to_pull_request_comment", "pull_request_review_write", "resolve_review_thread",
+test "denies the comment tools of the Codex connector and the GitHub MCP server" {
+  let denied = [
+    "mcp__github__add_issue_comment", "mcp__github__add_comment_to_pending_review",
+    "mcp__github__add_reply_to_pull_request_comment", "mcp__github__pull_request_review_write",
+    "mcp__github__resolve_review_thread",
   ]
-  for operation in operations {
-    for separator in ["_", "."] {
-      let name = "mcp__codex_apps__github\{separator}\{operation}"
-      assert_true(
-        @github_comment.is_comment_request({ "tool_name": name }),
-        msg=name,
-      )
-    }
+  for
+    operation in [
+      "add_comment_to_issue", "add_review_to_pr", "reply_to_review_comment", "update_issue_comment",
+      "update_review_comment", "add_issue_comment", "add_comment_to_pending_review",
+      "add_reply_to_pull_request_comment", "pull_request_review_write", "resolve_review_thread",
+    ] {
+    denied.push("mcp__codex_apps__github_\{operation}")
+    denied.push("mcp__codex_apps__github.\{operation}")
   }
-  let names = [
+  let allowed = [
     "mcp__codex_apps__github_fetch_pr_comments", "mcp__codex_apps__github_create_pull_request",
     "mcp__codex_apps__github.fetch_pr_comments", "mcp__codex_app__send_message_to_thread",
-  ]
-  for name in names {
-    assert_false(
-      @github_comment.is_comment_request({
-        "tool_name": name,
-        "tool_input": { "body": "hi" },
-      }),
-      msg=name,
-    )
-  }
-}
-
-///|
-test "denies GitHub MCP comment tools" {
-  let operations = [
-    "add_issue_comment", "add_comment_to_pending_review", "add_reply_to_pull_request_comment",
-    "pull_request_review_write", "resolve_review_thread",
-  ]
-  for operation in operations {
-    assert_true(
-      @github_comment.is_comment_request({
-        "tool_name": "mcp__github__\{operation}",
-      }),
-      msg=operation,
-    )
-  }
-  let names = [
     "mcp__github__pull_request_read", "mcp__github__create_pull_request", "mcp__github__issue_write",
     "mcp__linear__add_issue_comment",
   ]
-  for name in names {
-    assert_false(
-      @github_comment.is_comment_request({
-        "tool_name": name,
-        "tool_input": { "body": "hi" },
-      }),
+  for name in denied {
+    assert_true(
+      @github_comment.is_comment_request({ "tool_name": name }),
       msg=name,
     )
+  }
+  for name in allowed {
+    let event : Json = { "tool_name": name, "tool_input": { "body": "hi" } }
+    assert_false(@github_comment.is_comment_request(event), msg=name)
   }
 }
 

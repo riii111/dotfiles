@@ -85,5 +85,5 @@ stdenv.mkDerivation {
     runHook postInstall
   '';
 
-  meta.platforms = [ "aarch64-darwin" ];
+  meta.platforms = moonbit.meta.platforms;
 }

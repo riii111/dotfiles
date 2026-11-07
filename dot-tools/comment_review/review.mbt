@@ -110,14 +110,14 @@ fn denial_reason(listing : String) -> String {
 
 ///|
 let guidance_lead : String =
-  #|commit前に、追加したコメントを1件ずつ見直す。各コメントを消すか直すか残すかを決めてから、もう一度commitする。一覧が同じままのcommitは通す。[ ]はスクリプトが見つけた該当箇所。
+  #|commit前に、追加したコメントを1件ずつ消す・直す・残すに決めて、再びcommitする。一覧が同じままなら通す。[ ]は検出した規則。
 
 ///|
 /// Every denial carries this text, so a single contrasting pair shows where a needless comment begins without lengthening it.
 let guidance : String =
-  #|判断の基準: 関数直上の役割は、名前だけで伝わらない場合に限り残す。それ以外のコメントは、名前や型から自然に考えつく別の書き方を退ける理由を1つ挙げられなければ消す。詳しくは指示文の「コメント規律」に従う。
-  #|- 消す: `fn parse(...) -> Value` の上の `/// Returns the parsed value.`（名前と型で内容がすべて分かる）
-  #|- 残す: `// A submodule's .git is a file, so is_dir would miss it`（`is_dir` を使う自然な案を退ける）
+  #|基準はCLAUDE.mdの「コメント規律」。名前や型から自然に考えつく別案を退ける理由がなければ消す。
+  #|- 消す: `fn parse(...) -> Value` の上の `/// Returns the parsed value.`
+  #|- 残す: `// A submodule's .git is a file, so is_dir would miss it`
 
 ///|
 fn event_record(

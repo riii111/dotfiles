@@ -43,6 +43,7 @@ fn posts_comment(command : String) -> Bool {
 
 ///|
 /// Splits a command into the words of each simple command, as the Python hook split on runs of `();<>|&` characters.
+/// Here-document body lines count as commands, since a body fed to `bash` or `ssh` runs.
 fn segments(command : String) -> Array[Array[String]] {
   let words = @shell.split_words(
     command.replace_all(old="\n", new=";"),
@@ -65,9 +66,6 @@ fn segments(command : String) -> Array[Array[String]] {
 }
 
 ///|
-let shells : Array[String] = ["bash", "sh", "zsh"]
-
-///|
 let command_prefixes : Array[String] = ["env", "command", "exec"]
 
 ///|
@@ -79,22 +77,27 @@ fn is_comment_invocation(words : Array[String]) -> Bool {
   }
   guard start < words.length() else { return false }
 
-  let executable = basename(words[start])
-  let args = words[start + 1:]
-  if shells.contains(executable) &&
-    args.length() >= 2 &&
-    args[0].has_prefix("-") &&
-    args[0].contains_char('c') {
-    return posts_comment(args[1])
+  if @shell.nested_script(words[start:]) is Some(script) {
+    return posts_comment(script)
   }
+  let executable = @shell.basename(words[start])
+  let args = words[start + 1:]
   guard executable == "gh" else { return false }
 
-  let mut first = 0
-  while first < args.length() && args[first] is ("-R" | "--repo" | "--hostname") {
-    first += 2
+  is_gh_comment(gh_subcommand(args))
+}
+
+///|
+/// The arguments of `gh` from its subcommand on, past global options such as `-R owner/repo`.
+pub fn gh_subcommand(args : ArrayView[String]) -> ArrayView[String] {
+  let index = @shell.subcommand_index(args, options_with_value=[
+    "-R", "--repo", "--hostname",
+  ])
+  if index < args.length() {
+    args[index:]
+  } else {
+    [][:]
   }
-  let args = if first < args.length() { args[first:] } else { [][:] }
-  is_gh_comment(args)
 }
 
 ///|
@@ -224,14 +227,6 @@ fn is_assignment(word : String) -> Bool {
     }
   }
   false
-}
-
-///|
-fn basename(path : String) -> String {
-  match path.rev_find("/") {
-    Some(index) => path.view(start_offset=index + 1).to_owned()
-    None => path
-  }
 }
 
 ///|

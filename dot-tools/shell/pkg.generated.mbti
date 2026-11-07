@@ -2,11 +2,21 @@
 package "riii111/dot-tools/shell"
 
 // Values
+pub fn assignment(String) -> (String, String)?
+
+pub fn basename(String) -> String
+
 pub fn is_python_whitespace(Char) -> Bool
+
+pub fn join_path(String, String) -> String
+
+pub fn nested_script(ArrayView[String]) -> String?
 
 pub fn split_on_whitespace(String) -> Array[String]
 
 pub fn split_words(String, punctuation~ : String, comments~ : Bool) -> Array[String] raise ShellSyntaxError
+
+pub fn subcommand_index(ArrayView[String], options_with_value~ : Array[String]) -> Int32
 
 // Errors
 pub suberror ShellSyntaxError {

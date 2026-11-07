@@ -12,7 +12,7 @@ from pathlib import Path
 from unittest import mock
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 loader = importlib.machinery.SourceFileLoader(
     "affected_invoke", str(ROOT / "bin/executable_affected-agent")
 )
@@ -42,10 +42,8 @@ class AgentInvocationTest(unittest.TestCase):
             result = affected.main([command])
         return result, output.getvalue()
 
-    def test_absent_agent_is_silent_and_optional(self):
+    def test_agent_is_optional_and_only_after_apply_is_forwarded(self):
         self.assertEqual(self.run_main("after-apply"), (0, ""))
-
-    def test_only_after_apply_is_forwarded(self):
         self.script('printf "%s" "$1" > "$HOME/called"\n')
         for command in ("status", "codex-status"):
             self.assertEqual(self.run_main(command), (2, ""))
@@ -106,11 +104,3 @@ class ChezmoiIntegrationTest(unittest.TestCase):
                     str(ROOT / "run_after_zz-notify-affected.sh.tmpl"),
                 )
                 self.assertEqual("affected-agent" in rendered, personal)
-
-    def test_no_session_shows_the_monitor_status(self):
-        for template in ("dot_codex/hooks.json.tmpl", "dot_claude/settings.json.tmpl"):
-            with self.subTest(template=template):
-                rendered = self.chezmoi(
-                    "personal", "execute-template", "--file", str(ROOT / template)
-                )
-                self.assertNotIn("affected", rendered)

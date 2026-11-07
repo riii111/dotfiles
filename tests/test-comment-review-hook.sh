@@ -26,7 +26,7 @@ log="$HOME/.local/state/claude/comment-review-events.jsonl"
 review() {
 	jq -n --arg cwd "$repo" --arg command "$1" \
 		'{cwd:$cwd,session_id:"s1",hook_event_name:"PreToolUse",tool_name:"Bash",tool_input:{command:$command}}' |
-		"$hook" comment-review-check
+		"$hook" pre-tool-use # the registered hook, which runs the review among the other checks
 }
 
 expect_silent() {

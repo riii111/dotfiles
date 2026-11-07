@@ -2,7 +2,7 @@
 package "riii111/dot-tools/reply_reminder"
 
 // Values
-pub async fn reminder(String, home~ : String) -> String
+pub async fn reminder(String) -> String
 
 // Errors
 

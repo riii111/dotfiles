@@ -43,6 +43,20 @@ pub async fn run_git(cwd : String, args : Array[String]) -> GitOutput {
 /// Tells whether `ssh -G HOST` resolves to GitHub's SSH endpoint within two seconds.
 pub async fn github_host(host : String) -> Bool {
   guard host != "" else { return false }
+  // A fetch and a push URL usually name the same host, and ssh's configuration does not change within a hook run.
+  if github_hosts.get(host) is Some(answer) {
+    return answer
+  }
+  let answer = resolve_github_host(host)
+  github_hosts[host] = answer
+  answer
+}
+
+///|
+let github_hosts : Map[String, Bool] = Map([])
+
+///|
+async fn resolve_github_host(host : String) -> Bool {
   let config = @async.with_timeout_opt(2000, () => {
     @process.collect_output(
       "ssh",

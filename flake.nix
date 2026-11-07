@@ -16,14 +16,27 @@
       ...
     }:
     let
+      # Once nixpkgs reaches the pinned version its package wins, so the override never holds back a newer release.
+      # Warn rather than throw: a throw would stop the flake.lock update before its Draft PR,
+      # which lists these warnings so the obsolete security override is removed there.
+      # update-flake-lock.yml parses this exact line and allowlists the name, so keep both in step.
+      reachesPin =
+        name: upstream: pinned:
+        if nixpkgs.lib.versionAtLeast upstream.version pinned then
+          nixpkgs.lib.warn "dotfiles-obsolete-override: ${name}" true
+        else
+          false;
+      pinAtLeast =
+        name: upstream: pinned: override:
+        if reachesPin name upstream pinned then upstream else override;
       # CVE-2026-111943: rebuild Go CLIs, not just the compiler on PATH.
       securityOverlay =
         final: prev:
         let
-          upstream = import nixpkgs {
-            inherit (prev.stdenv.hostPlatform) system;
-            inherit (prev) config;
-          };
+          # The shared instance avoids a second nixpkgs evaluation; these packages are not unfree.
+          upstream = nixpkgs.legacyPackages.${prev.stdenv.hostPlatform.system};
+          # One decision for the compiler and the builder, so Go CLIs never build with a Go other than `go`.
+          goReachesPin = reachesPin "go" prev.go "1.27.3";
         in
         {
           # The patched Brotli reaches these build tools only through their curl,
@@ -38,16 +51,19 @@
             gitMinimal
             ;
           # CVE-2026-111497: also rebuild shared-library and Python consumers.
-          brotli = prev.brotli.overrideAttrs (
-            attrs: _: {
-              version = "1.2.1";
-              src = final.fetchFromGitHub {
-                owner = "google";
-                repo = "brotli";
-                tag = "v${attrs.version}";
-                hash = "sha256-llY72cYffDv0ugsH0p89xIPEbElV4L8u7U/Fe8hT3gI=";
-              };
-            }
+          # The cached build-tool inherits above and the doCheck overrides below go with it.
+          brotli = pinAtLeast "brotli" prev.brotli "1.2.1" (
+            prev.brotli.overrideAttrs (
+              attrs: _: {
+                version = "1.2.1";
+                src = final.fetchFromGitHub {
+                  owner = "google";
+                  repo = "brotli";
+                  tag = "v${attrs.version}";
+                  hash = "sha256-llY72cYffDv0ugsH0p89xIPEbElV4L8u7U/Fe8hT3gI=";
+                };
+              }
+            )
           );
           # Brotli consumers rebuild locally, so their upstream tests run on this Mac instead of on Hydra.
           # Skip the slow or load-sensitive ones; each already rebuilds, so no cached package is lost.
@@ -61,40 +77,8 @@
               requests-cache = pyPrev.requests-cache.overridePythonAttrs { doCheck = false; };
             })
           ];
-          go = final.go_1_27;
-          buildGoModule = final.buildGo127Module;
-          # Keep the patched verifier and managed-Python catalog in the official release.
-          uv = final.stdenvNoCC.mkDerivation (attrs: {
-            pname = "uv";
-            version = "0.13.5";
-            src = final.fetchurl {
-              url = "https://releases.astral.sh/github/uv/releases/download/${attrs.version}/uv-aarch64-apple-darwin.tar.gz";
-              hash = "sha256-dD+FA1oZluyzUGWeAc2frqlwmCm+CbG0sDxz6vPJzXM=";
-            };
-            nativeBuildInputs = [ final.installShellFiles ];
-            dontConfigure = true;
-            dontBuild = true;
-            dontStrip = true;
-            installPhase = ''
-              runHook preInstall
-              install -Dm755 uv "$out/bin/uv"
-              install -Dm755 uvx "$out/bin/uvx"
-              installShellCompletion --cmd uv \
-                --bash <("$out/bin/uv" generate-shell-completion bash) \
-                --fish <("$out/bin/uv" generate-shell-completion fish) \
-                --zsh <("$out/bin/uv" generate-shell-completion zsh)
-              runHook postInstall
-            '';
-            doInstallCheck = true;
-            installCheckPhase = ''
-              runHook preInstallCheck
-              "$out/bin/uv" --version | grep -F "uv ${attrs.version} "
-              runHook postInstallCheck
-            '';
-            meta = prev.uv.meta // {
-              platforms = [ "aarch64-darwin" ];
-            };
-          });
+          go = if goReachesPin then prev.go else final.go_1_27;
+          buildGoModule = if goReachesPin then prev.buildGoModule else final.buildGo127Module;
         };
       # The uninstaller evaluates a separate system; preserve the security overlay there too.
       securityDarwinTools =
@@ -145,6 +129,20 @@
         "aarch64-darwin"
       ];
       forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f system);
+      # CI builds dot-tools and runs repo checks on Linux runners, without the darwin-only CLI profile.
+      toolSystems = systems ++ [ "x86_64-linux" ];
+      # Build with unpatched nixpkgs: the overlay's Brotli reaches fetchurl via curl and would rebuild the fetcher chain.
+      toolsFor = nixpkgs.lib.genAttrs toolSystems (
+        system:
+        let
+          upstream = nixpkgs.legacyPackages.${system};
+          moonbit = upstream.callPackage ./nix/moonbit.nix { };
+        in
+        {
+          inherit upstream moonbit;
+          dotTools = upstream.callPackage ./dot-tools/package.nix { inherit moonbit; };
+        }
+      );
       mkCli =
         system:
         let
@@ -172,71 +170,76 @@
             done
           '';
           # Patch ensurepip in a copied runtime; retain Nix Python's TLS backend and CA defaults.
-          dailyPython = pkgs.stdenvNoCC.mkDerivation {
-            pname = "python3";
-            inherit (pkgs.python3) version;
-            pipWheel = pkgs.fetchurl {
-              url = "https://files.pythonhosted.org/packages/3f/06/3e4420302363fbb71be3c7f35ce042f54bfca330e3e66b3a2e3c4cca579f/pip-26.2.2-py3-none-any.whl";
-              hash = "sha256-/X9N+oGQ4BQBO58I8+lz9OTCb/0XmiBIlVM6clSBOnA=";
-            };
-            dontUnpack = true;
-            dontConfigure = true;
-            dontBuild = true;
-            dontStrip = true;
-            dontPatchShebangs = true;
-            installPhase = ''
-              runHook preInstall
-              mkdir -p "$out"
-              cp -R "${pkgs.python3}/." "$out/"
-              chmod -R u+w "$out"
-              ensurepip="$out/lib/python3.14/ensurepip"
-              substituteInPlace "$ensurepip/__init__.py" \
-                --replace-fail '_PIP_VERSION = "26.2.1"' '_PIP_VERSION = "26.2.2"'
-              rm "$ensurepip/_bundled/pip-26.2.1-py3-none-any.whl"
-              cp "$pipWheel" "$ensurepip/_bundled/pip-26.2.2-py3-none-any.whl"
-              runHook postInstall
-            '';
-            doInstallCheck = true;
-            installCheckPhase = ''
-              runHook preInstallCheck
-              "$out/bin/python3" -I -c 'import sys, ssl, sqlite3, ensurepip; assert ensurepip.__file__.startswith(sys.argv[1]); assert ensurepip.version() == "26.2.2"' "$out/"
-              "$out/bin/python3" -I -m venv "$TMPDIR/verify-venv"
-              "$TMPDIR/verify-venv/bin/python" -I -m pip --version | grep -F "pip 26.2.2 "
-              runHook postInstallCheck
-            '';
-            meta = pkgs.python3.meta;
-          };
+          # Python 3.14.9 bundles pip 26.2.2; check its ensurepip when this fires.
+          dailyPython = pinAtLeast "python3" pkgs.python3 "3.14.9" (
+            pkgs.stdenvNoCC.mkDerivation {
+              pname = "python3";
+              inherit (pkgs.python3) version;
+              pipWheel = pkgs.fetchurl {
+                url = "https://files.pythonhosted.org/packages/3f/06/3e4420302363fbb71be3c7f35ce042f54bfca330e3e66b3a2e3c4cca579f/pip-26.2.2-py3-none-any.whl";
+                hash = "sha256-/X9N+oGQ4BQBO58I8+lz9OTCb/0XmiBIlVM6clSBOnA=";
+              };
+              dontUnpack = true;
+              dontConfigure = true;
+              dontBuild = true;
+              dontStrip = true;
+              dontPatchShebangs = true;
+              installPhase = ''
+                runHook preInstall
+                mkdir -p "$out"
+                cp -R "${pkgs.python3}/." "$out/"
+                chmod -R u+w "$out"
+                ensurepip="$out/lib/python3.14/ensurepip"
+                substituteInPlace "$ensurepip/__init__.py" \
+                  --replace-fail '_PIP_VERSION = "26.2.1"' '_PIP_VERSION = "26.2.2"'
+                rm "$ensurepip/_bundled/pip-26.2.1-py3-none-any.whl"
+                cp "$pipWheel" "$ensurepip/_bundled/pip-26.2.2-py3-none-any.whl"
+                runHook postInstall
+              '';
+              doInstallCheck = true;
+              installCheckPhase = ''
+                runHook preInstallCheck
+                "$out/bin/python3" -I -c 'import sys, ssl, sqlite3, ensurepip; assert ensurepip.__file__.startswith(sys.argv[1]); assert ensurepip.version() == "26.2.2"' "$out/"
+                "$out/bin/python3" -I -m venv "$TMPDIR/verify-venv"
+                "$TMPDIR/verify-venv/bin/python" -I -m pip --version | grep -F "pip 26.2.2 "
+                runHook postInstallCheck
+              '';
+              meta = pkgs.python3.meta;
+            }
+          );
           # Keep the security release and its patched bundled libraries together.
-          dailyNode = pkgs.stdenvNoCC.mkDerivation (attrs: {
-            pname = "nodejs";
-            version = "24.22.1";
-            src = pkgs.fetchurl {
-              url = "https://nodejs.org/dist/v${attrs.version}/node-v${attrs.version}-darwin-arm64.tar.gz";
-              hash = "sha256-icaCWT12zUQjP6U7FWMmTn3py7GJytFpE1xbT637wKc=";
-            };
-            dontConfigure = true;
-            dontBuild = true;
-            dontStrip = true;
-            dontPatchShebangs = true;
-            installPhase = ''
-              runHook preInstall
-              mkdir -p "$out"
-              cp -R bin include lib share "$out/"
-              runHook postInstall
-            '';
-            doInstallCheck = true;
-            installCheckPhase = ''
-              runHook preInstallCheck
-              test "$("$out/bin/node" --version)" = "v${attrs.version}"
-              "$out/bin/node" "$out/lib/node_modules/npm/bin/npm-cli.js" --version
-              runHook postInstallCheck
-            '';
-            meta = {
-              homepage = "https://nodejs.org/";
-              license = pkgs.lib.licenses.mit;
-              platforms = [ "aarch64-darwin" ];
-            };
-          });
+          dailyNode = pinAtLeast "nodejs_24" pkgs.nodejs_24 "24.22.1" (
+            pkgs.stdenvNoCC.mkDerivation (attrs: {
+              pname = "nodejs";
+              version = "24.22.1";
+              src = pkgs.fetchurl {
+                url = "https://nodejs.org/dist/v${attrs.version}/node-v${attrs.version}-darwin-arm64.tar.gz";
+                hash = "sha256-icaCWT12zUQjP6U7FWMmTn3py7GJytFpE1xbT637wKc=";
+              };
+              dontConfigure = true;
+              dontBuild = true;
+              dontStrip = true;
+              dontPatchShebangs = true;
+              installPhase = ''
+                runHook preInstall
+                mkdir -p "$out"
+                cp -R bin include lib share "$out/"
+                runHook postInstall
+              '';
+              doInstallCheck = true;
+              installCheckPhase = ''
+                runHook preInstallCheck
+                test "$("$out/bin/node" --version)" = "v${attrs.version}"
+                "$out/bin/node" "$out/lib/node_modules/npm/bin/npm-cli.js" --version
+                runHook postInstallCheck
+              '';
+              meta = {
+                homepage = "https://nodejs.org/";
+                license = pkgs.lib.licenses.mit;
+                platforms = [ "aarch64-darwin" ];
+              };
+            })
+          );
           cliTrust =
             let
               certificates = pkgs.cacert.override {
@@ -273,22 +276,11 @@
               ln -s "$bundle" "$out/share/dotfiles/ca-bundle.crt"
             '';
           # Only this curl uses the verifier that blocks compromised intermediate keys.
-          # rustls-ffi 0.15.6 pins rustls-webpki 0.103.16.
-          curlRustlsFfi = pkgs.rustls-ffi.overrideAttrs (
-            attrs: _: {
-              version = "0.15.6";
-              src = pkgs.fetchFromGitHub {
-                owner = "rustls";
-                repo = "rustls-ffi";
-                tag = "v${attrs.version}";
-                hash = "sha256-qVsadtAxS+yTt9FZMszwxql0CBTuz9ofpTto1hw9Kzg=";
-              };
-              cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
-                inherit (attrs) pname version src;
-                hash = "sha256-rALR92Ia+I2axVTMVjI9UyNiiS4e6QuN5QU9JfM0UY8=";
-              };
-            }
-          );
+          # nixpkgs' rustls-ffi 0.15.7 pins rustls-webpki 0.103.16 and fixes GHSA-rc3f-4j82-cmrg.
+          curlRustlsFfi =
+            assert pkgs.lib.assertMsg (pkgs.lib.versionAtLeast pkgs.rustls-ffi.version "0.15.7")
+              "rustls-ffi ${pkgs.rustls-ffi.version} predates the rustls-webpki and GHSA-rc3f-4j82-cmrg fixes";
+            pkgs.rustls-ffi;
           curlWithRustls = pkgs.curl.override {
             opensslSupport = false;
             rustlsSupport = true;
@@ -311,10 +303,12 @@
                 makeWrapper "${pkgs.lib.getBin curlWithRustls}/bin/curl" "$out/bin/curl" \
                   --set-default CURL_CA_BUNDLE "${pkgs.cacert}/etc/ssl/certs/ca-no-trust-rules-bundle.crt"
               '';
-          # Build with unpatched nixpkgs: the overlay's Brotli reaches fetchurl via curl and would rebuild the fetcher chain.
-          upstream = nixpkgs.legacyPackages.${system};
-          moonbit = upstream.callPackage ./nix/moonbit.nix { };
-          dotTools = upstream.callPackage ./dot-tools/package.nix { inherit moonbit; };
+          # 0.13.5 ships rustls-webpki 0.103.16 and the 20261021 managed-Python catalog.
+          dailyUv =
+            assert pkgs.lib.assertMsg (pkgs.lib.versionAtLeast pkgs.uv.version "0.13.5")
+              "uv ${pkgs.uv.version} predates the patched verifier and managed-Python catalog";
+            pkgs.uv;
+          inherit (toolsFor.${system}) moonbit dotTools;
           mkVersionEntry = name: value: { inherit name value; };
           dailyCliPackages = with pkgs; [
             # Editor-integrated tooling that should exist in the normal shell too.
@@ -369,7 +363,7 @@
             zsh-abbr
             zsh-autosuggestions
             ruff
-            uv
+            dailyUv
             herdr
           ];
           directToolVersions = nixpkgs.lib.concatMap (
@@ -417,55 +411,65 @@
             dailyCurl
             dailyNode
             dailyPython
+            dailyUv
             cliProfile
             cliTrust
             ;
         };
+      # Evaluate each system's package set once for every output.
+      cliFor = forAllSystems mkCli;
     in
     {
-      packages = forAllSystems (
+      packages = nixpkgs.lib.genAttrs toolSystems (
         system:
-        let
-          cli = mkCli system;
-        in
         {
-          cli = cli.cliProfile;
-          dot-tools = cli.dotTools;
-          moonbit = cli.moonbit;
-          uv = cli.pkgs.uv;
-          curl = cli.dailyCurl;
-          python3 = cli.dailyPython;
-          rustup = cli.pkgs.rustup;
-          nodejs = cli.dailyNode;
-          ca-certificates = cli.cliTrust;
-          default = cli.cliProfile;
+          dot-tools = toolsFor.${system}.dotTools;
+          inherit (toolsFor.${system}) moonbit;
         }
+        // nixpkgs.lib.optionalAttrs (cliFor ? ${system}) (
+          let
+            cli = cliFor.${system};
+          in
+          {
+            cli = cli.cliProfile;
+            uv = cli.dailyUv;
+            curl = cli.dailyCurl;
+            python3 = cli.dailyPython;
+            rustup = cli.pkgs.rustup;
+            nodejs = cli.dailyNode;
+            ca-certificates = cli.cliTrust;
+            default = cli.cliProfile;
+          }
+        )
       );
 
-      devShells = forAllSystems (
+      devShells = nixpkgs.lib.genAttrs toolSystems (
         system:
-        let
-          cli = mkCli system;
-        in
-        {
-          default = cli.pkgs.mkShell {
-            packages = cli.dailyCliPackages;
+        nixpkgs.lib.optionalAttrs (cliFor ? ${system}) (
+          let
+            cli = cliFor.${system};
+          in
+          {
+            default = cli.pkgs.mkShell {
+              packages = cli.dailyCliPackages;
 
-            shellHook = ''
-              export SSL_CERT_FILE="${cli.cliTrust}/share/dotfiles/ca-bundle.crt"
-              export NIX_SSL_CERT_FILE="$SSL_CERT_FILE"
-              export CURL_CA_BUNDLE="$SSL_CERT_FILE"
-              export REQUESTS_CA_BUNDLE="$SSL_CERT_FILE"
-              export PIP_CERT="$SSL_CERT_FILE"
-              echo "Entered the dotfiles Nix shell."
-            '';
-          };
-
+              shellHook = ''
+                export SSL_CERT_FILE="${cli.cliTrust}/share/dotfiles/ca-bundle.crt"
+                export NIX_SSL_CERT_FILE="$SSL_CERT_FILE"
+                export CURL_CA_BUNDLE="$SSL_CERT_FILE"
+                export REQUESTS_CA_BUNDLE="$SSL_CERT_FILE"
+                export PIP_CERT="$SSL_CERT_FILE"
+                echo "Entered the dotfiles Nix shell."
+              '';
+            };
+          }
+        )
+        // {
           # Only what `dotctl test` runs; the daily shell builds unfree tools like terraform from source in CI.
           # Take the tools from unpatched nixpkgs: the overlay's Brotli reaches rustc via curl, so git and ruff rebuild Rust.
           ci =
             let
-              upstream = nixpkgs.legacyPackages.${system};
+              inherit (toolsFor.${system}) upstream;
             in
             upstream.mkShell {
               packages = with upstream; [
@@ -473,8 +477,11 @@
                 chezmoi
                 git
                 jq
+                # The hook tests resolve SSH remotes with `ssh -G`; Linux runners lack zsh.
+                openssh
                 python3
                 ruff
+                zsh
               ];
             };
         }
@@ -483,7 +490,7 @@
       formatter = forAllSystems (
         system:
         let
-          cli = mkCli system;
+          cli = cliFor.${system};
         in
         cli.pkgs.nixfmt-tree
       );
@@ -491,7 +498,7 @@
       lib.toolVersions = forAllSystems (
         system:
         let
-          cli = mkCli system;
+          cli = cliFor.${system};
         in
         cli.toolVersions
       );

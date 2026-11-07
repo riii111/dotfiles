@@ -43,6 +43,59 @@ pub fn split_on_whitespace(text : String) -> Array[String] {
 }
 
 ///|
+/// The part of a command word after its last `/`, which names the program it runs.
+pub fn basename(path : String) -> String {
+  match path.rev_split_once("/") {
+    Some((_, name)) => name.to_owned()
+    None => path
+  }
+}
+
+///|
+/// The index of a program's subcommand in its arguments, past its global options;
+/// `options_with_value` lists those that take the next word, and `--` ends the options.
+pub fn subcommand_index(
+  args : ArrayView[String],
+  options_with_value~ : Array[String],
+) -> Int32 {
+  let mut index = 0
+  while index < args.length() && args[index].has_prefix("-") {
+    if args[index] == "--" {
+      return index + 1
+    }
+    index += if options_with_value.contains(args[index]) { 2 } else { 1 }
+  }
+  index
+}
+
+///|
+/// Resolves a path a command names against the directory it runs in.
+pub fn join_path(base : String, path : String) -> String {
+  if path.has_prefix("/") {
+    path
+  } else {
+    base + "/" + path
+  }
+}
+
+///|
+/// Splits `NAME=value` when NAME is a shell variable name.
+pub fn assignment(token : String) -> (String, String)? {
+  guard token.split_once("=") is Some((name, value)) else { return None }
+  let name = name.to_owned()
+  guard name.get_char(0) is Some(first) &&
+    (first.is_ascii_alphabetic() || first == '_') &&
+    name
+    .iter()
+    .all(char => {
+      char.is_ascii_alphabetic() || char.is_ascii_digit() || char == '_'
+    }) else {
+    return None
+  }
+  Some((name, value.to_owned()))
+}
+
+///|
 /// Matches Python's `str.isspace()`, which `str.split()` and the `\s` regex class use.
 pub fn is_python_whitespace(char : Char) -> Bool {
   match char.to_int() {

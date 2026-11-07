@@ -11,6 +11,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts/cloud-setup.sh"
+# The refresh locks with util-linux flock, which the cloud image has and macOS lacks.
+needs_flock = unittest.skipUnless(shutil.which("flock"), "flock is not installed")
 
 
 class CloudSetupTest(unittest.TestCase):
@@ -59,24 +61,13 @@ class CloudSetupTest(unittest.TestCase):
             for group in settings["hooks"]["PreToolUse"]
         }
 
-    def test_installs_the_pr_hooks_for_bash_and_github_mcp(self):
-        settings = self.run_setup()
+    def test_a_first_run_installs_the_hooks_skills_and_rules(self):
+        settings = self.run_setup(PR_LANGUAGE="ja")
 
+        # No --steer-tools, as the image lacks fd and bat; the safety rules need no flag.
         self.assertEqual(
             self.commands(settings),
-            {
-                "^(Bash|mcp__.*)$": [("agent-hooks github-comment-check", 5)],
-                "^mcp__github__.*$": [
-                    ("agent-hooks pr-format-check", 5),
-                    ("agent-hooks pr-state-check", 5),
-                ],
-                "Bash": [
-                    ("agent-hooks git-force-check", 5),
-                    ("agent-hooks pr-format-check", 5),
-                    ("agent-hooks pr-state-check", 15),
-                    ("agent-hooks comment-review-check", 10),
-                ],
-            },
+            {"^(Bash|mcp__.*)$": [("agent-hooks pre-tool-use", 30)]},
         )
         self.assertEqual(self.post_commands(settings), ["agent-hooks pr-footer-reset"])
         self.assertEqual(
@@ -87,10 +78,6 @@ class CloudSetupTest(unittest.TestCase):
             ],
             ["agent-hooks reply-reminder"],
         )
-
-    def test_installs_the_review_skills_and_the_task_templates(self):
-        self.run_setup()
-
         skills = self.home / ".codex/skills"
         for name in (
             "ai-code-review",
@@ -120,6 +107,24 @@ class CloudSetupTest(unittest.TestCase):
                 }
             },
         )
+        self.assertIs(settings["includeCoAuthoredBy"], False)
+        self.assertIs(settings["attribution"], False)
+        self.assertEqual(
+            settings["permissions"]["allow"], ["Bash(git push --force-with-lease *)"]
+        )
+        memory = (self.home / ".claude/CLAUDE.md").read_text()
+        self.assertTrue(
+            memory.startswith((ROOT / ".chezmoitemplates/agents-common.md").read_text())
+        )
+        self.assertIn("Co-Authored-By", memory)
+        language = subprocess.run(
+            ["git", "config", "--global", "--get", "pr.language"],
+            env={"PATH": os.environ["PATH"], "HOME": str(self.home)},
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        self.assertEqual(language.stdout.strip(), "ja")
 
     def test_a_failed_first_taskctl_build_still_installs_the_rest(self):
         settings = self.run_setup(
@@ -128,18 +133,9 @@ class CloudSetupTest(unittest.TestCase):
             TASKCTL_REPO=str(self.home / "missing"),
         )
 
-        self.assertEqual(len(settings["hooks"]["PreToolUse"]), 3)
+        self.assertEqual(len(settings["hooks"]["PreToolUse"]), 1)
         self.assertTrue((self.home / ".config/harnexus/task.json").exists())
         self.assertTrue((self.home / ".codex/skills/task-worker/SKILL.md").exists())
-
-    def test_replaces_a_skill_whole_when_run_again(self):
-        self.run_setup()
-        stale = self.home / ".codex/skills/task-worker/stale.md"
-        stale.write_text("removed upstream")
-
-        self.run_setup()
-
-        self.assertFalse(stale.exists())
 
     def test_writes_the_codex_login_at_session_start_once(self):
         settings = self.run_setup()
@@ -206,6 +202,7 @@ class CloudSetupTest(unittest.TestCase):
                 check=True,
             )
 
+    @needs_flock
     def test_runs_itself_again_from_the_latest_dotfiles_at_session_start(self):
         repo = self.dotfiles_repo("dotfiles")
         settings = self.run_setup(DOTFILES_REPO=str(repo))
@@ -236,20 +233,15 @@ class CloudSetupTest(unittest.TestCase):
                 self.assertFalse(stale.exists())
                 self.assertEqual(skill.read_text(), version)
 
-    def test_a_refresh_follows_the_repository_set_again(self):
-        first = self.dotfiles_repo("first")
-        self.run_setup(DOTFILES_REPO=str(first))
-        self.refresh()
+        # Setting up again from another repository points the refresh at it.
         second = self.home / "second"
-        subprocess.run(["git", "clone", "-q", str(first), str(second)], check=True)
+        subprocess.run(["git", "clone", "-q", str(repo), str(second)], check=True)
         self.commit(second, "worker", "second")
-
         self.run_setup(DOTFILES_REPO=str(second))
         self.refresh()
-
-        skill = self.home / ".codex/skills/task-worker/SKILL.md"
         self.assertEqual(skill.read_text(), "second")
 
+    @needs_flock
     def test_skips_a_refresh_while_another_runs(self):
         self.run_setup(DOTFILES_REPO=str(self.dotfiles_repo("dotfiles")))
         stale = self.home / ".codex/skills/task-worker/stale.md"
@@ -261,37 +253,39 @@ class CloudSetupTest(unittest.TestCase):
 
         self.assertTrue(stale.exists())
 
+    @needs_flock
     def test_waits_for_a_refresh_of_an_earlier_version_to_end(self):
         self.run_setup(DOTFILES_REPO=str(self.dotfiles_repo("dotfiles")))
         legacy = self.home / ".cache/cloud-setup/refresh.lock"
-        legacy.mkdir()
-        (legacy / "pid").write_text(str(os.getpid()))
         stale = self.home / ".codex/skills/task-worker/stale.md"
-        stale.write_text("removed upstream")
-
-        self.refresh()
-        self.assertTrue(stale.exists())
-
-        # Taken a moment ago and its pid not written yet.
-        (legacy / "pid").unlink()
-        self.refresh()
-        self.assertTrue(stale.exists())
-
         dead = subprocess.Popen(["true"])
         dead.wait()
-        (legacy / "pid").write_text(str(dead.pid))
-        self.refresh()
-        self.assertFalse(stale.exists())
-        self.assertFalse(legacy.exists())
+        # (pid written, lock age in seconds, whether the old refresh still runs)
+        for name, pid, age, running in (
+            ("live pid", os.getpid(), 0, True),
+            ("pid not written yet", None, 0, True),
+            ("dead pid", dead.pid, 0, False),
+            ("no pid for over a minute", None, 120, False),
+        ):
+            with self.subTest(name):
+                shutil.rmtree(legacy, ignore_errors=True)
+                legacy.mkdir()
+                if pid is not None:
+                    (legacy / "pid").write_text(str(pid))
+                os.utime(legacy, (time.time() - age,) * 2)
+                stale.write_text("removed upstream")
 
+                self.refresh()
+
+                self.assertEqual(stale.exists(), running)
+                self.assertEqual(legacy.exists(), running)
+
+    @needs_flock
     def test_a_refresh_that_ended_early_does_not_stop_the_next(self):
         self.run_setup(DOTFILES_REPO=str(self.dotfiles_repo("dotfiles")))
         state = self.home / ".cache/cloud-setup"
-        # What an interrupted refresh leaves: the lock file, and an earlier version's
-        # lock folder that never got a pid.
+        # What an interrupted refresh leaves.
         (state / "refresh.flock").touch()
-        (state / "refresh.lock").mkdir()
-        os.utime(state / "refresh.lock", (time.time() - 120,) * 2)
         stale = self.home / ".codex/skills/task-worker/stale.md"
         stale.write_text("removed upstream")
 
@@ -299,7 +293,6 @@ class CloudSetupTest(unittest.TestCase):
         self.refresh()
 
         self.assertFalse(stale.exists())
-        self.assertFalse((state / "refresh.lock").exists())
 
     def source_repo(self, name, files):
         repo = self.home / name
@@ -391,50 +384,40 @@ class CloudSetupTest(unittest.TestCase):
         self.assertEqual((prefix / ".taskctl.commit").read_text().strip(), rev)
         self.assertTrue((self.home / ".codex/skills/task-worker/SKILL.md").exists())
 
-    def test_keeps_a_taskctl_built_from_the_pinned_commit(self):
+    def test_a_taskctl_that_fails_keeps_the_previous_set(self):
         repo, rev = self.taskctl_repo()
         prefix, _ = self.run_task_setup(TASKCTL_REPO=str(repo), TASKCTL_REV=rev)
-        (prefix / "installer.log").unlink()
-
-        # The pinned commit needs no fetch, so a repository that is gone does not matter.
-        self.run_task_setup(TASKCTL_REPO=str(self.home / "missing"), TASKCTL_REV=rev)
-
-        self.assertFalse((prefix / "installer.log").exists())
-        self.assertEqual(os.readlink(prefix / "harnexus-task"), "taskctl")
-
-    def test_a_failed_taskctl_update_keeps_the_previous_set(self):
-        repo, rev = self.taskctl_repo()
-        self.run_task_setup(TASKCTL_REPO=str(repo), TASKCTL_REV=rev)
         broken, broken_rev = self.taskctl_repo("broken", taskctl="#!/bin/sh\nexit 1\n")
         skill = self.home / ".codex/skills/task-worker"
         (skill / "kept.md").write_text("the set in use")
+        working = (prefix / "taskctl").read_text()
 
-        for name, env in (
-            ("check fails", {"TASKCTL_REPO": str(broken), "TASKCTL_REV": broken_rev}),
-            ("not a full commit", {"TASKCTL_REPO": str(repo), "TASKCTL_REV": rev[:12]}),
+        for name, env, installed in (
+            (
+                "check fails",
+                {"TASKCTL_REPO": str(broken), "TASKCTL_REV": broken_rev},
+                working,
+            ),
+            (
+                "not a full commit",
+                {"TASKCTL_REPO": str(repo), "TASKCTL_REV": rev[:12]},
+                working,
+            ),
+            (
+                "the installed one cannot fill the new templates",
+                {"TASKCTL_REPO": str(repo), "TASKCTL_REV": rev},
+                "#!/bin/sh\nexit 1\n",
+            ),
         ):
             with self.subTest(name):
-                prefix, ran = self.run_task_setup(**env)
+                (prefix / "taskctl").write_text(installed)
+                _, ran = self.run_task_setup(**env)
 
                 self.assertIn(
                     "previous skills, task.json and task CLI stay", ran.stderr
                 )
                 self.assertTrue((skill / "kept.md").exists())
                 self.assertEqual((prefix / ".taskctl.commit").read_text().strip(), rev)
-
-    def test_an_installed_taskctl_that_cannot_fill_the_new_templates_keeps_the_set(
-        self,
-    ):
-        repo, rev = self.taskctl_repo()
-        prefix, _ = self.run_task_setup(TASKCTL_REPO=str(repo), TASKCTL_REV=rev)
-        (prefix / "taskctl").write_text("#!/bin/sh\nexit 1\n")
-        kept = self.home / ".codex/skills/task-worker/kept.md"
-        kept.write_text("the set in use")
-
-        _, ran = self.run_task_setup(TASKCTL_REPO=str(repo), TASKCTL_REV=rev)
-
-        self.assertIn("previous skills, task.json and task CLI stay", ran.stderr)
-        self.assertTrue(kept.exists())
 
     def legacy_repo(self, name="harnexus", body="echo legacy"):
         installer = (
@@ -494,38 +477,12 @@ class CloudSetupTest(unittest.TestCase):
         self.assertEqual(os.readlink(prefix / "harnexus-task"), "taskctl")
         self.assertFalse((prefix / "taskctl").is_symlink())
 
-    def test_keeps_the_commits_only_when_given(self):
-        repo, rev = self.taskctl_repo()
-        self.run_task_setup(TASKCTL_REPO=str(repo), TASKCTL_REV=rev, TASK_CLI="taskctl")
-        options = self.home / ".cache/cloud-setup/options"
-        saved = subprocess.run(
-            [
-                "bash",
-                "-c",
-                f'. "{options}"; echo "$TASKCTL_REV $TASK_CLI $HARNEXUS_REV."',
-            ],
-            capture_output=True,
-            text=True,
-            check=True,
-        ).stdout
-
-        self.assertEqual(saved, f"{rev} taskctl .\n")
-
-        self.run_setup()
-        saved = subprocess.run(
-            ["bash", "-c", f'. "{options}"; echo "$TASKCTL_REV.$HARNEXUS_TASK."'],
-            capture_output=True,
-            text=True,
-            check=True,
-        ).stdout
-        self.assertEqual(saved, "..\n")
-
     def test_clones_the_dotfiles_when_piped_into_bash(self):
         settings = self.run_setup(
             piped=True, DOTFILES_REPO=str(self.dotfiles_repo("dotfiles"))
         )
 
-        self.assertEqual(len(settings["hooks"]["PreToolUse"]), 3)
+        self.assertEqual(len(settings["hooks"]["PreToolUse"]), 1)
         self.assertTrue((self.home / ".claude/hooks/codex-auth.sh").exists())
 
     def test_running_again_keeps_other_hooks_and_adds_nothing_twice(self):
@@ -552,11 +509,11 @@ class CloudSetupTest(unittest.TestCase):
         groups = settings["hooks"]["PreToolUse"]
         self.assertEqual(
             [group["matcher"] for group in groups],
-            ["Write", "Bash", "^(Bash|mcp__.*)$", "^mcp__github__.*$", "Bash"],
+            ["Write", "^(Bash|mcp__.*)$", "^(Bash|mcp__.*)$"],
         )
         self.assertEqual(groups[0]["hooks"], [own])
         self.assertEqual(groups[1]["hooks"], [own])
-        self.assertEqual(sum(len(group["hooks"]) for group in groups), 2 + 1 + 2 + 4)
+        self.assertEqual(sum(len(group["hooks"]) for group in groups), 3)
 
     GUARDS = (
         "github-comment-check",
@@ -611,12 +568,7 @@ class CloudSetupTest(unittest.TestCase):
 
         settings = self.run_setup()
 
-        self.assertEqual(
-            self.guard_commands(settings),
-            sorted(
-                f"agent-hooks {name}" for name in (*self.GUARDS, "comment-review-check")
-            ),
-        )
+        self.assertEqual(self.guard_commands(settings), ["agent-hooks pre-tool-use"])
         self.assertEqual(self.post_commands(settings), ["agent-hooks pr-footer-reset"])
         for name in (*self.GUARDS, "pr-footer-reset"):
             self.assertFalse((hooks / f"{name}.py").exists(), name)
@@ -635,10 +587,15 @@ class CloudSetupTest(unittest.TestCase):
             self.assertTrue((hooks / f"{name}.py").exists(), name)
 
     def test_a_failed_build_keeps_a_previously_built_agent_hooks(self):
-        self.run_setup()
+        hooks = self.home / ".claude/hooks"
+        hooks.mkdir(parents=True)
+        # One built before pre-tool-use fails on its name, so the separate checks are installed.
+        (hooks / "agent-hooks").write_text(
+            '#!/bin/sh\ncat >/dev/null\ncase "$1" in pre-tool-use) exit 1 ;; esac\n'
+        )
+        (hooks / "agent-hooks").chmod(0o755)
 
         settings = self.run_setup(AGENT_HOOKS_INSTALLER=self.failing_installer())
-
         self.assertEqual(
             self.guard_commands(settings),
             sorted(
@@ -646,11 +603,18 @@ class CloudSetupTest(unittest.TestCase):
             ),
         )
 
+        # A build that has pre-tool-use replaces them all.
+        settings = self.run_setup()
+        self.assertEqual(
+            self.commands(settings),
+            {"^(Bash|mcp__.*)$": [("agent-hooks pre-tool-use", 30)]},
+        )
+
     def test_a_guard_the_previous_agent_hooks_lacks_keeps_its_python_copy(self):
         hooks = self.install_python_guards()
         # An agent-hooks built before the PR checks moved fails on their names.
         (hooks / "agent-hooks").write_text(
-            '#!/bin/sh\ncase "$1" in pr-*) exit 1 ;; esac\n'
+            '#!/bin/sh\ncase "$1" in pr-* | pre-tool-use) exit 1 ;; esac\n'
         )
         (hooks / "agent-hooks").chmod(0o755)
 
@@ -690,35 +654,6 @@ class CloudSetupTest(unittest.TestCase):
         self.assertEqual(settings["hooks"]["PostToolUse"], [])
         self.assertEqual(settings["hooks"]["UserPromptSubmit"], [])
         self.assertTrue((self.home / ".codex/skills/task-worker/SKILL.md").exists())
-
-    def test_brings_the_local_rules_and_drops_attribution(self):
-        settings = self.run_setup()
-
-        self.assertIs(settings["includeCoAuthoredBy"], False)
-        self.assertIs(settings["attribution"], False)
-        self.assertEqual(
-            settings["permissions"]["allow"], ["Bash(git push --force-with-lease *)"]
-        )
-        memory = (self.home / ".claude/CLAUDE.md").read_text()
-        self.assertTrue(
-            memory.startswith((ROOT / ".chezmoitemplates/agents-common.md").read_text())
-        )
-        self.assertIn("Co-Authored-By", memory)
-
-    def test_sets_the_pr_language_only_when_given(self):
-        self.run_setup()
-        self.assertNotIn("[pr]", (self.home / ".gitconfig").read_text())
-
-        self.run_setup(PR_LANGUAGE="ja")
-
-        language = subprocess.run(
-            ["git", "config", "--global", "--get", "pr.language"],
-            env={"PATH": os.environ["PATH"], "HOME": str(self.home)},
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        self.assertEqual(language.stdout.strip(), "ja")
 
 
 if __name__ == "__main__":

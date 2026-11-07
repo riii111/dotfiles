@@ -1,42 +1,31 @@
-// Instructions read at session start lose effect as the conversation grows, so every prompt gets the reply rules again.
-// The full rules cost several hundred characters per prompt, so they go in only after a long reply, which corrects the next one.
+// Instructions read at session start lose effect as the conversation grows, so every prompt points back at the reply rules.
+// CLAUDE.md is already in context, so the pointer names its sections, and only a long reply gets its length rules quoted.
 
 ///|
-/// Returns the reply rules to add to the prompt, given the event's transcript and the user's home.
-pub async fn reminder(transcript : String, home~ : String) -> String {
+/// Returns the reply rules to add to the prompt, given the event's transcript.
+pub async fn reminder(transcript : String) -> String {
   guard last_reply(read_tail(transcript)) is Some(reply) &&
     reply_length(reply) > long_reply else {
     return short_rules
   }
-  let instructions = @fs.read_file(home + "/.claude/CLAUDE.md").text() catch {
-    _ => return short_rules
-  }
-  match sections(instructions, full_sections) {
-    Some(rules) => full_rules_lead + "\n\n" + rules
-    None => short_rules
-  }
+  short_rules + "\n" + long_rules
 }
 
 ///|
-/// Characters of prose, without code blocks and whitespace, above which the full rules follow.
+/// Characters of prose, without code blocks and whitespace, above which the length rules follow.
 let long_reply : Int32 = 600
 
 ///|
-let short_rules : String =
-  #|対話の返答に限り次を守る。PR本文・資料・報告の分量はこの対象外。
-  #|- 最初の1〜2文で、聞かれたことに答える
-  #|- 「詳しく」と頼まれたとき以外は、調査の経緯や作業の実況を書かない
-  #|- 調べれば分かることは確かめてから述べ、確かめていない推測は推測と書く
-  #|- ずんだもん口調（一人称「ぼく」、文末「〜のだ」）で返す
+/// tests/test_reply_reminder_rules.py keeps these names and quotes in agents-common.md.
+let short_rules : String = "対話の返答はCLAUDE.mdの「人格」「対話」「作業の進め方」に従う（ずんだもん口調）。"
 
 ///|
-let full_rules_lead : String =
-  #|直前の返答が長かった。対話の返答に限り、次の規則で書く。PR本文・資料・報告の分量はこの対象外。
-  #|口調はずんだもん（一人称「ぼく」、文末「〜のだ」）を保つ。
-  #|調べれば分かることは確かめてから述べ、確かめていない推測は推測と書く。
-
-///|
-let full_sections : Array[String] = ["対話", "共通の表現"]
+let long_rules : String =
+  #|直前の返答が長かった。CLAUDE.mdの「対話」から再掲する。
+  #|- 既定は200語以内
+  #|- 最初の1〜2文で要点を伝える
+  #|- 調査の経緯は必要な分だけ添える
+  #|- 短い回答にセクション見出しやTL;DRを付けない
 
 ///|
 /// A transcript can grow to many megabytes, and the last reply sits at its end.
@@ -118,24 +107,4 @@ fn reply_length(reply : String) -> Int32 {
     }
   }
   count
-}
-
-///|
-/// Joins the `## name` sections of a Markdown document in the given order, or `None` when one is missing.
-fn sections(document : String, names : Array[String]) -> String? {
-  let lines = @text.split_lines(document)
-  let found = []
-  for name in names {
-    let heading = "## " + name
-    guard lines.search(heading) is Some(start) else { return None }
-    let body = [heading]
-    for line in lines[start + 1:] {
-      if line.has_prefix("## ") || line.has_prefix("# ") {
-        break
-      }
-      body.push(line)
-    }
-    found.push(@text.strip(body.join("\n")))
-  }
-  Some(found.join("\n\n"))
 }

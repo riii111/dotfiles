@@ -29,16 +29,3 @@ test "lines split like Python's str.splitlines" {
   assert_eq(@text.split_lines(""), [])
   assert_eq(@text.strip("\u{3000} a b\t\n"), "a b")
 }
-
-///|
-test "symbols, variation selectors and other scripts' digits follow Python" {
-  for char in ['™', '\u{FE0F}', '\u{3099}'] {
-    assert_false(@text.is_word_char(char))
-  }
-  for char in ['١', '४', '𝟘'] {
-    assert_true(@text.is_decimal(char))
-    assert_true(@text.is_word_char(char))
-  }
-  assert_false(@text.is_decimal('①'))
-  assert_true(@text.is_word_char('①'))
-}

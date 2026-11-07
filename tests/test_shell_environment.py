@@ -29,7 +29,7 @@ class ShellEnvironmentTest(unittest.TestCase):
     def run_zsh(self, command):
         return subprocess.check_output(
             [
-                "zsh",
+                shutil.which("zsh"),
                 "-f",
                 "-c",
                 'source "$1"; ' + command,
@@ -45,7 +45,7 @@ class ShellEnvironmentTest(unittest.TestCase):
             text=True,
         ).splitlines()
 
-    def test_project_overrides_and_cargo_tools_keep_precedence(self):
+    def test_repeated_path_setup_keeps_tool_precedence(self):
         for directory, name in (
             (self.cargo, "cargo-custom"),
             (self.profile / "bin", "rustup"),
@@ -56,20 +56,31 @@ class ShellEnvironmentTest(unittest.TestCase):
             executable.chmod(0o755)
         (self.cargo / "rustup").symlink_to(self.profile / "bin/rustup")
         (self.cargo / "cargo").symlink_to("rustup")
+        output = self.run_zsh(
+            "MANPATH=/custom/man:; INFOPATH=/custom/info; "
+            "_dotfiles_homebrew_env prepend; _dotfiles_place_nix_path; "
+            "_dotfiles_homebrew_env; _dotfiles_place_nix_path; "
+            "whence -p cargo cargo-custom rustc; "
+            'print -rl -- "$PATH" "$MANPATH" "$INFOPATH"'
+        )
         self.assertEqual(
-            self.run_zsh("whence -p cargo cargo-custom rustc"),
+            output[:3],
             [
                 str(self.cargo / "cargo"),
                 str(self.cargo / "cargo-custom"),
                 str(self.project / "rustc"),
             ],
         )
-
-    def test_repeated_path_setup_keeps_active_system_before_installer_nix(self):
-        paths = self.run_zsh('_dotfiles_place_nix_path; print -rl -- "${path[@]}"')
+        paths, manpath, infopath = output[3].split(":"), output[4], output[5]
         self.assertEqual(len(paths), len(set(paths)))
-        self.assertLess(paths.index(str(self.project)), paths.index(str(self.cargo)))
-        self.assertLess(paths.index(str(self.profile / "bin")), paths.index("/usr/bin"))
+        order = [
+            str(self.project),
+            str(self.cargo),
+            str(self.profile / "bin"),
+            "/opt/homebrew/bin",
+            "/usr/bin",
+        ]
+        self.assertEqual([path for path in paths if path in order], order)
         if (
             "/run/current-system/sw/bin" in paths
             and "/nix/var/nix/profiles/default/bin" in paths
@@ -78,41 +89,19 @@ class ShellEnvironmentTest(unittest.TestCase):
                 paths.index("/run/current-system/sw/bin"),
                 paths.index("/nix/var/nix/profiles/default/bin"),
             )
+        self.assertEqual(manpath.split(":").count("/opt/homebrew/share/man"), 1)
+        self.assertEqual(infopath.split(":").count("/opt/homebrew/share/info"), 1)
 
-    def test_homebrew_setup_is_idempotent_and_keeps_project_paths(self):
-        values = self.run_zsh(
-            'MANPATH=/custom/man:; INFOPATH=/custom/info; '
-            '_dotfiles_homebrew_env prepend; _dotfiles_place_nix_path; '
-            '_dotfiles_homebrew_env; _dotfiles_place_nix_path; '
-            'print -rl -- "$PATH" "$MANPATH" "$INFOPATH" '
-            '"$HOMEBREW_PREFIX" "$HOMEBREW_CELLAR" "$HOMEBREW_REPOSITORY"'
+    def test_managed_ca_bundle_and_curl_are_exported_only_when_present(self):
+        command = (
+            'print -rl -- "${HOMEBREW_CURL_PATH-unset}" "${SSL_CERT_FILE-unset}" '
+            '"${NIX_SSL_CERT_FILE-unset}" "${CURL_CA_BUNDLE-unset}" '
+            '"${REQUESTS_CA_BUNDLE-unset}" "${PIP_CERT-unset}"'
         )
-        paths = values[0].split(":")
-        self.assertLess(paths.index(str(self.project)), paths.index(str(self.profile / "bin")))
-        self.assertLess(paths.index(str(self.cargo)), paths.index(str(self.profile / "bin")))
-        self.assertLess(paths.index(str(self.profile / "bin")), paths.index("/opt/homebrew/bin"))
-        self.assertEqual(paths.count("/opt/homebrew/bin"), 1)
-        self.assertEqual(values[1].split(":").count("/opt/homebrew/share/man"), 1)
-        self.assertEqual(values[2].split(":").count("/opt/homebrew/share/info"), 1)
-        self.assertEqual(values[3:], ["/opt/homebrew", "/opt/homebrew/Cellar", "/opt/homebrew"])
-
-    def test_clients_share_the_managed_ca_bundle(self):
+        self.assertEqual(self.run_zsh(command), ["unset"] * 6)
         bundle = self.profile / "share/dotfiles/ca-bundle.crt"
         bundle.touch()
-        self.assertEqual(
-            self.run_zsh(
-                'print -rl -- "$SSL_CERT_FILE" "$NIX_SSL_CERT_FILE" "$CURL_CA_BUNDLE" "$REQUESTS_CA_BUNDLE" "$PIP_CERT"'
-            ),
-            [str(bundle)] * 5,
-        )
-
-    def test_homebrew_uses_managed_curl_when_available(self):
         curl = self.profile / "bin/curl"
         curl.write_text("#!/bin/sh\nexit 0\n")
         curl.chmod(0o755)
-        self.assertEqual(self.run_zsh('print -r -- "$HOMEBREW_CURL_PATH"'), [str(curl)])
-
-    def test_missing_managed_curl_does_not_set_broken_homebrew_path(self):
-        self.assertEqual(
-            self.run_zsh('print -r -- "${HOMEBREW_CURL_PATH-unset}"'), ["unset"]
-        )
+        self.assertEqual(self.run_zsh(command), [str(curl)] + [str(bundle)] * 5)

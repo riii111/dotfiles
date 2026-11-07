@@ -10,14 +10,14 @@ fn find_commit(command : String, cwd : String) -> Commit? {
   let mut staged_here = false
   for segment in @git_command.segments(command) {
     if segment is ["cd", target] {
-      dir = join(dir, target)
+      dir = @shell.join_path(dir, target)
       continue
     }
     guard @git_command.subcommand(segment) is Some((git_dir, subcommand, args)) else {
       continue
     }
     let run_dir = match git_dir {
-      Some(path) => join(dir, path)
+      Some(path) => @shell.join_path(dir, path)
       None => dir
     }
     if subcommand == "add" {
@@ -34,15 +34,6 @@ fn find_commit(command : String, cwd : String) -> Commit? {
     return Some({ dir: run_dir, includes_unstaged, })
   }
   None
-}
-
-///|
-fn join(base : String, path : String) -> String {
-  if path.has_prefix("/") {
-    path
-  } else {
-    base + "/" + path
-  }
 }
 
 ///|

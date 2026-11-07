@@ -4,6 +4,7 @@ test "find_commit reads the directory and whether unstaged changes go in" {
     ("git commit -m \"feat: x\"", "/repo", false),
     ("cd sub && git commit -m x", "/repo/sub", false),
     ("git -C /other commit -m x", "/other", false),
+    ("git -C sub -C deeper commit -m x", "/repo/sub/deeper", false),
     ("git add -A && git commit -m x", "/repo", true),
     ("git commit -am x", "/repo", true),
     ("git commit --all -m x", "/repo", true),

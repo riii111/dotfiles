@@ -25,13 +25,13 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
 
-      - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+      - uses: nixbuild/nix-quick-install-action@9f63be77f412a248c9d9a65a4c82cf066cdf8f0c # v35
 
       - name: Update and verify with temporary XDG directories
         run: >-
           nix shell --inputs-from .
           nixpkgs#neovim nixpkgs#tree-sitter nixpkgs#lua-language-server
-          nixpkgs#go nixpkgs#ripgrep
+          nixpkgs#go_1_27 nixpkgs#ripgrep
           --command python3 scripts/nvim-plugins.py update
 
       - name: Export verified lockfile

@@ -345,53 +345,14 @@
         "hooks": [
           {
             "type": "command",
-            "command": "{{ .chezmoi.homeDir }}/.nix-profile/bin/agent-hooks github-comment-check",
-            "timeout": 5
-          }
-        ]
-      },
-      {
-        "matcher": "^mcp__github__.*$",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "{{ .chezmoi.homeDir }}/.nix-profile/bin/agent-hooks pr-format-check",
-            "timeout": 5
-          },
-          {
-            "type": "command",
-            "command": "{{ .chezmoi.homeDir }}/.nix-profile/bin/agent-hooks pr-state-check",
-            "timeout": 5
+            "command": "{{ .chezmoi.homeDir }}/.nix-profile/bin/agent-hooks pre-tool-use --steer-tools{{ if eq .type "work" }} --require-draft --deny-force-push{{ end }}",
+            "timeout": 30
           }
         ]
       },
       {
         "matcher": "Bash",
         "hooks": [
-          {
-            "type": "command",
-            "command": "read input; if echo \"$input\" | grep -q '\"command\":\"find'; then echo '{\"decision\": \"block\", \"reason\": \"Use fd instead of find! Example: fd --hidden --exclude .git --exclude node_modules --color=never --print0 <pattern>\"}'; elif echo \"$input\" | grep -q '\"command\":\"grep'; then echo '{\"decision\": \"block\", \"reason\": \"Use rg instead of grep! Example: rg --no-heading --color=never --json --trim --max-columns=120 <pattern>\"}'; elif echo \"$input\" | grep -q '\"command\":\"cat'; then echo '{\"decision\": \"block\", \"reason\": \"Use bat instead of cat! Example: bat --plain --paging=never --color=never <file>\"}';{{ if eq .type "work" }} elif echo \"$input\" | grep -q 'gh pr create' && ! echo \"$input\" | grep -q '\\-\\-draft'; then echo '{\"decision\": \"block\", \"reason\": \"gh pr create without --draft is not allowed. Always use --draft flag.\"}';{{ end }} elif echo \"$input\" | grep -q 'terraform apply'; then echo '{\"decision\": \"block\", \"reason\": \"terraform apply is not allowed directly. Separate it from other commands and let the user approve.\"}'; elif echo \"$input\" | grep -q 'terraform destroy'; then echo '{\"decision\": \"block\", \"reason\": \"terraform destroy is not allowed directly. Separate it from other commands and let the user approve.\"}'; elif echo \"$input\" | grep -q 'npm publish'; then echo '{\"decision\": \"block\", \"reason\": \"npm publish is not allowed directly. Separate it from other commands and let the user approve.\"}'; elif echo \"$input\" | grep -q 'cargo publish'; then echo '{\"decision\": \"block\", \"reason\": \"cargo publish is not allowed directly. Separate it from other commands and let the user approve.\"}'; fi"
-          },
-          {
-            "type": "command",
-            "command": "{{ .chezmoi.homeDir }}/.nix-profile/bin/agent-hooks git-force-check{{ if eq .type "work" }} --deny-force-push{{ end }}",
-            "timeout": 5
-          },
-          {
-            "type": "command",
-            "command": "{{ .chezmoi.homeDir }}/.nix-profile/bin/agent-hooks pr-format-check",
-            "timeout": 5
-          },
-          {
-            "type": "command",
-            "command": "{{ .chezmoi.homeDir }}/.nix-profile/bin/agent-hooks pr-state-check",
-            "timeout": 15
-          },
-          {
-            "type": "command",
-            "command": "{{ .chezmoi.homeDir }}/.nix-profile/bin/agent-hooks comment-review-check",
-            "timeout": 10
-          },
           {
             "type": "prompt",
             "if": "Bash(gh pr create *)",
@@ -415,7 +376,15 @@
         "hooks": [
           {
             "type": "command",
-            "command": "{{ .chezmoi.homeDir }}/.claude/hooks/git-worktree-post-add.sh"
+            "if": "Bash(git worktree add *)",
+            "command": "{{ .chezmoi.homeDir }}/.nix-profile/bin/agent-hooks worktree-post-add",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(git -C * worktree add *)",
+            "command": "{{ .chezmoi.homeDir }}/.nix-profile/bin/agent-hooks worktree-post-add",
+            "timeout": 10
           }
         ]
       }
@@ -426,7 +395,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 {{ .chezmoi.homeDir }}/.claude/hooks/log-permission-event.py",
+            "command": "{{ .chezmoi.homeDir }}/.nix-profile/bin/agent-hooks permission-log",
             "timeout": 5
           }
         ]
@@ -438,7 +407,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 {{ .chezmoi.homeDir }}/.claude/hooks/log-permission-event.py",
+            "command": "{{ .chezmoi.homeDir }}/.nix-profile/bin/agent-hooks permission-log",
             "timeout": 5
           }
         ]

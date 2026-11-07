@@ -29,16 +29,19 @@ def guard(name, timeout=5):
     return []
 
 
-# The Python hooks, taken out of settings written before the move unless they are kept.
-retired = {
-    f"python3 {hooks}/{name}.py"
-    for name in (
-        "github-comment-check",
-        "git-force-check",
-        "pr-format-check",
-        "pr-state-check",
-        "pr-footer-reset",
-    )
+# Every hook an earlier run may have installed, Python or agent-hooks, is taken out before this run adds its own.
+names = (
+    "pre-tool-use",
+    "github-comment-check",
+    "git-force-check",
+    "pr-format-check",
+    "pr-state-check",
+    "comment-review-check",
+    "pr-footer-reset",
+    "reply-reminder",
+)
+retired = {f"python3 {hooks}/{name}.py" for name in names} | {
+    f"{hooks}/agent-hooks {name}" for name in names
 }
 
 start = [
@@ -57,23 +60,29 @@ start = [
         ]
     }
 ]
-ours = [
-    {"matcher": "^(Bash|mcp__.*)$", "hooks": guard("github-comment-check")},
-    {
-        "matcher": "^mcp__github__.*$",
-        "hooks": [*guard("pr-format-check"), *guard("pr-state-check")],
-    },
-    {
-        "matcher": "Bash",
-        "hooks": [
-            *guard("git-force-check"),
-            *guard("pr-format-check"),
-            *guard("pr-state-check", 15),
-            *guard("comment-review-check", 10),
-        ],
-    },
-]
+if guards.get("pre-tool-use") == "agent-hooks":
+    # One process runs every check on the tools its own hook matched, as in the local settings. No
+    # --steer-tools: the cloud image has neither fd nor bat. The safety rules run without a flag.
+    ours = [{"matcher": "^(Bash|mcp__.*)$", "hooks": guard("pre-tool-use", 30)}]
+else:
+    ours = [
+        {"matcher": "^(Bash|mcp__.*)$", "hooks": guard("github-comment-check")},
+        {
+            "matcher": "^mcp__github__.*$",
+            "hooks": [*guard("pr-format-check"), *guard("pr-state-check")],
+        },
+        {
+            "matcher": "Bash",
+            "hooks": [
+                *guard("git-force-check"),
+                *guard("pr-format-check"),
+                *guard("pr-state-check", 15),
+                *guard("comment-review-check", 10),
+            ],
+        },
+    ]
 ours = [group for group in ours if group["hooks"]]
+# Not in the local settings on purpose: only the GitHub MCP server of cloud sessions appends a footer to a new PR.
 after = [
     {
         "matcher": "^mcp__github__create_pull_request$",

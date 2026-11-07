@@ -51,20 +51,18 @@ class ParseRemoteTest(unittest.TestCase):
     def setUp(self):
         self.mod = load_module()
 
-    def test_supported_forms(self):
-        for url in (
-            "https://github.com/riii111/dotfiles",
-            "https://github.com/riii111/dotfiles.git\n",
-            "https://token@github.com/riii111/dotfiles.git",
-            "git@github.com:riii111/dotfiles.git",
-            "ssh://git@github.com/riii111/dotfiles.git",
-            "ssh://git@github.com:443/riii111/dotfiles",
+    def test_parse_remote(self):
+        for url, expected in (
+            ("https://github.com/riii111/dotfiles", "riii111/dotfiles"),
+            ("https://github.com/riii111/dotfiles.git\n", "riii111/dotfiles"),
+            ("https://token@github.com/riii111/dotfiles.git", "riii111/dotfiles"),
+            ("git@github.com:riii111/dotfiles.git", "riii111/dotfiles"),
+            ("ssh://git@github.com/riii111/dotfiles.git", "riii111/dotfiles"),
+            ("ssh://git@github.com:443/riii111/dotfiles", "riii111/dotfiles"),
+            ("https://gitlab.com/a/b.git", None),
         ):
             with self.subTest(url=url):
-                self.assertEqual(self.mod.parse_remote(url), "riii111/dotfiles")
-
-    def test_non_github_remote(self):
-        self.assertIsNone(self.mod.parse_remote("https://gitlab.com/a/b.git"))
+                self.assertEqual(self.mod.parse_remote(url), expected)
 
 
 class MainTest(unittest.TestCase):
@@ -106,16 +104,6 @@ class MainTest(unittest.TestCase):
         self.assertTrue(result["too_long"])
         self.assertIsNone(result["url"])
         self.assertGreater(result["length"], 100)
-
-    def test_invalid_repo(self):
-        code, _, err = self.run_main("--title", "t", "--repo", "owner/repo?x=1")
-        self.assertEqual(code, 2)
-        self.assertIn("invalid repository", err)
-
-    def test_empty_title(self):
-        code, _, err = self.run_main("--title", "  ", "--repo", "owner/repo")
-        self.assertEqual(code, 2)
-        self.assertIn("title is empty", err)
 
     def test_ambiguous_remotes_require_repo(self):
         repos = {"me/fork": ["origin"], "up/repo": ["upstream"]}

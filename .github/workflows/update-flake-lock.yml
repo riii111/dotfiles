@@ -13,8 +13,10 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+      - uses: nixbuild/nix-quick-install-action@9f63be77f412a248c9d9a65a4c82cf066cdf8f0c # v35
 
       - name: Detect current system
         id: system
@@ -40,8 +42,22 @@ jobs:
           nix eval --json ".#lib.toolVersions.${SYSTEM}" > "$RUNNER_TEMP/tool-versions-after.json"
           echo "path=$RUNNER_TEMP/tool-versions-after.json" >> "$GITHUB_OUTPUT"
 
+      # Overrides that nixpkgs caught up with only warn, so the PR lists them for removal there.
+      # Only flake.nix's own warning line counts, and only a name pinAtLeast is called with, so no
+      # upstream text reaches the body.
       - name: Validate updated flake
-        run: nix flake check --no-build
+        id: validate
+        run: |
+          log="$RUNNER_TEMP/flake-check.log"
+          status=0
+          nix flake check --no-build 2> "$log" || status=$?
+          cat "$log" >&2
+          [ "$status" -eq 0 ]
+          {
+            sed -nE 's/^evaluation warning: dotfiles-obsolete-override: ([a-z0-9_-]+)$/\1/p' "$log" \
+              | grep -Fx -e brotli -e go -e python3 -e nodejs_24 || true
+          } | sort -u > "$RUNNER_TEMP/obsolete-overrides.txt"
+          echo "obsolete_path=$RUNNER_TEMP/obsolete-overrides.txt" >> "$GITHUB_OUTPUT"
 
       - name: Build tool version summary
         id: tool-summary
@@ -80,6 +96,7 @@ jobs:
         env:
           UPDATED_PATH: ${{ steps.tool-summary.outputs.updated_path }}
           NEOVIM_CHANGED: ${{ steps.tool-summary.outputs.neovim_changed }}
+          OBSOLETE_PATH: ${{ steps.validate.outputs.obsolete_path }}
         run: |
           body="$RUNNER_TEMP/update-flake-lock-body.md"
           {
@@ -89,6 +106,12 @@ jobs:
             echo
             cat "$UPDATED_PATH"
             echo
+            if [ -s "$OBSOLETE_PATH" ]; then
+              echo '## 不要になった上書き'
+              echo
+              sed 's/^/- /' "$OBSOLETE_PATH"
+              echo
+            fi
             if [ "$NEOVIM_CHANGED" = "true" ]; then
               echo 'Before applying locally, run a focused Neovim smoke check:'
               echo
