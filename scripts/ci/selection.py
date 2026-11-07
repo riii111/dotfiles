@@ -75,8 +75,7 @@ def select(paths: list[str]) -> set[str]:
             continue
         if path in REPO_ONLY:
             selected.add("repo")
-        # The package recipe also differs per platform, so it builds on macOS too.
-        elif path.startswith("dot-tools/") and path != "dot-tools/package.nix":
+        elif path.startswith("dot-tools/"):
             selected.update({"dot_tools", "repo", "hooks"})
         elif path.startswith("darwin/"):
             selected.update({"nix", "repo", "hooks"})
