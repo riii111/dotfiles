@@ -15,7 +15,7 @@ async fn worktree_post_add(event : Json) -> Array[String] {
       "tool_input": { "command": String(command), .. },
       ..
     } &&
-    command.has_prefix("git worktree add") else {
+    worktree_add_path(command, event_cwd(event)) is Some((dir, path)) else {
     return []
   }
   let response = match event {
@@ -25,9 +25,7 @@ async fn worktree_post_add(event : Json) -> Array[String] {
   }
   // Git prints this only when it created the worktree, so a failed add links nothing.
   guard response.contains("Preparing worktree") else { return [] }
-  let list = @git_trust.run_git(event_cwd(event), [
-    "worktree", "list", "--porcelain",
-  ]) catch {
+  let list = @git_trust.run_git(dir, ["worktree", "list", "--porcelain"]) catch {
     _ => return []
   }
   guard list.status == 0 else { return [] }
@@ -37,9 +35,62 @@ async fn worktree_post_add(event : Json) -> Array[String] {
       line.strip_prefix("worktree ").map(path => path.to_owned())
     })
     .collect()
-  // The main worktree is listed first and the newest last.
-  guard paths is [main, .., newest] && main != newest else { return [] }
-  link_ignored(main, newest)
+  // Git sorts linked worktrees by path, so the new one is found by the path the command named.
+  let added = @fs.realpath(path) catch { _ => return [] }
+  guard paths is [main, .. linked] else { return [] }
+  for listed in linked {
+    let resolved = @fs.realpath(listed) catch { _ => continue }
+    if resolved == added && resolved != (@fs.realpath(main) catch { _ => main }) {
+      return link_ignored(main, listed)
+    }
+  }
+  []
+}
+
+///|
+/// The directory Git runs in and the path a leading `git worktree add` creates, both joined to `cwd`.
+fn worktree_add_path(command : String, cwd : String) -> (String, String)? {
+  guard @git_command.segments(command) is [[first, ..] as segment, ..] &&
+    @shell.basename(first) == "git" &&
+    @git_command.subcommand(segment)
+    is Some((dir, "worktree", ["add", .. args])) else {
+    return None
+  }
+  let dir = match dir {
+    Some(dir) => join(cwd, dir)
+    None => cwd
+  }
+  let mut index = 0
+  while index < args.length() {
+    let arg = args[index]
+    index += 1
+    if arg == "--" {
+      break
+    } else if arg == "--reason" {
+      index += 1
+    } else if arg.has_prefix("--") {
+      continue
+    } else if arg.has_prefix("-") && arg.length() > 1 {
+      // In a cluster like `-fb name`, `-b` and `-B` take the rest or the next word.
+      match arg.find_by(char => char == 'b' || char == 'B') {
+        Some(at) => if at == arg.length() - 1 { index += 1 }
+        None => ()
+      }
+    } else {
+      return Some((dir, join(dir, arg)))
+    }
+  }
+  guard index < args.length() else { return None }
+  Some((dir, join(dir, args[index])))
+}
+
+///|
+fn join(base : String, path : String) -> String {
+  if path.has_prefix("/") {
+    path
+  } else {
+    base + "/" + path
+  }
 }
 
 ///|
