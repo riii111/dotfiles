@@ -114,8 +114,9 @@ jobs:
           persist-credentials: false
       - uses: nixbuild/nix-quick-install-action@9f63be77f412a248c9d9a65a4c82cf066cdf8f0c # v35
       # The patched uninstaller source is imported from an aarch64-darwin build, so Linux cannot evaluate these.
+      # This also builds that import, which the activation test's offline evaluation needs.
       - name: Evaluate both Darwin configurations
-        if: needs.select.outputs.nix == 'true'
+        if: needs.select.outputs.nix == 'true' || needs.select.outputs.ondemand_darwin != ''
         run: |
           nix eval --raw .#darwinConfigurations.personal.config.system.build.toplevel.drvPath
           nix eval --raw .#darwinConfigurations.work.config.system.build.toplevel.drvPath
