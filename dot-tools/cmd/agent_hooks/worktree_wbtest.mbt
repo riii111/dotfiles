@@ -140,11 +140,11 @@ test "worktree_add_path reads the path past options with values" {
 }
 
 ///|
-/// Sets a worktree's creation time, as Git records it, to two minutes ago.
-async fn age_worktree(main : String, name : String) -> Unit {
+/// Sets a worktree's creation time, as Git records it, to `when`, in `touch -d` form.
+async fn age_worktree(main : String, name : String, when : String) -> Unit {
   let (status, _, _) = @process.collect_output("touch", [
     "-d",
-    "2 minutes ago",
+    when,
     main + "/.git/worktrees/" + name + "/commondir",
   ])
   guard status == 0 else { fail("touch failed") }
@@ -162,7 +162,7 @@ async test "worktree-post-add finds a worktree the shell named by expansion" {
   git_in(main, ["add", "."])
   git_in(main, ["commit", "-qm", "init"])
   git_in(main, ["worktree", "add", "-q", "../old", "-b", "old"])
-  age_worktree(main, "old")
+  age_worktree(main, "old", "2 hours ago")
   let event = (command : String) => {
     let event : Json = {
       "tool_name": "Bash",
@@ -176,10 +176,22 @@ async test "worktree-post-add finds a worktree the shell named by expansion" {
   assert_eq(worktree_post_add(event("git worktree add \"$X/new\"")), [])
   assert_eq(@fs.exists(root + "/old/.docs"), false)
   git_in(main, ["worktree", "add", "-q", "../new", "-b", "new"])
-  assert_eq(
-    worktree_post_add(event("git worktree add \"$(pwd)/../new\" -b new")),
-    [".docs"],
-  )
+  git_in(main, ["worktree", "add", "-q", "../twin", "-b", "twin"])
+  // Two worktrees made at the same moment leave the added one unknown.
+  age_worktree(main, "new", "10 minutes ago")
+  let (status, _, _) = @process.collect_output("touch", [
+    "-r",
+    main + "/.git/worktrees/new/commondir",
+    main + "/.git/worktrees/twin/commondir",
+  ])
+  guard status == 0 else { fail("touch failed") }
+  let command = "git worktree add \"$(pwd)/../new\" -b new"
+  assert_eq(worktree_post_add(event(command)), [])
+  // A checkout slower than a minute still counts, since Git wrote `commondir` before it.
+  age_worktree(main, "twin", "2 hours ago")
+  age_worktree(main, "new", "5 minutes ago")
+  assert_eq(worktree_post_add(event(command)), [".docs"])
   assert_eq(@fs.kind(root + "/new/.docs", follow_symlink=false), SymLink)
   assert_eq(@fs.exists(root + "/old/.docs"), false)
+  assert_eq(@fs.exists(root + "/twin/.docs"), false)
 }

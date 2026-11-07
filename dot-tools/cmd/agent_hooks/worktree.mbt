@@ -60,12 +60,13 @@ async fn worktree_post_add(event : Json) -> Array[String] {
 }
 
 ///|
-/// How recently `git worktree add` must have made a worktree for it to count as the one a command just added.
-let newest_worktree_window_ms : Int64 = 60000
+/// How old a worktree may be and still count as the one a command just added. Git writes `commondir` before
+/// the checkout, so a slow checkout makes it old; the bound only keeps a long-idle worktree from being picked.
+let newest_worktree_bound_ms : Int64 = 3600000
 
 ///|
-/// The worktree Git made last, by its `commondir` file, which only `git worktree add` writes;
-/// one older than the window was there before the command, so none is picked.
+/// The worktree Git made last, by its `commondir` file, which only `git worktree add` writes.
+/// It must be strictly newer than every other worktree, so a tie picks none, and inside the bound.
 async fn newest_worktree(dir : String) -> String? {
   let common = @git_trust.run_git(dir, ["rev-parse", "--git-common-dir"]) catch {
     _ => return None
@@ -78,18 +79,24 @@ async fn newest_worktree(dir : String) -> String? {
     "/worktrees"
   let names = @fs.readdir(admin, include_hidden=true) catch { _ => return None }
   let mut newest : (Int64, String)? = None
+  let mut tied = false
   for name in names {
     let (seconds, nanoseconds) = @fs.mtime(admin + "/" + name + "/commondir") catch {
       _ => continue
     }
     let created = seconds * 1000 + (nanoseconds / 1000000).to_int64()
-    if newest is Some((time, _)) && time >= created {
-      continue
+    match newest {
+      Some((time, _)) if time > created => ()
+      Some((time, _)) if time == created => tied = true
+      _ => {
+        newest = Some((created, name))
+        tied = false
+      }
     }
-    newest = Some((created, name))
   }
-  guard newest is Some((created, name)) &&
-    @async.now() - created <= newest_worktree_window_ms else {
+  guard !tied &&
+    newest is Some((created, name)) &&
+    @async.now() - created <= newest_worktree_bound_ms else {
     return None
   }
   // `gitdir` holds the path of the worktree's `.git` file, relative to its folder with `worktree.useRelativePaths`.
