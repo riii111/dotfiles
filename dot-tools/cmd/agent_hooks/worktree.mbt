@@ -134,18 +134,31 @@ fn expand_path(word : String, cwd : String, home : String) -> String? {
 }
 
 ///|
-/// The directory Git runs in and the path a leading `git worktree add` creates, both joined to `cwd`.
+/// The directory Git runs in and the path the first `git worktree add` creates, both joined to `cwd`.
+/// A plain `cd DIR` before it moves the base, as in `cd repo && git worktree add ../x`.
 fn worktree_add_path(
   command : String,
   cwd : String,
   home~ : String,
 ) -> (String, String)? {
-  guard @git_command.segments(command) is [[first, ..] as segment, ..] &&
-    @shell.basename(first) == "git" &&
-    @git_command.subcommand(segment)
-    is Some((dir, "worktree", ["add", .. args])) else {
-    return None
+  let mut cwd = cwd
+  let mut found = None
+  for segment in @git_command.segments(command) {
+    if segment is ["cd", target] {
+      cwd = expand_path(target, cwd, home).unwrap_or(
+        @shell.join_path(cwd, target),
+      )
+      continue
+    }
+    if segment is [first, ..] &&
+      @shell.basename(first) == "git" &&
+      @git_command.subcommand(segment)
+      is Some((dir, "worktree", ["add", .. args])) {
+      found = Some((dir, args))
+      break
+    }
   }
+  guard found is Some((dir, args)) else { return None }
   let dir = match dir {
     Some(dir) => @shell.join_path(cwd, dir)
     None => cwd

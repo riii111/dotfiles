@@ -132,6 +132,15 @@ test "worktree_add_path reads the path past options with values" {
     ("git -C repo worktree add \"$PWD/../x\"", Some(("./repo", "./../x"))),
     ("git worktree add ~other/wt", Some((".", "./~other/wt"))),
     ("git worktree add \"$(pwd)/../x\"", Some((".", "./$(pwd)/../x"))),
+    // A later segment counts, run from where the `cd` before it moved the shell.
+    (
+      "cd repo && git worktree add ../x -b feat",
+      Some(("./repo", "./repo/../x")),
+    ),
+    ("cd a; cd b && git -C c worktree add wt", Some(("./a/b/c", "./a/b/c/wt"))),
+    ("cd ~/repo && git worktree add $PWD/x", Some(("/h/repo", "/h/repo/x"))),
+    ("git status && git worktree add wt", Some((".", "./wt"))),
+    ("cd repo && echo git worktree add wt", None),
   ]
   for case in cases {
     let (command, expected) = case
