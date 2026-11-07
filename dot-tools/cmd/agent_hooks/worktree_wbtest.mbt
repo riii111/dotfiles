@@ -149,6 +149,18 @@ test "worktree_add_path reads the path past options with values" {
 }
 
 ///|
+test "worktree_add_path leaves ~ unexpanded without HOME" {
+  assert_eq(
+    worktree_add_path("git worktree add ~/wt", ".", home=""),
+    Some((".", "./~/wt")),
+  )
+  assert_eq(
+    worktree_add_path("git worktree add $HOME/wt", ".", home=""),
+    Some((".", "./$HOME/wt")),
+  )
+}
+
+///|
 /// Sets a worktree's creation time, as Git records it, to `when`, in `touch -d` form.
 async fn age_worktree(main : String, name : String, when : String) -> Unit {
   let (status, _, _) = @process.collect_output("touch", [

@@ -112,21 +112,19 @@ async fn newest_worktree(dir : String) -> String? {
 ///|
 /// Expands a leading `~`, `$HOME` or `$PWD` as the shell would, so the path can be found; other words stay as they are.
 fn expand_path(word : String, cwd : String, home : String) -> String? {
+  // An unset HOME or PWD leaves the word as it is, rather than rooting `~/x` at `/x`.
   let variables = [
-    ("~/", home + "/"),
+    ("~", home),
     ("$HOME", home),
     ("${HOME}", home),
     ("$PWD", cwd),
     ("${PWD}", cwd),
   ]
-  if word == "~" && home != "" {
-    return Some(home)
-  }
   for variable in variables {
     let (prefix, value) = variable
     if word.strip_prefix(prefix) is Some(rest) &&
       value != "" &&
-      (prefix == "~/" || rest == "" || rest.has_prefix("/")) {
+      (rest == "" || rest.has_prefix("/")) {
       return Some(value + rest.to_owned())
     }
   }
