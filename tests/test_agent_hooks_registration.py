@@ -67,7 +67,11 @@ class AgentHooksRegistrationTest(unittest.TestCase):
                     (claude_pre, None, "agent-hooks pre-tool-use --command-rules")
                 ],
                 "PostToolUse": [
-                    ("Bash", None, "git-worktree-post-add.sh"),
+                    (
+                        "Bash",
+                        "Bash(git worktree add *)",
+                        "agent-hooks worktree-post-add",
+                    ),
                 ],
                 "UserPromptSubmit": [(None, None, "agent-hooks reply-reminder")],
                 "PermissionRequest": [("*", None, "log-permission-event.py")],

@@ -376,7 +376,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "{{ .chezmoi.homeDir }}/.claude/hooks/git-worktree-post-add.sh"
+            "if": "Bash(git worktree add *)",
+            "command": "{{ .chezmoi.homeDir }}/.nix-profile/bin/agent-hooks worktree-post-add",
+            "timeout": 10
           }
         ]
       }
