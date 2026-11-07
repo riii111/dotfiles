@@ -123,7 +123,8 @@ jobs:
       - name: Verify patched Python and ensurepip
         if: needs.select.outputs.nix == 'true'
         run: |
-          nix run --print-build-logs .#python3 -- -I -c 'import ensurepip; assert ensurepip.version() == "26.2.2"'
+          # At least the pinned pip: once nixpkgs reaches the pin, its Python may bundle a newer one.
+          nix run --print-build-logs .#python3 -- -I -c 'import ensurepip; assert tuple(map(int, ensurepip.version().split("."))) >= (26, 2, 2), ensurepip.version()'
       # dot-tools has platform-specific C stubs and file-system behavior.
       - name: Build and test dot-tools with the Darwin toolchain
         if: needs.select.outputs.nix == 'true' || needs.select.outputs.dot_tools == 'true'
