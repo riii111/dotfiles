@@ -72,6 +72,12 @@ class AgentHooksRegistrationTest(unittest.TestCase):
                         "Bash(git worktree add *)",
                         "agent-hooks worktree-post-add",
                     ),
+                    # One pattern per hook, so `git -C DIR worktree add` needs its own.
+                    (
+                        "Bash",
+                        "Bash(git -C * worktree add *)",
+                        "agent-hooks worktree-post-add",
+                    ),
                 ],
                 "UserPromptSubmit": [(None, None, "agent-hooks reply-reminder")],
                 "PermissionRequest": [("*", None, "agent-hooks permission-log")],
