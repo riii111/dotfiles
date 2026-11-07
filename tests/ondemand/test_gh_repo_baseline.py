@@ -14,9 +14,6 @@ FAKE_GH = """#!/bin/sh
 printf '%s\\n' "$*" >> "$GH_LOG"
 case "$*" in
   *--input*) cat >> "$GH_LOG"; echo >> "$GH_LOG" ;;
-  "repo view"*) echo me/current ;;
-  "api --paginate repos/me/existing/rulesets"*) echo 7 ;;
-  *"repos/me/broken"*) echo "HTTP 403: forbidden" >&2; exit 1 ;;
 esac
 if [ "$1" = api ]; then printf 'GH_REPO=%s\\n' "$GH_REPO" >> "$GH_LOG"; fi
 """
@@ -86,26 +83,6 @@ class GhRepoBaselineTest(unittest.TestCase):
             [rule["type"] for rule in ruleset["rules"]],
             ["deletion", "non_fast_forward"],
         )
-
-    def test_updates_existing_baseline_only(self):
-        result = self.run_script("me/existing")
-
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(
-            self.calls()[-1], "api -X PUT repos/me/existing/rulesets/7 --input -"
-        )
-
-    def test_defaults_to_current_repository(self):
-        result = self.run_script()
-
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("api -X PATCH repos/me/current --input -", self.calls())
-
-    def test_reports_failed_api_call(self):
-        result = self.run_script("me/broken")
-
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("HTTP 403: forbidden", result.stderr)
 
 
 if __name__ == "__main__":

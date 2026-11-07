@@ -39,19 +39,17 @@ class MacosSdkRepairTest(unittest.TestCase):
         self.assertTrue(older.exists())
         self.assertTrue(self.newer.exists())
 
-    def test_mismatched_installer_sdk_is_rejected(self):
-        with self.assertRaisesRegex(RuntimeError, "does not match"):
-            repair.repair_plan(self.sdks, 27, self.newer)
-
-    def test_current_sdk_cannot_be_quarantined(self):
-        with self.assertRaisesRegex(RuntimeError, "not a newer leftover"):
-            repair.repair_plan(self.sdks, 26, self.preferred)
-
-    def test_external_sdk_is_rejected(self):
+    def test_unsafe_targets_are_rejected(self):
         external = self.root / "external.sdk"
         external.mkdir()
-        with self.assertRaisesRegex(RuntimeError, "direct children"):
-            repair.repair_plan(self.sdks, 26, external)
+        for name, major, target, message in (
+            ("mismatched installer", 27, self.newer, "does not match"),
+            ("current sdk", 26, self.preferred, "not a newer leftover"),
+            ("outside SDKs", 26, external, "direct children"),
+        ):
+            with self.subTest(name):
+                with self.assertRaisesRegex(RuntimeError, message):
+                    repair.repair_plan(self.sdks, major, target)
 
     def test_quarantine_preserves_contents_alias_and_preferred_sdk(self):
         _, paths = repair.repair_plan(self.sdks, 26, self.newer)
@@ -66,33 +64,23 @@ class MacosSdkRepairTest(unittest.TestCase):
         self.assertTrue((self.sdks / "MacOSX.sdk").resolve().is_dir())
         self.assertFalse(self.newer.exists())
 
-    def test_failed_verification_restores_sdk_and_alias(self):
-        _, paths = repair.repair_plan(self.sdks, 26, self.newer)
+    def test_failed_or_interrupted_quarantine_restores_sdk_and_alias(self):
+        def raise_(error):
+            def verify():
+                raise error
 
-        def failure():
-            raise RuntimeError("probe failed")
+            return verify
 
-        with self.assertRaisesRegex(RuntimeError, "probe failed"):
-            repair.quarantine(paths, self.backup, failure)
-        self.assertTrue(self.newer.is_dir())
-        self.assertEqual((self.sdks / "MacOSX27.sdk").resolve(), self.newer)
-        self.assertTrue(self.preferred.is_dir())
-
-    def test_failed_move_restores_already_moved_sdk(self):
-        _, paths = repair.repair_plan(self.sdks, 26, self.newer)
-        paths.append(self.sdks / "missing.sdk")
-        with self.assertRaises(FileNotFoundError):
-            repair.quarantine(paths, self.backup, lambda: None)
-        self.assertTrue(self.newer.is_dir())
-        self.assertEqual((self.sdks / "MacOSX27.sdk").resolve(), self.newer)
-
-    def test_interrupted_verification_restores_sdk_and_alias(self):
-        _, paths = repair.repair_plan(self.sdks, 26, self.newer)
-
-        def interrupted():
-            raise KeyboardInterrupt()
-
-        with self.assertRaises(KeyboardInterrupt):
-            repair.quarantine(paths, self.backup, interrupted)
-        self.assertTrue(self.newer.is_dir())
-        self.assertEqual((self.sdks / "MacOSX27.sdk").resolve(), self.newer)
+        for name, extra, verify, error in (
+            ("failed probe", [], raise_(RuntimeError("probe failed")), RuntimeError),
+            ("interrupted probe", [], raise_(KeyboardInterrupt()), KeyboardInterrupt),
+            ("failed move", ["missing.sdk"], lambda: None, FileNotFoundError),
+        ):
+            with self.subTest(name):
+                _, paths = repair.repair_plan(self.sdks, 26, self.newer)
+                paths += [self.sdks / path for path in extra]
+                with self.assertRaises(error):
+                    repair.quarantine(paths, self.backup / name, verify)
+                self.assertTrue(self.newer.is_dir())
+                self.assertEqual((self.sdks / "MacOSX27.sdk").resolve(), self.newer)
+                self.assertTrue(self.preferred.is_dir())
