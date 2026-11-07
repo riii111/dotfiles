@@ -39,12 +39,19 @@ pub fn subcommand_index(args : ArrayView[String]) -> Int32 {
 
 ///|
 /// One walk over the global options gives the subcommand's index and the directory `-C` names.
+/// Git resolves each `-C` against the ones before it, and leaves the directory as is for an empty one.
 fn global_options(args : ArrayView[String]) -> (Int32, String?) {
   let mut dir = None
   let mut index = 0
   while index < args.length() && args[index].has_prefix("-") {
-    if args[index] == "-C" && index + 1 < args.length() {
-      dir = Some(args[index + 1])
+    if args[index] == "-C" && index + 1 < args.length() && args[index + 1] != "" {
+      let path = args[index + 1]
+      dir = Some(
+        match dir {
+          Some(base) => @shell.join_path(base, path)
+          None => path
+        },
+      )
     }
     index += if takes_value(args[index]) { 2 } else { 1 }
   }

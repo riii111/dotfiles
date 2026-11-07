@@ -118,6 +118,9 @@ test "worktree_add_path reads the path past options with values" {
     ("git worktree add --orphan -b wt ../wt", Some((".", "./../wt"))),
     ("git worktree add /abs/wt", Some((".", "/abs/wt"))),
     ("git -C repo worktree add -q ../wt", Some(("./repo", "./repo/../wt"))),
+    // Git applies each -C to the directory of the ones before it, and an absolute one resets it.
+    ("git -C a -C b worktree add wt", Some(("./a/b", "./a/b/wt"))),
+    ("git -C a -C /abs worktree add wt", Some(("/abs", "/abs/wt"))),
     ("git worktree add -b wt", None),
     ("git worktree list", None),
     ("echo git worktree add ../wt", None),
