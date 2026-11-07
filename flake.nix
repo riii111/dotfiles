@@ -16,13 +16,15 @@
       ...
     }:
     let
-      # Warn once nixpkgs catches up: a throw would stop the flake.lock update before its Draft PR,
+      # Once nixpkgs reaches the pinned version its package wins, so the override never holds back a newer release.
+      # Warn rather than throw: a throw would stop the flake.lock update before its Draft PR,
       # which lists these warnings so the obsolete security override is removed there.
-      warnIfObsolete =
-        name: upstream: pinned:
-        nixpkgs.lib.warnIf (nixpkgs.lib.versionAtLeast upstream pinned)
-          "obsolete override: nixpkgs ${name} ${upstream} reaches ${pinned}; remove its override from flake.nix"
-          true;
+      pinAtLeast =
+        name: upstream: pinned: override:
+        if nixpkgs.lib.versionAtLeast upstream.version pinned then
+          nixpkgs.lib.warn "obsolete override: nixpkgs ${name} ${upstream.version} reaches ${pinned}; remove its override from flake.nix" upstream
+        else
+          override;
       # CVE-2026-111943: rebuild Go CLIs, not just the compiler on PATH.
       securityOverlay =
         final: prev:
@@ -44,8 +46,7 @@
             ;
           # CVE-2026-111497: also rebuild shared-library and Python consumers.
           # The cached build-tool inherits above and the doCheck overrides below go with it.
-          brotli =
-            assert warnIfObsolete "brotli" prev.brotli.version "1.2.1";
+          brotli = pinAtLeast "brotli" prev.brotli "1.2.1" (
             prev.brotli.overrideAttrs (
               attrs: _: {
                 version = "1.2.1";
@@ -56,7 +57,8 @@
                   hash = "sha256-llY72cYffDv0ugsH0p89xIPEbElV4L8u7U/Fe8hT3gI=";
                 };
               }
-            );
+            )
+          );
           # Brotli consumers rebuild locally, so their upstream tests run on this Mac instead of on Hydra.
           # Skip the slow or load-sensitive ones; each already rebuilds, so no cached package is lost.
           nodejs-slim_24 = prev.nodejs-slim_24.overrideAttrs { doCheck = false; };
@@ -69,10 +71,12 @@
               requests-cache = pyPrev.requests-cache.overridePythonAttrs { doCheck = false; };
             })
           ];
-          go =
-            assert warnIfObsolete "go" prev.go.version "1.27.3";
-            final.go_1_27;
-          buildGoModule = final.buildGo127Module;
+          go = pinAtLeast "go" prev.go "1.27.3" final.go_1_27;
+          buildGoModule =
+            if nixpkgs.lib.versionAtLeast prev.go.version "1.27.3" then
+              prev.buildGoModule
+            else
+              final.buildGo127Module;
         };
       # The uninstaller evaluates a separate system; preserve the security overlay there too.
       securityDarwinTools =
@@ -165,8 +169,7 @@
           '';
           # Patch ensurepip in a copied runtime; retain Nix Python's TLS backend and CA defaults.
           # Python 3.14.9 bundles pip 26.2.2; check its ensurepip when this fires.
-          dailyPython =
-            assert warnIfObsolete "python3" pkgs.python3.version "3.14.9";
+          dailyPython = pinAtLeast "python3" pkgs.python3 "3.14.9" (
             pkgs.stdenvNoCC.mkDerivation {
               pname = "python3";
               inherit (pkgs.python3) version;
@@ -200,10 +203,10 @@
                 runHook postInstallCheck
               '';
               meta = pkgs.python3.meta;
-            };
+            }
+          );
           # Keep the security release and its patched bundled libraries together.
-          dailyNode =
-            assert warnIfObsolete "nodejs_24" pkgs.nodejs_24.version "24.22.1";
+          dailyNode = pinAtLeast "nodejs_24" pkgs.nodejs_24 "24.22.1" (
             pkgs.stdenvNoCC.mkDerivation (attrs: {
               pname = "nodejs";
               version = "24.22.1";
@@ -233,7 +236,8 @@
                 license = pkgs.lib.licenses.mit;
                 platforms = [ "aarch64-darwin" ];
               };
-            });
+            })
+          );
           cliTrust =
             let
               certificates = pkgs.cacert.override {
