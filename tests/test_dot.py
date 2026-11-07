@@ -1,5 +1,6 @@
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -212,6 +213,28 @@ class OndemandTestsTest(unittest.TestCase):
                         call.args[0] for call in stderr.write.call_args_list
                     )
                     self.assertEqual("test_mac.py" in written, notice)
+
+
+@unittest.skipUnless(shutil.which("ruff"), "ruff is not installed")
+class AgentHookTestsTest(unittest.TestCase):
+    def test_a_failing_hook_test_fails_unless_skipped(self):
+        dotctl = Path(__file__).resolve().parents[1] / "bin/executable_dotctl"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            (root / "tests").mkdir()
+            (root / "tests/test_ok.py").write_text(
+                "import unittest\n\n\nclass T(unittest.TestCase):\n"
+                "    def test_ok(self):\n        pass\n"
+            )
+            (root / "tests/test-comment-review-hook.sh").write_text("exit 1\n")
+            for args, expected in (([], 1), (["--skip-agent-hooks"], 0)):
+                result = subprocess.run(
+                    [sys.executable, str(dotctl), "test", *args],
+                    cwd=root,
+                    capture_output=True,
+                )
+                self.assertEqual(result.returncode, expected, args)
 
 
 if __name__ == "__main__":
