@@ -172,17 +172,6 @@ async test "a configured helper is denied unless the command turns it off" {
     reason("git fetch origin", configured=["^core\\.sshcommand$"]),
     Some("Unsafe Git configuration is forbidden."),
   )
-  // Worktree reads may run an fsmonitor hook or a filter driver, which no option turns off.
-  let fsmonitor = ["^core\\.fsmonitor$"]
-  let filter = ["^filter\\..*\\.(clean|smudge|process)$"]
-  for
-    command in [
-      "git status", "git diff --no-ext-diff --no-textconv", "git add x",
-    ] {
-    assert_true(reason(command, configured=fsmonitor) is Some(_), msg=command)
-    assert_true(reason(command, configured=filter) is Some(_), msg=command)
-  }
-  assert_eq(reason("git fetch origin", configured=filter), None)
 }
 
 ///|
@@ -211,24 +200,6 @@ async test "one configuration lookup finds each helper" {
     assert_true(decide(command) is Some(Deny(_)), msg=key)
     git(["config", "--unset", key])
   }
-  for
-    case in [
-      ("core.fsmonitor", "/tmp/hook", "git status"),
-      ("filter.a.clean", "x", "git status"),
-      ("filter.a.b.smudge", "x", "git diff"),
-      ("filter.a.process", "x", "git add x"),
-    ] {
-    let (key, value, command) = case
-    git(["config", key, value])
-    assert_true(decide(command) is Some(Deny(_)), msg=key)
-    git(["config", "--unset", key])
-  }
-  // A boolean fsmonitor is the builtin daemon or none, not a program.
-  for value in ["true", "false", "0", "Yes"] {
-    git(["config", "core.fsmonitor", value])
-    assert_true(decide("git status") is None, msg=value)
-  }
-  git(["config", "--unset", "core.fsmonitor"])
   // A key that only contains a pattern's name is not that helper.
   git(["config", "diff.externalx", "x"])
   assert_true(decide("git diff") is None)

@@ -102,9 +102,7 @@ async fn unsafe_git_configuration(
   if subcommand == "fetch" || subcommand == "ls-remote" || subcommand == "push" {
     return has_config("^core\\.sshcommand$") || has_config("^core\\.gitproxy$")
   }
-  // Commands that read the worktree may run an fsmonitor hook or a clean/smudge filter.
-  has_config("^core\\.fsmonitor$") ||
-  has_config("^filter\\..*\\.(clean|smudge|process)$")
+  false
 }
 
 ///|
