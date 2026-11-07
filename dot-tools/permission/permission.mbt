@@ -42,11 +42,11 @@ fn git_config_probe(cwd : String) -> async (String) -> Bool {
   async fn(pattern) {
     if answers.is_empty() {
       // One Git start answers every pattern the policy asks, instead of one per pattern.
-      let keys = configured_keys(cwd, combined_pattern)
+      let entries = configured_entries(cwd, combined_pattern)
       for known in config_patterns {
         let (name, matches) = known
-        answers[name] = match keys {
-          Some(keys) => keys.iter().any(matches)
+        answers[name] = match entries {
+          Some(entries) => entries.iter().any(matches)
           None => true
         }
       }
@@ -54,8 +54,8 @@ fn git_config_probe(cwd : String) -> async (String) -> Bool {
     if answers.get(pattern) is Some(answer) {
       return answer
     }
-    let answer = match configured_keys(cwd, pattern) {
-      Some(keys) => !keys.is_empty()
+    let answer = match configured_entries(cwd, pattern) {
+      Some(entries) => !entries.is_empty()
       None => true
     }
     answers[pattern] = answer
@@ -64,14 +64,53 @@ fn git_config_probe(cwd : String) -> async (String) -> Bool {
 }
 
 ///|
-/// The patterns the policy asks, with a matcher for the keys Git prints, whose section and variable are lowercased.
-let config_patterns : Array[(String, (String) -> Bool)] = [
-  ("^diff\\.external$", key => key == "diff.external"),
-  ("^diff\\..*\\.command$", key => driver_key(key, "diff", "command")),
-  ("^diff\\..*\\.textconv$", key => driver_key(key, "diff", "textconv")),
-  ("^core\\.sshcommand$", key => key == "core.sshcommand"),
-  ("^core\\.gitproxy$", key => key == "core.gitproxy"),
+/// A configuration entry as `git config --show-scope` prints it; a key with no `=` has no value.
+priv struct ConfigEntry {
+  scope : String
+  key : String
+  value : String?
+}
+
+///|
+/// The patterns the policy asks, with a matcher for the entries Git prints, whose section and variable are lowercased.
+let config_patterns : Array[(String, (ConfigEntry) -> Bool)] = [
+  ("^diff\\.external$", entry => entry.key == "diff.external"),
+  ("^diff\\..*\\.command$", entry => driver_key(entry.key, "diff", "command")),
+  ("^diff\\..*\\.textconv$", entry => driver_key(entry.key, "diff", "textconv")),
+  ("^core\\.sshcommand$", entry => entry.key == "core.sshcommand"),
+  ("^core\\.gitproxy$", entry => entry.key == "core.gitproxy"),
+  // A boolean picks the builtin daemon or none; any other value is a hook program Git runs.
+  (
+    "^core\\.fsmonitor$",
+    entry => entry.key == "core.fsmonitor" && !is_git_boolean(entry.value),
+  ),
+  // Git LFS installs its filters globally, so only a repository's own config counts; this ignores
+  // whether gitattributes names the driver, since a false deny is the safe failure.
+  ("^filter\\..*\\.(clean|smudge|process)$", repository_filter),
 ]
+
+///|
+fn repository_filter(entry : ConfigEntry) -> Bool {
+  (entry.scope == "local" || entry.scope == "worktree") &&
+  (
+    driver_key(entry.key, "filter", "clean") ||
+    driver_key(entry.key, "filter", "smudge") ||
+    driver_key(entry.key, "filter", "process")
+  )
+}
+
+///|
+/// Git's boolean spellings: no value is true, an empty one false, and an integer is nonzero or zero.
+fn is_git_boolean(value : String?) -> Bool {
+  guard value is Some(value) else { return true }
+  let value = value.to_lower()
+  ["", "true", "yes", "on", "false", "no", "off"].contains(value) ||
+  (
+    value.strip_prefix("-").unwrap_or(value[:]) is digits &&
+    !digits.is_empty() &&
+    digits.iter().all(char => char >= '0' && char <= '9')
+  )
+}
 
 ///|
 /// Matches `<section>.<driver>.<variable>`, where the driver may contain dots.
@@ -82,32 +121,39 @@ fn driver_key(key : String, section : String, variable : String) -> Bool {
 }
 
 ///|
-let combined_pattern : String = "^(diff\\.external|diff\\..*\\.command|diff\\..*\\.textconv|core\\.sshcommand|core\\.gitproxy)$"
+let combined_pattern : String = "^(diff\\.external|diff\\..*\\.command|diff\\..*\\.textconv|core\\.sshcommand|core\\.gitproxy|core\\.fsmonitor|filter\\..*\\.(clean|smudge|process))$"
 
 ///|
-/// The keys set in `cwd` that match `pattern`, or `None` when Git fails.
-async fn configured_keys(cwd : String, pattern : String) -> Array[String]? {
+/// The entries set in `cwd` whose keys match `pattern`, or `None` when Git fails.
+async fn configured_entries(
+  cwd : String,
+  pattern : String,
+) -> Array[ConfigEntry]? {
   let result = @git_trust.run_git(cwd, [
-    "config", "--null", "--get-regexp", pattern,
+    "config", "--null", "--show-scope", "--get-regexp", pattern,
   ]) catch {
     _ => return None
   }
   if result.status != 0 && result.status != 1 {
     return None
   }
-  // With --null each entry is the key, a newline and the value, ended by NUL.
-  Some(
-    result.stdout
-    .split("\u{0}")
-    .filter(entry => entry != "")
-    .map(entry => {
+  // With --null --show-scope each entry is the scope, NUL, then the key, a newline and the value, ended by NUL.
+  let fields = result.stdout.split("\u{0}").collect()
+  let entries = []
+  let mut index = 0
+  while index + 1 < fields.length() {
+    let scope = fields[index].to_owned()
+    let entry = fields[index + 1]
+    index += 2
+    entries.push(
       match entry.split_once("\n") {
-        Some((key, _)) => key.to_owned()
-        None => entry.to_owned()
-      }
-    })
-    .collect(),
-  )
+        Some((key, value)) =>
+          { scope, key: key.to_owned(), value: Some(value.to_owned()), }
+        None => { scope, key: entry.to_owned(), value: None, }
+      },
+    )
+  }
+  Some(entries)
 }
 
 ///|
