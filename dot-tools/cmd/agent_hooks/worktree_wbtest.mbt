@@ -124,9 +124,62 @@ test "worktree_add_path reads the path past options with values" {
     ("git worktree add -b wt", None),
     ("git worktree list", None),
     ("echo git worktree add ../wt", None),
+    // The shell expands these before Git sees the path.
+    ("git worktree add ~/wt/x", Some((".", "/h/wt/x"))),
+    ("git worktree add ~", Some((".", "/h"))),
+    ("git worktree add $HOME/wt/x", Some((".", "/h/wt/x"))),
+    ("git -C repo worktree add ${HOME}/wt", Some(("./repo", "/h/wt"))),
+    ("git -C repo worktree add \"$PWD/../x\"", Some(("./repo", "./../x"))),
+    ("git worktree add ~other/wt", Some((".", "./~other/wt"))),
+    ("git worktree add \"$(pwd)/../x\"", Some((".", "./$(pwd)/../x"))),
   ]
   for case in cases {
     let (command, expected) = case
-    assert_eq(worktree_add_path(command, "."), expected)
+    assert_eq(worktree_add_path(command, ".", home="/h"), expected)
   }
+}
+
+///|
+/// Sets a worktree's creation time, as Git records it, to two minutes ago.
+async fn age_worktree(main : String, name : String) -> Unit {
+  let (status, _, _) = @process.collect_output("touch", [
+    "-d",
+    "2 minutes ago",
+    main + "/.git/worktrees/" + name + "/commondir",
+  ])
+  guard status == 0 else { fail("touch failed") }
+}
+
+///|
+async test "worktree-post-add finds a worktree the shell named by expansion" {
+  let root = @fs.tmpdir(prefix="worktree-post-add-expand")
+  defer @fs.rmdir(root, recursive=true)
+  let main = root + "/main"
+  @fs.mkdir(main + "/.docs", recursive=true)
+  @fs.write_file(main + "/.gitignore", ".docs/\n")
+  @fs.write_file(main + "/.docs/plan.md", "plan")
+  git_in(main, ["init", "-q"])
+  git_in(main, ["add", "."])
+  git_in(main, ["commit", "-qm", "init"])
+  git_in(main, ["worktree", "add", "-q", "../old", "-b", "old"])
+  age_worktree(main, "old")
+  let event = (command : String) => {
+    let event : Json = {
+      "tool_name": "Bash",
+      "cwd": main,
+      "tool_input": { "command": command },
+      "tool_response": "Preparing worktree (new branch 'x')",
+    }
+    event
+  }
+  // Only an older worktree exists, so nothing is linked.
+  assert_eq(worktree_post_add(event("git worktree add \"$X/new\"")), [])
+  assert_eq(@fs.exists(root + "/old/.docs"), false)
+  git_in(main, ["worktree", "add", "-q", "../new", "-b", "new"])
+  assert_eq(
+    worktree_post_add(event("git worktree add \"$(pwd)/../new\" -b new")),
+    [".docs"],
+  )
+  assert_eq(@fs.kind(root + "/new/.docs", follow_symlink=false), SymLink)
+  assert_eq(@fs.exists(root + "/old/.docs"), false)
 }
