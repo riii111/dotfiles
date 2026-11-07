@@ -2,6 +2,7 @@
 
 - chezmoi の管理元を編集し、適用は変更対象に限定する。適用後は実ファイルと `chezmoi diff` を確認する。
 - 変更後は `nix develop -c ./bin/executable_dotctl test` を実行する。文書のみの変更では不要。
+  `tests/ondemand/` はこれに含まれない。対象を変えたら `./bin/executable_dotctl test --ondemand <テスト>` で実行する（対応は `scripts/ci/selection.py`）。
 - PR 本文は参照行と短い目的の文で書く。
   箇条書きは必要なときだけ添える。
   検証セクションは付けない。
