@@ -21,42 +21,67 @@ fn command_rule_denial(command : String, require_draft~ : Bool) -> String? {
       )
     _ => ()
   }
-  if require_draft && segments.iter().any(creates_ready_pr) {
-    return Some(
-      "gh pr create without --draft is not allowed. Always use --draft flag.",
-    )
+  if require_draft &&
+    find_command(segments, depth=0, ready_pr_denial) is Some(reason) {
+    return Some(reason)
   }
-  guarded_denial(segments, depth=0)
+  find_command(segments, depth=0, guarded_denial)
 }
 
 ///|
-/// Matches a guarded program at any word, so wrappers with options (`timeout 600`, `sudo -E`, `xargs`) cannot hide it;
+/// Tries `check` on the words from every position, so wrappers with options (`timeout 600`, `sudo -E`, `xargs`) cannot hide a program;
 /// a quoted argument stays one word, so a commit message naming the command does not match.
-fn guarded_denial(segments : Array[Array[String]], depth~ : Int32) -> String? {
+fn find_command(
+  segments : Array[Array[String]],
+  depth~ : Int32,
+  check : (ArrayView[String]) -> String?,
+) -> String? {
   for segment in segments {
-    for index, word in segment {
-      let tool = @shell.basename(word)
-      for rule in guarded {
-        let (name, verbs) = rule
-        guard name == tool else { continue }
-        for verb in verbs {
-          if segment[index + 1:].contains(verb) {
-            return Some(
-              "\{display(tool)} \{verb} is not allowed directly. Separate it from other commands and let the user approve.",
-            )
-          }
-        }
+    for index, _ in segment {
+      let words = segment[index:]
+      if check(words) is Some(reason) {
+        return Some(reason)
       }
       // The depth bound only stops pathological nesting.
       if depth < 4 &&
-        shell_command(segment[index:]) is Some(script) &&
-        guarded_denial(@git_command.segments(script), depth=depth + 1)
+        shell_command(words) is Some(script) &&
+        find_command(@git_command.segments(script), depth=depth + 1, check)
         is Some(reason) {
         return Some(reason)
       }
     }
   }
   None
+}
+
+///|
+fn guarded_denial(words : ArrayView[String]) -> String? {
+  guard words is [program, .. args] else { return None }
+  let tool = @shell.basename(program)
+  for rule in guarded {
+    let (name, verbs) = rule
+    guard name == tool else { continue }
+    for verb in verbs {
+      if args.contains(verb) {
+        return Some(
+          "\{display(tool)} \{verb} is not allowed directly. Separate it from other commands and let the user approve.",
+        )
+      }
+    }
+  }
+  None
+}
+
+///|
+fn ready_pr_denial(words : ArrayView[String]) -> String? {
+  guard words is [program, "pr", "create", .. args] &&
+    @shell.basename(program) == "gh" &&
+    !args
+    .iter()
+    .any(arg => arg == "--draft" || arg == "-d" || arg == "--draft=true") else {
+    return None
+  }
+  Some("gh pr create without --draft is not allowed. Always use --draft flag.")
 }
 
 ///|
@@ -97,32 +122,4 @@ fn display(tool : String) -> String {
   } else {
     tool
   }
-}
-
-///|
-let wrappers : Array[String] = [
-  "env", "command", "exec", "sudo", "nohup", "time",
-]
-
-///|
-/// The basename of the program a simple command runs, past assignments and wrappers, with its index.
-fn command_word(segment : Array[String]) -> (String, Int32)? {
-  for index, word in segment {
-    if wrappers.contains(word) || @shell.assignment(word) is Some(_) {
-      continue
-    }
-    return Some((@shell.basename(word), index))
-  }
-  None
-}
-
-///|
-fn creates_ready_pr(segment : Array[String]) -> Bool {
-  guard command_word(segment) is Some(("gh", index)) &&
-    segment[index + 1:] is ["pr", "create", .. args] else {
-    return false
-  }
-  !args
-  .iter()
-  .any(arg => arg == "--draft" || arg == "-d" || arg == "--draft=true")
 }

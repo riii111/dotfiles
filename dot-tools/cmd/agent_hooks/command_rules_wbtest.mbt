@@ -38,6 +38,11 @@ test "denies by the parsed command, not by text inside arguments" {
     ("gh pr create --draft --title t", true, None),
     ("gh pr create -d --title t", true, None),
     ("git commit -m 'gh pr create'", true, None),
+    ("timeout 60 gh pr create --title t", true, Some("--draft")),
+    ("env -u X gh pr create", true, Some("--draft")),
+    ("sudo -E gh pr create", true, Some("--draft")),
+    ("bash -c 'gh pr create --title t'", true, Some("--draft")),
+    ("bash -c 'gh pr create --draft'", true, None),
   ]
   for case in cases {
     let (command, require_draft, expected) = case
