@@ -26,18 +26,56 @@ fn command_rule_denial(command : String, require_draft~ : Bool) -> String? {
       "gh pr create without --draft is not allowed. Always use --draft flag.",
     )
   }
+  guarded_denial(segments, depth=0)
+}
+
+///|
+/// Matches a guarded program at any word, so wrappers with options (`timeout 600`, `sudo -E`, `xargs`) cannot hide it;
+/// a quoted argument stays one word, so a commit message naming the command does not match.
+fn guarded_denial(segments : Array[Array[String]], depth~ : Int32) -> String? {
   for segment in segments {
-    guard command_word(segment) is Some((tool, index)) else { continue }
-    for rule in guarded {
-      let (name, verbs) = rule
-      guard name == tool else { continue }
-      for verb in verbs {
-        if segment[index + 1:].contains(verb) {
-          return Some(
-            "\{display(tool)} \{verb} is not allowed directly. Separate it from other commands and let the user approve.",
-          )
+    for index, word in segment {
+      let tool = @shell.basename(word)
+      for rule in guarded {
+        let (name, verbs) = rule
+        guard name == tool else { continue }
+        for verb in verbs {
+          if segment[index + 1:].contains(verb) {
+            return Some(
+              "\{display(tool)} \{verb} is not allowed directly. Separate it from other commands and let the user approve.",
+            )
+          }
         }
       }
+      // The depth bound only stops pathological nesting.
+      if depth < 4 &&
+        shell_command(segment[index:]) is Some(script) &&
+        guarded_denial(@git_command.segments(script), depth=depth + 1)
+        is Some(reason) {
+        return Some(reason)
+      }
+    }
+  }
+  None
+}
+
+///|
+let shells : Array[String] = ["sh", "bash", "zsh", "dash", "ksh"]
+
+///|
+/// The script of `sh -c SCRIPT`, also with combined options like `-lc` or `-ec`.
+fn shell_command(words : ArrayView[String]) -> String? {
+  guard words is [program, .. args] && shells.contains(@shell.basename(program)) else {
+    return None
+  }
+  let mut inline = false
+  for arg in args {
+    if arg.has_prefix("-") && !arg.has_prefix("--") && arg.length() > 1 {
+      inline = inline || arg.contains_char('c')
+    } else if arg.has_prefix("--") {
+      continue
+    } else {
+      return if inline { Some(arg) } else { None }
     }
   }
   None
