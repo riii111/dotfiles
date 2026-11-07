@@ -50,15 +50,30 @@ pub fn has_shell_syntax(command : String) -> Bool {
 }
 
 ///|
-/// Splits a single simple command into its executable and arguments, skipping leading assignments.
-pub fn direct_command(command : String) -> (String, Array[String])? {
+/// The words of a command without shell syntax, or `None` when it has some or cannot be split.
+fn exact_words(command : String) -> Array[String]? {
   if has_shell_syntax(command) {
     return None
   }
-  let punctuation = "();&|<>"
-  let tokens = @shell.split_words(command, punctuation~, comments=false) catch {
-    _ => return None
+  try @shell.split_words(command, punctuation="", comments=false) catch {
+    _ => None
+  } noraise {
+    words => Some(words)
   }
+}
+
+///|
+/// Splits a single simple command into its executable and arguments, skipping leading assignments.
+pub fn direct_command(command : String) -> (String, Array[String])? {
+  direct_invocation(exact_words(command))
+}
+
+///|
+/// Without shell syntax, splitting at punctuation gives the same words, and a word made only of it was quoted;
+/// the Python hook could not tell that from an operator, so such a command is no direct invocation.
+fn direct_invocation(words : Array[String]?) -> (String, Array[String])? {
+  guard words is Some(tokens) else { return None }
+  let punctuation = "();&|<>"
   if tokens.is_empty() ||
     tokens
     .iter()
@@ -109,12 +124,9 @@ fn git_command(args : ArrayView[String]) -> (String, Array[String])? {
 }
 
 ///|
-/// Tells whether an assignment before the command sets anything but `GIT_PAGER=cat`, or the command cannot be split.
-fn has_unsafe_environment_override(command : String) -> Bool {
-  let tokens = @shell.split_words(command, punctuation="", comments=false) catch {
-    _ => return true
-  }
-  for token in tokens {
+/// Tells whether an assignment before the command sets anything but `GIT_PAGER=cat`.
+fn has_unsafe_environment_override(words : Array[String]) -> Bool {
+  for token in words {
     guard assignment(token) is Some((name, value)) else { break }
     if name != "GIT_PAGER" || value != "cat" {
       return true
@@ -390,10 +402,20 @@ pub async fn denial_reason(
   command : String,
   has_config : async (String) -> Bool,
 ) -> String? {
-  if direct_command(command) is Some((executable, args)) {
+  words_denial_reason(command, exact_words(command), has_config)
+}
+
+///|
+/// `words` is `exact_words(command)`, which the caller may reuse.
+async fn words_denial_reason(
+  command : String,
+  words : Array[String]?,
+  has_config : async (String) -> Bool,
+) -> String? {
+  if direct_invocation(words) is Some((executable, args)) {
     let name = last_path_part(executable)
     let reason = match name {
-      "git" => direct_git_denial_reason(command, args, has_config)
+      "git" => direct_git_denial_reason(words.unwrap(), args, has_config)
       _ => tool_denial_reason(name, args)
     }
     if reason is Some(_) {
@@ -405,11 +427,11 @@ pub async fn denial_reason(
 
 ///|
 async fn direct_git_denial_reason(
-  command : String,
+  words : Array[String],
   args : Array[String],
   has_config : async (String) -> Bool,
 ) -> String? {
-  if has_unsafe_environment_override(command) {
+  if has_unsafe_environment_override(words) {
     return Some("Git environment overrides are forbidden.")
   }
   if has_external_helper_config(args) {

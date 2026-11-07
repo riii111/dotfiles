@@ -17,15 +17,17 @@ pub async fn decide(
   environment : Map[String, String],
 ) -> Decision? {
   let has_config = git_config_probe(cwd)
-  if denial_reason(command, has_config) is Some(reason) {
+  // The approvals below read the same words, so the command is split once.
+  let words = exact_words(command)
+  if words_denial_reason(command, words, has_config) is Some(reason) {
     return Some(Deny(reason))
   }
   guard event_name == "PermissionRequest" else { return None }
   let home = environment.get("HOME").unwrap_or("")
-  if is_safe_auth_status(command) ||
-    is_task_dispatch_lock_release(command, home) ||
-    safe_git_request(command, cwd, environment, has_config) ||
-    safe_push(command, cwd, environment, has_config) {
+  if words is Some(["gh", "auth", "status"]) ||
+    is_task_dispatch_lock_release(words, home) ||
+    safe_git_request(words, cwd, environment, has_config) ||
+    safe_push(words, cwd, environment, has_config) {
     Some(Allow)
   } else {
     None
@@ -109,28 +111,11 @@ async fn configured_keys(cwd : String, pattern : String) -> Array[String]? {
 }
 
 ///|
-fn exact_words(command : String) -> Array[String]? {
-  if has_shell_syntax(command) {
-    return None
-  }
-  try @shell.split_words(command, punctuation="", comments=false) catch {
-    _ => None
-  } noraise {
-    words => Some(words)
-  }
-}
-
-///|
-fn is_safe_auth_status(command : String) -> Bool {
-  exact_words(command) is Some(["gh", "auth", "status"])
-}
-
-///|
 /// Unattended task-dispatch runs must release their lock without anyone to approve.
-fn is_task_dispatch_lock_release(command : String, home : String) -> Bool {
+fn is_task_dispatch_lock_release(words : Array[String]?, home : String) -> Bool {
   let home = home.trim_end(chars="/").to_owned()
   let lock = home + "/agent-desk/.lock"
-  match exact_words(command) {
+  match words {
     Some(["rm", path]) => path == lock + "/started_at"
     Some(["rmdir", path]) => path == lock
     _ => false
@@ -150,13 +135,13 @@ let listing_branch_options : Array[String] = [
 
 ///|
 async fn safe_git_request(
-  command : String,
+  words : Array[String]?,
   cwd : String,
   environment : Map[String, String],
   has_config : async (String) -> Bool,
 ) -> Bool {
-  guard direct_command(command) is Some(("git", args)) else { return false }
-  if has_unsafe_environment_override(command) ||
+  guard direct_invocation(words) is Some(("git", args)) else { return false }
+  if has_unsafe_environment_override(words.unwrap()) ||
     has_unsafe_ambient_git_environment(environment) ||
     has_git_config_override(args) {
     return false
@@ -295,12 +280,12 @@ let protected_branches : Array[String] = ["main", "master"]
 
 ///|
 async fn safe_push(
-  command : String,
+  words : Array[String]?,
   cwd : String,
   environment : Map[String, String],
   has_config : async (String) -> Bool,
 ) -> Bool {
-  guard exact_words(command)
+  guard words
     is Some(
       ["git", "push", "origin", "HEAD"]
       | ["git", "push", "-u" | "--set-upstream", "origin", "HEAD"]
