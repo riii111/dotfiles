@@ -295,6 +295,11 @@
                 makeWrapper "${pkgs.lib.getBin curlWithRustls}/bin/curl" "$out/bin/curl" \
                   --set-default CURL_CA_BUNDLE "${pkgs.cacert}/etc/ssl/certs/ca-no-trust-rules-bundle.crt"
               '';
+          # 0.13.5 ships rustls-webpki 0.103.16 and the 20261021 managed-Python catalog.
+          dailyUv =
+            assert pkgs.lib.assertMsg (pkgs.lib.versionAtLeast pkgs.uv.version "0.13.5")
+              "uv ${pkgs.uv.version} predates the patched verifier and managed-Python catalog";
+            pkgs.uv;
           inherit (toolsFor.${system}) moonbit dotTools;
           mkVersionEntry = name: value: { inherit name value; };
           dailyCliPackages = with pkgs; [
@@ -350,7 +355,7 @@
             zsh-abbr
             zsh-autosuggestions
             ruff
-            uv
+            dailyUv
             herdr
           ];
           directToolVersions = nixpkgs.lib.concatMap (
@@ -398,6 +403,7 @@
             dailyCurl
             dailyNode
             dailyPython
+            dailyUv
             cliProfile
             cliTrust
             ;
@@ -418,7 +424,7 @@
           in
           {
             cli = cli.cliProfile;
-            uv = cli.pkgs.uv;
+            uv = cli.dailyUv;
             curl = cli.dailyCurl;
             python3 = cli.dailyPython;
             rustup = cli.pkgs.rustup;
