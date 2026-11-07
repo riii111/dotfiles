@@ -55,19 +55,26 @@ fn find_command(
 }
 
 ///|
+/// The verb counts only as the subcommand, so `npm run publish` or `terraform plan -target=apply` passes.
 fn guarded_denial(words : ArrayView[String]) -> String? {
   guard words is [program, .. args] else { return None }
   let tool = @shell.basename(program)
   for rule in guarded {
-    let (name, verbs) = rule
+    let (name, verbs, options_with_value) = rule
     guard name == tool else { continue }
-    for verb in verbs {
-      if args.contains(verb) {
-        return Some(
-          "\{display(tool)} \{verb} is not allowed directly. Separate it from other commands and let the user approve.",
-        )
-      }
+    // `cargo +nightly` picks a toolchain before any option.
+    let args = match args {
+      [toolchain, .. rest] if tool == "cargo" && toolchain.has_prefix("+") =>
+        rest
+      _ => args
     }
+    let index = @shell.subcommand_index(args, options_with_value~)
+    guard index < args.length() && verbs.contains(args[index]) else {
+      return None
+    }
+    return Some(
+      "\{display(tool)} \{args[index]} is not allowed directly. Separate it from other commands and let the user approve.",
+    )
   }
   None
 }
@@ -87,12 +94,24 @@ fn ready_pr_denial(words : ArrayView[String]) -> String? {
 }
 
 ///|
-/// The grep rule `npm publish` also caught `pnpm publish`.
-let guarded : Array[(String, Array[String])] = [
-  ("terraform", ["apply", "destroy"]),
-  ("npm", ["publish"]),
-  ("pnpm", ["publish"]),
-  ("cargo", ["publish"]),
+/// Each program's verbs and the global options that take the next word; the grep rule `npm publish` also caught `pnpm publish`.
+/// Terraform's only global option with a value is `-chdir=DIR`, which is one word.
+let guarded : Array[(String, Array[String], Array[String])] = [
+  ("terraform", ["apply", "destroy"], []),
+  (
+    "npm",
+    ["publish"],
+    [
+      "--prefix", "-C", "-w", "--workspace", "--userconfig", "--globalconfig", "--cache",
+      "--registry", "--loglevel", "--otp", "--tag", "--access",
+    ],
+  ),
+  (
+    "pnpm",
+    ["publish"],
+    ["--filter", "-F", "-C", "--dir", "--loglevel", "--reporter"],
+  ),
+  ("cargo", ["publish"], ["-Z", "-C", "--config", "--color"]),
 ]
 
 ///|
