@@ -1,7 +1,53 @@
 ///|
 /// Removes here-document bodies and their delimiter lines, so the checks do not read the text a command is fed as commands.
 /// A body with no delimiter line is kept, since `<<` may then be a shift as in `$((1<<2))`, and a missed command would pass.
+/// All bodies are kept when the command names anything that could run its input, such as `bash <<EOF` or `cat <<EOF | sh`:
+/// loops, groups and pipes split across lines make the receiver hard to pin down, and a kept body only risks a false deny.
 pub fn strip_heredocs(command : String) -> String {
+  let stripped = drop_heredoc_bodies(command)
+  if stripped == command || runs_input(stripped) {
+    command
+  } else {
+    stripped
+  }
+}
+
+///|
+let input_runners : Array[String] = ["eval", "xargs", "source"]
+
+///|
+/// Words that may precede `.` as the command it runs; elsewhere, as in `git add .`, it is a path.
+let before_command : Array[String] = [
+  "command", "builtin", "exec", "{", "!", "do", "then", "else", "elif", "time",
+]
+
+///|
+/// Whether any word could execute what it reads; an unparsable command counts, to keep its bodies.
+fn runs_input(command : String) -> Bool {
+  let words = split_words(
+    command.replace_all(old="\n", new=";"),
+    punctuation=";&|()",
+    comments=true,
+  ) catch {
+    _ => return true
+  }
+  let mut at_command = true
+  for word in words {
+    let program = basename(word)
+    if shells.contains(program) ||
+      input_runners.contains(program) ||
+      (word == "." && at_command) {
+      return true
+    }
+    at_command = word.iter().all(char => ";&|()".contains_char(char)) ||
+      before_command.contains(word) ||
+      (at_command && assignment(word) is Some(_))
+  }
+  false
+}
+
+///|
+fn drop_heredoc_bodies(command : String) -> String {
   let chars : Array[Char] = command.iter().collect()
   let output = StringBuilder()
   let pending : Array[(String, Bool)] = []

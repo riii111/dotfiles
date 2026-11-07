@@ -9,6 +9,8 @@ test "denies comment posting commands" {
     "gh api -XPOST repos/a/b/pulls/1/reviews/2/events -f event=COMMENT", "gh api graphql -f 'query=mutation { addComment(input: {}) { clientMutationId } }'",
     "bash -o pipefail -c 'gh pr comment 1 -b hi'", "dash -c 'gh pr comment 1 -b hi'",
     "eval 'gh pr comment 1 -b hi'",
+    // A body fed to a shell runs as commands.
+     "bash <<'EOF'\ngh pr comment 12 --body done\nEOF", "cat <<EOF | sudo sh\ngh pr comment 1 -b hi\nEOF",
   ]
   for command in commands {
     assert_true(@github_comment.is_comment_request(bash(command)), msg=command)

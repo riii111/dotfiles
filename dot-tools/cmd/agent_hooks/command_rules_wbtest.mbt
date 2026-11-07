@@ -79,6 +79,21 @@ test "denies by the parsed command, not by text inside arguments" {
       Some("npm publish"),
     ),
     ("tee x <<A <<-\"B\"\nnpm publish\nA\n\tcargo publish\n\tB", false, None),
+    // A body fed to something that runs it stays commands.
+    ("sh <<EOF\nterraform apply\nEOF", false, Some("terraform apply")),
+    ("tee <<EOF | timeout 9 bash\nnpm publish\nEOF", false, Some("npm publish")),
+    (
+      "tee <<EOF |\nnpm publish\nEOF\nxargs -I{} sh -c {}",
+      false,
+      Some("npm publish"),
+    ),
+    (
+      "while read -r c; do\neval \"$c\"\ndone <<EOF\nnpm publish\nEOF",
+      false,
+      Some("npm publish"),
+    ),
+    (". /dev/stdin <<EOF\nnpm publish\nEOF", false, Some("npm publish")),
+    ("git add . && git commit -F - <<'EOF'\nnpm publish docs\nEOF", false, None),
     ("git commit -m $(bat <<'EOF'\nit's npm publish\nEOF\n)", false, None),
     ("git commit -F- <<< 'x'\nnpm publish", false, Some("npm publish")),
     // Without its delimiter line `<<` may be a shift, so the lines stay commands.
