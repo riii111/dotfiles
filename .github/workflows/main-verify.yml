@@ -42,9 +42,9 @@ jobs:
             python3 scripts/ci/selection.py --base "$BASE_SHA" >> "$GITHUB_OUTPUT"
           fi
       # The full repo suite already includes these tests.
-      - name: Verify cloud setup for operational Markdown
+      - name: Verify cloud setup and the reply reminder for operational Markdown
         if: steps.paths.outputs.cloud == 'true' && steps.paths.outputs.repo != 'true'
-        run: python3 -m unittest discover -s tests -p "test_cloud_setup.py"
+        run: python3 -m unittest tests/test_cloud_setup.py tests/test_reply_reminder_rules.py
 
   ai-docs:
     runs-on: ubuntu-latest

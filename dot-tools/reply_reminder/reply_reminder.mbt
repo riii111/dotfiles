@@ -16,6 +16,7 @@ pub async fn reminder(transcript : String) -> String {
 let long_reply : Int32 = 600
 
 ///|
+/// tests/test_reply_reminder_rules.py keeps these names and quotes in agents-common.md.
 let short_rules : String = "対話の返答はCLAUDE.mdの「人格」「対話」「作業の進め方」に従う（ずんだもん口調）。"
 
 ///|

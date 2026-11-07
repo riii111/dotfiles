@@ -63,7 +63,7 @@ def select(paths: list[str]) -> set[str]:
             selected.update({path, "repo"})
             continue
         if path.endswith(".md"):
-            # These Markdown files are consumed by cloud setup, not just read as docs.
+            # Cloud setup and the reply reminder consume these Markdown files, not just people.
             if path.startswith((".chezmoitemplates/", "dot_codex/skills/")):
                 selected.add("cloud")
             continue  # ai-docs always runs.
