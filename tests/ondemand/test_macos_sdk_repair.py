@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 SPEC = importlib.util.spec_from_file_location(
-    "sdk_repair", Path(__file__).resolve().parents[1] / "scripts/repair-macos-sdk.py"
+    "sdk_repair", Path(__file__).resolve().parents[2] / "scripts/repair-macos-sdk.py"
 )
 repair = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(repair)

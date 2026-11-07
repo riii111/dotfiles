@@ -12,7 +12,7 @@ from pathlib import Path
 from unittest import mock
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 loader = importlib.machinery.SourceFileLoader(
     "affected_invoke", str(ROOT / "bin/executable_affected-agent")
 )
