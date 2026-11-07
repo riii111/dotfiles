@@ -104,7 +104,7 @@ jobs:
   # Only what must build, run or import aarch64-darwin derivations.
   darwin:
     needs: select
-    if: needs.select.outputs.nix == 'true' || needs.select.outputs.ondemand_darwin != ''
+    if: needs.select.outputs.nix == 'true' || needs.select.outputs.dot_tools == 'true' || needs.select.outputs.ondemand_darwin != ''
     runs-on: macos-latest
     permissions:
       contents: read
@@ -123,8 +123,9 @@ jobs:
         if: needs.select.outputs.nix == 'true'
         run: |
           nix run --print-build-logs .#python3 -- -I -c 'import ensurepip; assert ensurepip.version() == "26.2.2"'
+      # dot-tools has platform-specific C stubs and file-system behavior.
       - name: Build and test dot-tools with the Darwin toolchain
-        if: needs.select.outputs.nix == 'true'
+        if: needs.select.outputs.nix == 'true' || needs.select.outputs.dot_tools == 'true'
         run: nix build --print-build-logs .#dot-tools
       - name: Run selected Darwin on-demand tests
         if: needs.select.outputs.ondemand_darwin != ''
@@ -160,7 +161,7 @@ jobs:
             linux=true
           fi
           darwin=false
-          if [ "$NIX" = true ] || [ -n "$ONDEMAND_DARWIN" ]; then
+          if [ "$NIX" = true ] || [ "$DOT_TOOLS" = true ] || [ -n "$ONDEMAND_DARWIN" ]; then
             darwin=true
           fi
           expect "$linux" "$LINUX_RESULT"
