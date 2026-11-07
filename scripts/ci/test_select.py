@@ -18,6 +18,8 @@ class SelectionTests(unittest.TestCase):
     def test_path_categories_and_ondemand_targets(self):
         cases = [
             (["README.md"], set()),
+            # No on-demand test reads Markdown, even under a directory it exercises.
+            (["darwin/README.md"], set()),
             (["dot_codex/skills/example/SKILL.md"], {"cloud"}),
             # Unclassified paths select what --full does, on-demand tests included.
             (["nix/moonbit.nix"], selector.full()),

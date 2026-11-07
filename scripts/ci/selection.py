@@ -55,6 +55,12 @@ def matches(path: str, targets: tuple[str, ...]) -> bool:
 def select(paths: list[str]) -> set[str]:
     selected: set[str] = set()
     for path in paths:
+        if path.endswith(".md"):
+            # Cloud setup and the reply reminder consume these Markdown files, not just people.
+            # No on-demand target is Markdown, so a README beside one selects nothing.
+            if path.startswith((".chezmoitemplates/", "dot_codex/skills/")):
+                selected.add("cloud")
+            continue  # ai-docs always runs.
         for name, targets in ONDEMAND.items():
             if matches(path, targets):
                 selected.add(ONDEMAND_DIR + name)
@@ -67,11 +73,6 @@ def select(paths: list[str]) -> set[str]:
                 # Any on-demand test may import a helper.
                 selected.update(all_ondemand())
             continue
-        if path.endswith(".md"):
-            # Cloud setup and the reply reminder consume these Markdown files, not just people.
-            if path.startswith((".chezmoitemplates/", "dot_codex/skills/")):
-                selected.add("cloud")
-            continue  # ai-docs always runs.
         if path in REPO_ONLY:
             selected.add("repo")
         # The package recipe also differs per platform, so it builds on macOS too.
