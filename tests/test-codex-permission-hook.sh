@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# The cases that depend on a checkout: its trust, branch, configuration and the Git processes the hook starts.
+# Commands decided by their text alone are tested in dot-tools/permission.
 
 set -euo pipefail
 
@@ -40,6 +42,14 @@ permission_request_with_env() {
 	)
 }
 
+expect_allowed() {
+	permission_request "$1" | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
+}
+
+expect_denied() {
+	permission_request "$1" | jq -e '.hookSpecificOutput.decision.behavior == "deny"' >/dev/null
+}
+
 # Silence means exit 0 with empty stdout and stderr, so a crashing hook cannot pass as "no decision".
 expect_silent() {
 	local status=0
@@ -51,7 +61,7 @@ expect_silent() {
 	fi
 }
 
-# A command no rule could approve starts no Git, and the denial checks and push approval share their Git lookups.
+# A command no rule could approve starts no Git, and the denial checks and approvals share their Git lookups.
 git_log="$test_root/git.log"
 mkdir -p "$test_root/bin"
 cat >"$test_root/bin/git" <<EOF
@@ -69,16 +79,17 @@ record_git expect_silent permission_request 'ls -la'
 record_git expect_silent pre_tool_use 'git diff'
 [ -s "$git_log" ]
 [ -z "$(sort "$git_log" | uniq -d)" ]
-record_git permission_request 'git push origin HEAD' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
-[ -z "$(sort "$git_log" | uniq -d)" ]
+for command in 'git push origin HEAD' 'git diff --stat' 'git diff -- a b'; do
+	record_git expect_allowed "$command"
+	[ -z "$(sort "$git_log" | uniq -d)" ]
+done
 
-permission_request 'git push -u origin HEAD' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
-permission_request 'git push --set-upstream origin HEAD' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
-permission_request 'gh auth status' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
-permission_request 'git branch --show-current' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
-permission_request 'git fetch origin' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
-permission_request 'git ls-remote origin' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
 for command in \
+	'git push -u origin HEAD' \
+	'git push --set-upstream origin HEAD' \
+	'git branch --show-current' \
+	'git fetch origin' \
+	'git ls-remote origin' \
 	'git status --short' \
 	'git diff --check' \
 	'git log --oneline -1' \
@@ -91,189 +102,35 @@ for command in \
 	'git switch feat/test' \
 	'git switch -c feat/new' \
 	'git add file' \
+	'git add -- --force' \
 	'git commit -c HEAD' \
 	'git log -c -1' \
 	'git commit --amend --no-edit' \
 	'git merge feat/test' \
 	'git rebase --continue' \
-	'git cherry-pick --abort'; do
-	permission_request "$command" | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
+	'git cherry-pick --abort' \
+	"git -C $tmpdir status" \
+	"git log --format='a>b'" \
+	'GIT_PAGER=cat git log --oneline -1'; do
+	expect_allowed "$command"
 done
-permission_request "git -C $tmpdir status" | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
-expect_silent permission_request 'git pull --ff-only'
-permission_request 'git fetch --force origin' | jq -e '.hookSpecificOutput.decision.behavior == "deny"' >/dev/null
-permission_request 'git fetch origin +main:main' | jq -e '.hookSpecificOutput.decision.behavior == "deny"' >/dev/null
-permission_request 'git fetch --update-head-ok origin' | jq -e '.hookSpecificOutput.decision.behavior == "deny"' >/dev/null
-permission_request 'gh auth status --show-token' | jq -e '.hookSpecificOutput.decision.behavior == "deny"' >/dev/null
-permission_request 'gh auth status --hostname github.com --show-token' | jq -e '.hookSpecificOutput.decision.behavior == "deny"' >/dev/null
-permission_request 'gh auth status --hostname github.com -t' | jq -e '.hookSpecificOutput.decision.behavior == "deny"' >/dev/null
-permission_request 'git reset HEAD~1 --hard' | jq -e '.hookSpecificOutput.decision.behavior == "deny"' >/dev/null
-expect_silent permission_request 'gh auth status --hostname github.com'
-expect_silent permission_request 'git push'
-expect_silent permission_request 'git push origin feat/test'
+
+# Commands outside the approved forms are left to Codex even in a trusted checkout.
+# shellcheck disable=SC2016 # Literal expansions are hook inputs, not test-shell operations.
 for command in \
+	'git pull --ff-only' \
+	'git push' \
+	'git push origin feat/test' \
 	$'git push\norigin HEAD' \
-	$'gh auth\nstatus' \
-	$'gh\nauth status'; do
-	expect_silent permission_request "$command"
-done
-
-for command in \
-	'git reset HEAD~1 --hard' \
-	'FOO=1 git reset --hard' \
-	'git restore .' \
-	'git restore :/' \
-	'git restore --staged --worktree .' \
-	'git switch -f old' \
-	'git switch -C old' \
-	'git switch --force-create old' \
-	'git switch --discard-changes old' \
-	'git branch -D old' \
-	'git branch --delete --force old' \
-	'git branch --delete -f old' \
-	'git fetch -f origin' \
-	'git rebase --exec "touch outside" main' \
-	'git switch --orphan empty' \
-	'git diff --output=/tmp/codex-leak main' \
-	'git diff --no-index /etc/hosts /etc/passwd' \
-	'GIT_SEQUENCE_EDITOR="touch outside" git rebase -i main' \
-	'GIT_SSH_COMMAND="touch outside" git fetch origin' \
-	'GIT_EDITOR="touch outside" git commit' \
-	'git fetch --force origin' \
-	'git fetch origin +main:main' \
-	'git fetch --update-head-ok origin' \
-	'git add --for ignored' \
-	'git switch --disc old' \
-	'git switch --force-c old' \
-	'git switch --or empty' \
-	'git rebase --ex "touch outside" main' \
-	'git reset --har HEAD' \
-	'git push --mir origin' \
-	'git push --del origin old' \
-	'git push --pru origin' \
-	'git clean --for -d' \
-	'git checkout -- .' \
-	'git stash clear' \
-	'git stash drop' \
-	'git add -f ignored' \
-	'git clean -fdx' \
-	'git gc --prune=now' \
-	"git -c alias.x='!git push --force origin HEAD' x" \
-	"git -c core.sshCommand='touch /tmp/outside' fetch origin" \
-	'git --config-env=alias.x=GIT_ALIAS x' \
-	'git -C repo push origin +main:main' \
-	'git push origin :old' \
-	'git push -d origin old' \
-	'git push --prune origin' \
-	'gh auth token' \
-	'gh auth status --hostname github.com --show-token' \
-	'gh repo delete owner/repo' \
-	'gh ssh-key add key.pub' \
-	'gh gpg-key add key.asc' \
-	'gh auth login' \
-	'gh auth refresh' \
-	'gh auth setup-git' \
-	'gcloud auth print-access-token' \
-	'gcloud projects delete project' \
-	'gcloud storage rm gs://bucket/object' \
-	'gcloud run jobs delete job' \
-	'gcloud run services delete service' \
-	'gcloud iam service-accounts keys create key.json' \
-	'terraform apply' \
-	'terraform state rm resource.name' \
-	'terraform state mv old new' \
-	'terraform taint resource.name' \
-	'terraform import resource.name id' \
-	'terraform force-unlock lock-id' \
-	'terraform workspace delete old' \
-	'chezmoi purge' \
-	'chezmoi destroy' \
-	'bq rm dataset' \
-	'sudo command' \
-	'chmod 777 file' \
-	'find . -delete'; do
-	pre_tool_use "$command" | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
-done
-
-for command in \
-	'git add --for ignored' \
-	'git switch --disc old' \
-	'git switch --force-c old' \
-	'git switch --or empty' \
-	'git rebase --ex "touch outside" main'; do
-	permission_request "$command" | jq -e '.hookSpecificOutput.decision.behavior == "deny"' >/dev/null
-done
-for command in \
-	'git reset --har HEAD' \
-	'git push --mir origin' \
-	'git push --del origin old' \
-	'git push --pru origin' \
-	'git clean --for -d'; do
-	permission_request "$command" | jq -e '.hookSpecificOutput.decision.behavior == "deny"' >/dev/null
-done
-permission_request 'git add -- --force' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
-expect_silent pre_tool_use 'git add -- --force'
-expect_silent permission_request 'git --paginate log'
-permission_request 'git -c core.pager=cat log' | jq -e '.hookSpecificOutput.decision.behavior == "deny"' >/dev/null
-pre_tool_use 'git -c core.pager=cat log' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
-# PreToolUse cannot request approval, so prompt-class operations remain governed by the sandbox.
-expect_silent pre_tool_use 'rm file'
-pre_tool_use '/usr/bin/git reset --hard' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
-pre_tool_use '/bin/rm -rf build' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
-expect_silent pre_tool_use 'rm agent-desk/started_at'
-pre_tool_use 'rm a --recursive' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
-
-# task-dispatch releases only its own lock without approval.
-lock_dir="$test_home/agent-desk/.lock"
-permission_request "rm $lock_dir/started_at" | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
-permission_request "rmdir $lock_dir" | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
-expect_silent permission_request "rmdir $test_home/agent-desk"
-expect_silent permission_request "rm $lock_dir/started_at $test_home/other"
-permission_request "rm -rf $lock_dir" | jq -e '.hookSpecificOutput.decision.behavior == "deny"' >/dev/null
-
-# Indirection and compound shell syntax must not bypass the deny checks.
-for command in \
-	"eval 'git reset --hard'" \
-	'exec /usr/bin/git reset --hard' \
-	'printf build | xargs rm -rf' \
-	"find . -exec rm -rf '{}' +" \
-	'nice -n 5 /usr/bin/git reset --hard' \
-	'command -p git reset --hard' \
-	"env -S 'git reset --hard'" \
-	'if true; then git reset --hard; fi' \
-	"printf 'git reset --hard\\n' | sh" \
-	"git -c alias.x='!git reset --hard' x" \
-	'nohup git reset --hard'; do
-	pre_tool_use "$command" | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
-done
-
-# Normal shell composition must not interrupt autonomous development work.
-# shellcheck disable=SC2016 # Literal expansions are hook inputs, not test-shell operations.
-for command in 'echo "$HOME"' 'git diff "$(git merge-base main HEAD)"' 'rg foo src/*.rs' 'source .venv/bin/activate'; do
-	expect_silent pre_tool_use "$command"
-done
-expect_silent pre_tool_use 'git diff --no-ext-diff --no-textconv'
-expect_silent pre_tool_use 'rg textconv src'
-expect_silent permission_request 'git diff -- /etc/hosts'
-expect_silent permission_request 'git diff -- ../outside'
-# shellcheck disable=SC2016 # Literal expansions are hook inputs, not test-shell operations.
-for command in \
+	'git --paginate log' \
+	'git diff -- /etc/hosts' \
+	'git diff -- ../outside' \
 	$'git status\ntouch /tmp/outside' \
 	'git status `id`' \
 	'git status > /tmp/outside' \
 	'/tmp/git status'; do
 	expect_silent permission_request "$command"
 done
-# shellcheck disable=SC2016 # Literal expansions are hook inputs, not test-shell operations.
-for command in \
-	'PATH=/tmp:$PATH git status' \
-	"GIT_PAGER='touch /tmp/outside' git log" \
-	"PAGER='touch /tmp/outside' git log"; do
-	permission_request "$command" | jq -e '.hookSpecificOutput.decision.behavior == "deny"' >/dev/null
-done
-permission_request "git log --format='a>b'" | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
-permission_request 'GIT_PAGER=cat git log --oneline -1' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
-expect_silent pre_tool_use 'GIT_PAGER=cat git status'
 
 for variable in GIT_SSH_COMMAND GIT_DIR GIT_WORK_TREE; do
 	if [ "$variable" = GIT_SSH_COMMAND ]; then
@@ -285,57 +142,24 @@ for variable in GIT_SSH_COMMAND GIT_DIR GIT_WORK_TREE; do
 done
 
 git -C "$tmpdir" config diff.external 'touch /tmp/outside'
-permission_request 'git diff' | jq -e '.hookSpecificOutput.decision.behavior == "deny"' >/dev/null
-pre_tool_use 'git diff' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
+expect_denied 'git diff'
 git -C "$tmpdir" config --unset-all diff.external
 git -C "$tmpdir" config core.sshCommand 'touch /tmp/outside'
-permission_request 'git fetch origin' | jq -e '.hookSpecificOutput.decision.behavior == "deny"' >/dev/null
-pre_tool_use 'git fetch origin' | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
+expect_denied 'git fetch origin'
 git -C "$tmpdir" config --unset-all core.sshCommand
-expect_silent pre_tool_use 'git restore --staged .'
-expect_silent pre_tool_use 'gh search code "auth token"'
-expect_silent pre_tool_use 'git stash pop'
-expect_silent pre_tool_use 'terraform state list'
 
+# Remote trust; dot-tools/git_trust covers the other untrusted remotes.
 git -C "$tmpdir" remote set-url origin https://example.com/riii111/test.git
 expect_silent permission_request 'git push origin HEAD'
 expect_silent permission_request 'git fetch origin'
-expect_silent permission_request 'git ls-remote origin'
 
 git -C "$tmpdir" remote set-url origin git@github.com:riii111/test.git
-permission_request 'git push origin HEAD' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
+expect_allowed 'git push origin HEAD'
 
 mkdir -p "$test_home/.ssh"
 printf 'Host github.com\n  HostName ssh.github.com\n  Port 443\n' >"$test_home/.ssh/config"
-permission_request 'git push origin HEAD' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
+expect_allowed 'git push origin HEAD'
 rm -f "$test_home/.ssh/config"
-
-mkdir -p "$test_home/.ssh"
-printf 'Host work-github\n  HostName github.com\n' >"$test_home/.ssh/config"
-git -C "$tmpdir" remote set-url origin https://work-github/riii111/test.git
-expect_silent permission_request 'git fetch origin'
-git -C "$tmpdir" remote set-url origin git@github.com:riii111/test.git
-
-git -C "$tmpdir" remote set-url origin https://github.com/riii111/test.git
-git -C "$tmpdir" config url."https://attacker.example/other.git".insteadOf https://github.com/riii111/test.git
-expect_silent permission_request 'git fetch origin'
-expect_silent permission_request 'git push origin HEAD'
-git -C "$tmpdir" config --unset-all url."https://attacker.example/other.git".insteadOf
-git -C "$tmpdir" remote set-url origin git@github.com:riii111/test.git
-
-git -C "$tmpdir" remote set-url origin https://github.com/attacker/other.git
-expect_silent permission_request 'git push origin HEAD'
-expect_silent permission_request 'git fetch origin'
-expect_silent permission_request 'git ls-remote origin'
-git -C "$tmpdir" remote set-url origin git@github.com:riii111/test.git
-
-git -C "$tmpdir" remote set-url --push origin https://github.com/attacker/other.git
-expect_silent permission_request 'git push origin HEAD'
-git -C "$tmpdir" remote set-url --delete --push origin https://github.com/attacker/other.git
-
-git -C "$tmpdir" remote set-url --add --push origin https://github.com/riii111/test.git
-git -C "$tmpdir" remote set-url --add --push origin https://example.com/riii111/test.git
-expect_silent permission_request 'git push origin HEAD'
 
 git -C "$tmpdir" switch -q -c main
 expect_silent permission_request 'git push origin HEAD'
@@ -346,8 +170,8 @@ mkdir -p "$tmpdir"
 git -C "$tmpdir" init -q
 git -C "$tmpdir" switch -q -c feat/test
 git -C "$tmpdir" remote add origin git@github.com:riii111/upper.git
-permission_request 'git status' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
-permission_request 'git push origin HEAD' | jq -e '.hookSpecificOutput.decision.behavior == "allow"' >/dev/null
+expect_allowed 'git status'
+expect_allowed 'git push origin HEAD'
 git -C "$tmpdir" remote set-url origin git@github.com:riii111/other.git
 expect_silent permission_request 'git status'
 

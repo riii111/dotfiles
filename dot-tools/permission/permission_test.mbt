@@ -75,6 +75,86 @@ async test "ordinary commands pass" {
 }
 
 ///|
+/// Commands decided by their text alone, for both Codex events; the hook's shell test keeps the Git-state cases.
+async test "the command table" {
+  let denied = [
+    "git reset HEAD~1 --hard", "FOO=1 git reset --hard", "git restore .", "git restore :/",
+    "git restore --staged --worktree .", "git switch -f old", "git switch -C old",
+    "git switch --force-create old", "git switch --discard-changes old", "git branch -D old",
+    "git branch --delete --force old", "git branch --delete -f old", "git fetch -f origin",
+    "git fetch --force origin", "git fetch origin +main:main", "git fetch --update-head-ok origin",
+    "git rebase --exec \"touch outside\" main", "git switch --orphan empty", "git diff --output=/tmp/codex-leak main",
+    "git diff --no-index /etc/hosts /etc/passwd", "GIT_SEQUENCE_EDITOR=\"touch outside\" git rebase -i main",
+    "GIT_SSH_COMMAND=\"touch outside\" git fetch origin", "GIT_EDITOR=\"touch outside\" git commit",
+    "git add --for ignored", "git switch --disc old", "git switch --force-c old",
+    "git switch --or empty", "git rebase --ex \"touch outside\" main", "git reset --har HEAD",
+    "git push --mir origin", "git push --del origin old", "git push --pru origin",
+    "git clean --for -d", "git checkout -- .", "git stash clear", "git stash drop",
+    "git add -f ignored", "git clean -fdx", "git gc --prune=now", "git -c alias.x='!git push --force origin HEAD' x",
+    "git -c core.sshCommand='touch /tmp/outside' fetch origin", "git --config-env=alias.x=GIT_ALIAS x",
+    "git -c core.pager=cat log", "git -C repo push origin +main:main", "git push origin :old",
+    "git push -d origin old", "git push --prune origin", "gh auth token", "gh auth status --show-token",
+    "gh auth status --hostname github.com --show-token", "gh auth status --hostname github.com -t",
+    "gh repo delete owner/repo", "gh ssh-key add key.pub", "gh gpg-key add key.asc",
+    "gh auth login", "gh auth refresh", "gh auth setup-git", "gcloud auth print-access-token",
+    "gcloud projects delete project", "gcloud storage rm gs://bucket/object", "gcloud run jobs delete job",
+    "gcloud run services delete service", "gcloud iam service-accounts keys create key.json",
+    "terraform apply", "terraform state rm resource.name", "terraform state mv old new",
+    "terraform taint resource.name", "terraform import resource.name id", "terraform force-unlock lock-id",
+    "terraform workspace delete old", "chezmoi purge", "chezmoi destroy", "bq rm dataset",
+    "sudo command", "chmod 777 file", "find . -delete", "/usr/bin/git reset --hard",
+    "/bin/rm -rf build", "rm a --recursive",
+    // Indirection and compound shell syntax.
+     "eval 'git reset --hard'", "exec /usr/bin/git reset --hard", "printf build | xargs rm -rf",
+    "find . -exec rm -rf '{}' +", "nice -n 5 /usr/bin/git reset --hard", "command -p git reset --hard",
+    "env -S 'git reset --hard'", "if true; then git reset --hard; fi", "printf 'git reset --hard\\n' | sh",
+    "git -c alias.x='!git reset --hard' x", "nohup git reset --hard", "PATH=/tmp:$PATH git status",
+    "GIT_PAGER='touch /tmp/outside' git log", "PAGER='touch /tmp/outside' git log",
+  ]
+  for command in denied {
+    assert_true(reason(command) is Some(_), msg=command)
+  }
+  // Ordinary development work and prompt-class operations, which the sandbox still governs.
+  let passed = [
+    "git add -- --force", "rm file", "rm agent-desk/started_at", "echo \"$HOME\"",
+    "git diff \"$(git merge-base main HEAD)\"", "rg foo src/*.rs", "source .venv/bin/activate",
+    "git diff --no-ext-diff --no-textconv", "rg textconv src", "git restore --staged .",
+    "gh search code \"auth token\"", "git stash pop", "terraform state list", "GIT_PAGER=cat git status",
+  ]
+  for command in passed {
+    assert_eq(reason(command), None, msg=command)
+  }
+}
+
+///|
+async test "approvals that need no repository" {
+  let environment = { "HOME": "/home/u" }
+  let lock = "/home/u/agent-desk/.lock"
+  let decide = async fn(command) {
+    match @permission.decide("PermissionRequest", command, "/", environment) {
+      Some(Allow) => "allow"
+      Some(Deny(_)) => "deny"
+      None => "none"
+    }
+  }
+  let cases = [
+    ("gh auth status", "allow"),
+    ("gh auth status --hostname github.com", "none"),
+    ("gh auth\nstatus", "none"),
+    ("gh\nauth status", "none"),
+    ("rm \{lock}/started_at", "allow"),
+    ("rmdir \{lock}", "allow"),
+    ("rmdir /home/u/agent-desk", "none"),
+    ("rm \{lock}/started_at /home/u/other", "none"),
+    ("rm -rf \{lock}", "deny"),
+  ]
+  for case in cases {
+    let (command, expected) = case
+    assert_eq(decide(command), expected, msg=command)
+  }
+}
+
+///|
 async test "a configured helper is denied unless the command turns it off" {
   let external = ["^diff\\.external$"]
   assert_eq(
