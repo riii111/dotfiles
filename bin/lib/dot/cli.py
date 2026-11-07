@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -335,8 +336,37 @@ def check_shell_template(repo_root: Path, template: Path, shell_path: str) -> li
     return failures
 
 
+def run_ondemand_tests(repo_root: Path, paths: list[str]) -> int:
+    ondemand = repo_root / "tests/ondemand"
+    tests = sorted(ondemand.glob("test_*.py"))
+    if paths:
+        tests = []
+        for path in paths:
+            test = (repo_root / path).resolve()
+            if test.parent != ondemand or not test.is_file():
+                print(f"Not an on-demand test: {path}", file=sys.stderr)
+                return 1
+            tests.append(test)
+    args = ["python3", "-m", "unittest", "-v"]
+    args += [str(test.relative_to(repo_root)) for test in tests]
+    print("$", shlex.join(args))
+    result = subprocess.run(
+        args, cwd=repo_root, check=False, text=True, stderr=subprocess.PIPE
+    )
+    print(result.stderr, end="", file=sys.stderr)
+    if result.returncode != 0:
+        return 1
+    # Requested tests that skip for a missing tool or input would otherwise pass silently.
+    if re.search(r"^OK \(.*skipped=", result.stderr, re.M):
+        print("On-demand tests were skipped", file=sys.stderr)
+        return 1
+    return 0
+
+
 def command_test(args: argparse.Namespace) -> int:
     repo_root = resolve_repo_root()
+    if args.ondemand is not None:
+        return run_ondemand_tests(repo_root, args.ondemand)
     failures = 0
 
     ruff = shutil.which("ruff")
@@ -574,8 +604,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     test_parser = subparsers.add_parser("test", help="run repo verification")
     test_parser.add_argument(
-        "--skip-agent-hooks", action="store_true",
+        "--skip-agent-hooks",
+        action="store_true",
         help="skip agent-hooks integration scripts (for selective CI only)",
+    )
+    test_parser.add_argument(
+        "--ondemand",
+        nargs="*",
+        metavar="PATH",
+        help="run only the given tests/ondemand files (all when none are given)",
     )
     test_parser.set_defaults(func=command_test)
 
