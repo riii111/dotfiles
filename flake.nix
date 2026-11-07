@@ -20,18 +20,23 @@
       # Warn rather than throw: a throw would stop the flake.lock update before its Draft PR,
       # which lists these warnings so the obsolete security override is removed there.
       # update-flake-lock.yml parses this exact line and allowlists the name, so keep both in step.
+      reachesPin =
+        name: upstream: pinned:
+        if nixpkgs.lib.versionAtLeast upstream.version pinned then
+          nixpkgs.lib.warn "dotfiles-obsolete-override: ${name}" true
+        else
+          false;
       pinAtLeast =
         name: upstream: pinned: override:
-        if nixpkgs.lib.versionAtLeast upstream.version pinned then
-          nixpkgs.lib.warn "dotfiles-obsolete-override: ${name}" upstream
-        else
-          override;
+        if reachesPin name upstream pinned then upstream else override;
       # CVE-2026-111943: rebuild Go CLIs, not just the compiler on PATH.
       securityOverlay =
         final: prev:
         let
           # The shared instance avoids a second nixpkgs evaluation; these packages are not unfree.
           upstream = nixpkgs.legacyPackages.${prev.stdenv.hostPlatform.system};
+          # One decision for the compiler and the builder, so Go CLIs never build with a Go other than `go`.
+          goReachesPin = reachesPin "go" prev.go "1.27.3";
         in
         {
           # The patched Brotli reaches these build tools only through their curl,
@@ -72,12 +77,8 @@
               requests-cache = pyPrev.requests-cache.overridePythonAttrs { doCheck = false; };
             })
           ];
-          go = pinAtLeast "go" prev.go "1.27.3" final.go_1_27;
-          buildGoModule =
-            if nixpkgs.lib.versionAtLeast prev.go.version "1.27.3" then
-              prev.buildGoModule
-            else
-              final.buildGo127Module;
+          go = if goReachesPin then prev.go else final.go_1_27;
+          buildGoModule = if goReachesPin then prev.buildGoModule else final.buildGo127Module;
         };
       # The uninstaller evaluates a separate system; preserve the security overlay there too.
       securityDarwinTools =
