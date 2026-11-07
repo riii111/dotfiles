@@ -7,6 +7,8 @@ test "denies comment posting commands" {
     "gh api repos/a/b/issues/1/comments -f body=hi", "gh api -X POST repos/a/b/pulls/1/comments --input draft.json",
     "gh api repos/a/b/pulls/1/comments/2/replies -f body=hi", "gh api --method PATCH repos/a/b/issues/comments/2 -f body=hi",
     "gh api -XPOST repos/a/b/pulls/1/reviews/2/events -f event=COMMENT", "gh api graphql -f 'query=mutation { addComment(input: {}) { clientMutationId } }'",
+    "bash -o pipefail -c 'gh pr comment 1 -b hi'", "dash -c 'gh pr comment 1 -b hi'",
+    "eval 'gh pr comment 1 -b hi'",
   ]
   for command in commands {
     assert_true(@github_comment.is_comment_request(bash(command)), msg=command)

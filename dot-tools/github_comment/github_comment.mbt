@@ -67,9 +67,6 @@ fn segments(command : String) -> Array[Array[String]] {
 }
 
 ///|
-let shells : Array[String] = ["bash", "sh", "zsh"]
-
-///|
 let command_prefixes : Array[String] = ["env", "command", "exec"]
 
 ///|
@@ -81,14 +78,11 @@ fn is_comment_invocation(words : Array[String]) -> Bool {
   }
   guard start < words.length() else { return false }
 
+  if @shell.nested_script(words[start:]) is Some(script) {
+    return posts_comment(script)
+  }
   let executable = @shell.basename(words[start])
   let args = words[start + 1:]
-  if shells.contains(executable) &&
-    args.length() >= 2 &&
-    args[0].has_prefix("-") &&
-    args[0].contains_char('c') {
-    return posts_comment(args[1])
-  }
   guard executable == "gh" else { return false }
 
   let mut first = 0
