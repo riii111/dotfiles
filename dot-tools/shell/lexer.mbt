@@ -52,6 +52,16 @@ pub fn basename(path : String) -> String {
 }
 
 ///|
+/// Resolves a path a command names against the directory it runs in.
+pub fn join_path(base : String, path : String) -> String {
+  if path.has_prefix("/") {
+    path
+  } else {
+    base + "/" + path
+  }
+}
+
+///|
 /// Splits `NAME=value` when NAME is a shell variable name.
 pub fn assignment(token : String) -> (String, String)? {
   guard token.split_once("=") is Some((name, value)) else { return None }

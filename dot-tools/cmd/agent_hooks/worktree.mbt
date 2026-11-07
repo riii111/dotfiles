@@ -57,7 +57,7 @@ fn worktree_add_path(command : String, cwd : String) -> (String, String)? {
     return None
   }
   let dir = match dir {
-    Some(dir) => join(cwd, dir)
+    Some(dir) => @shell.join_path(cwd, dir)
     None => cwd
   }
   let mut index = 0
@@ -77,20 +77,11 @@ fn worktree_add_path(command : String, cwd : String) -> (String, String)? {
         None => ()
       }
     } else {
-      return Some((dir, join(dir, arg)))
+      return Some((dir, @shell.join_path(dir, arg)))
     }
   }
   guard index < args.length() else { return None }
-  Some((dir, join(dir, args[index])))
-}
-
-///|
-fn join(base : String, path : String) -> String {
-  if path.has_prefix("/") {
-    path
-  } else {
-    base + "/" + path
-  }
+  Some((dir, @shell.join_path(dir, args[index])))
 }
 
 ///|
