@@ -81,12 +81,6 @@ jobs:
             --apply 'v: builtins.compareVersions v "1.27.3" >= 0' | grep -qx true
           nix eval --raw .#darwinConfigurations.personal.config.system.build.toplevel.drvPath
           nix eval --raw .#darwinConfigurations.work.config.system.build.toplevel.drvPath
-      - name: Verify patched uv
-        if: needs.select.outputs.nix == 'true'
-        shell: bash
-        run: |
-          nix run --print-build-logs .#uv -- --version | tee /tmp/uv-version
-          grep -Eq '^uv 0\.13\.5( \(.*\))?$' /tmp/uv-version
       - name: Verify patched Python and ensurepip
         if: needs.select.outputs.nix == 'true'
         run: |

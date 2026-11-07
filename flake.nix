@@ -61,38 +61,6 @@
           ];
           go = final.go_1_27;
           buildGoModule = final.buildGo127Module;
-          # Keep the patched verifier and managed-Python catalog in the official release.
-          uv = final.stdenvNoCC.mkDerivation (attrs: {
-            pname = "uv";
-            version = "0.13.5";
-            src = final.fetchurl {
-              url = "https://releases.astral.sh/github/uv/releases/download/${attrs.version}/uv-aarch64-apple-darwin.tar.gz";
-              hash = "sha256-dD+FA1oZluyzUGWeAc2frqlwmCm+CbG0sDxz6vPJzXM=";
-            };
-            nativeBuildInputs = [ final.installShellFiles ];
-            dontConfigure = true;
-            dontBuild = true;
-            dontStrip = true;
-            installPhase = ''
-              runHook preInstall
-              install -Dm755 uv "$out/bin/uv"
-              install -Dm755 uvx "$out/bin/uvx"
-              installShellCompletion --cmd uv \
-                --bash <("$out/bin/uv" generate-shell-completion bash) \
-                --fish <("$out/bin/uv" generate-shell-completion fish) \
-                --zsh <("$out/bin/uv" generate-shell-completion zsh)
-              runHook postInstall
-            '';
-            doInstallCheck = true;
-            installCheckPhase = ''
-              runHook preInstallCheck
-              "$out/bin/uv" --version | grep -F "uv ${attrs.version} "
-              runHook postInstallCheck
-            '';
-            meta = prev.uv.meta // {
-              platforms = [ "aarch64-darwin" ];
-            };
-          });
         };
       # The uninstaller evaluates a separate system; preserve the security overlay there too.
       securityDarwinTools =
