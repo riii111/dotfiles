@@ -21,6 +21,7 @@ test "allows reads and unrelated commands" {
     "gh api graphql -f 'query={ repository(owner: \"a\", name: \"b\") { name } }'",
     "gh pr create --draft --title 'fix: title' --body hi", "gh issue comment 1 -b hi",
     "gh issue close 1 --comment hi", "rg 'gh pr comment' tests", "echo gh pr comment 1",
+    "gh pr create --draft --body-file - <<'EOF'\ngh pr comment 1 -b hi\nEOF",
   ]
   for command in commands {
     assert_false(@github_comment.is_comment_request(bash(command)), msg=command)

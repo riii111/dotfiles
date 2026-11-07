@@ -51,6 +51,24 @@ test "denies by the parsed command, not by text inside arguments" {
     ("sudo -E gh pr create", true, Some("--draft")),
     ("bash -c 'gh pr create --title t'", true, Some("--draft")),
     ("bash -c 'gh pr create --draft'", true, None),
+    // Here-document bodies are input, not commands.
+    ("git commit -F - <<'EOF'\nnpm publish docs\nEOF", false, None),
+    (
+      "gh pr create --draft --body-file - <<EOF\nRun gh pr create first.\nEOF",
+      true,
+      None,
+    ),
+    (
+      "tee x <<A <<-\"B\"\nnpm publish\nA\n\tcargo publish\n\tB\nnpm publish",
+      false,
+      Some("npm publish"),
+    ),
+    ("tee x <<A <<-\"B\"\nnpm publish\nA\n\tcargo publish\n\tB", false, None),
+    ("git commit -m $(bat <<'EOF'\nit's npm publish\nEOF\n)", false, None),
+    ("git commit -F- <<< 'x'\nnpm publish", false, Some("npm publish")),
+    // Without its delimiter line `<<` may be a shift, so the lines stay commands.
+    ("git commit -F - <<EOF\nnpm publish", false, Some("npm publish")),
+    ("echo $((1<<2))\nnpm publish", false, Some("npm publish")),
   ]
   for case in cases {
     let (command, require_draft, expected) = case
