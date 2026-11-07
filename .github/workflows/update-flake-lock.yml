@@ -43,6 +43,8 @@ jobs:
           echo "path=$RUNNER_TEMP/tool-versions-after.json" >> "$GITHUB_OUTPUT"
 
       # Overrides that nixpkgs caught up with only warn, so the PR lists them for removal there.
+      # Only flake.nix's own warning line counts, and only a name pinAtLeast is called with, so no
+      # upstream text reaches the body.
       - name: Validate updated flake
         id: validate
         run: |
@@ -51,7 +53,10 @@ jobs:
           nix flake check --no-build 2> "$log" || status=$?
           cat "$log" >&2
           [ "$status" -eq 0 ]
-          { grep -o 'obsolete override: .*' "$log" || true; } | sort -u > "$RUNNER_TEMP/obsolete-overrides.txt"
+          {
+            sed -nE 's/^evaluation warning: dotfiles-obsolete-override: ([a-z0-9_-]+)$/\1/p' "$log" \
+              | grep -Fx -e brotli -e go -e python3 -e nodejs_24 || true
+          } | sort -u > "$RUNNER_TEMP/obsolete-overrides.txt"
           echo "obsolete_path=$RUNNER_TEMP/obsolete-overrides.txt" >> "$GITHUB_OUTPUT"
 
       - name: Build tool version summary
@@ -104,7 +109,7 @@ jobs:
             if [ -s "$OBSOLETE_PATH" ]; then
               echo '## 不要になった上書き'
               echo
-              sed 's/^obsolete override: /- /' "$OBSOLETE_PATH"
+              sed 's/^/- /' "$OBSOLETE_PATH"
               echo
             fi
             if [ "$NEOVIM_CHANGED" = "true" ]; then

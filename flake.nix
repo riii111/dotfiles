@@ -19,10 +19,11 @@
       # Once nixpkgs reaches the pinned version its package wins, so the override never holds back a newer release.
       # Warn rather than throw: a throw would stop the flake.lock update before its Draft PR,
       # which lists these warnings so the obsolete security override is removed there.
+      # update-flake-lock.yml parses this exact line and allowlists the name, so keep both in step.
       pinAtLeast =
         name: upstream: pinned: override:
         if nixpkgs.lib.versionAtLeast upstream.version pinned then
-          nixpkgs.lib.warn "obsolete override: nixpkgs ${name} ${upstream.version} reaches ${pinned}; remove its override from flake.nix" upstream
+          nixpkgs.lib.warn "dotfiles-obsolete-override: ${name}" upstream
         else
           override;
       # CVE-2026-111943: rebuild Go CLIs, not just the compiler on PATH.
