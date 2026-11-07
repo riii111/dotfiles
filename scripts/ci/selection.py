@@ -75,7 +75,8 @@ def select(paths: list[str]) -> set[str]:
             continue
         if path in REPO_ONLY:
             selected.add("repo")
-        elif path.startswith("dot-tools/"):
+        # The CLI profile and both Darwin configurations consume the package recipe.
+        elif path.startswith("dot-tools/") and path != "dot-tools/package.nix":
             selected.update({"dot_tools", "repo", "hooks"})
         elif path.startswith("darwin/"):
             selected.update({"nix", "repo", "hooks"})

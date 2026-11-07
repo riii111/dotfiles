@@ -25,8 +25,8 @@ class SelectionTests(unittest.TestCase):
             (["nix/moonbit.nix"], selector.full()),
             (["new-unclassified-file"], selector.full()),
             (["dot-tools/permission/policy.mbt"], {"dot_tools", "repo", "hooks"}),
-            # dot_tools builds the package on macOS as well as Linux.
-            (["dot-tools/package.nix"], {"dot_tools", "repo", "hooks"}),
+            # The CLI profile and the Darwin configurations consume the package recipe.
+            (["dot-tools/package.nix"], selector.full()),
             (["scripts/build-open-apps.sh"], {"repo"}),
             # Narrow categories must still pull in the integration tests they affect.
             (["darwin/hosts/personal.nix"], {"nix", "repo", "hooks", ACTIVATION}),
