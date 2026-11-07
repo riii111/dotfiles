@@ -73,9 +73,11 @@ fn guarded_denial(words : ArrayView[String]) -> String? {
 }
 
 ///|
+/// `gh pr new` is an alias of `gh pr create`.
 fn ready_pr_denial(words : ArrayView[String]) -> String? {
-  guard words is [program, "pr", "create", .. args] &&
+  guard words is [program, .. args] &&
     @shell.basename(program) == "gh" &&
+    @github_comment.gh_subcommand(args) is ["pr", "create" | "new", .. args] &&
     !args
     .iter()
     .any(arg => arg == "--draft" || arg == "-d" || arg == "--draft=true") else {

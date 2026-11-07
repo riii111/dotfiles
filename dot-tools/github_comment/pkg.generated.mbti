@@ -4,6 +4,8 @@ package "riii111/dot-tools/github_comment"
 // Values
 pub let denial_reason : String
 
+pub fn gh_subcommand(ArrayView[String]) -> ArrayView[String]
+
 pub fn is_comment_request(Json) -> Bool
 
 // Errors

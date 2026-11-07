@@ -51,6 +51,10 @@ test "denies by the parsed command, not by text inside arguments" {
     ("sudo -E gh pr create", true, Some("--draft")),
     ("bash -c 'gh pr create --title t'", true, Some("--draft")),
     ("bash -c 'gh pr create --draft'", true, None),
+    ("gh -R owner/repo pr create --title t", true, Some("--draft")),
+    ("gh --repo owner/repo pr create", true, Some("--draft")),
+    ("gh --hostname h pr new --title t", true, Some("--draft")),
+    ("gh pr new --draft", true, None),
     // Here-document bodies are input, not commands.
     ("git commit -F - <<'EOF'\nnpm publish docs\nEOF", false, None),
     (

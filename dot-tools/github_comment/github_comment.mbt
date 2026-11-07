@@ -85,12 +85,20 @@ fn is_comment_invocation(words : Array[String]) -> Bool {
   let args = words[start + 1:]
   guard executable == "gh" else { return false }
 
-  let mut first = 0
-  while first < args.length() && args[first] is ("-R" | "--repo" | "--hostname") {
-    first += 2
+  is_gh_comment(gh_subcommand(args))
+}
+
+///|
+/// The arguments of `gh` from its subcommand on, past global options such as `-R owner/repo`.
+pub fn gh_subcommand(args : ArrayView[String]) -> ArrayView[String] {
+  let index = @shell.subcommand_index(args, options_with_value=[
+    "-R", "--repo", "--hostname",
+  ])
+  if index < args.length() {
+    args[index:]
+  } else {
+    [][:]
   }
-  let args = if first < args.length() { args[first:] } else { [][:] }
-  is_gh_comment(args)
 }
 
 ///|
