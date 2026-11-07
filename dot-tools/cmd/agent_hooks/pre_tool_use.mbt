@@ -91,25 +91,40 @@ async fn pre_tool_use_output(
 ///|
 /// Runs the checks concurrently, with the results in list order.
 /// A failed check decides nothing: raised in the group, it would cancel the rest and lose a decision another one found.
+/// The deadline stays under the 30s hook timeout, so a hung check (a Git lock, gh, ssh -G) is cancelled with no decision
+/// instead of the hook being killed and dropping the decisions already found.
 async fn run_slow_checks(
   checks : Array[async () -> (String, String)?],
+  deadline_ms~ : Int32 = 20000,
 ) -> Array[(String, String)?] {
   let results : Array[(String, String)?] = Array::make(checks.length(), None)
-  @async.with_task_group(group => {
-    for index, check in checks {
-      group.spawn_bg(() => {
-        results[index] = check() catch {
-          error => {
-            @stdio.stderr.write("pre-tool-use: a check failed: \{error}\n") catch {
-              _ => ()
+  let finished = @async.with_timeout_opt(deadline_ms, () => {
+    @async.with_task_group(group => {
+      for index, check in checks {
+        group.spawn_bg(() => {
+          results[index] = check() catch {
+            error => {
+              log_check_failure("a check failed: \{error}")
+              None
             }
-            None
           }
-        }
-      })
-    }
-  })
+        })
+      }
+    })
+  }) catch {
+    _ => None
+  }
+  if finished is None {
+    log_check_failure("slow checks passed the \{deadline_ms}ms deadline")
+  }
   results
+}
+
+///|
+async fn log_check_failure(message : String) -> Unit {
+  @stdio.stderr.write("pre-tool-use: \{message}\n") catch {
+    _ => ()
+  }
 }
 
 ///|

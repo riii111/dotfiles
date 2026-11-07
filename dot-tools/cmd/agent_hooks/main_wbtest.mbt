@@ -254,3 +254,18 @@ async test "a slow check that fails does not drop the others' decisions" {
   ]
   assert_eq(run_slow_checks(checks), [None, Some(("ask", "merge"))])
 }
+
+///|
+async test "a slow check that never returns does not drop the others' decisions" {
+  let checks : Array[async () -> (String, String)?] = [
+    () => {
+      @async.sleep(1000000)
+      Some(("deny", "late"))
+    },
+    () => Some(("deny", "force")),
+  ]
+  assert_eq(run_slow_checks(checks, deadline_ms=100), [
+    None,
+    Some(("deny", "force")),
+  ])
+}
