@@ -43,9 +43,8 @@ fn posts_comment(command : String) -> Bool {
 
 ///|
 /// Splits a command into the words of each simple command, as the Python hook split on runs of `();<>|&` characters.
-/// Here-document bodies are dropped first, so a PR body quoting a comment command is not one.
+/// Here-document body lines count as commands, since a body fed to `bash` or `ssh` runs.
 fn segments(command : String) -> Array[Array[String]] {
-  let command = @shell.strip_heredocs(command)
   let words = @shell.split_words(
     command.replace_all(old="\n", new=";"),
     punctuation="();<>|&",

@@ -18,7 +18,8 @@ test "forced push asks or is denied" {
     // A global option with a separate value must not hide the subcommand.
      "git --config-env core.x=Y push -f", "git --git-dir .git --work-tree . push --force",
     // A body fed to a shell runs as commands.
-     "bash <<'EOF'\ngit push --force origin main\nEOF",
+     "bash <<'EOF'\ngit push --force origin main\nEOF", "ssh host <<EOF\ngit push --force origin main\nEOF",
+    "echo $((1<<2))\ngit push --force origin main\n2",
   ]
   for command in commands {
     assert_true(

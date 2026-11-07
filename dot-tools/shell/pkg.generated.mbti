@@ -16,8 +16,6 @@ pub fn split_on_whitespace(String) -> Array[String]
 
 pub fn split_words(String, punctuation~ : String, comments~ : Bool) -> Array[String] raise ShellSyntaxError
 
-pub fn strip_heredocs(String) -> String
-
 pub fn subcommand_index(ArrayView[String], options_with_value~ : Array[String]) -> Int32
 
 // Errors

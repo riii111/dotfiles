@@ -11,6 +11,9 @@ test "denies comment posting commands" {
     "eval 'gh pr comment 1 -b hi'",
     // A body fed to a shell runs as commands.
      "bash <<'EOF'\ngh pr comment 12 --body done\nEOF", "cat <<EOF | sudo sh\ngh pr comment 1 -b hi\nEOF",
+    "ssh h <<EOF\ngh pr comment 1 --body x\nEOF",
+    // Accepted false positive: a body that only quotes a comment command is still denied.
+     "gh pr create --draft --body-file - <<'EOF'\ngh pr comment 1 -b hi\nEOF",
   ]
   for command in commands {
     assert_true(@github_comment.is_comment_request(bash(command)), msg=command)
@@ -25,7 +28,6 @@ test "allows reads and unrelated commands" {
     "gh api graphql -f 'query={ repository(owner: \"a\", name: \"b\") { name } }'",
     "gh pr create --draft --title 'fix: title' --body hi", "gh issue comment 1 -b hi",
     "gh issue close 1 --comment hi", "rg 'gh pr comment' tests", "echo gh pr comment 1",
-    "gh pr create --draft --body-file - <<'EOF'\ngh pr comment 1 -b hi\nEOF",
   ]
   for command in commands {
     assert_false(@github_comment.is_comment_request(bash(command)), msg=command)

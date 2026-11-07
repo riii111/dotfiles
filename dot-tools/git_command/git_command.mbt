@@ -3,12 +3,10 @@ let separators : Array[String] = [";", "&&", "||", "|", "&", "|&", "(", ")"]
 
 ///|
 /// Unbalanced quotes fall back to splitting on whitespace, so a malformed command is still checked.
-/// Here-document bodies are dropped first, since their lines would otherwise read as commands.
+/// Here-document body lines are split as commands too: a body may be run by `bash <<EOF` or `ssh host <<EOF`,
+/// and telling those from `cat <<EOF` is guesswork; a false deny is the safe failure.
 pub fn segments(command : String) -> Array[Array[String]] {
-  let normalized = @shell.strip_heredocs(command).replace_all(
-    old="\n",
-    new=" ; ",
-  )
+  let normalized = command.replace_all(old="\n", new=" ; ")
   let words = @shell.split_words(normalized, punctuation=";&|()", comments=true) catch {
     _ => @shell.split_on_whitespace(normalized)
   }

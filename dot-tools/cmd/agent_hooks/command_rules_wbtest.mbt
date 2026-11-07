@@ -70,39 +70,30 @@ test "denies by the parsed command, not by text inside arguments" {
     ("npm publish && gh pr create --title t", true, Some("--draft")),
     ("bash -c 'cargo publish'; bash -c 'gh pr new'", true, Some("--draft")),
     ("npm publish && gh pr create --title t", false, Some("npm publish")),
-    // Here-document bodies are input, not commands.
-    ("git commit -F - <<'EOF'\nnpm publish docs\nEOF", false, None),
+    // Here-document body lines are commands, as on main; quoting a command in a body is an accepted false positive.
+    (
+      "git commit -F - <<'EOF'\nnpm publish docs\nEOF",
+      false,
+      Some("npm publish"),
+    ),
     (
       "gh pr create --draft --body-file - <<EOF\nRun gh pr create first.\nEOF",
       true,
-      None,
+      Some("--draft"),
     ),
     (
-      "tee x <<A <<-\"B\"\nnpm publish\nA\n\tcargo publish\n\tB\nnpm publish",
+      "tee x <<A <<-\"B\"\nnpm publish\nA\n\tcargo publish\n\tB",
       false,
       Some("npm publish"),
     ),
-    ("tee x <<A <<-\"B\"\nnpm publish\nA\n\tcargo publish\n\tB", false, None),
-    // A body fed to something that runs it stays commands.
     ("sh <<EOF\nterraform apply\nEOF", false, Some("terraform apply")),
+    ("ssh host <<EOF\nterraform apply\nEOF", false, Some("terraform apply")),
     ("tee <<EOF | timeout 9 bash\nnpm publish\nEOF", false, Some("npm publish")),
-    (
-      "tee <<EOF |\nnpm publish\nEOF\nxargs -I{} sh -c {}",
-      false,
-      Some("npm publish"),
-    ),
-    (
-      "while read -r c; do\neval \"$c\"\ndone <<EOF\nnpm publish\nEOF",
-      false,
-      Some("npm publish"),
-    ),
     (". /dev/stdin <<EOF\nnpm publish\nEOF", false, Some("npm publish")),
-    ("git add . && git commit -F - <<'EOF'\nnpm publish docs\nEOF", false, None),
-    ("git commit -m $(bat <<'EOF'\nit's npm publish\nEOF\n)", false, None),
     ("git commit -F- <<< 'x'\nnpm publish", false, Some("npm publish")),
-    // Without its delimiter line `<<` may be a shift, so the lines stay commands.
-    ("git commit -F - <<EOF\nnpm publish", false, Some("npm publish")),
     ("echo $((1<<2))\nnpm publish", false, Some("npm publish")),
+    ("cat <<EOF\nplain text\nEOF", false, Some("bat")),
+    ("git commit -F - <<'EOF'\nfeat: add x\nEOF", false, None),
   ]
   for case in cases {
     let (command, require_draft, expected) = case
