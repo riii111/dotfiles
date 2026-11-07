@@ -105,59 +105,18 @@ fn prefix(text : String, limit : Int32) -> String {
 }
 
 ///|
-extern "C" fn utc_offset(seconds : Int64) -> Int32 = "agent_hooks_utc_offset"
-
-///|
-fn local_timestamp(seconds : Int64) -> String {
-  format_timestamp(seconds, utc_offset(seconds))
-}
+#borrow(buffer)
+extern "C" fn format_local_time(
+  seconds : Int64,
+  buffer : FixedArray[Byte],
+  size : Int32,
+) -> Int32 = "agent_hooks_local_time"
 
 ///|
 /// Formats like `time.strftime("%Y-%m-%dT%H:%M:%S%z")`.
-fn format_timestamp(seconds : Int64, offset : Int32) -> String {
-  let shifted = seconds + offset.to_int64()
-  let days = floor_div(shifted, 86400L)
-  let clock = (shifted - days * 86400L).to_int()
-  // Howard Hinnant's days-to-civil algorithm.
-  let z = days + 719468L
-  let era = floor_div(z, 146097L)
-  let day_of_era = z - era * 146097L
-  let year_of_era = (
-      day_of_era -
-      day_of_era / 1460L +
-      day_of_era / 36524L -
-      day_of_era / 146096L
-    ) /
-    365L
-  let day_of_year = day_of_era -
-    (365L * year_of_era + year_of_era / 4L - year_of_era / 100L)
-  let month_index = (5L * day_of_year + 2L) / 153L
-  let day = day_of_year - (153L * month_index + 2L) / 5L + 1L
-  let month = if month_index < 10L {
-    month_index + 3L
-  } else {
-    month_index - 9L
-  }
-  let year = year_of_era + era * 400L + (if month <= 2L { 1L } else { 0L })
-  let sign = if offset < 0 { "-" } else { "+" }
-  let minutes = offset.abs() / 60
-  "\{pad(year.to_int(), 4)}-\{pad(month.to_int(), 2)}-\{pad(day.to_int(), 2)}T" +
-  "\{pad(clock / 3600, 2)}:\{pad(clock / 60 % 60, 2)}:\{pad(clock % 60, 2)}" +
-  "\{sign}\{pad(minutes / 60, 2)}\{pad(minutes % 60, 2)}"
-}
-
-///|
-fn floor_div(value : Int64, divisor : Int64) -> Int64 {
-  let quotient = value / divisor
-  if value % divisor < 0L {
-    quotient - 1L
-  } else {
-    quotient
-  }
-}
-
-///|
-fn pad(value : Int32, width : Int32) -> String {
-  let digits = value.to_string()
-  "0".repeat(width - digits.length()) + digits
+fn local_timestamp(seconds : Int64) -> String {
+  let buffer = FixedArray::make(64, b'\x00')
+  let length = format_local_time(seconds, buffer, buffer.length())
+  // strftime writes ASCII only.
+  String::from_iter(buffer.iter().take(length).map(byte => byte.to_char()))
 }
