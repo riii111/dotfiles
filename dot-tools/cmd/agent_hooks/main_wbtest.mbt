@@ -188,7 +188,7 @@ async test "pre-tool-use answers with the strongest decision of its checks" {
     reason.has_suffix("\n\n" + @github_comment.denial_reason),
   )
   assert_eq(combined(bash("find ."), []), None)
-  assert_eq(combined(bash("git commit -m 'terraform apply'"), rules), None)
+  assert_eq(combined(bash("git commit -m 'terraform plan'"), rules), None)
   guard combined(bash("gh pr create --title t"), [..rules, "--require-draft"])
     is Some(("deny", reason)) else {
     fail("no denial")

@@ -1,5 +1,5 @@
 ///|
-test "denies by the parsed command, not by text inside arguments" {
+test "denies by the parsed command or by the old raw substring" {
   let cases : Array[(String, Bool, String?)] = [
     ("find . -name x", false, Some("fd")),
     ("grep -r x .", false, Some("rg")),
@@ -16,8 +16,10 @@ test "denies by the parsed command, not by text inside arguments" {
     ("FOO=1 npm publish", false, Some("npm publish")),
     ("pnpm publish", false, Some("npm publish")),
     ("cargo publish --dry-run", false, Some("cargo publish")),
-    ("git commit -m 'terraform apply'", false, None),
-    ("git commit -m \"terraform apply\"", false, None),
+    // The raw substring rule denies a message naming the command, as the grep did: an accepted false positive.
+    ("git commit -m 'terraform apply'", false, Some("terraform apply")),
+    ("git commit -m \"terraform apply\"", false, Some("terraform apply")),
+    ("git commit -m 'terraform plan'", false, None),
     // A program anywhere in the command counts, so wrappers with options cannot hide it.
     ("timeout 600 terraform apply", false, Some("terraform apply")),
     ("env -u X terraform apply", false, Some("terraform apply")),
@@ -28,20 +30,35 @@ test "denies by the parsed command, not by text inside arguments" {
     ("bash -c 'terraform apply'", false, Some("terraform apply")),
     ("zsh -lc 'cd x && cargo publish'", false, Some("cargo publish")),
     ("sh -c \"bash -c 'npm publish'\"", false, Some("npm publish")),
-    ("bash -c 'git commit -m \"terraform apply\"'", false, None),
+    (
+      "bash -c 'git commit -m \"terraform apply\"'",
+      false,
+      Some("terraform apply"),
+    ),
     ("eval 'terraform apply'", false, Some("terraform apply")),
     ("eval terraform \"'apply'\"", false, Some("terraform apply")),
-    ("eval 'git commit -m \"terraform apply\"'", false, None),
+    ("eval 'git commit -m \"terraform apply\"'", false, Some("terraform apply")),
+    // Quoting that parsing may not unwrap still holds the substring.
+    ("echo `terraform apply`", false, Some("terraform apply")),
+    (
+      "x=\"$(terraform destroy -auto-approve)\"",
+      false,
+      Some("terraform destroy"),
+    ),
+    ("url=\"$(gh pr create --title x --body y)\"", true, Some("--draft")),
+    ("echo `gh pr create`", true, Some("--draft")),
     ("bash -o pipefail -c 'npm publish'", false, Some("npm publish")),
     ("bash +O extglob -c 'npm publish'", false, Some("npm publish")),
     ("bash -eo pipefail -c 'npm publish'", false, Some("npm publish")),
     ("bash --rcfile x -c 'npm publish'", false, Some("npm publish")),
-    ("bash -o pipefail script.sh 'npm publish'", false, None),
+    ("bash -o pipefail script.sh 'npm publish'", false, Some("npm publish")),
+    ("bash -o pipefail script.sh 'npm test'", false, None),
     // Like the raw grep it replaces, this rule accepts an echo false positive.
     ("echo npm publish", false, Some("npm publish")),
     ("bash script.sh terraform", false, None),
     ("terraform plan", false, None),
-    // The verb counts only as the subcommand, past the program's global options.
+    // The verb counts only as the subcommand, past the program's global options; the grep
+    // needed `npm publish` adjacent, so `npm run publish` passes both rules.
     ("npm run publish", false, None),
     ("cargo build -p publish", false, None),
     ("terraform plan -target=apply", false, None),
@@ -55,8 +72,11 @@ test "denies by the parsed command, not by text inside arguments" {
     ("gh pr create --title t", true, Some("--draft")),
     ("gh pr create --title t", false, None),
     ("gh pr create --draft --title t", true, None),
-    ("gh pr create -d --title t", true, None),
-    ("git commit -m 'gh pr create'", true, None),
+    // The grep wanted the literal `--draft`, so `-d` is an accepted false positive.
+    ("gh pr create -d --title t", true, Some("--draft")),
+    ("git commit -m 'gh pr create'", true, Some("--draft")),
+    // `--draft` anywhere in the text spared the grep, so only the parsed rule catches this one.
+    ("gh pr create --title t; echo --draft", true, Some("--draft")),
     ("timeout 60 gh pr create --title t", true, Some("--draft")),
     ("env -u X gh pr create", true, Some("--draft")),
     ("sudo -E gh pr create", true, Some("--draft")),

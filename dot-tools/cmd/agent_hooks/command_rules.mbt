@@ -1,5 +1,6 @@
 // Claude Code's Bash rules that used to grep the raw hook JSON, so a commit message quoting `terraform apply` was blocked.
-// They now read the parsed words of each simple command.
+// The safety rules deny when either the parsed words or the old substring match does, so they are never weaker than the grep;
+// the steering rules (fd, rg, bat) are style nudges and read only the parsed leading command.
 
 ///|
 /// Returns why a Bash command is denied; `require_draft` denies `gh pr create` without `--draft`.
@@ -21,30 +22,76 @@ fn command_rule_denial(command : String, require_draft~ : Bool) -> String? {
       )
     _ => ()
   }
+  let parsed = parsed_denial(segments, require_draft~)
+  let raw = raw_denial(command, require_draft~)
+  // The draft reason wins, as it did with a pass of its own.
+  match (parsed, raw) {
+    (_, Some(reason)) if reason == ready_pr_reason => raw
+    (Some(_), _) => parsed
+    _ => raw
+  }
+}
+
+///|
+/// The old grep hook's substrings, checked on the command text: parsing can miss quoting tricks such as
+/// `"$(...)"`, backticks or `eval '...'`, but a substring cannot. `npm publish` also matches `pnpm publish`.
+let raw_guarded : Array[String] = [
+  "terraform apply", "terraform destroy", "npm publish", "cargo publish",
+]
+
+///|
+/// Reproduces the grep rules in their order; `--draft` anywhere in the text spared `gh pr create`.
+fn raw_denial(command : String, require_draft~ : Bool) -> String? {
+  if require_draft &&
+    command.contains("gh pr create") &&
+    !command.contains("--draft") {
+    return Some(ready_pr_reason)
+  }
+  for pattern in raw_guarded {
+    if command.contains(pattern) {
+      return Some(guarded_reason(pattern))
+    }
+  }
+  None
+}
+
+///|
+fn guarded_reason(command : String) -> String {
+  "\{command} is not allowed directly. Separate it from other commands and let the user approve."
+}
+
+///|
+let ready_pr_reason = "gh pr create without --draft is not allowed. Always use --draft flag."
+
+///|
+fn parsed_denial(
+  segments : Array[Array[String]],
+  require_draft~ : Bool,
+) -> String? {
   // One walk for both rules, since each walk re-parses nested scripts; it goes on past a guarded verb
   // so that the draft reason still wins wherever it appears.
-  let mut guarded_reason = None
+  let mut found = None
   let check = (words : ArrayView[String]) => {
     if require_draft && ready_pr_denial(words) is Some(reason) {
       return Some(reason)
     }
-    if guarded_reason is None {
-      guarded_reason = guarded_denial(words)
+    if found is None {
+      found = guarded_denial(words)
       if !require_draft {
-        return guarded_reason
+        return found
       }
     }
     None
   }
   match find_command(segments, depth=0, check) {
     Some(reason) => Some(reason)
-    None => guarded_reason
+    None => found
   }
 }
 
 ///|
 /// Tries `check` on the words from every position, so wrappers with options (`timeout 600`, `sudo -E`, `xargs`) cannot hide a program;
-/// a quoted argument stays one word, so a commit message naming the command does not match.
+/// a quoted argument stays one word here, though the raw check still denies a commit message naming the command.
 fn find_command(
   segments : Array[Array[String]],
   depth~ : Int32,
@@ -86,9 +133,7 @@ fn guarded_denial(words : ArrayView[String]) -> String? {
     guard index < args.length() && verbs.contains(args[index]) else {
       return None
     }
-    return Some(
-      "\{display(tool)} \{args[index]} is not allowed directly. Separate it from other commands and let the user approve.",
-    )
+    return Some(guarded_reason("\{display(tool)} \{args[index]}"))
   }
   None
 }
@@ -104,7 +149,7 @@ fn ready_pr_denial(words : ArrayView[String]) -> String? {
     .any(arg => arg == "--draft" || arg == "-d" || arg == "--draft=true") else {
     return None
   }
-  Some("gh pr create without --draft is not allowed. Always use --draft flag.")
+  Some(ready_pr_reason)
 }
 
 ///|
