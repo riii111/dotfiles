@@ -52,6 +52,23 @@ pub fn basename(path : String) -> String {
 }
 
 ///|
+/// Splits `NAME=value` when NAME is a shell variable name.
+pub fn assignment(token : String) -> (String, String)? {
+  guard token.split_once("=") is Some((name, value)) else { return None }
+  let name = name.to_owned()
+  guard name.get_char(0) is Some(first) &&
+    (first.is_ascii_alphabetic() || first == '_') &&
+    name
+    .iter()
+    .all(char => {
+      char.is_ascii_alphabetic() || char.is_ascii_digit() || char == '_'
+    }) else {
+    return None
+  }
+  Some((name, value.to_owned()))
+}
+
+///|
 /// Matches Python's `str.isspace()`, which `str.split()` and the `\s` regex class use.
 pub fn is_python_whitespace(char : Char) -> Bool {
   match char.to_int() {

@@ -10,7 +10,7 @@ fn git_command(args : ArrayView[String]) -> (String, Array[String])? {
 /// Tells whether an assignment before the command sets anything but `GIT_PAGER=cat`.
 fn has_unsafe_environment_override(words : Array[String]) -> Bool {
   for token in words {
-    guard assignment(token) is Some((name, value)) else { break }
+    guard @shell.assignment(token) is Some((name, value)) else { break }
     if name != "GIT_PAGER" || value != "cat" {
       return true
     }

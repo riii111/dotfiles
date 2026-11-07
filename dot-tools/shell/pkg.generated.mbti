@@ -2,6 +2,8 @@
 package "riii111/dot-tools/shell"
 
 // Values
+pub fn assignment(String) -> (String, String)?
+
 pub fn basename(String) -> String
 
 pub fn is_python_whitespace(Char) -> Bool

@@ -78,26 +78,9 @@ fn direct_invocation(words : Array[String]?) -> (String, Array[String])? {
     return None
   }
   let mut index = 0
-  while index < tokens.length() && assignment(tokens[index]) is Some(_) {
+  while index < tokens.length() && @shell.assignment(tokens[index]) is Some(_) {
     index += 1
   }
   guard index < tokens.length() else { return None }
   Some((tokens[index], tokens[index + 1:].to_owned()))
-}
-
-///|
-/// Splits `NAME=value` when NAME is a shell variable name.
-fn assignment(token : String) -> (String, String)? {
-  guard token.split_once("=") is Some((name, value)) else { return None }
-  let name = name.to_owned()
-  guard name.get_char(0) is Some(first) &&
-    (first.is_ascii_alphabetic() || first == '_') &&
-    name
-    .iter()
-    .all(char => {
-      char.is_ascii_alphabetic() || char.is_ascii_digit() || char == '_'
-    }) else {
-    return None
-  }
-  Some((name, value.to_owned()))
 }

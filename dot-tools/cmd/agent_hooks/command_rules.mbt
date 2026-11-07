@@ -70,30 +70,12 @@ let wrappers : Array[String] = [
 /// The basename of the program a simple command runs, past assignments and wrappers, with its index.
 fn command_word(segment : Array[String]) -> (String, Int32)? {
   for index, word in segment {
-    if wrappers.contains(word) || is_assignment(word) {
+    if wrappers.contains(word) || @shell.assignment(word) is Some(_) {
       continue
     }
-    let name = match word.rev_split_once("/") {
-      Some((_, name)) => name.to_owned()
-      None => word
-    }
-    return Some((name, index))
+    return Some((@shell.basename(word), index))
   }
   None
-}
-
-///|
-fn is_assignment(word : String) -> Bool {
-  match word.split_once("=") {
-    Some((name, _)) =>
-      name != "" &&
-      name
-      .iter()
-      .all(char => {
-        char == '_' || char.is_ascii_alphabetic() || char.is_ascii_digit()
-      })
-    None => false
-  }
 }
 
 ///|

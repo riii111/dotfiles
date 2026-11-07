@@ -9,6 +9,7 @@ import {
   "riii111/dot-tools/pr_format",
   "riii111/dot-tools/pr_state",
   "riii111/dot-tools/reply_reminder",
+  "riii111/dot-tools/shell",
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/async/stdio",
