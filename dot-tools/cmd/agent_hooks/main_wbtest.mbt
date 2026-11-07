@@ -226,3 +226,22 @@ async test "pre-tool-use runs each check on the tools its hook matched" {
     Some(("deny", "Privilege escalation and user switching are forbidden.")),
   )
 }
+
+///|
+async test "pre-tool-use skips the slow checks once a cheap one denies" {
+  let looked_up = Ref(false)
+  let lookup : async (@pr_state.Lookup) -> String = _ => {
+    looked_up.val = true
+    "{\"url\": \"https://github.com/o/r/pull/1\"}"
+  }
+  let event = bash("gh pr comment 1 -b hi && gh pr merge 1")
+  let output = pre_tool_use_output(event, [], lookup)
+  guard output
+    is Some({ "hookSpecificOutput": { "permissionDecision": "deny", .. }, .. }) else {
+    fail("no denial")
+  }
+  assert_false(looked_up.val)
+  // Without the cheap denial the merge is looked up.
+  let _ = pre_tool_use_output(bash("gh pr merge 1"), [], lookup)
+  assert_true(looked_up.val)
+}

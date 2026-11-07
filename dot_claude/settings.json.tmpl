@@ -346,7 +346,7 @@
           {
             "type": "command",
             "command": "{{ .chezmoi.homeDir }}/.nix-profile/bin/agent-hooks pre-tool-use --command-rules{{ if eq .type "work" }} --require-draft --deny-force-push{{ end }}",
-            "timeout": 20
+            "timeout": 30
           }
         ]
       },

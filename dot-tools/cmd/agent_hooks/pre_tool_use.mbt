@@ -1,5 +1,6 @@
 // One process for every PreToolUse check, where one hook per check cost a process start each on every Bash call.
-// Each check still runs on the tools its own hook matched, and all of them run, so comment-review records its state as before.
+// Each check still runs on the tools its own hook matched. The pure checks run first, and a deny skips the slow ones,
+// so a hook killed by its timeout cannot drop a deny already found.
 
 ///|
 priv struct Verdict {
@@ -41,26 +42,36 @@ async fn pre_tool_use_output(
       ).map(reason => ("deny", reason)),
     )
   }
-  if bash && codex {
-    add(codex_policy_denial(event))
-  }
   if @github_comment.is_comment_request(event) {
     add(Some(("deny", @github_comment.denial_reason)))
   }
   if bash && !codex {
     add(git_force_decision(event, options))
   }
-  // Codex ran the PR checks on Bash only, and cannot ask, so its merges are denied.
-  if bash || (!codex && name.has_prefix("mcp__github__")) {
-    add(pr_format_decision(event, @pr_format.read_language))
-    let merge_options = if codex { ["--deny-merge"] } else { options }
-    add(pr_state_decision(event, merge_options, lookup))
-  }
-  if bash && !codex {
-    add(comment_review_decision(event))
-  }
   let has = (behavior : String) => {
     verdicts.iter().any(verdict => verdict.behavior == behavior)
+  }
+  // The hook timeout (30s in both agents' settings) stays above these budgets: Claude Code 22s (pr.language 3s,
+  // PR lookup 10s, comment-review's three Git calls 3s each), Codex 15s (ssh -G 2s, 3s, 10s).
+  // A denied call never runs, so skipping comment-review then only defers its review to the next attempt.
+  let slow : Array[async () -> (String, String)?] = []
+  if bash && codex {
+    slow.push(() => codex_policy_denial(event))
+  }
+  // Codex ran the PR checks on Bash only, and cannot ask, so its merges are denied.
+  if bash || (!codex && name.has_prefix("mcp__github__")) {
+    slow.push(() => pr_format_decision(event, @pr_format.read_language))
+    let merge_options = if codex { ["--deny-merge"] } else { options }
+    slow.push(() => pr_state_decision(event, merge_options, lookup))
+  }
+  if bash && !codex {
+    slow.push(() => comment_review_decision(event))
+  }
+  for check in slow {
+    if has("deny") {
+      break
+    }
+    add(check())
   }
   let behavior = if has("deny") {
     "deny"

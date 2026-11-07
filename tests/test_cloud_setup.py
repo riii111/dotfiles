@@ -65,7 +65,7 @@ class CloudSetupTest(unittest.TestCase):
 
         self.assertEqual(
             self.commands(settings),
-            {"^(Bash|mcp__.*)$": [("agent-hooks pre-tool-use", 20)]},
+            {"^(Bash|mcp__.*)$": [("agent-hooks pre-tool-use", 30)]},
         )
         self.assertEqual(self.post_commands(settings), ["agent-hooks pr-footer-reset"])
         self.assertEqual(
@@ -578,7 +578,7 @@ class CloudSetupTest(unittest.TestCase):
         settings = self.run_setup()
         self.assertEqual(
             self.commands(settings),
-            {"^(Bash|mcp__.*)$": [("agent-hooks pre-tool-use", 20)]},
+            {"^(Bash|mcp__.*)$": [("agent-hooks pre-tool-use", 30)]},
         )
 
     def test_a_guard_the_previous_agent_hooks_lacks_keeps_its_python_copy(self):

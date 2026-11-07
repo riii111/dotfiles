@@ -63,7 +63,7 @@ start = [
 if guards.get("pre-tool-use") == "agent-hooks":
     # One process runs every check on the tools its own hook matched, as in the local settings. The fd/bat
     # rules stay off, since the cloud image has neither.
-    ours = [{"matcher": "^(Bash|mcp__.*)$", "hooks": guard("pre-tool-use", 20)}]
+    ours = [{"matcher": "^(Bash|mcp__.*)$", "hooks": guard("pre-tool-use", 30)}]
 else:
     ours = [
         {"matcher": "^(Bash|mcp__.*)$", "hooks": guard("github-comment-check")},
