@@ -101,22 +101,9 @@ fn last_path_part(path : String) -> String {
 }
 
 ///|
-let git_options_with_value : Array[String] = [
-  "-C", "-c", "--config-env", "--exec-path", "--git-dir", "--namespace", "--super-prefix",
-  "--work-tree",
-]
-
-///|
 /// Finds the Git subcommand after the global options.
 fn git_command(args : ArrayView[String]) -> (String, Array[String])? {
-  let mut index = 0
-  while index < args.length() && args[index].has_prefix("-") {
-    let option = args[index]
-    index += 1
-    if git_options_with_value.contains(option) {
-      index += 1
-    }
-  }
+  let index = @git_command.subcommand_index(args)
   guard index < args.length() else { return None }
   Some((args[index], args[index + 1:].to_owned()))
 }
@@ -183,7 +170,7 @@ fn has_git_config_override(args : ArrayView[String]) -> Bool {
     let option = args[index]
     global_options.push(option)
     index += 1
-    if git_options_with_value.contains(option) && index < args.length() {
+    if @git_command.takes_value(option) && index < args.length() {
       global_options.push(args[index])
       index += 1
     }

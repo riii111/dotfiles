@@ -1,4 +1,5 @@
 import {
+  "riii111/dot-tools/git_command",
   "riii111/dot-tools/git_trust",
   "riii111/dot-tools/shell",
   "riii111/dot-tools/text",

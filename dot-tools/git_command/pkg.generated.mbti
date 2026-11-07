@@ -6,6 +6,10 @@ pub fn segments(String) -> Array[Array[String]]
 
 pub fn subcommand(Array[String]) -> (String?, String, ArrayView[String])?
 
+pub fn subcommand_index(ArrayView[String]) -> Int32
+
+pub fn takes_value(String) -> Bool
+
 // Errors
 
 // Types and methods

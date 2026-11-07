@@ -15,6 +15,8 @@ test "forced push asks or is denied" {
     "git push --force", "git push origin feat/x --force", "git push -f origin feat/x",
     "git push -uf origin feat/x", "git push origin +feat/x", "git push --force-with-lease origin +feat/x",
     "git -C repo push origin +HEAD:feat/x", "git status && git push -f", "git status\ngit push origin +feat/x",
+    // A global option with a separate value must not hide the subcommand.
+     "git --config-env core.x=Y push -f", "git --git-dir .git --work-tree . push --force",
   ]
   for command in commands {
     assert_true(

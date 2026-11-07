@@ -20,9 +20,26 @@ pub fn segments(command : String) -> Array[Array[String]] {
 }
 
 ///|
+/// Global options that take their value as the next word; `--exec-path` takes one only after `=`.
 let options_with_value : Array[String] = [
-  "-C", "-c", "--git-dir", "--work-tree", "--namespace",
+  "-C", "-c", "--attr-source", "--config-env", "--git-dir", "--namespace", "--super-prefix",
+  "--work-tree",
 ]
+
+///|
+pub fn takes_value(option : String) -> Bool {
+  options_with_value.contains(option)
+}
+
+///|
+/// The index of the subcommand in the words after `git`, past its global options.
+pub fn subcommand_index(args : ArrayView[String]) -> Int32 {
+  let mut index = 0
+  while index < args.length() && args[index].has_prefix("-") {
+    index += if takes_value(args[index]) { 2 } else { 1 }
+  }
+  index
+}
 
 ///|
 pub fn subcommand(
@@ -38,7 +55,7 @@ pub fn subcommand(
     if segment[index] == "-C" && index + 1 < segment.length() {
       dir = Some(segment[index + 1])
     }
-    index += if options_with_value.contains(segment[index]) { 2 } else { 1 }
+    index += if takes_value(segment[index]) { 2 } else { 1 }
   }
   guard index < segment.length() else { None }
   Some((dir, segment[index], segment[index + 1:]))
