@@ -106,13 +106,14 @@ async test "permission-request answers each Codex event in its own format" {
 async test "pr-footer-reset asks to send the created body again" {
   let event : Json = {
     "tool_name": "mcp__github__create_pull_request",
-    "tool_input": { "body": "目的" },
+    "tool_input": { "body": "Refs #1" },
   }
   guard hook_output("pr-footer-reset", [], event)
     is Some({ "decision": "block", "reason": String(reason), .. }) else {
     fail("no block")
   }
-  assert_true(reason.has_suffix("上書きする。\n\n目的"))
+  assert_true(reason.contains("update_pull_request"))
+  assert_false(reason.contains("Refs #1"))
   assert_true(
     hook_output("pr-footer-reset", [], {
       "tool_name": "mcp__github__update_pull_request",
