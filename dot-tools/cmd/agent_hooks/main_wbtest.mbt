@@ -143,3 +143,85 @@ async test "reply-reminder adds the reply rules to every prompt" {
   }
   assert_true(rules.has_prefix("対話の返答に限り"))
 }
+
+///|
+async fn combined(event : Json, options : Array[String]) -> (String, String)? {
+  let no_lookup : async (@pr_state.Lookup) -> String = _ => fail("no lookup")
+  match pre_tool_use_output(event, options, no_lookup) {
+    Some(
+      {
+        "hookSpecificOutput": {
+          "hookEventName": "PreToolUse",
+          "permissionDecision": String(behavior),
+          "permissionDecisionReason": String(reason),
+          ..
+        },
+        ..
+      }
+    ) => Some((behavior, reason))
+    None => None
+    _ => fail("unexpected output")
+  }
+}
+
+///|
+async test "pre-tool-use answers with the strongest decision of its checks" {
+  assert_eq(combined(bash("ls"), []), None)
+  assert_eq(combined(bash("git push -f"), []).map(pair => pair.0), Some("ask"))
+  assert_eq(
+    combined(bash("git push -f"), ["--deny-force-push"]).map(pair => pair.0),
+    Some("deny"),
+  )
+  // The ask of the force push is dropped, as Claude Code ranks deny above it.
+  assert_eq(
+    combined(bash("git push -f && gh pr comment 1 -b hi"), []),
+    Some(("deny", @github_comment.denial_reason)),
+  )
+  let rules = ["--command-rules"]
+  guard combined(bash("find . && gh pr comment 1 -b hi"), rules)
+    is Some(("deny", reason)) else {
+    fail("no denial")
+  }
+  assert_true(
+    reason.has_prefix("Use fd") &&
+    reason.has_suffix("\n\n" + @github_comment.denial_reason),
+  )
+  assert_eq(combined(bash("find ."), []), None)
+  assert_eq(combined(bash("git commit -m 'terraform apply'"), rules), None)
+  guard combined(bash("gh pr create --title t"), [..rules, "--require-draft"])
+    is Some(("deny", reason)) else {
+    fail("no denial")
+  }
+  assert_true(reason.contains("--draft"))
+}
+
+///|
+async test "pre-tool-use runs each check on the tools its hook matched" {
+  let comment : Json = {
+    "tool_name": "mcp__github__add_issue_comment",
+    "tool_input": { "body": "hi" },
+  }
+  assert_eq(
+    combined(comment, []),
+    Some(("deny", @github_comment.denial_reason)),
+  )
+  assert_eq(combined({ "tool_name": "Read", "tool_input": {} }, []), None)
+  let find : Json = {
+    "tool_name": "Bash",
+    "tool_input": { "command": "find ." },
+    "cwd": "/",
+    "hook_event_name": "PreToolUse",
+  }
+  // Codex has no fd rule, force-push check or comment review, only its command policy.
+  assert_eq(combined(find, ["--codex"]), None)
+  let sudo : Json = {
+    "tool_name": "Bash",
+    "tool_input": { "command": "sudo true" },
+    "cwd": "/",
+    "hook_event_name": "PreToolUse",
+  }
+  assert_eq(
+    combined(sudo, ["--codex"]),
+    Some(("deny", "Privilege escalation and user switching are forbidden.")),
+  )
+}

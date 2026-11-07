@@ -14,36 +14,13 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "^Bash$",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.nix-profile/bin/agent-hooks permission-request",
-            "timeout": 5,
-            "statusMessage": "Checking forbidden commands"
-          },
-          {
-            "type": "command",
-            "command": "~/.nix-profile/bin/agent-hooks pr-format-check",
-            "timeout": 5,
-            "statusMessage": "Checking PR format"
-          },
-          {
-            "type": "command",
-            "command": "~/.nix-profile/bin/agent-hooks pr-state-check --deny-merge",
-            "timeout": 15,
-            "statusMessage": "Checking PR state"
-          }
-        ]
-      },
-      {
         "matcher": "^(Bash|mcp__.*)$",
         "hooks": [
           {
             "type": "command",
-            "command": "~/.nix-profile/bin/agent-hooks github-comment-check",
-            "timeout": 5,
-            "statusMessage": "Checking GitHub comment policy"
+            "command": "~/.nix-profile/bin/agent-hooks pre-tool-use --codex",
+            "timeout": 20,
+            "statusMessage": "Checking command policy"
           }
         ]
       }

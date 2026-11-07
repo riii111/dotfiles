@@ -1,6 +1,7 @@
 import {
   "moonbitlang/core/env",
   "riii111/dot-tools/comment_review",
+  "riii111/dot-tools/git_command",
   "riii111/dot-tools/git_force",
   "riii111/dot-tools/github_comment",
   "riii111/dot-tools/permission",

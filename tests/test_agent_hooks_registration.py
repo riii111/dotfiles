@@ -1,4 +1,5 @@
 import json
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -6,21 +7,26 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+EVENTS = (
+    "PreToolUse",
+    "PostToolUse",
+    "UserPromptSubmit",
+    "PermissionRequest",
+    "PermissionDenied",
+)
 
 
-class AgentHooksRegistrationTest(unittest.TestCase):
-    def render(self, path):
-        state = tempfile.TemporaryDirectory()
-        self.addCleanup(state.cleanup)
-        return subprocess.run(
+def render(state, data, path):
+    return json.loads(
+        subprocess.run(
             [
                 "chezmoi",
                 "--config",
-                str(ROOT / "tests/chezmoi/personal.toml"),
+                str(ROOT / f"tests/chezmoi/{data}.toml"),
                 "--source",
                 str(ROOT),
                 "--persistent-state",
-                str(Path(state.name) / "state.boltdb"),
+                str(Path(state) / "state.boltdb"),
                 "execute-template",
                 "--file",
                 str(ROOT / path),
@@ -30,114 +36,71 @@ class AgentHooksRegistrationTest(unittest.TestCase):
             text=True,
             check=True,
         ).stdout
+    )
 
-    def test_rendered_configs_register_the_comment_check(self):
-        for path in ("dot_codex/hooks.json.tmpl", "dot_claude/settings.json.tmpl"):
-            with self.subTest(path=path):
-                groups = json.loads(self.render(path))["hooks"]["PreToolUse"]
-                self.assertTrue(
-                    any(
-                        group["matcher"] == "^(Bash|mcp__.*)$"
-                        and any(
-                            hook["command"].endswith(
-                                "/.nix-profile/bin/agent-hooks github-comment-check"
-                            )
-                            for hook in group["hooks"]
-                        )
-                        for group in groups
+
+def commands(config):
+    """Maps each event to (matcher, if, command name) rows, with the install folder dropped."""
+    table = {}
+    for event in EVENTS:
+        for group in config["hooks"].get(event, []):
+            for hook in group["hooks"]:
+                if hook["type"] != "command":
+                    continue
+                table.setdefault(event, []).append(
+                    (
+                        group.get("matcher"),
+                        hook.get("if"),
+                        hook["command"].rsplit("/", 1)[-1],
                     )
                 )
+    return table
 
-    def test_claude_settings_register_the_force_check_for_bash(self):
-        groups = json.loads(self.render("dot_claude/settings.json.tmpl"))["hooks"][
-            "PreToolUse"
-        ]
-        bash = [group for group in groups if group["matcher"] == "Bash"]
-        self.assertTrue(
-            any(
-                hook["command"].endswith(
-                    "/.nix-profile/bin/agent-hooks git-force-check"
-                )
-                for group in bash
-                for hook in group["hooks"]
-            )
-        )
 
-    def test_github_mcp_group_keeps_only_the_pr_checks(self):
-        groups = json.loads(self.render("dot_claude/settings.json.tmpl"))["hooks"][
-            "PreToolUse"
-        ]
-        mcp = [group for group in groups if group["matcher"] == "^mcp__github__.*$"]
-        self.assertEqual(
-            [
-                hook["command"].rsplit("/", 1)[-1]
-                for group in mcp
-                for hook in group["hooks"]
-            ],
-            ["agent-hooks pr-format-check", "agent-hooks pr-state-check"],
-        )
-
-    def test_codex_denies_the_merges_claude_code_asks_about(self):
-        for path, expected in (
-            ("dot_claude/settings.json.tmpl", "agent-hooks pr-state-check"),
-            ("dot_codex/hooks.json.tmpl", "agent-hooks pr-state-check --deny-merge"),
-        ):
-            with self.subTest(path=path):
-                groups = json.loads(self.render(path))["hooks"]["PreToolUse"]
-                commands = {
-                    hook["command"].rsplit("/", 1)[-1]
-                    for group in groups
-                    for hook in group["hooks"]
-                    if "pr-state-check" in hook.get("command", "")
-                }
-                self.assertEqual(commands, {expected})
-
-    def test_codex_runs_the_command_policy_for_both_bash_events(self):
-        hooks = json.loads(self.render("dot_codex/hooks.json.tmpl"))["hooks"]
-        for event in ("PreToolUse", "PermissionRequest"):
-            with self.subTest(event=event):
-                self.assertTrue(
-                    any(
-                        group["matcher"] == "^Bash$"
-                        and any(
-                            hook["command"].endswith(
-                                "/.nix-profile/bin/agent-hooks permission-request"
-                            )
-                            for hook in group["hooks"]
-                        )
-                        for group in hooks[event]
+@unittest.skipUnless(shutil.which("chezmoi"), "chezmoi is not installed")
+class AgentHooksRegistrationTest(unittest.TestCase):
+    def test_rendered_configs_register_the_hooks(self):
+        claude_pre = "^(Bash|mcp__.*)$"
+        expected = {
+            ("personal", "dot_claude/settings.json.tmpl"): {
+                "PreToolUse": [
+                    (claude_pre, None, "agent-hooks pre-tool-use --command-rules")
+                ],
+                "PostToolUse": [
+                    ("Bash", None, "git-worktree-post-add.sh"),
+                ],
+                "UserPromptSubmit": [(None, None, "agent-hooks reply-reminder")],
+                "PermissionRequest": [("*", None, "log-permission-event.py")],
+                "PermissionDenied": [("*", None, "log-permission-event.py")],
+            },
+            ("work", "dot_claude/settings.json.tmpl"): {
+                "PreToolUse": [
+                    (
+                        claude_pre,
+                        None,
+                        "agent-hooks pre-tool-use --command-rules"
+                        " --require-draft --deny-force-push",
                     )
-                )
-
-    def test_only_claude_code_gets_the_reply_reminder(self):
-        hooks = json.loads(self.render("dot_claude/settings.json.tmpl"))["hooks"]
-        self.assertEqual(
-            [
-                hook["command"].rsplit("/", 1)[-1]
-                for group in hooks["UserPromptSubmit"]
-                for hook in group["hooks"]
-            ],
-            ["agent-hooks reply-reminder"],
-        )
-        codex = json.loads(self.render("dot_codex/hooks.json.tmpl"))["hooks"]
-        self.assertNotIn("reply-reminder", json.dumps(codex))
-
-    def test_only_claude_code_reviews_comments_on_commit(self):
-        groups = json.loads(self.render("dot_claude/settings.json.tmpl"))["hooks"][
-            "PreToolUse"
-        ]
-        self.assertIn(
-            "agent-hooks comment-review-check",
-            [
-                hook["command"].rsplit("/", 1)[-1]
-                for group in groups
-                if group["matcher"] == "Bash"
-                for hook in group["hooks"]
-                if "command" in hook
-            ],
-        )
-        codex = json.loads(self.render("dot_codex/hooks.json.tmpl"))["hooks"]
-        self.assertNotIn("comment-review-check", json.dumps(codex))
+                ],
+            },
+            ("personal", "dot_codex/hooks.json.tmpl"): {
+                "PreToolUse": [
+                    (claude_pre, None, "agent-hooks pre-tool-use --codex")
+                ],
+                "PermissionRequest": [
+                    ("^Bash$", None, "agent-hooks permission-request")
+                ],
+            },
+        }
+        with tempfile.TemporaryDirectory() as state:
+            for (data, path), events in expected.items():
+                table = commands(render(state, data, path))
+                for event, rows in events.items():
+                    with self.subTest(data=data, path=path, event=event):
+                        self.assertEqual(table.get(event), rows)
+                if path.startswith("dot_codex"):
+                    # Codex has no reply reminder, comment review or permission log.
+                    self.assertEqual(set(table), {"PreToolUse", "PermissionRequest"})
 
 
 if __name__ == "__main__":
