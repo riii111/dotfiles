@@ -73,3 +73,4 @@ bin/lib/dot/git_trust.py
 .claude/hooks/pr-footer-reset.py
 bin/git-tree
 .claude/hooks/git-worktree-post-add.sh
+.claude/hooks/log-permission-event.py

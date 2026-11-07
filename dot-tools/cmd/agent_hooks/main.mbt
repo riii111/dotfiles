@@ -22,6 +22,10 @@ async fn hook_output(
     "pre-tool-use" =>
       return pre_tool_use_output(event, options, @pr_state.run_lookup)
     "permission-request" => return permission_output(event)
+    "permission-log" => {
+      permission_log(event, home=@env.get_env_var("HOME").unwrap_or(""))
+      return None
+    }
     "worktree-post-add" => {
       let linked = worktree_post_add(event)
       if !linked.is_empty() {
@@ -46,7 +50,7 @@ async fn hook_output(
     "comment-review-check" => comment_review_decision(event)
     _ =>
       fail(
-        "usage: agent-hooks pre-tool-use [--codex] [--command-rules [--require-draft]] [--deny-force-push] | git-force-check [--deny-force-push] | github-comment-check | pr-state-check [--deny-merge] | pr-format-check | comment-review-check | permission-request | pr-footer-reset | reply-reminder | worktree-post-add",
+        "usage: agent-hooks pre-tool-use [--codex] [--command-rules [--require-draft]] [--deny-force-push] | git-force-check [--deny-force-push] | github-comment-check | pr-state-check [--deny-merge] | pr-format-check | comment-review-check | permission-request | pr-footer-reset | reply-reminder | worktree-post-add | permission-log",
       )
   }
 

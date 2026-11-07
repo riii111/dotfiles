@@ -60,11 +60,11 @@ def commands(config):
 @unittest.skipUnless(shutil.which("chezmoi"), "chezmoi is not installed")
 class AgentHooksRegistrationTest(unittest.TestCase):
     def test_rendered_configs_register_the_hooks(self):
-        claude_pre = "^(Bash|mcp__.*)$"
+        combined = "^(Bash|mcp__.*)$"
         expected = {
             ("personal", "dot_claude/settings.json.tmpl"): {
                 "PreToolUse": [
-                    (claude_pre, None, "agent-hooks pre-tool-use --command-rules")
+                    (combined, None, "agent-hooks pre-tool-use --command-rules")
                 ],
                 "PostToolUse": [
                     (
@@ -74,13 +74,13 @@ class AgentHooksRegistrationTest(unittest.TestCase):
                     ),
                 ],
                 "UserPromptSubmit": [(None, None, "agent-hooks reply-reminder")],
-                "PermissionRequest": [("*", None, "log-permission-event.py")],
-                "PermissionDenied": [("*", None, "log-permission-event.py")],
+                "PermissionRequest": [("*", None, "agent-hooks permission-log")],
+                "PermissionDenied": [("*", None, "agent-hooks permission-log")],
             },
             ("work", "dot_claude/settings.json.tmpl"): {
                 "PreToolUse": [
                     (
-                        claude_pre,
+                        combined,
                         None,
                         "agent-hooks pre-tool-use --command-rules"
                         " --require-draft --deny-force-push",
@@ -88,9 +88,7 @@ class AgentHooksRegistrationTest(unittest.TestCase):
                 ],
             },
             ("personal", "dot_codex/hooks.json.tmpl"): {
-                "PreToolUse": [
-                    (claude_pre, None, "agent-hooks pre-tool-use --codex")
-                ],
+                "PreToolUse": [(combined, None, "agent-hooks pre-tool-use --codex")],
                 "PermissionRequest": [
                     ("^Bash$", None, "agent-hooks permission-request")
                 ],

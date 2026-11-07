@@ -39,7 +39,7 @@ task_prefix=${HARNEXUS_TASK_PREFIX:-/usr/local/bin}
 
 script=${BASH_SOURCE[0]:-}
 dotfiles=${DOTFILES_DIR:-}
-if [[ -z $dotfiles && -n $script && -d $(dirname "$script")/../dot_claude/hooks ]]; then
+if [[ -z $dotfiles && -n $script && -f $(dirname "$script")/cloud-setup/claude-settings.py ]]; then
 	dotfiles=$(cd "$(dirname "$script")/.." && pwd)
 fi
 state="$HOME/.cache/cloud-setup"
