@@ -7,7 +7,8 @@ import subprocess
 from pathlib import Path
 
 # Only explicitly understood inputs get narrower checks. All other paths run all
-# checks, including deleted paths and both sides of renames (--no-renames).
+# checks and on-demand tests, as --full does, including deleted paths and both
+# sides of renames (--no-renames).
 REPO_ONLY = {
     "bin/executable_dotctl",
     "bin/lib/dot/cli.py",
@@ -72,7 +73,8 @@ def select(paths: list[str]) -> set[str]:
         elif path.startswith("darwin/"):
             selected.update({"nix", "repo", "hooks"})
         else:
-            selected.update(ALL)
+            # Unknown effects may reach any on-demand target too.
+            selected.update(full())
     return selected
 
 

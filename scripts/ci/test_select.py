@@ -19,15 +19,16 @@ class SelectionTests(unittest.TestCase):
         cases = [
             (["README.md"], set()),
             (["dot_codex/skills/example/SKILL.md"], {"cloud"}),
-            (["nix/moonbit.nix"], selector.ALL),
-            (["new-unclassified-file"], selector.ALL),
+            # Unclassified paths select what --full does, on-demand tests included.
+            (["nix/moonbit.nix"], selector.full()),
+            (["new-unclassified-file"], selector.full()),
             (["dot-tools/permission/policy.mbt"], {"dot_tools", "repo", "hooks"}),
-            (["dot-tools/package.nix"], selector.ALL),
+            (["dot-tools/package.nix"], selector.full()),
             (["scripts/build-open-apps.sh"], {"repo"}),
             # Narrow categories must still pull in the integration tests they affect.
             (["darwin/hosts/personal.nix"], {"nix", "repo", "hooks", ACTIVATION}),
             (["bin/lib/dot/cli.py"], {"repo", INTEGRATION}),
-            (["flake.lock"], selector.ALL | {ACTIVATION}),
+            (["flake.lock"], selector.full()),
             # An on-demand test change runs only that test, not the whole suite.
             ([INTEGRATION], {INTEGRATION}),
             (["tests/ondemand/test_new.py"], {"tests/ondemand/test_new.py"}),
