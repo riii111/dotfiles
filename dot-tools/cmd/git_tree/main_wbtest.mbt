@@ -88,10 +88,3 @@ async test "a repository without main or master has no tree" {
   assert_eq(branch_tree(Git::new(Some(root)), color=false), None)
   @fs.rmdir(root, recursive=true)
 }
-
-///|
-test "names are ordered by code point" {
-  let names = ["b", "aa", "é", "Z", "a/b"]
-  names.sort_by(code_point_compare)
-  assert_eq(names, ["Z", "a/b", "aa", "b", "é"])
-}

@@ -204,3 +204,31 @@ async test "one configuration lookup finds each helper" {
   git(["config", "diff.externalx", "x"])
   assert_true(decide("git diff") is None)
 }
+
+///|
+/// The last-resort patterns read the raw text, so they catch Git and rm runs inside a quoted word.
+async test "quoted hard resets, forced adds and recursive rm runs are denied" {
+  let denied = [
+    ("eval 'git reset --hard'", "Hard reset is forbidden."),
+    ("eval 'x && git -C a reset y --hard;ls'", "Hard reset is forbidden."),
+    ("eval '/usr/bin/git reset --hard'\n", "Hard reset is forbidden."),
+    ("eval 'git add x' -f", "Force-add is forbidden."),
+    ("eval 'git  add x' -f\n", "Force-add is forbidden."),
+    ("eval 'cd a && rm -fr y'", "Recursive file deletion is forbidden."),
+    ("eval 'rm x -fR'", "Recursive file deletion is forbidden."),
+    ("eval 'rm --recursive x'", "Recursive file deletion is forbidden."),
+  ]
+  for case in denied {
+    let (command, expected) = case
+    assert_eq(reason(command), Some(expected), msg=command)
+  }
+  let passed = [
+    "eval 'git reset --hard-ish'", "eval 'git reset --hard_x'", "eval 'git reset; --hard'",
+    "eval 'gitx reset --hard'", "eval '日本git reset --hard'", "eval 'git resetx --hard'",
+    "eval 'git add x' -f y", "eval 'git add x' -fx", "eval 'git add x;' -f", "eval 'git add -f'",
+    "eval 'rmdir -r'", "eval 'rm -f x'", "eval 'rm x; -r'", "eval 'rm -1r'", "eval 'arm -r'",
+  ]
+  for command in passed {
+    assert_eq(reason(command), None, msg=command)
+  }
+}

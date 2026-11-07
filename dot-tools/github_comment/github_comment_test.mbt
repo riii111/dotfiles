@@ -28,62 +28,36 @@ test "allows reads and unrelated commands" {
 }
 
 ///|
-test "denies GitHub connector comment tools" {
-  let operations = [
-    "add_comment_to_issue", "add_review_to_pr", "reply_to_review_comment", "update_issue_comment",
-    "update_review_comment", "add_issue_comment", "add_comment_to_pending_review",
-    "add_reply_to_pull_request_comment", "pull_request_review_write", "resolve_review_thread",
+test "denies the comment tools of the Codex connector and the GitHub MCP server" {
+  let denied = [
+    "mcp__github__add_issue_comment", "mcp__github__add_comment_to_pending_review",
+    "mcp__github__add_reply_to_pull_request_comment", "mcp__github__pull_request_review_write",
+    "mcp__github__resolve_review_thread",
   ]
-  for operation in operations {
-    for separator in ["_", "."] {
-      let name = "mcp__codex_apps__github\{separator}\{operation}"
-      assert_true(
-        @github_comment.is_comment_request({ "tool_name": name }),
-        msg=name,
-      )
-    }
+  for
+    operation in [
+      "add_comment_to_issue", "add_review_to_pr", "reply_to_review_comment", "update_issue_comment",
+      "update_review_comment", "add_issue_comment", "add_comment_to_pending_review",
+      "add_reply_to_pull_request_comment", "pull_request_review_write", "resolve_review_thread",
+    ] {
+    denied.push("mcp__codex_apps__github_\{operation}")
+    denied.push("mcp__codex_apps__github.\{operation}")
   }
-  let names = [
+  let allowed = [
     "mcp__codex_apps__github_fetch_pr_comments", "mcp__codex_apps__github_create_pull_request",
     "mcp__codex_apps__github.fetch_pr_comments", "mcp__codex_app__send_message_to_thread",
-  ]
-  for name in names {
-    assert_false(
-      @github_comment.is_comment_request({
-        "tool_name": name,
-        "tool_input": { "body": "hi" },
-      }),
-      msg=name,
-    )
-  }
-}
-
-///|
-test "denies GitHub MCP comment tools" {
-  let operations = [
-    "add_issue_comment", "add_comment_to_pending_review", "add_reply_to_pull_request_comment",
-    "pull_request_review_write", "resolve_review_thread",
-  ]
-  for operation in operations {
-    assert_true(
-      @github_comment.is_comment_request({
-        "tool_name": "mcp__github__\{operation}",
-      }),
-      msg=operation,
-    )
-  }
-  let names = [
     "mcp__github__pull_request_read", "mcp__github__create_pull_request", "mcp__github__issue_write",
     "mcp__linear__add_issue_comment",
   ]
-  for name in names {
-    assert_false(
-      @github_comment.is_comment_request({
-        "tool_name": name,
-        "tool_input": { "body": "hi" },
-      }),
+  for name in denied {
+    assert_true(
+      @github_comment.is_comment_request({ "tool_name": name }),
       msg=name,
     )
+  }
+  for name in allowed {
+    let event : Json = { "tool_name": name, "tool_input": { "body": "hi" } }
+    assert_false(@github_comment.is_comment_request(event), msg=name)
   }
 }
 

@@ -1,52 +1,55 @@
 ///|
-/// Mirrors `github_repository` with `github.com` and the `work-github` alias as the hosts that resolve to GitHub.
-fn repository(url : String) -> (String, String)? {
-  guard @git_trust.parse_remote(url) is Some(remote) else { return None }
-  let on_github = match remote.host {
-    Https(host) => host == "github.com"
-    Ssh(host) => host == "github.com" || host == "work-github"
-  }
-  if on_github {
-    Some((remote.owner, remote.repo))
-  } else {
-    None
-  }
+/// The parsed remote as `scheme:host/owner/repo`, where SSH covers both `git@` and `ssh://` remotes.
+fn parsed(url : String) -> String? {
+  @git_trust.parse_remote(url).map(remote => {
+    let host = match remote.host {
+      Https(host) => "https:" + host
+      Ssh(host) => "ssh:" + host
+    }
+    "\{host}/\{remote.owner}/\{remote.repo}"
+  })
 }
 
 ///|
-test "GitHub remotes give the lowercased owner and repository" {
+test "remotes give their host and the lowercased owner and repository" {
   let cases = [
-    ("git@github.com:Riii111/Test.git", "riii111", "test"),
-    ("git@github.com:a/b", "a", "b"),
-    ("git@work-github:a/b.git", "a", "b"),
-    ("git@github.com:a/b.git.git", "a", "b.git"),
-    ("https://github.com/A/B.git", "a", "b"),
-    ("https://GitHub.com/a/b", "a", "b"),
-    ("HTTPS://github.com/a/b", "a", "b"),
-    ("https://user@github.com:8443/a/b", "a", "b"),
-    ("https://github.com/a/b?", "a", "b"),
-    ("https://git\thub.com/a/b", "a", "b"),
-    ("ssh://git@github.com/a/b.git", "a", "b"),
-    ("ssh://git@work-github:22/a/b", "a", "b"),
-    ("ssh://git@github.com/a/b.git?", "a", "b"),
+    ("git@github.com:Riii111/Test.git", "ssh:github.com/riii111/test"),
+    ("git@github.com:a/b", "ssh:github.com/a/b"),
+    ("git@work-github:a/b.git", "ssh:work-github/a/b"),
+    ("git@github.com:a/b.git.git", "ssh:github.com/a/b.git"),
+    ("git@example.com:a/b", "ssh:example.com/a/b"),
+    // An empty host parses, and `github_host` rejects it.
+    ("git@:a/b", "ssh:/a/b"),
+    ("ssh://[github.com]/a/b", "ssh:/a/b"),
+    ("ssh:///a/b", "ssh:/a/b"),
+    ("https://github.com/A/B.git", "https:github.com/a/b"),
+    ("https://GitHub.com/a/b", "https:github.com/a/b"),
+    ("HTTPS://github.com/a/b", "https:github.com/a/b"),
+    ("https://user@github.com:8443/a/b", "https:github.com/a/b"),
+    ("https://github.com/a/b?", "https:github.com/a/b"),
+    ("https://git\thub.com/a/b", "https:github.com/a/b"),
+    ("https://work-github/a/b", "https:work-github/a/b"),
+    ("ssh://git@github.com/a/b.git", "ssh:github.com/a/b"),
+    ("ssh://git@work-github:22/a/b", "ssh:work-github/a/b"),
+    ("ssh://git@github.com/a/b.git?", "ssh:github.com/a/b"),
+    ("ssh://example.com/a/b", "ssh:example.com/a/b"),
   ]
   for case in cases {
-    let (url, owner, repo) = case
-    assert_eq(repository(url), Some((owner, repo)))
+    let (url, expected) = case
+    assert_eq(parsed(url), Some(expected), msg=url)
   }
 }
 
 ///|
-test "other remotes are rejected" {
+test "malformed remotes and other schemes are rejected" {
   let urls = [
-    "git@example.com:a/b", "git@github.com:/a/b", "git@github.com:a/b/c", "git@github.com:a/",
-    "git@:a/b", "https://github.com/a/b?x=1", "https://github.com/a/b#f", "https://github.com/a/b/",
-    "https://github.com//a/b", "https://github.com/a/b.git/", "https://work-github/a/b",
-    "https:github.com/a/b", "http://github.com/a/b", "ssh://example.com/a/b", "ssh://[github.com]/a/b",
-    "ssh:///a/b", "file:///a/b", "github.com:a/b",
+    "git@github.com:/a/b", "git@github.com:a/b/c", "git@github.com:a/", "https://github.com/a/b?x=1",
+    "https://github.com/a/b#f", "https://github.com/a/b/", "https://github.com//a/b",
+    "https://github.com/a/b.git/", "https:github.com/a/b", "http://github.com/a/b",
+    "file:///a/b", "github.com:a/b",
   ]
   for url in urls {
-    assert_eq(repository(url), None)
+    assert_eq(parsed(url), None, msg=url)
   }
 }
 
