@@ -34,11 +34,21 @@ pub fn takes_value(option : String) -> Bool {
 ///|
 /// The index of the subcommand in the words after `git`, past its global options.
 pub fn subcommand_index(args : ArrayView[String]) -> Int32 {
+  global_options(args).0
+}
+
+///|
+/// One walk over the global options gives the subcommand's index and the directory `-C` names.
+fn global_options(args : ArrayView[String]) -> (Int32, String?) {
+  let mut dir = None
   let mut index = 0
   while index < args.length() && args[index].has_prefix("-") {
+    if args[index] == "-C" && index + 1 < args.length() {
+      dir = Some(args[index + 1])
+    }
     index += if takes_value(args[index]) { 2 } else { 1 }
   }
-  index
+  (index, dir)
 }
 
 ///|
@@ -49,14 +59,8 @@ pub fn subcommand(
     is Some(git) else {
     None
   }
-  let mut dir = None
-  let mut index = git + 1
-  while index < segment.length() && segment[index].has_prefix("-") {
-    if segment[index] == "-C" && index + 1 < segment.length() {
-      dir = Some(segment[index + 1])
-    }
-    index += if takes_value(segment[index]) { 2 } else { 1 }
-  }
-  guard index < segment.length() else { None }
-  Some((dir, segment[index], segment[index + 1:]))
+  let args = segment[git + 1:]
+  let (index, dir) = global_options(args)
+  guard index < args.length() else { None }
+  Some((dir, args[index], args[index + 1:]))
 }
