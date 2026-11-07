@@ -21,23 +21,15 @@ ALL = {"nix", "dot_tools", "repo", "hooks"}
 ONDEMAND_DIR = "tests/ondemand/"
 # `dotctl test` skips these slow integration tests, so each runs only when its
 # own file or a path it exercises changes. Entries ending in "/" are prefixes.
+# A path that already runs everything (see select) needs no entry, so only paths
+# the narrow categories cover are listed; test_select keeps the table to those.
 ONDEMAND = {
-    "test_affected_activation.py": ("darwin/", "flake.nix", "flake.lock"),
-    "test_affected_integration.py": (
-        "bin/executable_affected-agent",
-        "bin/lib/dot/cli.py",
-        "run_after_zz-notify-affected.sh.tmpl",
-        ".chezmoiignore",
-        "tests/chezmoi/",
-    ),
-    "test_gh_repo_baseline.py": ("bin/executable_gh-repo-baseline",),
+    "test_affected_activation.py": ("darwin/",),
+    "test_affected_integration.py": ("bin/lib/dot/cli.py",),
+    "test_gh_repo_baseline.py": (),
     "test_macos_sdk_repair.py": ("scripts/repair-macos-sdk.py",),
-    "test_shell_widget.py": (
-        "dot_zshrc.tmpl",
-        "dot_zshenv",
-        "tests/chezmoi/personal.toml",
-    ),
-    "test_terminal_queries.py": ("lefthook.yml",),
+    "test_shell_widget.py": (),
+    "test_terminal_queries.py": (),
 }
 # These evaluate the Darwin configurations, which only a macOS runner can import.
 DARWIN_ONDEMAND = {"test_affected_activation.py"}

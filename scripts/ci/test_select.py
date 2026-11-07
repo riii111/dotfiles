@@ -43,6 +43,21 @@ class SelectionTests(unittest.TestCase):
             with self.subTest(paths=paths):
                 self.assertEqual(selector.select(paths), expected)
 
+    def test_every_ondemand_target_changes_the_selection(self):
+        # A target that would select its test anyway is dead weight, so each must matter.
+        for name, targets in selector.ONDEMAND.items():
+            for target in targets:
+                path = target + "x" if target.endswith("/") else target
+                with self.subTest(name=name, target=target):
+                    test = selector.ONDEMAND_DIR + name
+                    self.assertIn(test, selector.select([path]))
+                    original = selector.ONDEMAND
+                    selector.ONDEMAND = {**original, name: ()}
+                    try:
+                        self.assertNotIn(test, selector.select([path]))
+                    finally:
+                        selector.ONDEMAND = original
+
     def test_darwin_only_ondemand_tests_are_listed_separately(self):
         selected = {ACTIVATION, INTEGRATION, "tests/ondemand/test_new.py"}
         self.assertEqual(
