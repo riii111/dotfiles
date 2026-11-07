@@ -153,6 +153,28 @@ class OndemandTestsTest(unittest.TestCase):
             self.assertEqual(code, 1)
             popen.assert_not_called()
 
+    def test_streams_unittest_output_and_fails_on_skips(self):
+        cases = (
+            ("pass", 0),
+            ("self.skipTest('no tool')", 1),
+        )
+        for body, expected in cases:
+            with self.subTest(body), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                (root / "tests/ondemand").mkdir(parents=True)
+                (root / "tests/ondemand/test_x.py").write_text(
+                    "import unittest\n\n\nclass T(unittest.TestCase):\n"
+                    f"    def test_x(self):\n        {body}\n"
+                )
+                with (
+                    mock.patch("sys.stderr") as stderr,
+                    mock.patch("sys.stdout"),
+                ):
+                    code = cli.run_ondemand_tests(root, [])
+                self.assertEqual(code, expected)
+                written = "".join(call.args[0] for call in stderr.write.call_args_list)
+                self.assertIn("test_x", written)
+
 
 if __name__ == "__main__":
     unittest.main()

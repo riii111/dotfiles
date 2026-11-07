@@ -355,15 +355,19 @@ def run_ondemand_tests(repo_root: Path, paths: list[str]) -> int:
             tests.append(test)
     args = ["python3", "-m", "unittest", "-v"]
     args += [str(test.relative_to(repo_root)) for test in tests]
-    print("$", shlex.join(args))
-    result = subprocess.run(
-        args, cwd=repo_root, check=False, text=True, stderr=subprocess.PIPE
-    )
-    print(result.stderr, end="", file=sys.stderr)
-    if result.returncode != 0:
+    print("$", shlex.join(args), flush=True)
+    # Streamed so a hanging test shows where it hangs; the copy is checked for skips.
+    lines: list[str] = []
+    with subprocess.Popen(
+        args, cwd=repo_root, text=True, stderr=subprocess.PIPE
+    ) as process:
+        for line in process.stderr:
+            print(line, end="", file=sys.stderr, flush=True)
+            lines.append(line)
+    if process.returncode != 0:
         return 1
     # Requested tests that skip for a missing tool or input would otherwise pass silently.
-    if re.search(r"^OK \(.*skipped=", result.stderr, re.M):
+    if re.search(r"^OK \(.*skipped=", "".join(lines), re.M):
         print("On-demand tests were skipped", file=sys.stderr)
         return 1
     return 0
