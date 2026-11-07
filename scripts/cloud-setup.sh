@@ -64,13 +64,17 @@ if ! bash "${AGENT_HOOKS_INSTALLER:-$dotfiles/scripts/install-agent-hooks.sh}" "
 fi
 guards=()
 missing=()
-for name in github-comment-check git-force-check pr-format-check pr-state-check pr-footer-reset reply-reminder comment-review-check; do
+# pre-tool-use runs every PreToolUse check in one process; the separate names stay for an agent-hooks built before it.
+for name in pre-tool-use github-comment-check git-force-check pr-format-check pr-state-check pr-footer-reset reply-reminder comment-review-check; do
 	# A hook name that agent-hooks does not know makes it fail, while a known one lets an empty event through.
 	if [[ -x $hooks/agent-hooks ]] && printf '{}' | "$hooks/agent-hooks" "$name" >/dev/null 2>&1; then
 		guards+=("$name=agent-hooks")
 		rm -f "$hooks/$name.py"
 	elif [[ -f $hooks/$name.py ]]; then
 		guards+=("$name=python")
+	elif [[ $name == pre-tool-use ]]; then
+		# Without it, the separate guards are installed instead.
+		continue
 	elif [[ $name != pr-footer-reset && $name != reply-reminder && $name != comment-review-check ]]; then
 		# These only adjust Claude's output or advise it and guard nothing, so the setup still succeeds without them.
 		missing+=("$name")
