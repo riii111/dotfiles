@@ -121,6 +121,20 @@
         "aarch64-darwin"
       ];
       forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f system);
+      # CI builds dot-tools and runs repo checks on Linux runners, without the darwin-only CLI profile.
+      toolSystems = systems ++ [ "x86_64-linux" ];
+      # Build with unpatched nixpkgs: the overlay's Brotli reaches fetchurl via curl and would rebuild the fetcher chain.
+      toolsFor = nixpkgs.lib.genAttrs toolSystems (
+        system:
+        let
+          upstream = nixpkgs.legacyPackages.${system};
+          moonbit = upstream.callPackage ./nix/moonbit.nix { };
+        in
+        {
+          inherit upstream moonbit;
+          dotTools = upstream.callPackage ./dot-tools/package.nix { inherit moonbit; };
+        }
+      );
       mkCli =
         system:
         let
@@ -281,10 +295,7 @@
                 makeWrapper "${pkgs.lib.getBin curlWithRustls}/bin/curl" "$out/bin/curl" \
                   --set-default CURL_CA_BUNDLE "${pkgs.cacert}/etc/ssl/certs/ca-no-trust-rules-bundle.crt"
               '';
-          # Build with unpatched nixpkgs: the overlay's Brotli reaches fetchurl via curl and would rebuild the fetcher chain.
-          upstream = nixpkgs.legacyPackages.${system};
-          moonbit = upstream.callPackage ./nix/moonbit.nix { };
-          dotTools = upstream.callPackage ./dot-tools/package.nix { inherit moonbit; };
+          inherit (toolsFor.${system}) moonbit dotTools;
           mkVersionEntry = name: value: { inherit name value; };
           dailyCliPackages = with pkgs; [
             # Editor-integrated tooling that should exist in the normal shell too.
@@ -395,49 +406,56 @@
       cliFor = forAllSystems mkCli;
     in
     {
-      packages = forAllSystems (
+      packages = nixpkgs.lib.genAttrs toolSystems (
         system:
-        let
-          cli = cliFor.${system};
-        in
         {
-          cli = cli.cliProfile;
-          dot-tools = cli.dotTools;
-          moonbit = cli.moonbit;
-          uv = cli.pkgs.uv;
-          curl = cli.dailyCurl;
-          python3 = cli.dailyPython;
-          rustup = cli.pkgs.rustup;
-          nodejs = cli.dailyNode;
-          ca-certificates = cli.cliTrust;
-          default = cli.cliProfile;
+          dot-tools = toolsFor.${system}.dotTools;
+          inherit (toolsFor.${system}) moonbit;
         }
+        // nixpkgs.lib.optionalAttrs (cliFor ? ${system}) (
+          let
+            cli = cliFor.${system};
+          in
+          {
+            cli = cli.cliProfile;
+            uv = cli.pkgs.uv;
+            curl = cli.dailyCurl;
+            python3 = cli.dailyPython;
+            rustup = cli.pkgs.rustup;
+            nodejs = cli.dailyNode;
+            ca-certificates = cli.cliTrust;
+            default = cli.cliProfile;
+          }
+        )
       );
 
-      devShells = forAllSystems (
+      devShells = nixpkgs.lib.genAttrs toolSystems (
         system:
-        let
-          cli = cliFor.${system};
-        in
-        {
-          default = cli.pkgs.mkShell {
-            packages = cli.dailyCliPackages;
+        nixpkgs.lib.optionalAttrs (cliFor ? ${system}) (
+          let
+            cli = cliFor.${system};
+          in
+          {
+            default = cli.pkgs.mkShell {
+              packages = cli.dailyCliPackages;
 
-            shellHook = ''
-              export SSL_CERT_FILE="${cli.cliTrust}/share/dotfiles/ca-bundle.crt"
-              export NIX_SSL_CERT_FILE="$SSL_CERT_FILE"
-              export CURL_CA_BUNDLE="$SSL_CERT_FILE"
-              export REQUESTS_CA_BUNDLE="$SSL_CERT_FILE"
-              export PIP_CERT="$SSL_CERT_FILE"
-              echo "Entered the dotfiles Nix shell."
-            '';
-          };
-
+              shellHook = ''
+                export SSL_CERT_FILE="${cli.cliTrust}/share/dotfiles/ca-bundle.crt"
+                export NIX_SSL_CERT_FILE="$SSL_CERT_FILE"
+                export CURL_CA_BUNDLE="$SSL_CERT_FILE"
+                export REQUESTS_CA_BUNDLE="$SSL_CERT_FILE"
+                export PIP_CERT="$SSL_CERT_FILE"
+                echo "Entered the dotfiles Nix shell."
+              '';
+            };
+          }
+        )
+        // {
           # Only what `dotctl test` runs; the daily shell builds unfree tools like terraform from source in CI.
           # Take the tools from unpatched nixpkgs: the overlay's Brotli reaches rustc via curl, so git and ruff rebuild Rust.
           ci =
             let
-              upstream = nixpkgs.legacyPackages.${system};
+              inherit (toolsFor.${system}) upstream;
             in
             upstream.mkShell {
               packages = with upstream; [
