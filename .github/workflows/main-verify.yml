@@ -98,8 +98,7 @@ jobs:
           ONDEMAND: ${{ needs.select.outputs.ondemand }}
         run: |
           # shellcheck disable=SC2086 # One path per word.
-          nix develop .#ci -c nix shell --inputs-from . nixpkgs#lefthook \
-            -c ./bin/executable_dotctl test --ondemand $ONDEMAND
+          nix develop .#ci -c ./bin/executable_dotctl test --ondemand $ONDEMAND
 
   # Only what must build, run or import aarch64-darwin derivations.
   darwin:

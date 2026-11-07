@@ -3,6 +3,9 @@ test "find_commit reads the directory and whether unstaged changes go in" {
   let cases : Array[(String, String, Bool)] = [
     ("git commit -m \"feat: x\"", "/repo", false),
     ("cd sub && git commit -m x", "/repo/sub", false),
+    // The shell expands these before `cd` sees them.
+    ("cd ~/other && git commit -m x", "/h/other", false),
+    ("cd $HOME && git commit -m x", "/h", false),
     ("git -C /other commit -m x", "/other", false),
     ("git -C sub -C deeper commit -m x", "/repo/sub/deeper", false),
     ("git add -A && git commit -m x", "/repo", true),
@@ -13,7 +16,7 @@ test "find_commit reads the directory and whether unstaged changes go in" {
   ]
   for case in cases {
     let (command, dir, includes_unstaged) = case
-    guard find_commit(command, "/repo") is Some(commit) else {
+    guard find_commit(command, "/repo", home="/h") is Some(commit) else {
       fail("no commit in \{command}")
     }
     assert_eq(commit.dir, dir)
@@ -24,7 +27,7 @@ test "find_commit reads the directory and whether unstaged changes go in" {
 ///|
 test "commands that record nothing are not commits" {
   for command in ["git status", "git commit --dry-run", "git commit -h"] {
-    assert_true(find_commit(command, "/repo") is None)
+    assert_true(find_commit(command, "/repo", home="/h") is None)
   }
 }
 

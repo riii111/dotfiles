@@ -14,10 +14,18 @@ test "log lines escape like Python's json.dumps without ensure_ascii" {
 
 ///|
 test "timestamps carry the local offset like %z" {
-  assert_eq(format_timestamp(0L, 0), "1970-01-01T00:00:00+0000")
-  assert_eq(format_timestamp(1700000000L, 32400), "2023-11-15T07:13:20+0900")
-  assert_eq(format_timestamp(1700000000L, -18000), "2023-11-14T17:13:20-0500")
-  assert_eq(format_timestamp(951782400L, -12600), "2000-02-28T20:30:00-0330")
+  let saved = @env.get_env_var("TZ")
+  defer (match saved {
+    Some(value) => @env.set_env_var("TZ", value)
+    None => @env.unset_env_var("TZ")
+  })
+  // POSIX TZ strings, so no zone database is needed.
+  @env.set_env_var("TZ", "UTC")
+  assert_eq(local_timestamp(0L), "1970-01-01T00:00:00+0000")
+  @env.set_env_var("TZ", "JST-9")
+  assert_eq(local_timestamp(1700000000L), "2023-11-15T07:13:20+0900")
+  @env.set_env_var("TZ", "NST3:30")
+  assert_eq(local_timestamp(951782400L), "2000-02-28T20:30:00-0330")
 }
 
 ///|

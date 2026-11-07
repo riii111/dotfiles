@@ -73,3 +73,46 @@ pub fn subcommand(
   guard index < args.length() else { None }
   Some((dir, args[index], args[index + 1:]))
 }
+
+///|
+/// Expands a leading `~`, `$HOME` or `$PWD` as the shell would, so the path can be found; other words stay as they are.
+pub fn expand_path(word : String, cwd : String, home : String) -> String? {
+  // An unset HOME or PWD leaves the word as it is, rather than rooting `~/x` at `/x`.
+  let variables = [
+    ("~", home),
+    ("$HOME", home),
+    ("${HOME}", home),
+    ("$PWD", cwd),
+    ("${PWD}", cwd),
+  ]
+  for variable in variables {
+    let (prefix, value) = variable
+    if word.strip_prefix(prefix) is Some(rest) &&
+      value != "" &&
+      (rest == "" || rest.has_prefix("/")) {
+      return Some(value + rest.to_owned())
+    }
+  }
+  None
+}
+
+///|
+/// Each segment but a plain `cd DIR`, with the directory the shell runs it in; a `cd` moves it for the segments after.
+pub fn segments_in(
+  command : String,
+  cwd : String,
+  home~ : String,
+) -> Array[(String, Array[String])] {
+  let mut dir = cwd
+  let found = []
+  for segment in segments(command) {
+    if segment is ["cd", target] {
+      dir = expand_path(target, dir, home).unwrap_or(
+        @shell.join_path(dir, target),
+      )
+      continue
+    }
+    found.push((dir, segment))
+  }
+  found
+}

@@ -108,8 +108,8 @@ async fn run_slow_checks(
         group.spawn_bg(() => {
           results[index] = check() catch {
             // An error raised while the deadline cancels the check (a killed process, a cleanup) is
-            // the deadline's doing, not a failed check; re-raised, it ends in the deadline message below.
-            error if @async.is_being_cancelled() => raise error
+            // the deadline's doing, not a failed check; kept out of the group, it ends in the deadline message below.
+            _ if @async.is_being_cancelled() => None
             error => {
               log("a check failed: \{error}")
               None
@@ -119,7 +119,11 @@ async fn run_slow_checks(
       }
     })
   }) catch {
-    _ => None
+    // Only None from with_timeout_opt is the deadline; a raised error is logged as itself.
+    error => {
+      log("slow checks failed: \{error}")
+      Some(())
+    }
   }
   if finished is None {
     log("slow checks passed the \{deadline_ms}ms deadline")

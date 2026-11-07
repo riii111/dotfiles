@@ -7,7 +7,7 @@ pub async fn review(
   session~ : String,
   home~ : String,
 ) -> String? {
-  guard find_commit(command, cwd) is Some(commit) else { return None }
+  guard find_commit(command, cwd, home~) is Some(commit) else { return None }
   let diff = staged_diff(commit) catch { _ => return None }
   let files = added_comments(diff)
   guard files.iter().any(changes => !changes.comments.is_empty()) else {
