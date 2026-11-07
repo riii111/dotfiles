@@ -2,7 +2,11 @@
 package "riii111/dot-tools/git_command"
 
 // Values
+pub fn expand_path(String, String, String) -> String?
+
 pub fn segments(String) -> Array[Array[String]]
+
+pub fn segments_in(String, String, home~ : String) -> Array[(String, Array[String])]
 
 pub fn subcommand(Array[String]) -> (String?, String, ArrayView[String])?
 

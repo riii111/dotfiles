@@ -110,28 +110,6 @@ async fn newest_worktree(dir : String) -> String? {
 }
 
 ///|
-/// Expands a leading `~`, `$HOME` or `$PWD` as the shell would, so the path can be found; other words stay as they are.
-fn expand_path(word : String, cwd : String, home : String) -> String? {
-  // An unset HOME or PWD leaves the word as it is, rather than rooting `~/x` at `/x`.
-  let variables = [
-    ("~", home),
-    ("$HOME", home),
-    ("${HOME}", home),
-    ("$PWD", cwd),
-    ("${PWD}", cwd),
-  ]
-  for variable in variables {
-    let (prefix, value) = variable
-    if word.strip_prefix(prefix) is Some(rest) &&
-      value != "" &&
-      (rest == "" || rest.has_prefix("/")) {
-      return Some(value + rest.to_owned())
-    }
-  }
-  None
-}
-
-///|
 /// The directory Git runs in and the path the first `git worktree add` creates, both joined to `cwd`.
 /// A plain `cd DIR` before it moves the base, as in `cd repo && git worktree add ../x`.
 fn worktree_add_path(
@@ -139,24 +117,18 @@ fn worktree_add_path(
   cwd : String,
   home~ : String,
 ) -> (String, String)? {
-  let mut cwd = cwd
   let mut found = None
-  for segment in @git_command.segments(command) {
-    if segment is ["cd", target] {
-      cwd = expand_path(target, cwd, home).unwrap_or(
-        @shell.join_path(cwd, target),
-      )
-      continue
-    }
+  for item in @git_command.segments_in(command, cwd, home~) {
+    let (segment_cwd, segment) = item
     if segment is [first, ..] &&
       @shell.basename(first) == "git" &&
       @git_command.subcommand(segment)
       is Some((dir, "worktree", ["add", .. args])) {
-      found = Some((dir, args))
+      found = Some((segment_cwd, dir, args))
       break
     }
   }
-  guard found is Some((dir, args)) else { return None }
+  guard found is Some((cwd, dir, args)) else { return None }
   let dir = match dir {
     Some(dir) => @shell.join_path(cwd, dir)
     None => cwd
@@ -185,7 +157,7 @@ fn worktree_add_path(
   guard index < args.length() else { return None }
   let path = args[index]
   // The shell expands against its own directory, before `-C` moves Git.
-  match expand_path(path, cwd, home) {
+  match @git_command.expand_path(path, cwd, home) {
     Some(path) => Some((dir, path))
     None => Some((dir, @shell.join_path(dir, path)))
   }

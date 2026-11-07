@@ -5,14 +5,10 @@ priv struct Commit {
 }
 
 ///|
-fn find_commit(command : String, cwd : String) -> Commit? {
-  let mut dir = cwd
+fn find_commit(command : String, cwd : String, home~ : String) -> Commit? {
   let mut staged_here = false
-  for segment in @git_command.segments(command) {
-    if segment is ["cd", target] {
-      dir = @shell.join_path(dir, target)
-      continue
-    }
+  for item in @git_command.segments_in(command, cwd, home~) {
+    let (dir, segment) = item
     guard @git_command.subcommand(segment) is Some((git_dir, subcommand, args)) else {
       continue
     }
