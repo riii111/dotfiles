@@ -9,6 +9,20 @@ refresh() {
 	exec 9>"$state/refresh.flock" || return 0
 	# util-linux flock is on every Ubuntu image, and starts faster than Python.
 	flock -n 9 || return 0
+	# A refresh from before flock may still be writing under its directory lock during the upgrade.
+	# It writes its pid right after taking the lock, so the lock is left over only once that pid
+	# has died, or when none was written within a minute.
+	legacy="$state/refresh.lock"
+	if [[ -d $legacy ]]; then
+		holder=$(cat "$legacy/pid" 2>/dev/null)
+		if [[ -n $holder ]] && kill -0 "$holder" 2>/dev/null; then
+			return 0
+		fi
+		if [[ -z $holder && -z $(find "$legacy" -maxdepth 0 -mmin +1) ]]; then
+			return 0
+		fi
+		rm -rf "$legacy" "$legacy.reap"
+	fi
 	# shellcheck source=/dev/null
 	. "$state/options"
 	checkout="$state/dotfiles"

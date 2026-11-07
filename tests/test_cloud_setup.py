@@ -4,6 +4,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -250,6 +251,33 @@ class CloudSetupTest(unittest.TestCase):
             self.refresh()
 
         self.assertTrue(stale.exists())
+
+    @needs_flock
+    def test_waits_for_a_refresh_of_an_earlier_version_to_end(self):
+        self.run_setup(DOTFILES_REPO=str(self.dotfiles_repo("dotfiles")))
+        legacy = self.home / ".cache/cloud-setup/refresh.lock"
+        stale = self.home / ".codex/skills/task-worker/stale.md"
+        dead = subprocess.Popen(["true"])
+        dead.wait()
+        # (pid written, lock age in seconds, whether the old refresh still runs)
+        for name, pid, age, running in (
+            ("live pid", os.getpid(), 0, True),
+            ("pid not written yet", None, 0, True),
+            ("dead pid", dead.pid, 0, False),
+            ("no pid for over a minute", None, 120, False),
+        ):
+            with self.subTest(name):
+                shutil.rmtree(legacy, ignore_errors=True)
+                legacy.mkdir()
+                if pid is not None:
+                    (legacy / "pid").write_text(str(pid))
+                os.utime(legacy, (time.time() - age,) * 2)
+                stale.write_text("removed upstream")
+
+                self.refresh()
+
+                self.assertEqual(stale.exists(), running)
+                self.assertEqual(legacy.exists(), running)
 
     @needs_flock
     def test_a_refresh_that_ended_early_does_not_stop_the_next(self):
