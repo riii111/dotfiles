@@ -463,8 +463,11 @@
                 chezmoi
                 git
                 jq
+                # The hook tests resolve SSH remotes with `ssh -G`; Linux runners lack zsh.
+                openssh
                 python3
                 ruff
+                zsh
               ];
             };
         }
