@@ -54,14 +54,18 @@ async fn hook_output(
       )
   }
 
-  guard decision is Some((behavior, reason)) else { return None }
-  Some({
+  decision.map(decision => pre_tool_use_decision(decision.0, decision.1))
+}
+
+///|
+fn pre_tool_use_decision(behavior : String, reason : String) -> Json {
+  {
     "hookSpecificOutput": {
       "hookEventName": "PreToolUse",
       "permissionDecision": behavior,
       "permissionDecisionReason": reason,
     },
-  })
+  }
 }
 
 ///|
@@ -158,6 +162,32 @@ async fn comment_review_decision(event : Json) -> (String, String)? {
 ///|
 /// Codex's command policy, for both its PreToolUse and PermissionRequest events.
 async fn permission_output(event : Json) -> Json? {
+  guard codex_decision(event) is Some((event_name, decision)) else {
+    return None
+  }
+  match decision {
+    Deny(reason) if event_name == "PreToolUse" =>
+      Some(pre_tool_use_decision("deny", reason))
+    Deny(reason) =>
+      Some({
+        "hookSpecificOutput": {
+          "hookEventName": "PermissionRequest",
+          "decision": { "behavior": "deny", "message": reason },
+        },
+      })
+    Allow =>
+      Some({
+        "hookSpecificOutput": {
+          "hookEventName": "PermissionRequest",
+          "decision": { "behavior": "allow" },
+        },
+      })
+  }
+}
+
+///|
+/// The event's name and the policy's decision on its command.
+async fn codex_decision(event : Json) -> (String, @permission.Decision)? {
   guard event
     is {
       "tool_input": { "command": String(command), .. },
@@ -170,31 +200,9 @@ async fn permission_output(event : Json) -> Json? {
     { "hook_event_name": String(name), .. } => name
     _ => ""
   }
-  match @permission.decide(event_name, command, cwd, @env.get_env_vars()) {
-    None => None
-    Some(Deny(reason)) if event_name == "PreToolUse" =>
-      Some({
-        "hookSpecificOutput": {
-          "hookEventName": "PreToolUse",
-          "permissionDecision": "deny",
-          "permissionDecisionReason": reason,
-        },
-      })
-    Some(Deny(reason)) =>
-      Some({
-        "hookSpecificOutput": {
-          "hookEventName": "PermissionRequest",
-          "decision": { "behavior": "deny", "message": reason },
-        },
-      })
-    Some(Allow) =>
-      Some({
-        "hookSpecificOutput": {
-          "hookEventName": "PermissionRequest",
-          "decision": { "behavior": "allow" },
-        },
-      })
-  }
+  @permission.decide(event_name, command, cwd, @env.get_env_vars()).map(decision => {
+    (event_name, decision)
+  })
 }
 
 ///|

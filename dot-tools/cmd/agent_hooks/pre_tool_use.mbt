@@ -74,28 +74,12 @@ async fn pre_tool_use_output(
     .filter(verdict => verdict.behavior == behavior)
     .map(verdict => verdict.reason)
     .collect()
-  Some({
-    "hookSpecificOutput": {
-      "hookEventName": "PreToolUse",
-      "permissionDecision": behavior,
-      "permissionDecisionReason": reasons.join("\n\n"),
-    },
-  })
+  Some(pre_tool_use_decision(behavior, reasons.join("\n\n")))
 }
 
 ///|
 async fn codex_policy_denial(event : Json) -> (String, String)? {
-  guard permission_output(event)
-    is Some(
-      {
-        "hookSpecificOutput": {
-          "permissionDecision": "deny",
-          "permissionDecisionReason": String(reason),
-          ..
-        },
-        ..
-      }
-    ) else {
+  guard codex_decision(event) is Some(("PreToolUse", Deny(reason))) else {
     return None
   }
   Some(("deny", reason))
