@@ -128,8 +128,8 @@ class CloudSetupTest(unittest.TestCase):
 
     def test_a_failed_first_taskctl_build_still_installs_the_rest(self):
         settings = self.run_setup(
-            HARNEXUS_TASK="1",
-            HARNEXUS_TASK_PREFIX=str(self.home / "bin"),
+            HARNEXUS_CREW="1",
+            HARNEXUS_CREW_PREFIX=str(self.home / "bin"),
             HARNEXUS_CREW_REPO=str(self.home / "missing"),
         )
 
@@ -345,8 +345,8 @@ class CloudSetupTest(unittest.TestCase):
                 "HOME": str(self.home),
                 "GIT_CONFIG_NOSYSTEM": "1",
                 "AGENT_HOOKS_INSTALLER": str(self.installer),
-                "HARNEXUS_TASK": "1",
-                "HARNEXUS_TASK_PREFIX": str(prefix),
+                "HARNEXUS_CREW": "1",
+                "HARNEXUS_CREW_PREFIX": str(prefix),
                 **env,
             },
             capture_output=True,

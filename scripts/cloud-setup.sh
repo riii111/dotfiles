@@ -13,11 +13,11 @@
 # The last is where download.mooncakes.io redirects; if the agent-hooks build cannot resolve a new host, add it.
 #
 # Setup script (downloaded first, since a failed download piped into bash exits 0):
-#   curl -fsSLo /tmp/cloud-setup.sh https://raw.githubusercontent.com/riii111/dotfiles/main/scripts/cloud-setup.sh && PR_LANGUAGE=ja HARNEXUS_TASK=1 bash /tmp/cloud-setup.sh
+#   curl -fsSLo /tmp/cloud-setup.sh https://raw.githubusercontent.com/riii111/dotfiles/main/scripts/cloud-setup.sh && PR_LANGUAGE=ja HARNEXUS_CREW=1 bash /tmp/cloud-setup.sh
 #   npm install -g @openai/codex || true
 #   mkdir -p ~/.codex && printf 'forced_login_method = "chatgpt"\n' > ~/.codex/config.toml
 #
-# HARNEXUS_TASK=1 installs harnexus-crew from HARNEXUS_CREW_REPO at HARNEXUS_CREW_REV.
+# HARNEXUS_CREW=1 installs harnexus-crew from HARNEXUS_CREW_REPO at HARNEXUS_CREW_REV.
 #
 # Environment variables:
 #   CODEX_AUTH_B64=      output of: base64 < ~/.codex/auth.json | tr -d '\n'
@@ -29,8 +29,8 @@ set -euo pipefail
 
 dotfiles_repo=${DOTFILES_REPO:-https://github.com/riii111/dotfiles.git}
 crew_repo=${HARNEXUS_CREW_REPO:-https://github.com/riii111/taskctl.git}
-crew_rev=${HARNEXUS_CREW_REV:-3c41e810b52dd63dfa63a37bf655cc90af964d07}
-task_prefix=${HARNEXUS_TASK_PREFIX:-/usr/local/bin}
+crew_rev=${HARNEXUS_CREW_REV:-2607176991ea87b731acbbea185edd49e08d5deb}
+task_prefix=${HARNEXUS_CREW_PREFIX:-/usr/local/bin}
 
 script=${BASH_SOURCE[0]:-}
 dotfiles=${DOTFILES_DIR:-}
@@ -79,11 +79,11 @@ install -m 0755 "$own/codex-auth.sh" "$hooks/codex-auth.sh"
 install -m 0755 "$own/refresh.sh" "$hooks/cloud-refresh.sh"
 # The commits are kept only when given, so a refresh follows the pins of the latest dotfiles.
 {
-	printf 'export HARNEXUS_TASK=%q\n' "${HARNEXUS_TASK:-}"
+	printf 'export HARNEXUS_CREW=%q\n' "${HARNEXUS_CREW:-}"
 	printf 'export DOTFILES_REPO=%q\n' "$dotfiles_repo"
 	printf 'export HARNEXUS_CREW_REPO=%q\n' "$crew_repo"
 	printf 'export HARNEXUS_CREW_REV=%q\n' "${HARNEXUS_CREW_REV:-}"
-	printf 'export HARNEXUS_TASK_PREFIX=%q\n' "$task_prefix"
+	printf 'export HARNEXUS_CREW_PREFIX=%q\n' "$task_prefix"
 } >"$state/options"
 python3 "$own/claude-settings.py" "$HOME/.claude/settings.json" "$hooks" "${guards[@]}"
 
@@ -148,7 +148,7 @@ install_crew() {
 }
 
 switch_set=yes
-if [[ ${HARNEXUS_TASK:-} == 1 ]]; then
+if [[ ${HARNEXUS_CREW:-} == 1 ]]; then
 	if ! install_crew; then
 		# Without a CLI already in place there is no set to keep, and the hooks still need the skills.
 		if [[ -x $task_prefix/harnexus-crew ]] && [[ -d $skills/task-worker ]]; then
