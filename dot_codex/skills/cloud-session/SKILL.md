@@ -14,7 +14,6 @@ description: |
    引き継ぐ場合は、対象のセッションのIDか`claude.ai/code`のURLを確かめる。
    分からなければユーザーに聞く。
 2. `harnexus cloud`をサンドボックス外で一度実行する。
-   `harnexus`が未導入なら、代わりに互換入口の`harnexus-task cloud`を同じ引数で使う。
    対象は今のチャットのプロジェクトになるので、`--project`は付けない。
    ユーザーが別のリポジトリを指定したときだけ、`list_projects`でそのprojectIdを調べて`--project <projectId>`を付ける。
    - 新しく始める：依頼の本文をファイルに保存し、`--prompt-file <そのファイルの絶対パス>`を付ける。

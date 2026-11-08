@@ -7,8 +7,7 @@ description: |
 
 # Task Orchestration
 
-`taskctl`が未導入なら、互換入口の`harnexus-task`を同じ引数で使う。
-`taskctl environment`が`"host":"claude"`を返す場合は、先に末尾の「Claude CodeのCloud」を読む。
+`harnexus-crew environment`が`"host":"claude"`を返す場合は、先に末尾の「Claude CodeのCloud」を読む。
 
 統括役はCodexを既定とし、ユーザーがClaudeでの統括を指示した場合（AppでClaudeを選択した場合を含む）にClaudeを使う。
 workerは既定Claude、reviewerはCodexとし、統括役の選択から変更しない。
@@ -30,12 +29,12 @@ harnexus内のClaudeは、自分が起動したworkerを追う。
 不足する履歴や出力だけ追加取得する。
 追加指示は最新の最終回答・明示エラー・履歴の進行に基づき、不足に限定する。
 idleやtimeoutだけで停止と判断せず、worker/reviewerの結果受取方式を変更しない。
-taskctlの結果不明・モデル不一致は再送せず、ユーザーへ確認を求める。
+harnexus-crewの結果不明・モデル不一致は再送せず、ユーザーへ確認を求める。
 merge通知の自動受信や親Taskの自動再開は扱わない。
 
 ## Claude CodeのCloud
 
-`taskctl environment`が`"host":"claude"`を返す場合、このセッションのClaudeが統括役になる。
+`harnexus-crew environment`が`"host":"claude"`を返す場合、このセッションのClaudeが統括役になる。
 workerはtask-session-launchの「Claude CodeのCloud」で起動する。
 開始済みかどうかは、既存のCodex Taskの代わりに`list_sessions`で確かめる。
 workerの完了・停止・指摘対応の報告は、各workerからの`send_message`で受け取る。
@@ -43,4 +42,4 @@ workerの完了・停止・指摘対応の報告は、各workerからの`send_me
 進捗は`get_session`の`status_bucket`と`list_events`で確かめる。
 `status`は失敗したturnでも`idle`と読めるため、判断に使わない。
 workerのtaskを完了または中止にしたら、`archive_session`でそのworkerのセッションを閉じる。
-mcp__codex_link__のツールと、taskctlのlaunch・state・resolveは使わない。
+mcp__codex_link__のツールと、harnexus-crewのlaunch・state・resolveは使わない。

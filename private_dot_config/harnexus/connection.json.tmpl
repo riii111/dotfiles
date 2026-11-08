@@ -3,9 +3,9 @@
   "cloudSkills": ["cloud-session"]
 {{- if hasKey . "harnexus_adapter" }},
   "externalConversationAdapter": {
-    "id": "taskctl",
-    "command": "{{ .chezmoi.homeDir }}/.local/bin/taskctl",
-    "args": ["adapter", "serve", "--id", "taskctl"],
+    "id": "harnexus-crew",
+    "command": "{{ .chezmoi.homeDir }}/.local/bin/harnexus-crew",
+    "args": ["adapter", "serve", "--id", "harnexus-crew"],
     "mode": {{ .harnexus_adapter | quote }}
   }
 {{- end }}

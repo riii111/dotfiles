@@ -130,7 +130,7 @@ class CloudSetupTest(unittest.TestCase):
         settings = self.run_setup(
             HARNEXUS_TASK="1",
             HARNEXUS_TASK_PREFIX=str(self.home / "bin"),
-            TASKCTL_REPO=str(self.home / "missing"),
+            HARNEXUS_CREW_REPO=str(self.home / "missing"),
         )
 
         self.assertEqual(len(settings["hooks"]["PreToolUse"]), 1)
@@ -320,28 +320,19 @@ class CloudSetupTest(unittest.TestCase):
         '"${XDG_CONFIG_HOME:-$HOME/.config}/harnexus/task.json") && test -f "$w" ;; esac\n'
     )
 
-    def taskctl_repo(self, name="taskctl", taskctl=TASKCTL):
-        # Stands in for taskctl's installer, which builds with Bun: it records how it was called and switches as
-        # the real one does, only after the new binary passes its check.
+    def crew_repo(self, name="crew", crew=TASKCTL):
         installer = (
             "set -e\n"
             "while [ $# -gt 0 ]; do case $1 in\n"
             "  --prefix) prefix=$2; shift 2 ;; --repo) repo=$2; shift 2 ;;\n"
-            "  --rev) rev=$2; shift 2 ;; --bun) shift 2 ;; *) mode=$1; shift ;;\n"
+            "  --rev) rev=$2; shift 2 ;; --bun) shift 2 ;; *) exit 2 ;;\n"
             "esac; done\n"
-            'new=$(mktemp); cp "$repo/taskctl" "$new"; chmod +x "$new"; "$new" check\n'
-            'printf "%s\\n" "$rev" "$mode" >"$prefix/installer.log"\n'
-            'mv "$new" "$prefix/taskctl"\n'
-            'if [ ! -L "$prefix/harnexus-task" ]; then\n'
-            '  if [ -e "$prefix/harnexus-task" ]; then\n'
-            '    [ ! -e "$prefix/harnexus-task.pre-taskctl" ] || exit 1\n'
-            '    mv "$prefix/harnexus-task" "$prefix/harnexus-task.pre-taskctl"\n'
-            "  fi\n"
-            '  ln -s taskctl "$prefix/harnexus-task"\n'
-            "fi\n"
+            'new=$(mktemp); cp "$repo/harnexus-crew" "$new"; chmod +x "$new"; "$new" check\n'
+            'printf "%s\\n" "$rev" >"$prefix/installer.log"\n'
+            'mv "$new" "$prefix/harnexus-crew"\n'
         )
         return self.source_repo(
-            name, {"scripts/install.sh": installer, "taskctl": taskctl}
+            name, {"scripts/install.sh": installer, "harnexus-crew": crew}
         )
 
     def run_task_setup(self, check=True, **env):
@@ -365,117 +356,54 @@ class CloudSetupTest(unittest.TestCase):
             self.assertEqual(ran.returncode, 0, ran.stderr)
         return prefix, ran
 
-    def test_installs_taskctl_with_harnexus_task_linked_to_it(self):
-        repo, rev = self.taskctl_repo()
-        prefix = self.home / "bin"
-        prefix.mkdir()
-        (prefix / "harnexus-task").write_text("built from harnexus")
-
-        self.run_task_setup(TASKCTL_REPO=str(repo), TASKCTL_REV=rev)
-
-        self.assertEqual(
-            (prefix / "installer.log").read_text().split(),
-            [rev, "--replace-harnexus-task"],
+    def test_installs_harnexus_crew(self):
+        repo, rev = self.crew_repo()
+        prefix, _ = self.run_task_setup(
+            HARNEXUS_CREW_REPO=str(repo), HARNEXUS_CREW_REV=rev
         )
-        self.assertEqual(os.readlink(prefix / "harnexus-task"), "taskctl")
-        self.assertEqual(
-            (prefix / "harnexus-task.pre-taskctl").read_text(), "built from harnexus"
-        )
-        self.assertEqual((prefix / ".taskctl.commit").read_text().strip(), rev)
+
+        self.assertEqual((prefix / "installer.log").read_text().strip(), rev)
+        self.assertEqual((prefix / ".harnexus-crew.commit").read_text().strip(), rev)
         self.assertTrue((self.home / ".codex/skills/task-worker/SKILL.md").exists())
 
-    def test_a_taskctl_that_fails_keeps_the_previous_set(self):
-        repo, rev = self.taskctl_repo()
-        prefix, _ = self.run_task_setup(TASKCTL_REPO=str(repo), TASKCTL_REV=rev)
-        broken, broken_rev = self.taskctl_repo("broken", taskctl="#!/bin/sh\nexit 1\n")
+    def test_a_crew_that_fails_keeps_the_previous_set(self):
+        repo, rev = self.crew_repo()
+        prefix, _ = self.run_task_setup(
+            HARNEXUS_CREW_REPO=str(repo), HARNEXUS_CREW_REV=rev
+        )
+        broken, broken_rev = self.crew_repo("broken", crew="#!/bin/sh\nexit 1\n")
         skill = self.home / ".codex/skills/task-worker"
         (skill / "kept.md").write_text("the set in use")
-        working = (prefix / "taskctl").read_text()
+        working = (prefix / "harnexus-crew").read_text()
 
         for name, env, installed in (
             (
                 "check fails",
-                {"TASKCTL_REPO": str(broken), "TASKCTL_REV": broken_rev},
+                {"HARNEXUS_CREW_REPO": str(broken), "HARNEXUS_CREW_REV": broken_rev},
                 working,
             ),
             (
                 "not a full commit",
-                {"TASKCTL_REPO": str(repo), "TASKCTL_REV": rev[:12]},
+                {"HARNEXUS_CREW_REPO": str(repo), "HARNEXUS_CREW_REV": rev[:12]},
                 working,
             ),
             (
                 "the installed one cannot fill the new templates",
-                {"TASKCTL_REPO": str(repo), "TASKCTL_REV": rev},
+                {"HARNEXUS_CREW_REPO": str(repo), "HARNEXUS_CREW_REV": rev},
                 "#!/bin/sh\nexit 1\n",
             ),
         ):
             with self.subTest(name):
-                (prefix / "taskctl").write_text(installed)
+                (prefix / "harnexus-crew").write_text(installed)
                 _, ran = self.run_task_setup(**env)
 
                 self.assertIn(
                     "previous skills, task.json and task CLI stay", ran.stderr
                 )
                 self.assertTrue((skill / "kept.md").exists())
-                self.assertEqual((prefix / ".taskctl.commit").read_text().strip(), rev)
-
-    def legacy_repo(self, name="harnexus", body="echo legacy"):
-        installer = (
-            "set -e\n"
-            "while [ $# -gt 0 ]; do case $1 in --prefix) prefix=$2; shift 2 ;; *) shift 2 ;; esac; done\n"
-            'mkdir -p "$prefix"\n'
-            # Replaces the file as the real one does, so a link left at harnexus-task is not written through.
-            'new=$(mktemp "$prefix/.new.XXXXXX")\n'
-            f'printf "#!/bin/sh\\n{body}\\n" >"$new"\n'
-            'chmod +x "$new" && mv -f "$new" "$prefix/harnexus-task"\n'
-        )
-        return self.source_repo(name, {"scripts/install-cloud-task.sh": installer})
-
-    def test_a_legacy_harnexus_task_that_does_not_start_keeps_the_set(self):
-        repo, rev = self.taskctl_repo()
-        prefix, _ = self.run_task_setup(TASKCTL_REPO=str(repo), TASKCTL_REV=rev)
-        broken, broken_rev = self.legacy_repo("broken", body="exit 1")
-        kept = self.home / ".codex/skills/task-worker/kept.md"
-        kept.write_text("the set in use")
-
-        _, ran = self.run_task_setup(
-            TASK_CLI="legacy", HARNEXUS_REPO=str(broken), HARNEXUS_REV=broken_rev
-        )
-
-        self.assertIn("previous skills, task.json and task CLI stay", ran.stderr)
-        self.assertTrue(kept.exists())
-        self.assertEqual(os.readlink(prefix / "harnexus-task"), "taskctl")
-        self.assertFalse((prefix / "taskctl").is_symlink())
-
-    def test_rolls_back_to_the_pinned_harnexus_task_and_forward_again(self):
-        repo, rev = self.taskctl_repo()
-        harnexus, harnexus_rev = self.legacy_repo()
-        pins = {
-            "TASKCTL_REPO": str(repo),
-            "TASKCTL_REV": rev,
-            "HARNEXUS_REPO": str(harnexus),
-            "HARNEXUS_REV": harnexus_rev,
-        }
-        prefix, _ = self.run_task_setup(**pins)
-
-        self.run_task_setup(TASK_CLI="legacy", **pins)
-
-        self.assertFalse((prefix / "harnexus-task").is_symlink())
-        self.assertEqual(os.readlink(prefix / "taskctl"), "harnexus-task")
-        self.assertEqual(
-            subprocess.run(
-                [str(prefix / "taskctl")], capture_output=True, text=True
-            ).stdout,
-            "legacy\n",
-        )
-        self.assertEqual(
-            (prefix / ".harnexus-task.commit").read_text().strip(), harnexus_rev
-        )
-
-        self.run_task_setup(**pins)
-
-        self.assertEqual(os.readlink(prefix / "harnexus-task"), "taskctl")
-        self.assertFalse((prefix / "taskctl").is_symlink())
+                self.assertEqual(
+                    (prefix / ".harnexus-crew.commit").read_text().strip(), rev
+                )
 
     def test_clones_the_dotfiles_when_piped_into_bash(self):
         settings = self.run_setup(

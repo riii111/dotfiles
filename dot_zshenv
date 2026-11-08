@@ -6,7 +6,7 @@ export PSQL_PAGER="${PSQL_PAGER:-pspg}"
 export PSQL_WATCH_PAGER="${PSQL_WATCH_PAGER:-pspg --stream}"
 export NPM_CONFIG_CACHE="${NPM_CONFIG_CACHE:-$HOME/.cache/npm}"
 # harnexus opens its call socket only when asked, and `bun run open-app` saves the value from this environment for later app launches.
-# taskctl, pr-wake and CODEX_THREAD_ID in Claude chats need the socket open; an absolute path set beforehand is kept.
+# harnexus-crew, pr-wake and CODEX_THREAD_ID in Claude chats need the socket open; an absolute path set beforehand is kept.
 export HARNEXUS_CALL_SOCKET="${HARNEXUS_CALL_SOCKET:-on}"
 
 if [[ -x "${NIX_DOTFILES_BIN}/curl" ]]; then

@@ -22,9 +22,9 @@ Manual steps outside this repository:
 - Vulnerability monitoring (personal Mac): place the agent at `~/.local/bin/am-i-affected`.
 - Finder file associations: run `scripts/build-open-apps.sh`, then `nix shell nixpkgs#duti --command bash scripts/setup-default-apps.sh`. Re-run after a macOS update breaks them.
 - Claude Code cloud: set up the environment as the top of [cloud-setup.sh](scripts/cloud-setup.sh) shows.
-- Task CLIs for the skills: install `taskctl` with `scripts/install.sh --compat` of [taskctl](https://github.com/riii111/taskctl), `pr-wake` with `scripts/install.sh` of [pr-wake](https://github.com/riii111/pr-wake), and `harnexus` with `bun run install:cli` in the [harnexus](https://github.com/riii111/harnexus) checkout. The skills fall back to `harnexus-task` while `taskctl` is missing.
-- harnexus call socket for taskctl and pr-wake: `~/.zshenv` sets `HARNEXUS_CALL_SOCKET=on`. After `chezmoi apply ~/.zshenv`, quit the app, run `bun run open-app` in the harnexus checkout from a new shell, then check that `launchctl getenv HARNEXUS_CALL_SOCKET` prints `on`.
-- Cloud review chats through taskctl: add `harnexus_adapter = "observe"` (or `"write"`) under `[data]` in `~/.config/chezmoi/chezmoi.toml`, run `chezmoi apply`, then restart the app.
+- Task CLIs for the skills: install `harnexus-crew` with `scripts/install.sh` of [taskctl](https://github.com/riii111/taskctl), `pr-wake` with `scripts/install.sh` of [pr-wake](https://github.com/riii111/pr-wake), and `harnexus` with `bun run install:cli` in the [harnexus](https://github.com/riii111/harnexus) checkout.
+- harnexus call socket for harnexus-crew and pr-wake: `~/.zshenv` sets `HARNEXUS_CALL_SOCKET=on`. After `chezmoi apply ~/.zshenv`, quit the app, run `bun run open-app` in the harnexus checkout from a new shell, then check that `launchctl getenv HARNEXUS_CALL_SOCKET` prints `on`.
+- Cloud review chats through harnexus-crew: add `harnexus_adapter = "observe"` (or `"write"`) under `[data]` in `~/.config/chezmoi/chezmoi.toml`, run `chezmoi apply`, then restart the app.
 
 ## Update
 
