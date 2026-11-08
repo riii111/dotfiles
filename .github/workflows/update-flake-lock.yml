@@ -16,7 +16,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: nixbuild/nix-quick-install-action@9f63be77f412a248c9d9a65a4c82cf066cdf8f0c # v35
+      # Fetch the official installer to a file with HTTP failure checks and retries.
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.34.7/install
+          extra_nix_config: accept-flake-config = true
 
       - name: Detect current system
         id: system
