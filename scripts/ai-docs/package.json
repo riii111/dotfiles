@@ -8,7 +8,8 @@
   "scripts": {
     "lint": "node cli.mjs lint",
     "fmt": "node cli.mjs fmt",
-    "links": "node cli.mjs links"
+    "links": "node cli.mjs links",
+    "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
     "@textlint/kernel": "15.8.0",
@@ -27,5 +28,9 @@
     "textlint-rule-no-doubled-joshi": "5.1.1",
     "textlint-rule-sentence-length": "5.2.1",
     "unified-engine": "11.2.2"
+  },
+  "overrides": {
+    "glob@>=9.0.0 <14.0.2": "14.0.2",
+    "minimatch@>=7.0.0 <11.0.1": "11.0.1"
   }
 }
