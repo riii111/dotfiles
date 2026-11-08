@@ -77,7 +77,11 @@ jobs:
         with:
           persist-credentials: false
       # No store cache: restoring a cached store cost more than it saved.
-      - uses: nixbuild/nix-quick-install-action@9f63be77f412a248c9d9a65a4c82cf066cdf8f0c # v35
+      # Fetch the official installer to a file with HTTP failure checks and retries.
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.34.7/install
+          extra_nix_config: accept-flake-config = true
       # The Go floor guards the CVE-2026-111943 rebuild against a nixpkgs update.
       - name: Evaluate the Go version
         if: needs.select.outputs.nix == 'true'
@@ -112,7 +116,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: nixbuild/nix-quick-install-action@9f63be77f412a248c9d9a65a4c82cf066cdf8f0c # v35
+      # Fetch the official installer to a file with HTTP failure checks and retries.
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.34.7/install
+          extra_nix_config: accept-flake-config = true
       # The patched uninstaller source is imported from an aarch64-darwin build, so Linux cannot evaluate these.
       # This also builds that import, which the activation test's offline evaluation needs.
       - name: Evaluate both Darwin configurations
