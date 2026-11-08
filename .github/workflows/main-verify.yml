@@ -61,6 +61,7 @@ jobs:
         with:
           node-version: "22"
       - run: npm ci --ignore-scripts --no-fund --no-audit
+      - run: npm test
       - run: npm run links
       - run: npm run fmt -- --all --check
       - run: npm run lint
