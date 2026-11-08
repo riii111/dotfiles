@@ -13,12 +13,11 @@
 # The last is where download.mooncakes.io redirects; if the agent-hooks build cannot resolve a new host, add it.
 #
 # Setup script (downloaded first, since a failed download piped into bash exits 0):
-#   curl -fsSLo /tmp/cloud-setup.sh https://raw.githubusercontent.com/riii111/dotfiles/main/scripts/cloud-setup.sh && PR_LANGUAGE=ja HARNEXUS_TASK=1 bash /tmp/cloud-setup.sh
+#   curl -fsSLo /tmp/cloud-setup.sh https://raw.githubusercontent.com/riii111/dotfiles/main/scripts/cloud-setup.sh && PR_LANGUAGE=ja HARNEXUS_CREW=1 bash /tmp/cloud-setup.sh
 #   npm install -g @openai/codex || true
 #   mkdir -p ~/.codex && printf 'forced_login_method = "chatgpt"\n' > ~/.codex/config.toml
 #
-# HARNEXUS_TASK=1 installs taskctl with harnexus-task linked to it, from TASKCTL_REPO at TASKCTL_REV.
-# Adding TASK_CLI=legacy rolls back to the harnexus-task of HARNEXUS_REPO at HARNEXUS_REV, with taskctl linked to it.
+# HARNEXUS_CREW=1 installs harnexus-crew from HARNEXUS_CREW_REPO at HARNEXUS_CREW_REV.
 #
 # Environment variables:
 #   CODEX_AUTH_B64=      output of: base64 < ~/.codex/auth.json | tr -d '\n'
@@ -29,13 +28,9 @@
 set -euo pipefail
 
 dotfiles_repo=${DOTFILES_REPO:-https://github.com/riii111/dotfiles.git}
-taskctl_repo=${TASKCTL_REPO:-https://github.com/riii111/taskctl.git}
-taskctl_rev=${TASKCTL_REV:-9069255654571b28bb5e2b46d48b5e3f129035fc}
-# The last harnexus that builds harnexus-task, kept for rolling back; later commits drop its installer.
-harnexus_repo=${HARNEXUS_REPO:-https://github.com/riii111/harnexus.git}
-harnexus_rev=${HARNEXUS_REV:-8127612dfd009025c6ee95f6f3c1dba5663935ee}
-task_cli=${TASK_CLI:-taskctl}
-task_prefix=${HARNEXUS_TASK_PREFIX:-/usr/local/bin}
+crew_repo=${HARNEXUS_CREW_REPO:-https://github.com/riii111/taskctl.git}
+crew_rev=${HARNEXUS_CREW_REV:-2607176991ea87b731acbbea185edd49e08d5deb}
+task_prefix=${HARNEXUS_CREW_PREFIX:-/usr/local/bin}
 
 script=${BASH_SOURCE[0]:-}
 dotfiles=${DOTFILES_DIR:-}
@@ -84,14 +79,11 @@ install -m 0755 "$own/codex-auth.sh" "$hooks/codex-auth.sh"
 install -m 0755 "$own/refresh.sh" "$hooks/cloud-refresh.sh"
 # The commits are kept only when given, so a refresh follows the pins of the latest dotfiles.
 {
-	printf 'export HARNEXUS_TASK=%q\n' "${HARNEXUS_TASK:-}"
-	printf 'export TASK_CLI=%q\n' "${TASK_CLI:-}"
+	printf 'export HARNEXUS_CREW=%q\n' "${HARNEXUS_CREW:-}"
 	printf 'export DOTFILES_REPO=%q\n' "$dotfiles_repo"
-	printf 'export TASKCTL_REPO=%q\n' "$taskctl_repo"
-	printf 'export TASKCTL_REV=%q\n' "${TASKCTL_REV:-}"
-	printf 'export HARNEXUS_REPO=%q\n' "$harnexus_repo"
-	printf 'export HARNEXUS_REV=%q\n' "${HARNEXUS_REV:-}"
-	printf 'export HARNEXUS_TASK_PREFIX=%q\n' "$task_prefix"
+	printf 'export HARNEXUS_CREW_REPO=%q\n' "$crew_repo"
+	printf 'export HARNEXUS_CREW_REV=%q\n' "${HARNEXUS_CREW_REV:-}"
+	printf 'export HARNEXUS_CREW_PREFIX=%q\n' "$task_prefix"
 } >"$state/options"
 python3 "$own/claude-settings.py" "$HOME/.claude/settings.json" "$hooks" "${guards[@]}"
 
@@ -140,69 +132,30 @@ fetch_commit() {
 		[[ $(git -C "$1" rev-parse HEAD) == "$3" ]]
 }
 
-install_taskctl() {
-	if [[ -x $task_prefix/taskctl && ! -L $task_prefix/taskctl &&
-		$(readlink "$task_prefix/harnexus-task") == taskctl &&
-		$(cat "$task_prefix/.taskctl.commit" 2>/dev/null) == "$taskctl_rev" ]]; then
-		XDG_CONFIG_HOME="$stage/config" "$task_prefix/taskctl" check >/dev/null
+install_crew() {
+	if [[ -x $task_prefix/harnexus-crew &&
+		$(cat "$task_prefix/.harnexus-crew.commit" 2>/dev/null) == "$crew_rev" ]]; then
+		XDG_CONFIG_HOME="$stage/config" "$task_prefix/harnexus-crew" check >/dev/null
 		return
 	fi
 	(
-		source="$stage/taskctl"
-		# set -e does not apply inside a condition, so each step stops the rest itself.
-		fetch_commit "$source" "$taskctl_repo" "$taskctl_rev" || exit 1
-		# The installer keeps one earlier harnexus-task aside and refuses to overwrite it. A harnexus-task that is
-		# not its link was built by this script after that copy was made, so it is the one worth keeping.
-		if [[ ! -L $task_prefix/harnexus-task ]]; then
-			rm -f "$task_prefix/harnexus-task.pre-taskctl"
-		fi
-		# The installer checks the new binary against the templates its environment names before replacing anything.
+		source="$stage/harnexus-crew"
+		fetch_commit "$source" "$crew_repo" "$crew_rev" || exit 1
 		XDG_CONFIG_HOME="$stage/config" bash "$source/scripts/install.sh" \
-			--prefix "$task_prefix" --repo "$source" --rev "$taskctl_rev" --bun "$bun_bin" --replace-harnexus-task || exit 1
-		printf '%s\n' "$taskctl_rev" >"$task_prefix/.taskctl.commit"
+			--prefix "$task_prefix" --repo "$source" --rev "$crew_rev" --bun "$bun_bin" || exit 1
+		printf '%s\n' "$crew_rev" >"$task_prefix/.harnexus-crew.commit"
 	)
 }
 
-# The old harnexus-task has no template check, so starting it is all that is checked before the switch.
-install_legacy_harnexus_task() {
-	if [[ -x $task_prefix/harnexus-task && ! -L $task_prefix/harnexus-task &&
-		$(cat "$task_prefix/.harnexus-task.commit" 2>/dev/null) == "$harnexus_rev" ]]; then
-		"$task_prefix/harnexus-task" environment >/dev/null || return 1
-	else
-		(
-			source="$stage/harnexus"
-			built="$stage/legacy"
-			fetch_commit "$source" "$harnexus_repo" "$harnexus_rev" || exit 1
-			bash "$source/scripts/install-cloud-task.sh" --prefix "$built" --bun "$bun_bin" || exit 1
-			"$built/harnexus-task" environment >/dev/null || exit 1
-			mkdir -p "$task_prefix"
-			staged=$(mktemp "$task_prefix/.harnexus-task.XXXXXX")
-			install -m 0755 "$built/harnexus-task" "$staged" && mv -f "$staged" "$task_prefix/harnexus-task" || exit 1
-			printf '%s\n' "$harnexus_rev" >"$task_prefix/.harnexus-task.commit"
-		) || return 1
-	fi
-	# Skills that call taskctl reach the same binary, so one CLI writes the task state.
-	link=$(mktemp -u "$task_prefix/.taskctl.XXXXXX")
-	ln -s harnexus-task "$link" && mv -f "$link" "$task_prefix/taskctl"
-}
-
 switch_set=yes
-if [[ ${HARNEXUS_TASK:-} == 1 ]]; then
-	case $task_cli in
-	taskctl) install=install_taskctl ;;
-	legacy) install=install_legacy_harnexus_task ;;
-	*)
-		echo "cloud-setup: TASK_CLI must be taskctl or legacy, not $task_cli" >&2
-		install=false
-		;;
-	esac
-	if ! $install; then
+if [[ ${HARNEXUS_CREW:-} == 1 ]]; then
+	if ! install_crew; then
 		# Without a CLI already in place there is no set to keep, and the hooks still need the skills.
-		if [[ -x $task_prefix/harnexus-task || -x $task_prefix/taskctl ]] && [[ -d $skills/task-worker ]]; then
+		if [[ -x $task_prefix/harnexus-crew ]] && [[ -d $skills/task-worker ]]; then
 			switch_set=no
-			echo "cloud-setup: the $task_cli set was not installed; the previous skills, task.json and task CLI stay" >&2
+			echo "cloud-setup: the harnexus-crew set was not installed; the previous skills, task.json and task CLI stay" >&2
 		else
-			echo "cloud-setup: the $task_cli set was not installed; the hooks and skills were" >&2
+			echo "cloud-setup: the harnexus-crew set was not installed; the hooks and skills were" >&2
 		fi
 	fi
 fi

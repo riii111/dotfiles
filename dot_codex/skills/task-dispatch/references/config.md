@@ -67,4 +67,4 @@ calendar:
 3. スレッドが自分をアーカイブできるか。
 4. 実行から`automation_update`でScheduled Taskを作成・更新・削除できるか。
 5. workerを起動したスレッドとは別のスレッドから続行を送り、workerが進むか。
-6. `auto_review`のもとで、サンドボックス外の実行（`taskctl`など）が無人でも止まらないか。
+6. `auto_review`のもとで、サンドボックス外の実行（`harnexus-crew`など）が無人でも止まらないか。
