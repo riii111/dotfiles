@@ -26,7 +26,7 @@ class ShellEnvironmentTest(unittest.TestCase):
         ):
             path.mkdir(parents=True)
 
-    def run_zsh(self, command):
+    def run_zsh(self, command, extra_env=None):
         return subprocess.check_output(
             [
                 shutil.which("zsh"),
@@ -41,6 +41,7 @@ class ShellEnvironmentTest(unittest.TestCase):
                 "PATH": os.pathsep.join(
                     map(str, (self.project, self.cargo, "/usr/bin", "/bin"))
                 ),
+                **(extra_env or {}),
             },
             text=True,
         ).splitlines()
@@ -105,3 +106,11 @@ class ShellEnvironmentTest(unittest.TestCase):
         curl.write_text("#!/bin/sh\nexit 0\n")
         curl.chmod(0o755)
         self.assertEqual(self.run_zsh(command), [str(curl)] + [str(bundle)] * 5)
+
+    def test_harnexus_call_socket_is_on_unless_already_set(self):
+        command = 'print -r -- "$HARNEXUS_CALL_SOCKET"'
+        self.assertEqual(self.run_zsh(command), ["on"])
+        for value in ("/custom/call.sock", "off"):
+            self.assertEqual(
+                self.run_zsh(command, {"HARNEXUS_CALL_SOCKET": value}), [value]
+            )
