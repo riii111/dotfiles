@@ -30,7 +30,21 @@
     "unified-engine": "11.2.2"
   },
   "overrides": {
-    "glob@>=9.0.0 <14.0.2": "14.0.2",
-    "minimatch@>=7.0.0 <11.0.1": "11.0.1"
+    "@npmcli/map-workspaces": {
+      "glob": "14.0.2",
+      "minimatch": "11.0.1"
+    },
+    "@npmcli/package-json": {
+      "glob": "14.0.2"
+    },
+    "textlint": {
+      "glob": "14.0.2"
+    },
+    "unified-engine": {
+      "glob": "14.0.2"
+    },
+    "glob@14.0.2": {
+      "minimatch": "11.0.1"
+    }
   }
 }

@@ -77,7 +77,7 @@ npm --prefix scripts/ai-docs run fmt -- dot_codex/skills/task-dispatch/SKILL.md
 
 ## 依存関係の互換性
 
-globとminimatchは、親パッケージが修正版に対応するまで、脆弱なバージョンだけをoverrideする。
+globとminimatchは、親パッケージが修正版に対応するまで、影響する親パッケージに限定してoverrideする。
 対象は[globのキャンセル処理](https://github.com/advisories/GHSA-3g3m-2fjr-6pw4)と[minimatchのパターン処理](https://github.com/advisories/GHSA-g3hv-75wg-m249)。
 minimatch 11は内部のパターン表現を変えているため、古いglobと組み合わせず、両方を更新する。
 互換性テストではリンク検査、textlintのファイル検索、npmのワークスペース検索とパッケージ情報の読み込みを確認する。
