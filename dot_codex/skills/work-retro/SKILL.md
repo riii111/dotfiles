@@ -25,7 +25,7 @@ description: |
   - hook・設定・スクリプト：dotfiles（`chezmoi source-path`で管理元を調べる）
   - harnexusの拡張：`~/ghq/github.com/riii111/harnexus`。
     スレッド間の受け渡し、`harnexus cloud`・`harnexus call`など、AppとAIの境界にある処理
-  - タスクのコマンド：`~/ghq/github.com/riii111/taskctl`。
+  - タスクのコマンド：`~/ghq/github.com/riii111/harnexus-crew`。
     `harnexus-crew`の起動・レビュー・状態の記録
   - PRの監視と通知：`~/ghq/github.com/riii111/pr-wake`。
     外部の出来事を起点にしたworkerへの送信
