@@ -26,6 +26,14 @@ Manual steps outside this repository:
 - harnexus call socket for harnexus-crew and pr-wake: `~/.zshenv` sets `HARNEXUS_CALL_SOCKET=on`. After `chezmoi apply ~/.zshenv`, quit the app, run `bun run open-app` in the harnexus checkout from a new shell, then check that `launchctl getenv HARNEXUS_CALL_SOCKET` prints `on`.
 - Cloud review chats through harnexus-crew: add `harnexus_adapter = "observe"` (or `"write"`) under `[data]` in `~/.config/chezmoi/chezmoi.toml`, run `chezmoi apply`, then restart the app.
 
+### Claude Code Cloud rename
+
+In each Cloud environment's saved setup script, replace `HARNEXUS_TASK=1` with `HARNEXUS_CREW=1` using the command at the top of [cloud-setup.sh](scripts/cloud-setup.sh), then rerun setup. The saved Cloud setting is separate from this repository. A fresh setup rejects the removed enable name rather than installing skills without their CLI.
+
+An existing `~/.cache/cloud-setup/options` from before the rename migrates its enable flag and install prefix once on refresh. Explicit `HARNEXUS_CREW*` settings win, including an empty enable flag. The original options remain in `options.pre-crew`; old executables and task data are not removed. If building crew fails, the existing skills and `task.json` stay until a later successful retry.
+
+A custom cached `TASKCTL_REPO` or nonempty `TASKCTL_REV` requires an explicit corresponding `HARNEXUS_CREW_REPO` or `HARNEXUS_CREW_REV`; set it to an empty value to choose the current default. A cache selecting `TASK_CLI=legacy` requires an explicit `HARNEXUS_CREW=1`. These cases stop before changing the existing setup rather than silently replacing a chosen source.
+
 ## Update
 
 ```bash

@@ -1,6 +1,7 @@
 import fcntl
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import tempfile
@@ -163,7 +164,7 @@ class CloudSetupTest(unittest.TestCase):
         settings = json.loads((self.home / ".claude/settings.json").read_text())
         self.assertEqual(len(settings["hooks"]["SessionStart"]), 1)
 
-    def refresh(self):
+    def refresh(self, **env):
         subprocess.run(
             ["bash", str(self.home / ".claude/hooks/cloud-refresh.sh")],
             env={
@@ -172,6 +173,7 @@ class CloudSetupTest(unittest.TestCase):
                 "GIT_CONFIG_NOSYSTEM": "1",
                 "AGENT_HOOKS_INSTALLER": str(self.installer),
                 "CLOUD_REFRESH_FOREGROUND": "1",
+                **env,
             },
             check=True,
             capture_output=True,
@@ -355,6 +357,164 @@ class CloudSetupTest(unittest.TestCase):
         if check:
             self.assertEqual(ran.returncode, 0, ran.stderr)
         return prefix, ran
+
+    def legacy_options(self, **options):
+        state = self.home / ".cache/cloud-setup"
+        state.mkdir(parents=True, exist_ok=True)
+        values = {
+            "HARNEXUS_TASK": "1",
+            "TASK_CLI": "",
+            "DOTFILES_REPO": "https://github.com/riii111/dotfiles.git",
+            "TASKCTL_REPO": "https://github.com/riii111/taskctl.git",
+            "TASKCTL_REV": "",
+            "HARNEXUS_REPO": "https://github.com/riii111/harnexus.git",
+            "HARNEXUS_REV": "",
+            "HARNEXUS_TASK_PREFIX": str(self.home / "old bin"),
+            **options,
+        }
+        text = "".join(f"export {key}={shlex.quote(value)}\n" for key, value in values.items())
+        (state / "options").write_text(text)
+        return text
+
+    def cached_options(self):
+        result = subprocess.run(
+            ["bash", "-c", '. "$HOME/.cache/cloud-setup/options"; env -0'],
+            env={"PATH": os.environ["PATH"], "HOME": str(self.home)},
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return dict(item.split("=", 1) for item in result.stdout.split("\0") if item)
+
+    @needs_flock
+    def test_an_old_refresh_migrates_the_cached_enable_and_prefix_once(self):
+        repo = self.dotfiles_repo("dotfiles")
+        self.run_setup(DOTFILES_REPO=str(repo))
+        old = self.legacy_options(DOTFILES_REPO=str(repo))
+        prefix = self.home / "old bin"
+        prefix.mkdir()
+        (prefix / "taskctl").write_text("old binary, retained for rollback")
+        data = self.home / ".local/state/harnexus/tasks.json"
+        data.parent.mkdir(parents=True)
+        data.write_text("existing user state")
+        crew, rev = self.crew_repo()
+
+        # This refresh script is unchanged from before the rename. It exports only the old cache names.
+        self.refresh(HARNEXUS_CREW_REPO=str(crew), HARNEXUS_CREW_REV=rev)
+
+        self.assertTrue((prefix / "harnexus-crew").exists())
+        self.assertEqual((prefix / "taskctl").read_text(), "old binary, retained for rollback")
+        self.assertEqual(data.read_text(), "existing user state")
+        options = self.cached_options()
+        self.assertEqual(options["HARNEXUS_CREW"], "1")
+        self.assertEqual(options["HARNEXUS_CREW_PREFIX"], str(prefix))
+        self.assertNotIn("HARNEXUS_TASK", options)
+        self.assertNotIn("TASKCTL_REV", options)
+        backup = self.home / ".cache/cloud-setup/options.pre-crew"
+        self.assertEqual(backup.read_text(), old)
+        (prefix / "installer.log").write_text("not rebuilt")
+
+        self.refresh()
+
+        self.assertEqual((prefix / "installer.log").read_text(), "not rebuilt")
+        self.assertEqual(backup.read_text(), old)
+        self.assertEqual(self.cached_options(), options)
+
+    def test_new_options_override_the_legacy_cache(self):
+        self.legacy_options(TASKCTL_REPO="old custom repo", TASKCTL_REV="old pinned revision")
+        repo, rev = self.crew_repo()
+        prefix, _ = self.run_task_setup(HARNEXUS_CREW_REPO=str(repo), HARNEXUS_CREW_REV=rev)
+
+        options = self.cached_options()
+        self.assertEqual(options["HARNEXUS_CREW"], "1")
+        self.assertEqual(options["HARNEXUS_CREW_PREFIX"], str(prefix))
+        self.assertEqual(options["HARNEXUS_CREW_REPO"], str(repo))
+        self.assertEqual(options["HARNEXUS_CREW_REV"], rev)
+        self.assertTrue((prefix / "harnexus-crew").exists())
+        self.assertFalse((self.home / "old bin").exists())
+
+    def test_an_explicit_new_opt_out_is_not_reenabled_by_the_old_cache(self):
+        for value in ("0", ""):
+            with self.subTest(value=value):
+                self.legacy_options(TASKCTL_REV="old pinned revision")
+                self.run_setup(HARNEXUS_CREW=value)
+                self.assertEqual(self.cached_options()["HARNEXUS_CREW"], value)
+                self.assertFalse((self.home / "old bin").exists())
+
+    def test_legacy_custom_sources_need_an_explicit_new_choice(self):
+        self.run_setup()
+        settings = self.home / ".claude/settings.json"
+        original = settings.read_text()
+        for overrides in (
+            {"TASKCTL_REPO": "custom repo"},
+            {"TASKCTL_REV": "1" * 40},
+            {"TASK_CLI": "legacy"},
+        ):
+            with self.subTest(overrides=overrides):
+                old = self.legacy_options(**overrides)
+                with self.assertRaises(subprocess.CalledProcessError) as raised:
+                    self.run_setup()
+                self.assertIn("HARNEXUS_CREW", raised.exception.stderr)
+                self.assertEqual((self.home / ".cache/cloud-setup/options").read_text(), old)
+                self.assertEqual(settings.read_text(), original)
+                self.assertFalse((self.home / ".cache/cloud-setup/options.pre-crew").exists())
+
+    def test_explicit_empty_new_source_options_choose_the_current_defaults(self):
+        self.legacy_options(TASKCTL_REPO="custom repo", TASKCTL_REV="old pin")
+        # Disabling installation avoids fetching the default source in this hermetic test.
+        self.run_setup(HARNEXUS_CREW="0", HARNEXUS_CREW_REPO="", HARNEXUS_CREW_REV="")
+        options = self.cached_options()
+        self.assertEqual(options["HARNEXUS_CREW_REPO"], "https://github.com/riii111/taskctl.git")
+        self.assertEqual(options["HARNEXUS_CREW_REV"], "")
+
+    def test_fresh_setup_does_not_silently_accept_the_removed_enable_name(self):
+        with self.assertRaises(subprocess.CalledProcessError) as raised:
+            self.run_setup(HARNEXUS_TASK="1")
+        self.assertIn("replace HARNEXUS_TASK=1 with HARNEXUS_CREW=1", raised.exception.stderr)
+        self.assertFalse((self.home / ".cache/cloud-setup/options").exists())
+        self.assertFalse((self.home / ".claude/settings.json").exists())
+
+    def test_a_failed_crew_upgrade_preserves_each_previous_cli_set(self):
+        self.run_setup()
+        prefix = self.home / "old bin"
+        prefix.mkdir()
+        skill = self.home / ".codex/skills/task-worker/SKILL.md"
+        config = self.home / ".config/harnexus/task.json"
+        for name in ("taskctl", "harnexus-task"):
+            with self.subTest(cli=name):
+                self.legacy_options()
+                old = prefix / name
+                old.write_text("#!/bin/sh\nexit 0\n")
+                old.chmod(0o755)
+                skill.write_text("old skills")
+                config.write_text("old config")
+
+                self.run_setup(HARNEXUS_CREW_REPO=str(self.home / "missing"))
+
+                self.assertEqual(skill.read_text(), "old skills")
+                self.assertEqual(config.read_text(), "old config")
+                self.assertEqual(old.read_text(), "#!/bin/sh\nexit 0\n")
+                self.assertFalse((prefix / "harnexus-crew").exists())
+                self.assertEqual(self.cached_options()["HARNEXUS_CREW"], "1")
+                old.unlink()
+
+    def test_a_failed_prefix_move_preserves_the_old_set_on_every_retry(self):
+        self.run_setup()
+        self.legacy_options()
+        previous = self.home / "old bin"
+        previous.mkdir()
+        (previous / "taskctl").write_text("#!/bin/sh\nexit 0\n")
+        (previous / "taskctl").chmod(0o755)
+        skill = self.home / ".codex/skills/task-worker/SKILL.md"
+        config = self.home / ".config/harnexus/task.json"
+        skill.write_text("old skills")
+        config.write_text("old config")
+
+        for _ in range(2):
+            self.run_task_setup(HARNEXUS_CREW_REPO=str(self.home / "missing"))
+            self.assertEqual(skill.read_text(), "old skills")
+            self.assertEqual(config.read_text(), "old config")
+            self.assertTrue((previous / "taskctl").exists())
 
     def test_installs_harnexus_crew(self):
         repo, rev = self.crew_repo()

@@ -28,9 +28,6 @@
 set -euo pipefail
 
 dotfiles_repo=${DOTFILES_REPO:-https://github.com/riii111/dotfiles.git}
-crew_repo=${HARNEXUS_CREW_REPO:-https://github.com/riii111/taskctl.git}
-crew_rev=${HARNEXUS_CREW_REV:-2607176991ea87b731acbbea185edd49e08d5deb}
-task_prefix=${HARNEXUS_CREW_PREFIX:-/usr/local/bin}
 
 script=${BASH_SOURCE[0]:-}
 dotfiles=${DOTFILES_DIR:-}
@@ -42,6 +39,45 @@ mkdir -p "$state"
 stage=$(mktemp -d "$state/stage.XXXXXX")
 cloned=
 trap 'rm -rf "$stage" ${cloned:+"$cloned"}' EXIT
+
+# Only the old cache schema is migrated, once. Old environment names are not aliases for new setups.
+# Scope every cached option locally so sourcing it cannot override an explicitly supplied new option.
+read_legacy_options() {
+	local HARNEXUS_TASK='' HARNEXUS_TASK_PREFIX='' TASK_CLI='' TASKCTL_REPO='' TASKCTL_REV=''
+	# shellcheck disable=SC2034 # These names may be assigned by the sourced cache.
+	local DOTFILES_REPO HARNEXUS_REPO HARNEXUS_REV HARNEXUS_CREW HARNEXUS_CREW_REPO HARNEXUS_CREW_REV HARNEXUS_CREW_PREFIX
+	# shellcheck source=/dev/null
+	. "$state/options"
+	legacy_enabled=$HARNEXUS_TASK
+	legacy_prefix=$HARNEXUS_TASK_PREFIX
+	legacy_cli=$TASK_CLI
+	legacy_repo=$TASKCTL_REPO
+	legacy_rev=$TASKCTL_REV
+}
+legacy_options=no
+if [[ -f $state/options ]] && grep -q '^export HARNEXUS_TASK=' "$state/options"; then
+	read_legacy_options
+	if [[ ${HARNEXUS_CREW-$legacy_enabled} == 1 ]]; then
+		if [[ $legacy_cli == legacy && ${HARNEXUS_CREW+x} != x ]]; then
+			echo "cloud-setup: the cache selects the legacy CLI; rerun with HARNEXUS_CREW=1 to migrate" >&2
+			exit 1
+		fi
+		if [[ -n $legacy_repo && $legacy_repo != https://github.com/riii111/taskctl.git && ${HARNEXUS_CREW_REPO+x} != x ]] ||
+			[[ -n $legacy_rev && ${HARNEXUS_CREW_REV+x} != x ]]; then
+			echo "cloud-setup: the cache pins a taskctl source; set HARNEXUS_CREW_REPO and HARNEXUS_CREW_REV explicitly (empty uses the current defaults)" >&2
+			exit 1
+		fi
+	fi
+	export HARNEXUS_CREW=${HARNEXUS_CREW-$legacy_enabled}
+	export HARNEXUS_CREW_PREFIX=${HARNEXUS_CREW_PREFIX-$legacy_prefix}
+	legacy_options=yes
+elif [[ ${HARNEXUS_TASK:-} == 1 && ${HARNEXUS_CREW+x} != x ]]; then
+	echo "cloud-setup: replace HARNEXUS_TASK=1 with HARNEXUS_CREW=1 in the Cloud setup script and rerun it" >&2
+	exit 1
+fi
+crew_repo=${HARNEXUS_CREW_REPO:-https://github.com/riii111/taskctl.git}
+crew_rev=${HARNEXUS_CREW_REV:-2607176991ea87b731acbbea185edd49e08d5deb}
+task_prefix=${HARNEXUS_CREW_PREFIX:-/usr/local/bin}
 if [[ -z $dotfiles ]]; then
 	dotfiles=$(mktemp -d)
 	cloned=$dotfiles
@@ -84,7 +120,11 @@ install -m 0755 "$own/refresh.sh" "$hooks/cloud-refresh.sh"
 	printf 'export HARNEXUS_CREW_REPO=%q\n' "$crew_repo"
 	printf 'export HARNEXUS_CREW_REV=%q\n' "${HARNEXUS_CREW_REV:-}"
 	printf 'export HARNEXUS_CREW_PREFIX=%q\n' "$task_prefix"
-} >"$state/options"
+} >"$stage/options"
+if [[ $legacy_options == yes && ! -e $state/options.pre-crew ]]; then
+	cp -p "$state/options" "$state/options.pre-crew"
+fi
+mv -f "$stage/options" "$state/options"
 python3 "$own/claude-settings.py" "$HOME/.claude/settings.json" "$hooks" "${guards[@]}"
 
 # The cloud harness adds attribution lines unless user instructions say otherwise; settings alone do not stop it.
@@ -150,8 +190,8 @@ install_crew() {
 switch_set=yes
 if [[ ${HARNEXUS_CREW:-} == 1 ]]; then
 	if ! install_crew; then
-		# Without a CLI already in place there is no set to keep, and the hooks still need the skills.
-		if [[ -x $task_prefix/harnexus-crew ]] && [[ -d $skills/task-worker ]]; then
+		# Keep an existing set until its replacement CLI validates, even when the install prefix changed.
+		if [[ -d $skills/task-worker ]]; then
 			switch_set=no
 			echo "cloud-setup: the harnexus-crew set was not installed; the previous skills, task.json and task CLI stay" >&2
 		else
