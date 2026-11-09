@@ -14,6 +14,7 @@
 | 量                       | [新規起動する件数](#新規起動する件数)に従い、枠が増えたら[追加分](#追加分と外れた仕事)を見せる                                                                                                                                                                                                                        |
 | 先に聞きたいことへの答え | [決めたことのメモ](#決めたことのメモ)に残し、その項目を[判定し直す](plan.md#着手できるか判断する)。`ready`になれば改めてOKを聞かず、`planned`（note：`launch 答え`）と`approved`（note：`答え`）を記録して、ほかのOKと同じく翌朝に起動する。`ready`にならなければ、何が足りないかを返す                               |
 | 候補にないIssueの指定    | `sources`の`repo:`と同じリポジトリのIssueだけ受ける。クエリにも`add`にも当たらなければ、担当になっていないことを伝えて始めてよいかを聞き、OKなら`discovered`で追加して[判定する](plan.md#着手できるか判断する)。`ready`なら`planned`（note：`launch 指定`）と`approved`（note：`担当外でOK`）を記録して翌朝に起動する |
+| workerのモデルの指定     | 新規起動の項目なら、未使用の`planned`のnoteに`model=<モデル> thinking=<思考量>`を足す。思考量の指定がなければ`thinking`は書かない。続行の項目には効かないことを返す                                                                                                                                                   |
 | 休み                     | 未使用の`planned`をすべて取り消しと同じに扱う。退勤時刻は記録しない                                                                                                                                                                                                                                                   |
 | 問い                     | 予定・台帳・Issue・PRから説明する。状態は変えない                                                                                                                                                                                                                                                                     |
 
@@ -120,6 +121,8 @@ OKのない`planned`は起動せず、そのまま残す。
 2. 台帳を`running`にし、`attempts`に`launch_requested`を追記してファイルへ書く。
 3. [task-session-launch](../../task-session-launch/SKILL.md)の手順3・4で`harnexus-crew launch`を実行する。
    同じprojectIdとtaskIdなら既存workerが返るため、同じkeyは同じworkerになる。
+   使った`planned`のnoteに`model=`があれば`--model`に、`thinking=`があれば`--thinking`に渡す。
+   出力のmodelが指定と違えば、手順5のモデル不一致として扱う。
 4. 出力の`threadId`を`worker_thread`に書き、`attempts`に`launched`を`threadId`付きで追記してファイルへ書く。
 5. 結果不明・モデル不一致・起動失敗は再実行しない。
    `needs_decision`にして、`next_action`にAppで確認する内容を書く。
