@@ -8,6 +8,7 @@ description: |
 # Task Review Cycle
 
 `harnexus-crew environment`が`"host":"claude"`を返す場合は、先に末尾の「Claude CodeのCloud」を読む。
+`"app":"t3"`を返す場合は、先に「T3 Code」を読む。
 
 commit済み候補をfreshなCodex reviewerへ渡し、以後は同じreview Taskで続ける。
 修正・検証・review基点・完了条件は[task-worker](../task-worker/SKILL.md)に従う。
@@ -65,6 +66,19 @@ worker checkoutでレビューし、branchやcheckoutは変更しないでくだ
 base branchが進んだことだけを理由にLGTMを保留しないでください。
 参照文書に根拠がなく、人が答えないと決まらない判断は、決めた点・選んだもの・推奨を確認事項として結果に含めてください。
 確認事項だけを理由にLGTMを保留しないでください。
+
+## T3 Code
+
+`harnexus-crew environment`が`"app":"t3"`を返す場合、reviewerはT3 Codeのスレッドで動き、次のとおり読み替える。
+
+- 依頼JSONのprojectIdは`t3_project_list`で選ぶ。
+- reviewerは[返却方法](references/reply-T3.md)に従い、`t3_thread_send`でworkerへ結果を送る。
+- 手順3は、Codexはturnを終了し、届いた結果で次turnを始める。
+  Claudeは届いた結果を使う。
+  届かなければ`t3_thread_wait`で待ち、`t3_thread_read`で最新の回答を読む。
+  timeoutMsは60000以下にする。
+- 手順2の「create_thread・send_message_to_threadを直接呼ばない」は、`t3_thread_launch`・`t3_thread_send`にも当てはまる。
+- `--thinking`と、再レビューの`--model`は渡せない。
 
 ## Claude CodeのCloud
 

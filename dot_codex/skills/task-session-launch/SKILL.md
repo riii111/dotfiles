@@ -13,6 +13,7 @@ description: |
 
 1. `list_projects`を一度呼び、repositoryに対応するprojectIdを決める。
    CodexはAppのツール、harnexus内のClaudeは`mcp__codex_link__list_projects`を使う。
+   T3 Codeでは`t3_project_list`を使う。
 2. [起動依頼JSON](references/request.md)を保存する。
 3. `harnexus-crew launch --request <JSONの絶対パス>`をサンドボックス外で一度実行する。
    Codexは`sandbox_permissions: require_escalated`を付ける。

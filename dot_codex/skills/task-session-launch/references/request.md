@@ -20,6 +20,7 @@
 - completionTarget: ユーザーが許可した到達点。
   implementationは実装・検証、draft_prはDraft PR・CI成功、mergeはマージまで。
 - projectId: list_projectsで選んだGit repositoryのprojectId。
+  T3 Codeでは`t3_project_list`で選ぶ。
 - startingBranch: 任意。
   ユーザーが開始branchを明示した場合と、[PRの積み方](stacking.md)で積むと決めた場合だけ指定する。
   省略時はprojectのdefault branchから作る。
