@@ -21,8 +21,10 @@ description: |
    パイプ・リダイレクト・`cd`などを付けず単独で実行する（付けると対象外にならない）。
    - モデルと思考量は`harnexus-crew`の既定に任せる。
      ユーザーが別モデルを指定した場合だけ`--model`・`--thinking`を渡す。
+     T3 Codeでは`--thinking`を渡さず、思考量の指定はworkerの作成後にT3 Codeで設定するようユーザーに伝える。
 4. 出力のthreadId・model・effortを報告する。
    失敗時は理由を報告して停止し、create_threadを直接呼ばない。
+   T3 Codeでは`t3_thread_launch`も直接呼ばない。
 
 同じprojectIdとtaskIdの再実行は既存workerを返し、新規作成しない。
 結果不明・モデル不一致は`harnexus-crew state --request <JSON>`で確認する。
