@@ -44,7 +44,8 @@ Issueに結び付かない依頼のkeyは`manual:<英小文字・数字・-の�
 
 openのPR（Draftを含む）ができた項目は`review_ready`にする。
 PRのないIssueに着手するほうが成果になるため、候補の優先度を最も低くする。
-workerへの続行・Appでの確認依頼・レビュー状態の検証はせず、PRのmerge・closeだけを追う。
+workerへの続行・Appでの確認依頼はせず、台帳の状態の照合ではPRのmerge・closeだけを追う。
+朝の報告の完了判定では、[朝の報告](digest.md#朝の報告)に従ってworkerの最終回答とPR・CIを確認する。
 予定での扱いは[明日の予定を作成する](plan.md#明日の予定を作成する)に従う。
 
 ### 遷移表
