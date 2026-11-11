@@ -8,6 +8,7 @@
 key: gh:org/repo#456
 source: example-epic           # 発見元の`sources[].name`。umbrellaはconfigから引く
 status: discovered             # discovered / ready / running / needs_decision / review_ready / done
+kind: implementation           # implementation（Draft PRまで）/ research（ローカルのファイルで返す調査）。省略時はimplementation
 next_action: ""                # 次にすること、または止まった位置。自分の言葉で書く
 question: ""                   # 予定で聞く問い。選択肢と推奨を付け、答えで判定し直したら空にする
 worker_thread: ""
@@ -24,6 +25,12 @@ Issueのkeyは`gh:<owner>/<repo>#<番号>`とする。
 Issueに結び付かない依頼のkeyは`manual:<英小文字・数字・-の名前>`とする（例：`manual:andon-triage-2026-10-16`）。
 ファイル名はkeyの英数字・`.`・`-`以外を`_`に置き換えたもの（例：`gh_org_repo_456.yaml`）。
 重複の判定はファイル名ではなく`key`の値で行う。
+
+## kind
+
+`kind`は、ownerが予定か報告のスレッドで[仕事の種類を指定](launch.md#okの受け取り方)したときだけ書き換える。
+Issueの内容から推測して変えない。
+同じIssueでも、調査の後に実装へ進むことがあるため。
 
 ## status
 
@@ -53,19 +60,20 @@ workerへの続行・Appでの確認依頼はせず、台帳の状態の照合�
 `done`以外の項目を照合し、表を上から当てはめて最初に当たった行に従う。
 表を当てはめる前に、`pr`が空の`running`・`needs_decision`は、Issueに紐づくPR（Developmentのリンク、本文で閉じるIssueに指定したPR）を探し、あれば`pr`に書く。
 
-| 現在                    | 条件                                                                                                   | 移る先                                                                     | 記録                     |
-| ----------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- | ------------------------ |
-| すべて                  | Issueがclose、またはPRがmergeされた                                                                    | done                                                                       | `status`                 |
-| running・review_ready   | PRがmergeされずにcloseされた                                                                           | needs_decision                                                             | `status`                 |
-| running・needs_decision | `pr`がopen                                                                                             | review_ready                                                               | `status`（noteにPR番号） |
-| running                 | `worker_thread`が空                                                                                    | 下記「起動結果の確認」                                                     | 下記                     |
-| running                 | worker_threadの最新turnが、大きな設計判断を求める最終回答で止まっている                                | needs_decision（問いを`question`に書く）                                   | `status`                 |
-| running                 | worker_threadの最新turnが、それ以外の最終回答で止まっている                                            | [続行の送信](continue.md)の理由`stopped`として早朝の実行と朝の実行で決める | なし                     |
-| running                 | 上のどれでもない（turnが進行中、CIが実行中など）                                                       | running                                                                    | なし                     |
-| review_ready            | 上のどれでもない                                                                                       | review_ready                                                               | なし                     |
-| needs_decision          | `worker_thread`の最新turnが、最後に`needs_decision`へ移した後に始まっている（人がAppで答えて再開した） | running                                                                    | `status`                 |
-| discovered              | [着手できるか判断する](plan.md#着手できるか判断する)                                                   | ready・needs_decision                                                      | `status`                 |
-| needs_decision          | [着手できるか判断する](plan.md#着手できるか判断する)の再判定条件を満たした                             | ready・needs_decision                                                      | `status`                 |
+| 現在                    | 条件                                                                                                        | 移る先                                                                            | 記録                     |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ------------------------ |
+| すべて                  | Issueがclose、またはPRがmergeされた                                                                         | done                                                                              | `status`                 |
+| running・review_ready   | PRがmergeされずにcloseされた                                                                                | needs_decision                                                                    | `status`                 |
+| running・needs_decision | `pr`がopen                                                                                                  | review_ready                                                                      | `status`（noteにPR番号） |
+| running                 | `worker_thread`が空                                                                                         | 下記「起動結果の確認」                                                            | 下記                     |
+| running                 | `kind`が`research`で、worker_threadの最新turnが調査結果のファイルのパスを報告して終わり、そのファイルがある | needs_decision（`next_action`にファイルのパスと、実装へ進むかを決めることを書く） | `status`                 |
+| running                 | worker_threadの最新turnが、大きな設計判断を求める最終回答で止まっている                                     | needs_decision（問いを`question`に書く）                                          | `status`                 |
+| running                 | worker_threadの最新turnが、それ以外の最終回答で止まっている                                                 | [続行の送信](continue.md)の理由`stopped`として早朝の実行と朝の実行で決める        | なし                     |
+| running                 | 上のどれでもない（turnが進行中、CIが実行中など）                                                            | running                                                                           | なし                     |
+| review_ready            | 上のどれでもない                                                                                            | review_ready                                                                      | なし                     |
+| needs_decision          | `worker_thread`の最新turnが、最後に`needs_decision`へ移した後に始まっている（人がAppで答えて再開した）      | running                                                                           | `status`                 |
+| discovered              | [着手できるか判断する](plan.md#着手できるか判断する)                                                        | ready・needs_decision                                                             | `status`                 |
+| needs_decision          | [着手できるか判断する](plan.md#着手できるか判断する)の再判定条件を満たした                                  | ready・needs_decision                                                             | `status`                 |
 
 `running`のturnは、`worker_thread`の最新1turnを出力なしで`read_thread`して確かめる。
 idleだけで停止と判断しない。

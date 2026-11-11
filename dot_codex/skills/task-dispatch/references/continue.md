@@ -9,6 +9,8 @@
 | resume  | `needs_decision`から再判定で`ready`になり、`worker_thread`に値がある（[起動の確認](launch.md#起動の確認)の1） | 再判定のきっかけにしたコメントのID、Issueの更新時刻、またはメモに追記した時刻 |
 
 送信履歴は`attempts`の`continue_sent`だけを使う。
+種類が変わる前の送信は、下の表の2〜4行目で数えない。
+変わる前の送信とは、最後にworkerへ伝えた種類（下の続行の書き方で決める）が今の`kind`と違う間のすべての送信と、noteに`種類=`がある最新の`continue_sent`より前の送信をいう。
 次の表を上から当てはめ、最初に当たった行に従う。
 早朝の実行は表の扱いに従う。
 朝の実行は、理由`stopped`だけを表の扱いで送る。
@@ -31,4 +33,8 @@
 `resume`を送ったら`running`にし、`status`を記録する。
 messageの先頭に`$task-worker`を置き、理由・refを自分の言葉で書く。
 [決めたことのメモ](launch.md#決めたことのメモ)があれば、その絶対パスも書く。
+最後にworkerへ伝えた種類が今の`kind`と違う項目には、今の種類の到達点も書き、`continue_sent`のnoteに`種類=<kind>`を足す。
+最後に伝えた種類は、最後の`launched`より後で最新の`種類=`（直後に送信の`failed`があるものは除く）、なければ`requests/<file>.json`の`completionTarget`（`implementation`なら調査）で決める。
+調査になった項目には[調査の進め方](../../task-worker/references/research.md)の絶対パス、実装になった項目には調査の進め方を使わず`draft_pr`まで進めることを書く。
+同じtaskIdでは`harnexus-crew`が既存workerを返し、到達点を起動し直せないため。
 回答の文面は転記せず、workerがGitHubから読む。
