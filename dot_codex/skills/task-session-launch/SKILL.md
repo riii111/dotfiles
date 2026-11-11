@@ -13,6 +13,7 @@ description: |
 
 1. `list_projects`を一度呼び、repositoryに対応するprojectIdを決める。
    CodexはAppのツール、harnexus内のClaudeは`mcp__codex_link__list_projects`を使う。
+   T3 Codeでは`t3_project_list`を使う。
 2. [起動依頼JSON](references/request.md)を保存する。
 3. `harnexus-crew launch --request <JSONの絶対パス>`をサンドボックス外で一度実行する。
    Codexは`sandbox_permissions: require_escalated`を付ける。
@@ -20,8 +21,10 @@ description: |
    パイプ・リダイレクト・`cd`などを付けず単独で実行する（付けると対象外にならない）。
    - モデルと思考量は`harnexus-crew`の既定に任せる。
      ユーザーが別モデルを指定した場合だけ`--model`・`--thinking`を渡す。
+     T3 Codeでは`--thinking`を渡さず、思考量の指定はworkerの作成後にT3 Codeで設定するようユーザーに伝える。
 4. 出力のthreadId・model・effortを報告する。
    失敗時は理由を報告して停止し、create_threadを直接呼ばない。
+   T3 Codeでは`t3_thread_launch`も直接呼ばない。
 
 同じprojectIdとtaskIdの再実行は既存workerを返し、新規作成しない。
 結果不明・モデル不一致は`harnexus-crew state --request <JSON>`で確認する。

@@ -1,6 +1,7 @@
 # 依頼JSON
 
 初回はlist_projectsでGit repositoryとisGitRepositoryを確認してprojectIdを選び、次を`.reviewctl/request.json`へ保存する。
+T3 Codeでは`t3_project_list`でprojectIdを選ぶ。
 
 ```json
 {
@@ -20,6 +21,7 @@ documentRefsは管理元を先頭に置く絶対パス・HTTPS URLの配列で�
 資料本文や補足文をJSONへ入れない。
 workerのチャットIDはharnexus-crewが`CODEX_THREAD_ID`から取得する。
 checkoutは`~/.codex/worktrees/`配下のworker worktreeに限る。
+T3 Codeでは、チャットIDを`T3CODE_THREAD_ID`から取得し、checkoutは`~/.t3/worktrees/`配下に限る。
 
 baseBranchはローカルまたはremote追跡branch名。
 初回にそのtipとcheckoutのHEADからbase/head SHAを固定する。

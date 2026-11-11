@@ -16,6 +16,7 @@ description: |
 ただし、続行の指示が調査の進め方を使わず到達点を変えると伝えた場合は、その到達点で以降の手順に従う。
 割り当てられたGit worktreeでConventionalな英語branchを作り、実装する。
 自身のTask IDはCodex・Claudeとも`CODEX_THREAD_ID`とする。
+`harnexus-crew environment`が`"app":"t3"`を返すT3 Codeでは`T3CODE_THREAD_ID`とする。
 候補をcommitする。
 `implementation`（実装・検証まで）の場合は検証結果とcommitを報告して完了する。
 `draft_pr`（Draft PR・CI成功まで）と`merge`（マージまで）の場合は[task-review-cycle](../task-review-cycle/SKILL.md)を読み、独立レビューを受ける。
