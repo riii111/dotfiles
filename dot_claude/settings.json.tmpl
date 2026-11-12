@@ -267,12 +267,15 @@
         "github.com",
         "api.github.com",
         "registry.npmjs.org",
+        "pypi.org",
+        "proxy.golang.org",
+        "results-receiver.actions.githubusercontent.com",
         "chatgpt.com"
       ],
       "allowUnixSockets": ["/nix/var/nix/daemon-socket/socket"]
     },
     "filesystem": {
-      "allowWrite": ["~/.cache/nix", "~/.codex/worktrees", "~/agent-desk/research"]
+      "allowWrite": ["~/.cache/nix", "~/.cache/uv", "~/.codex/worktrees", "~/agent-desk/research", "~/agent-desk/retro"]
     },
     "excludedCommands": [
       "cargo nextest *",
