@@ -1,3 +1,6 @@
+keybinding:
+  universal:
+    cycleDiffRenderersReverse: ['\', '¥', '<alt+¥>']
 git:
   pagers:
     # | key to toggle between side-by-side and unified view
