@@ -58,8 +58,7 @@ prefix_rule(pattern=["codex-read-lines"], decision="allow", justification="Read 
 prefix_rule(pattern=["codex-force-with-lease"], decision="allow", justification="Push the current trusted branch with an explicit remote lease")
 # pending-reviewはユーザーのPendingレビューへの保存専用で、送信・返信・resolveを実行できない。
 # サブコマンドを限定し、汎用のgh apiやGraphQLの許可には広げない。
-prefix_rule(pattern=["pending-review", "status"], decision="allow", justification="Read the user's pending review on a pull request")
-prefix_rule(pattern=["pending-review", "add"], decision="allow", justification="Save line comments into the user's own pending review without submitting it")
+prefix_rule(pattern=["pending-review"], decision="allow", justification="Save or edit line comments in the user's own pending review without submitting it")
 # harnexusはcloudだけを許可し、任意のcall socket要求を送れるcallは許可しない。
 prefix_rule(pattern=["harnexus-crew", "launch"], decision="allow", justification="Send a generated worker launch through the harnexus call socket")
 prefix_rule(pattern=["harnexus-crew", "review"], decision="allow", justification="Send a generated review request through the harnexus call socket")

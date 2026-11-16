@@ -57,8 +57,8 @@ let marker_prefix : String = "<!-- pending-review owner="
 let marker_suffix : String = " -->"
 
 ///|
-fn with_marker(body : String, owner : String, side : Side) -> String {
-  "\{body}\n\n\{marker_prefix}\{owner} side=\{side.name()}\{marker_suffix}"
+fn with_marker(body : String, owner : String, side : String) -> String {
+  "\{body}\n\n\{marker_prefix}\{owner} side=\{side}\{marker_suffix}"
 }
 
 ///|
@@ -81,6 +81,7 @@ fn split_marker(raw : String) -> (String, String?, String?) {
 
 ///|
 priv struct Comment {
+  id : String
   path : String
   line : Int32
   text : String
@@ -112,7 +113,14 @@ fn parse_comment(json : Json) -> Comment raise Failure {
     Some(line) => line
     None => json.field("originalLine").int().unwrap_or(0)
   }
-  { path: required_text(json, "path"), line, text, owner, side, }
+  {
+    id: required_text(json, "id"),
+    path: required_text(json, "path"),
+    line,
+    text,
+    owner,
+    side,
+  }
 }
 
 ///|

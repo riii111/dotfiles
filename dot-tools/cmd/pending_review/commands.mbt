@@ -102,7 +102,7 @@ fn render(
   session : Session,
   viewer : String,
   pull : Pull,
-  owner : String?,
+  owner : String,
 ) -> String {
   let target = session.target
   let lines = [
@@ -112,45 +112,18 @@ fn render(
   match pull.review {
     None => lines.push("pending review: none")
     Some(review) => {
-      let comments = review.comments
-      let yours = comments
-        .filter(comment => comment.owner is Some(_) && comment.owner == owner)
-        .length()
       lines.push("pending review: PENDING \{review.url}")
+      let mine = review.comments.filter(comment => comment.owner == Some(owner))
       lines.push(
-        "comments: \{comments.length()} in total, \{yours} saved by this owner",
+        "comments: \{review.comments.length()} in total, \{mine.length()} saved by this owner",
       )
+      for comment in mine {
+        lines.push("  \{comment.id}  \{comment.path}:\{comment.line}")
+      }
     }
   }
   lines.push("This command cannot submit the review; submit it on GitHub.")
   lines.join("\n") + "\n"
-}
-
-///|
-async fn run_status(session : Session, owner : String?) -> Report raise Failure {
-  let viewer = session.viewer()
-  let pull = session.pull(viewer)
-  { text: render(session, viewer, pull, owner), code: 0, }
-}
-
-///|
-async fn settle(
-  session : Session,
-  viewer : String,
-  message : String,
-  saved : (Pull) -> (Int32, Int32),
-) -> Report raise Failure {
-  let pull = session.pull(viewer) catch {
-    _ =>
-      raise Unverified(
-        "\{message}; the review could not be read back, so what was saved is unknown. Run status before trying again",
-      )
-  }
-  let (done, total) = saved(pull)
-  {
-    text: "failed: \{message}\n\{done} of \{total} comments are on the server. Running the same command again saves the rest without duplicating the others.\n",
-    code: 1,
-  }
 }
 
 ///|
@@ -177,9 +150,8 @@ async fn save_draft(
   draft : Draft,
   owner : String,
 ) -> Unit raise Failure {
-  let json = (session.send)(
-    AddThread(review_id, draft, with_marker(draft.body, owner, draft.side)),
-  )
+  let body = with_marker(draft.body, owner, draft.side.name())
+  let json = (session.send)(AddThread(review_id, draft, body))
   let comments = json
     .field("data")
     .field("addPullRequestReviewThread")
@@ -195,58 +167,130 @@ async fn save_draft(
 }
 
 ///|
-async fn run_add(
-  session : Session,
+fn find_comment(pull : Pull, id : String) -> Comment? {
+  comments_of(pull).iter().find_first(comment => comment.id == id)
+}
+
+///|
+fn edits_to_make(
+  pull : Pull,
   owner : String,
-  sha : String,
+  edits : Array[Edit],
+) -> Array[(Edit, String)] raise Failure {
+  let todo = []
+  for edit in edits {
+    guard find_comment(pull, edit.id) is Some(comment) &&
+      comment.owner == Some(owner) &&
+      comment.side is Some(side) else {
+      raise Refused(
+        "\{edit.id} is not a comment saved by this command for this owner",
+      )
+    }
+    if comment.text != edit.body {
+      todo.push((edit, side))
+    }
+  }
+  todo
+}
+
+///|
+fn drafts_to_save(
+  pull : Pull,
+  owner : String,
   drafts : Array[Draft],
+) -> Array[Draft] {
+  let todo : Array[Draft] = []
+  for draft in drafts {
+    let saved = comments_of(pull)
+      .iter()
+      .any(comment => is_saved(comment, owner, draft))
+    let queued = todo
+      .iter()
+      .any(other => {
+        other.path == draft.path &&
+        other.line == draft.line &&
+        other.side.name() == draft.side.name() &&
+        other.body == draft.body
+      })
+    if !saved && !queued {
+      todo.push(draft)
+    }
+  }
+  todo
+}
+
+///|
+async fn run_request(
+  session : Session,
+  request : Request,
 ) -> Report raise Failure {
+  let { sha, owner, drafts, edits, .. } = request
   let viewer = session.viewer()
   check_pull(session.pull(viewer), sha)
-  let files = session.diff()
+  let files = if drafts.is_empty() { Map([]) } else { session.diff() }
   let pull = session.pull(viewer)
   check_pull(pull, sha)
   let problems = drafts.filter_map(draft => position_problem(files, draft))
   if !problems.is_empty() {
     raise Refused(problems.join("; "))
   }
-  let existing = comments_of(pull)
-  let todo = drafts.filter(draft => {
-    !existing.iter().any(comment => is_saved(comment, owner, draft))
-  })
-  let skipped = drafts.length() - todo.length()
-  let count = (pull : Pull) => {
-    let comments = comments_of(pull)
-    let done = todo
-      .filter(draft => comments.iter().any(c => is_saved(c, owner, draft)))
-      .length()
-    (done, todo.length())
+  let new_drafts = drafts_to_save(pull, owner, drafts)
+  let new_edits = edits_to_make(pull, owner, edits)
+  let confirmed = (pull : Pull) => {
+    let saved = new_drafts.filter(draft => {
+      comments_of(pull).iter().any(comment => is_saved(comment, owner, draft))
+    })
+    let edited = new_edits.filter(item => {
+      find_comment(pull, item.0.id).map(comment => comment.text) ==
+      Some(item.0.body)
+    })
+    saved.length() + edited.length()
   }
-  if !todo.is_empty() {
+  let total = new_drafts.length() + new_edits.length()
+  let settle = async fn(message : String) -> Report raise Failure {
+    let after = session.pull(viewer) catch {
+      _ =>
+        raise Unverified(
+          "\{message}; the review could not be read back, so what was saved is unknown. Read it before trying again",
+        )
+    }
+    {
+      text: "failed: \{message}\n\{confirmed(after)} of \{total} changes are on the server. Running the same command again does the rest without duplicating the others.\n",
+      code: 1,
+    }
+  }
+  if !new_drafts.is_empty() {
     let review_id = match pull.review {
       Some(review) => review.id
       None =>
         start_review(session, pull, sha) catch {
-          Api(message) => return settle(session, viewer, message, count)
+          Api(message) => return settle(message)
           failure => raise failure
         }
     }
-    for draft in todo {
+    for draft in new_drafts {
       save_draft(session, review_id, draft, owner) catch {
-        Api(message) => return settle(session, viewer, message, count)
+        Api(message) => return settle(message)
         failure => raise failure
       }
+    }
+  }
+  for item in new_edits {
+    let body = with_marker(item.0.body, owner, item.1)
+    let _ = (session.send)(EditComment(item.0.id, body)) catch {
+      Api(message) => return settle(message)
+      failure => raise failure
     }
   }
   let after = session.pull(viewer) catch {
     _ =>
       raise Unverified(
-        "the comments were saved but the review could not be read back; run status",
+        "the changes were sent but the review could not be read back; read it again",
       )
   }
-  if count(after).0 != todo.length() {
-    raise Unverified("the saved comments are not found in the pending review")
+  if confirmed(after) != total {
+    raise Unverified("the changes are not found in the pending review")
   }
-  let head = "saved \{todo.length()} new comments, \{skipped} already saved"
-  { text: head + "\n" + render(session, viewer, after, Some(owner)), code: 0, }
+  let head = "saved \{new_drafts.length()} new, \{drafts.length() - new_drafts.length()} already saved, edited \{new_edits.length()}"
+  { text: head + "\n" + render(session, viewer, after, owner), code: 0, }
 }

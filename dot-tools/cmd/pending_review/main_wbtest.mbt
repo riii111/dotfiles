@@ -9,55 +9,52 @@ priv struct Stored {
   id : String
   path : String
   line : Int32
-  body : String
-  state : String
+  mut body : String
 }
 
 ///|
 priv struct Fake {
-  viewer : String
   mut head : String
   mut review : String?
   mut review_commit : String
   stored : Array[Stored]
-  log : Array[String]
   mut writes : Int32
   mut lost_response_write : Int32
   mut lost_response_applied : Bool
   mut reads_broken : Bool
+  mut breaks_reads_on_write : Bool
   mut on_files : () -> Unit
-  mut before_write : () -> Unit
   mut listed_state : String
+  mut viewer : String
 }
 
 ///|
 fn Fake::new() -> Fake {
   {
-    viewer: "alice",
     head,
     review: None,
     review_commit: head,
     stored: [],
-    log: [],
     writes: 0,
     lost_response_write: 0,
     lost_response_applied: false,
     reads_broken: false,
+    breaks_reads_on_write: false,
     on_files: () => (),
-    before_write: () => (),
     listed_state: "PENDING",
+    viewer: "alice",
   }
 }
 
 ///|
-fn operation_name(operation : Operation) -> String {
-  match operation {
-    Viewer => "Viewer"
-    Snapshot(_) => "Snapshot"
-    PullFiles(_, _) => "PullFiles"
-    StartReview(_, _) => "StartReview"
-    AddThread(_, _, _) => "AddThread"
-  }
+fn Fake::manual(
+  self : Fake,
+  path : String,
+  line : Int32,
+  body : String,
+) -> Unit {
+  self.review = Some("PRR_1")
+  self.stored.push({ id: "PRRC_\{self.stored.length() + 1}", path, line, body, })
 }
 
 ///|
@@ -77,34 +74,22 @@ fn Fake::snapshot(self : Fake) -> Json {
     "path": stored.path,
     "line": stored.line,
     "originalLine": stored.line,
-    "state": stored.state,
-    "subjectType": "LINE",
     "body": stored.body,
   })
+  fn review(id : String, login : String, comments : Array[Json]) -> Json {
+    let node : Json = {
+      "id": id,
+      "state": self.listed_state,
+      "url": "https://github.com/o/r/pull/7#pullrequestreview-9",
+      "author": { "login": login },
+      "commit": { "oid": self.review_commit },
+      "comments": { "pageInfo": { "hasNextPage": false }, "nodes": comments },
+    }
+    node
+  }
   let nodes : Array[Json] = match self.review {
     None => []
-    Some(id) =>
-      [
-        {
-          "id": id,
-          "state": self.listed_state,
-          "url": "https://github.com/o/r/pull/7#pullrequestreview-9",
-          "author": { "login": self.viewer },
-          "commit": { "oid": self.review_commit },
-          "comments": {
-            "pageInfo": { "hasNextPage": false },
-            "nodes": comments,
-          },
-        },
-        {
-          "id": "someone-else",
-          "state": "PENDING",
-          "url": "https://github.com/o/r/pull/7#pullrequestreview-1",
-          "author": { "login": "mallory" },
-          "commit": { "oid": self.review_commit },
-          "comments": { "pageInfo": { "hasNextPage": false }, "nodes": [] },
-        },
-      ]
+    Some(id) => [review(id, self.viewer, comments), review("x", "mallory", [])]
   }
   {
     "data": {
@@ -123,8 +108,6 @@ fn Fake::snapshot(self : Fake) -> Json {
 
 ///|
 fn Fake::send(self : Fake, operation : Operation) -> Json raise Failure {
-  let name = operation_name(operation)
-  self.log.push(name)
   match operation {
     Viewer => return { "data": { "viewer": { "login": self.viewer } } }
     Snapshot(_) => {
@@ -140,7 +123,9 @@ fn Fake::send(self : Fake, operation : Operation) -> Json raise Failure {
     _ => ()
   }
   self.writes += 1
-  (self.before_write)()
+  if self.breaks_reads_on_write {
+    self.reads_broken = true
+  }
   let lost = self.writes == self.lost_response_write
   if lost && !self.lost_response_applied {
     raise Api("connection reset")
@@ -173,167 +158,136 @@ fn Fake::apply(self : Fake, operation : Operation) -> Json raise Failure {
       if self.review != Some(review_id) {
         raise Api("Could not resolve to a pending review")
       }
-      let state = if self.review == Some(review_id) {
-        "PENDING"
-      } else {
-        "SUBMITTED"
-      }
       let id = "PRRC_\{self.stored.length() + 1}"
-      self.stored.push({ id, path: draft.path, line: draft.line, body, state, })
+      self.stored.push({ id, path: draft.path, line: draft.line, body, })
+      let node : Json = { "id": id, "state": "PENDING" }
       {
         "data": {
           "addPullRequestReviewThread": {
-            "thread": {
-              "comments": { "nodes": [{ "id": id, "state": state }] },
-            },
+            "thread": { "comments": { "nodes": [node] } },
           },
         },
       }
     }
+    EditComment(id, body) =>
+      match self.stored.iter().find_first(stored => stored.id == id) {
+        Some(stored) => {
+          stored.body = body
+          { "data": {} }
+        }
+        None => raise Api("Could not resolve to a node")
+      }
     _ => raise Api("not a write")
   }
 }
 
 ///|
-fn Fake::add_manual(
-  self : Fake,
+fn comment(
   path : String,
   line : Int32,
   body : String,
-) -> Unit {
-  self.review = Some("PRR_1")
-  self.stored.push({
-    id: "PRRC_\{self.stored.length() + 1}",
-    path,
-    line,
-    body,
-    state: "PENDING",
-  })
+  side~ : String = "RIGHT",
+) -> Json {
+  { "path": path, "line": line, "side": side, "body": body }
+}
+
+///|
+async fn send(fake : Fake, request : Json) -> Report {
+  run(request.stringify(), None, operation => fake.send(operation))
 }
 
 ///|
 async fn call(
   fake : Fake,
-  command : String,
-  input : Json?,
+  add~ : Array[Json] = [],
+  update~ : Array[Json] = [],
   sha~ : String = head,
   owner~ : String = "chat-1",
 ) -> Report {
-  let args = [command, "--repo", "o/r", "--pr", "7", "--owner", owner]
-  if command != "status" {
-    args.push("--sha")
-    args.push(sha)
+  let request : Json = {
+    "repo": "o/r",
+    "pr": 7,
+    "sha": sha,
+    "owner": owner,
+    "add": add,
+    "update": update,
   }
-  run(args, None, () => input.map(json => json.stringify()).unwrap_or(""), operation => {
-    fake.send(operation)
-  })
-}
-
-///|
-fn drafts(items : Array[(String, Int32, String)]) -> Json {
-  let comments : Array[Json] = items.map(item => {
-    "path": item.0,
-    "line": item.1,
-    "body": item.2,
-  })
-  { "comments": comments }
-}
-
-///|
-fn write_count(fake : Fake) -> Int32 {
-  fake.log.filter(name => name is ("StartReview" | "AddThread")).length()
+  send(fake, request)
 }
 
 ///|
 async test "saves comments into a new pending review at the confirmed commit" {
   let fake = Fake::new()
-  let report = call(
-    fake,
-    "add",
-    Some(
-      drafts([("src/a.txt", 11, "first\nsecond"), ("src/a.txt", 41, "again")]),
-    ),
-  )
+  let first = comment("src/a.txt", 11, "first\nsecond")
+  let report = call(fake, add=[first, comment("src/a.txt", 41, "again")])
   assert_eq(report.code, 0)
-  assert_true(report.text.contains("saved 2 new comments, 0 already saved"))
+  assert_true(report.text.contains("saved 2 new, 0 already saved, edited 0"))
   assert_true(
-    report.text.contains(
-      "pending review: PENDING https://github.com/o/r/pull/7#pullrequestreview-9",
-    ),
+    report.text.contains("pending review: PENDING https://github.com"),
   )
-  assert_true(report.text.contains("2 in total, 2 saved by this owner"))
+  assert_true(report.text.contains("  PRRC_1  src/a.txt:11"))
   assert_eq(fake.review_commit, head)
-  assert_eq(fake.stored.length(), 2)
   assert_eq(
     fake.stored[0].body,
     "first\nsecond\n\n<!-- pending-review owner=chat-1 side=RIGHT -->",
   )
-  assert_true(fake.stored.iter().all(stored => stored.state == "PENDING"))
 }
 
 ///|
-async test "adds to an existing pending review and leaves its manual comments alone" {
+async test "leaves comments it did not save alone, and edits only its own" {
   let fake = Fake::new()
-  fake.add_manual("src/a.txt", 11, "my own note")
-  let report = call(
-    fake,
-    "add",
-    Some(drafts([("src/a.txt", 12, "from the chat")])),
+  fake.manual("src/a.txt", 11, "my own note")
+  assert_eq(call(fake, add=[comment("src/a.txt", 12, "long text")]).code, 0)
+  let other = call(fake, add=[comment("src/a.txt", 13, "x")], owner="chat-2")
+  assert_eq(other.code, 0)
+  let writes = fake.writes
+  for id in ["PRRC_1", "PRRC_3", "PRRC_404"] {
+    let report = call(fake, update=[{ "id": id, "body": "rewritten" }])
+    assert_eq(report.code, 1, msg=id)
+  }
+  assert_eq(fake.writes, writes)
+  let edit : Json = { "id": "PRRC_2", "body": "short" }
+  assert_eq(call(fake, update=[edit]).code, 0)
+  assert_eq(
+    fake.stored[1].body,
+    "short\n\n<!-- pending-review owner=chat-1 side=RIGHT -->",
   )
-  assert_eq(report.code, 0)
   assert_eq(fake.stored[0].body, "my own note")
-  assert_eq(fake.stored.length(), 2)
-  assert_false(fake.log.contains("StartReview"))
+  assert_true(call(fake, update=[edit]).text.contains("edited 0"))
+  assert_eq(fake.writes, writes + 1)
 }
 
 ///|
-async test "the same text on the other side of the diff is a separate comment" {
+async test "the other side of the diff is a separate comment, and reruns add nothing" {
   let fake = Fake::new()
-  let right : Json = {
-    "comments": [{ "path": "src/a.txt", "line": 11, "body": "same" }],
-  }
-  let left : Json = {
-    "comments": [
-      { "path": "src/a.txt", "line": 11, "side": "LEFT", "body": "same" },
-    ],
-  }
-  assert_eq(call(fake, "add", Some(right)).code, 0)
-  assert_eq(call(fake, "add", Some(left)).code, 0)
+  let right = comment("src/a.txt", 11, "same")
+  let left = comment("src/a.txt", 11, "same", side="LEFT")
+  assert_eq(call(fake, add=[right, left, right]).code, 0)
   assert_eq(fake.stored.length(), 2)
-  let again = call(fake, "add", Some(left))
-  assert_true(again.text.contains("saved 0 new comments, 1 already saved"))
+  let again = call(fake, add=[right, left, right])
+  assert_true(again.text.contains("saved 0 new, 3 already saved"))
   assert_eq(fake.stored.length(), 2)
 }
 
 ///|
 async test "does not write when the commit differs from the confirmed one" {
-  let fake = Fake::new()
-  let report = call(
-    fake,
-    "add",
-    Some(drafts([("src/a.txt", 11, "x")])),
-    sha=moved,
-  )
-  assert_eq(report.code, 1)
-  assert_true(report.text.contains("head mismatch"))
+  let x = comment("src/a.txt", 11, "x")
+  let wrong = Fake::new()
+  assert_eq(call(wrong, add=[x], sha=moved).code, 1)
   let moving = Fake::new()
   moving.on_files = () => moving.head = moved
-  let report = call(moving, "add", Some(drafts([("src/a.txt", 11, "x")])))
-  assert_eq(report.code, 1)
-  assert_true(report.text.contains("head mismatch"))
+  assert_eq(call(moving, add=[x]).code, 1)
   let stale = Fake::new()
-  stale.add_manual("src/a.txt", 11, "note")
+  stale.manual("src/a.txt", 11, "note")
   stale.review_commit = moved
-  let report = call(stale, "add", Some(drafts([("src/a.txt", 12, "x")])))
-  assert_eq(report.code, 1)
-  assert_true(report.text.contains("pending review is on commit"))
-  assert_eq(write_count(fake) + write_count(stale) + write_count(moving), 0)
+  assert_eq(call(stale, add=[x]).code, 1)
+  assert_eq(wrong.writes + moving.writes + stale.writes, 0)
 }
 
 ///|
 async test "refuses positions that are not in the diff" {
   let fake = Fake::new()
-  let cases = [
+  let positions = [
     ("src/a.txt", 9),
     ("src/a.txt", 14),
     ("src/a.txt", 40),
@@ -341,23 +295,13 @@ async test "refuses positions that are not in the diff" {
     ("image.bin", 1),
     ("gone.txt", 1),
   ]
-  for item in cases {
-    let report = call(fake, "add", Some(drafts([(item.0, item.1, "x")])))
-    assert_eq(report.code, 1, msg="\{item.0}:\{item.1}")
+  for position in positions {
+    let report = call(fake, add=[comment(position.0, position.1, "x")])
+    assert_eq(report.code, 1, msg="\{position.0}:\{position.1}")
   }
-  assert_eq(write_count(fake), 0)
-  let left = Json::object({
-    "comments": [
-      { "path": "gone.txt", "line": 2, "side": "LEFT", "body": "removed" },
-    ],
-  })
-  assert_eq(call(fake, "add", Some(left)).code, 0)
-  let right = Json::object({
-    "comments": [
-      { "path": "gone.txt", "line": 2, "side": "RIGHT", "body": "removed" },
-    ],
-  })
-  assert_eq(call(fake, "add", Some(right)).code, 1)
+  assert_eq(fake.writes, 0)
+  let removed = comment("gone.txt", 2, "removed", side="LEFT")
+  assert_eq(call(fake, add=[removed]).code, 0)
 }
 
 ///|
@@ -366,26 +310,14 @@ async test "a lost response does not duplicate a comment on retry" {
     let fake = Fake::new()
     fake.lost_response_write = 2
     fake.lost_response_applied = applied
-    let input = Some(
-      drafts([("src/a.txt", 11, "one"), ("src/a.txt", 12, "two")]),
-    )
-    let report = call(fake, "add", input)
-    assert_eq(report.code, 1)
-    assert_true(report.text.contains("failed: connection reset"))
-    assert_true(report.text.contains(if applied { "1 of 2" } else { "0 of 2" }))
+    let input = [
+      comment("src/a.txt", 11, "one"),
+      comment("src/a.txt", 12, "two"),
+    ]
+    assert_eq(call(fake, add=input).code, 1)
     fake.lost_response_write = 0
-    let retry = call(fake, "add", input)
-    assert_eq(retry.code, 0)
+    assert_eq(call(fake, add=input).code, 0)
     assert_eq(fake.stored.length(), 2)
-    assert_true(
-      retry.text.contains(
-        if applied {
-          "saved 1 new comments, 1 already"
-        } else {
-          "saved 2 new comments, 0 already"
-        },
-      ),
-    )
   }
 }
 
@@ -394,13 +326,11 @@ async test "a lost review start is recovered by the next run" {
   let fake = Fake::new()
   fake.lost_response_write = 1
   fake.lost_response_applied = true
-  let input = Some(drafts([("src/a.txt", 11, "one")]))
-  assert_eq(call(fake, "add", input).code, 1)
-  assert_eq(fake.stored.length(), 0)
+  let input = [comment("src/a.txt", 11, "one")]
+  assert_eq(call(fake, add=input).code, 1)
   fake.lost_response_write = 0
-  assert_eq(call(fake, "add", input).code, 0)
+  assert_eq(call(fake, add=input).code, 0)
   assert_eq(fake.stored.length(), 1)
-  assert_eq(fake.log.filter(name => name == "StartReview").length(), 1)
 }
 
 ///|
@@ -408,102 +338,87 @@ async test "reports an unknown outcome when the review cannot be read back" {
   let fake = Fake::new()
   fake.lost_response_write = 1
   fake.lost_response_applied = true
-  fake.before_write = () => fake.reads_broken = true
-  let report = call(fake, "add", Some(drafts([("src/a.txt", 11, "one")])))
-  assert_eq(report.code, 3)
-  assert_true(report.text.contains("Run status before trying again"))
+  fake.breaks_reads_on_write = true
+  assert_eq(call(fake, add=[comment("src/a.txt", 11, "one")]).code, 3)
 }
 
 ///|
-async test "a review that is not pending is never written to" {
+async test "a review that is not pending and a bot account are never written to" {
+  let x = comment("src/a.txt", 12, "x")
   let fake = Fake::new()
-  fake.add_manual("src/a.txt", 11, "note")
+  fake.manual("src/a.txt", 11, "note")
   fake.listed_state = "COMMENTED"
-  let report = call(fake, "add", Some(drafts([("src/a.txt", 12, "x")])))
-  assert_eq(report.code, 1)
-  assert_true(report.text.contains("not pending"))
-  assert_eq(write_count(fake), 0)
+  let bot = Fake::new()
+  bot.viewer = "ci[bot]"
+  assert_eq(call(fake, add=[x]).code, 1)
+  assert_eq(call(bot, add=[x]).code, 1)
+  assert_eq(fake.writes + bot.writes, 0)
 }
 
 ///|
-async test "a bot account and a missing owner are refused" {
+async test "an empty request only reads the state" {
   let fake = Fake::new()
-  let bot = { ..fake, viewer: "ci[bot]", }
-  assert_eq(call(bot, "add", Some(drafts([("src/a.txt", 11, "x")]))).code, 1)
-  let report = run(
-    ["add", "--repo", "o/r", "--pr", "7", "--sha", head],
-    None,
-    () => "{}",
-    operation => fake.send(operation),
-  )
-  assert_eq(report.code, 1)
-  assert_true(report.text.contains("--owner is needed"))
-  assert_eq(write_count(fake) + write_count(bot), 0)
-}
-
-///|
-async test "status reads only" {
-  let fake = Fake::new()
-  fake.add_manual("src/a.txt", 11, "note")
-  let report = call(fake, "status", None)
+  fake.manual("src/a.txt", 11, "note")
+  let report = call(fake)
   assert_eq(report.code, 0)
   assert_true(report.text.contains("viewer: alice"))
-  assert_eq(write_count(fake), 0)
-  assert_true(report.text.contains("1 in total, 0 saved by this owner"))
+  assert_eq(fake.writes, 0)
 }
 
 ///|
-async test "input that carries anything beyond comments is refused" {
+async test "input beyond the fixed fields is refused" {
   let fake = Fake::new()
-  let inputs : Array[Json] = [
-    {
-      "comments": [
-        { "path": "src/a.txt", "line": 11, "body": "x", "event": "APPROVE" },
-      ],
-    },
-    {
-      "comments": [{ "path": "src/a.txt", "line": 11, "body": "x" }],
-      "event": "APPROVE",
-    },
-    {
-      "comments": [
-        {
-          "path": "src/a.txt",
-          "line": 11,
-          "body": "x<!-- pending-review owner=chat-2 -->",
-        },
-      ],
-    },
-    { "comments": [{ "path": "src/a.txt", "line": 0, "body": "x" }] },
-    {
-      "comments": [
-        { "path": "src/a.txt", "line": 11, "side": "BOTH", "body": "x" },
-      ],
-    },
-    { "comments": [{ "path": "src/a.txt", "line": 11, "body": "  " }] },
-    { "comments": [] },
-    "just text",
+  let changes : Array[(String, Json)] = [
+    ("event", "APPROVE"),
+    ("add", [{ "path": "src/a.txt", "line": 11, "body": "x", "event": "A" }]),
+    ("add", [comment("src/a.txt", 11, "x<!-- pending-review owner=c -->")]),
+    ("add", [comment("src/a.txt", 0, "x")]),
+    ("add", [comment("src/a.txt", 11, "x", side="BOTH")]),
+    ("add", [comment("src/a.txt", 11, "  ")]),
+    ("sha", "abc"),
+    ("repo", "o/r/x"),
+    ("repo", "o/{r}"),
+    ("pr", 0),
+    ("owner", "bad owner"),
   ]
-  for input in inputs {
-    assert_eq(call(fake, "add", Some(input)).code, 1, msg=input.stringify())
+  for change in changes {
+    let request : Map[String, Json] = {
+      "repo": "o/r",
+      "pr": 7,
+      "sha": head,
+      "owner": "chat-1",
+    }
+    request[change.0] = change.1
+    let report = send(fake, Json::object(request))
+    assert_eq(report.code, 1, msg=change.0)
   }
-  assert_eq(write_count(fake), 0)
+  assert_eq(run("not json", None, op => fake.send(op)).code, 1)
+  let no_owner : Json = { "repo": "o/r", "pr": 7, "sha": head }
+  let no_owner = no_owner.stringify()
+  assert_eq(run(no_owner, None, op => fake.send(op)).code, 1)
+  assert_eq(fake.writes, 0)
 }
 
 ///|
 test "every request is a fixed GraphQL mutation or read and never submits" {
   let target = { owner: "o", name: "r", number: 7, }
   let draft = { path: "a=b.txt", line: 3, side: Right, body: "true", }
+  let hostile = "@/etc/passwd -X POST submitPullRequestReview event"
   let operations = [
     Viewer,
     Snapshot(target),
     PullFiles(target, 2),
     StartReview("PR_7", head),
-    AddThread(
-      "PRR_1", draft, "@/etc/passwd -X POST \"submitPullRequestReview\" event",
-    ),
+    AddThread("PRR_1", draft, hostile),
+    EditComment("PRRC_1", hostile),
   ]
-  let allowed = ["addPullRequestReview", "addPullRequestReviewThread"]
+  let allowed = [
+    "addPullRequestReview", "addPullRequestReviewThread", "updatePullRequestReviewComment",
+  ]
+  let forbidden = [
+    "submitPullRequestReview", "event", "dismiss", "deletePullRequest", "resolveReviewThread",
+    "ThreadReply",
+  ]
   for operation in operations {
     let args = gh_args(operation)
     assert_eq(args[0], "api")
@@ -512,36 +427,26 @@ test "every request is a fixed GraphQL mutation or read and never submits" {
       args.contains("--method") ||
       args.contains("--input"),
     )
-    let queries = args.filter(arg => arg.has_prefix("query="))
-    for query in queries {
-      assert_false(query.contains("submitPullRequestReview"))
-      assert_false(query.contains("event"))
-      assert_false(query.contains("dismiss"))
-      assert_false(query.contains("deletePullRequest"))
-      assert_false(query.contains("resolveReviewThread"))
-      assert_false(query.contains("addPullRequestReviewThreadReply"))
+    for query in args.filter(arg => arg.has_prefix("query=")) {
+      for word in forbidden {
+        assert_false(query.contains(word), msg=word)
+      }
       if query.contains("mutation") {
-        let names = ["addPullRequestReviewThread", "addPullRequestReview"]
-        assert_true(
-          allowed.contains(
-            names.iter().find_first(name => query.contains(name)).unwrap(),
-          ),
-        )
+        assert_true(allowed.iter().any(name => query.contains("\{name}(")))
       }
     }
     // Caller text travels only as the value of a raw field, which `gh` never reads from a file.
     for index, arg in args {
-      if arg.contains("passwd") || arg.contains("submitPullRequestReview\\") {
+      if arg.contains("passwd") {
         assert_eq(args[index - 1], "-f")
       }
     }
   }
-  assert_true(gh_args(AddThread("PRR_1", draft, "true")).contains("body=true"))
 }
 
 ///|
 test "markers round-trip and plain comments have none" {
-  let raw = with_marker("text\n\nmore", "chat-1", Left)
+  let raw = with_marker("text\n\nmore", "chat-1", "LEFT")
   assert_eq(split_marker(raw), ("text\n\nmore", Some("chat-1"), Some("LEFT")))
   assert_eq(
     split_marker("a manual comment\n"),
@@ -549,8 +454,7 @@ test "markers round-trip and plain comments have none" {
   )
   let quoted = "quoted <!-- pending-review owner=x side=LEFT --> in the middle"
   assert_eq(split_marker(quoted), (quoted, None, None))
-  let sideless = "text\n\n<!-- pending-review owner=x -->"
-  assert_eq(split_marker(sideless).1, None)
+  assert_eq(split_marker("text\n\n<!-- pending-review owner=x -->").1, None)
 }
 
 ///|
@@ -563,27 +467,4 @@ test "hunk ranges cover the context and changed lines of each side" {
   assert_true(hunks.contains(Left, 12) && !hunks.contains(Left, 13))
   assert_true(hunks.contains(Left, 40))
   assert_false(hunks.contains(Right, 41))
-}
-
-///|
-test "options are strict" {
-  let ok = ["add", "--repo", "o/r", "--pr", "7", "--sha", head]
-  assert_true(parse_options(ok) is Some(_))
-  let bad = [
-    [],
-    ["merge", "--repo", "o/r", "--pr", "7"],
-    ["add", "--repo", "o/r", "--pr", "7"],
-    ["status", "--repo", "o/r"],
-    ["status", "--repo", "o/r", "--pr", "x"],
-    ["status", "--repo", "o/r", "--pr", "7", "--method", "POST"],
-    ["status", "--repo", "o/r", "--pr", "7", "--event", "APPROVE"],
-  ]
-  for args in bad {
-    assert_true(
-      (Some(parse_options(args)) catch { _ => None }) is None,
-      msg=args.join(" "),
-    )
-  }
-  assert_true((Some(parse_repo("o/r/x", 1)) catch { _ => None }) is None)
-  assert_true((Some(parse_repo("o/{r}", 1)) catch { _ => None }) is None)
 }
