@@ -69,6 +69,7 @@ async test "authors are ranked by their commits to the paths, without the user a
   change(repository, "app/b.txt", author="Carol")
   change(repository, "app/b.txt", author="Self")
   change(repository, "app/a.txt", author="dependabot[bot]")
+  change(repository, "app/a.txt", author="Noreply")
   for _ in 0..<5 {
     change(repository, "docs/c.txt", author="Dave")
   }
@@ -168,12 +169,49 @@ test "a terminal aligns wide names and scales the bars to the top author" {
     (
       #|app · since 1 year ago · 3 people
       #|
-      #|  Alice  ████████████  4  2 weeks ago   alice@example.com
-      #|  山田   ██████        2  7 months ago  yamada@example.com
+      #|  Alice  ━━━━━━━━━━━━  4 commits  2 weeks ago   alice@example.com
+      #|  山田   ━━━━━━──────  2 commits  7 months ago  yamada@example.com
+      #|
       #|
     ),
   )
   assert_eq(described(["app", "docs", "e2e"]), "app and 2 more paths")
+}
+
+///|
+test "a terminal leaves out the bars when every count is the same" {
+  let authors : Array[Author] = [
+    {
+      name: "Alice",
+      email: "alice@example.com",
+      last: "2026-11-15",
+      ago: "1 day ago",
+      commits: 1,
+    },
+    {
+      name: "Bob",
+      email: "bob@example.com",
+      last: "2026-04-28",
+      ago: "7 months ago",
+      commits: 1,
+    },
+  ]
+  assert_eq(
+    view(
+      authors,
+      "app",
+      "since 1 year ago · 2 people",
+      Palette::new(color=false),
+    ),
+    (
+      #|app · since 1 year ago · 2 people
+      #|
+      #|  Alice  1 commit  1 day ago     alice@example.com
+      #|  Bob    1 commit  7 months ago  bob@example.com
+      #|
+      #|
+    ),
+  )
 }
 
 ///|

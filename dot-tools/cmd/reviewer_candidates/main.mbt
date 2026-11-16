@@ -241,7 +241,7 @@ priv struct Author {
 }
 
 ///|
-/// Counts the commits of each author in `log`, leaving out `me` and bots, most commits first.
+/// Counts the commits of each author in `log`, leaving out `me`, bots and `noreply@` addresses, most commits first.
 fn rank(log : String, me : String?) -> Array[Author] {
   let me = me.map(email => email.to_lower())
   let authors : Map[String, Author] = Map([])
@@ -251,7 +251,8 @@ fn rank(log : String, me : String?) -> Array[Author] {
     }
     let name = name.to_owned()
     let key = email.to_owned().to_lower()
-    if Some(key) == me || name.has_suffix("[bot]") {
+    // AI agents such as Claude author commits as `noreply@` addresses, and they cannot review.
+    if Some(key) == me || name.has_suffix("[bot]") || key.has_prefix("noreply@") {
       continue
     }
     match authors.get(key) {
@@ -310,34 +311,55 @@ fn view(
   palette : Palette,
 ) -> String {
   let most = authors[0].commits
+  // Equal counts draw equal bars that tell nothing, so bars appear only when the counts differ.
+  let bars = authors.iter().any(author => author.commits != most)
+  let count_width = most.to_string().length()
+  let labels = authors.map(author => commits_label(author.commits, count_width))
   let mut name_width = 0
+  let mut label_width = 0
   let mut ago_width = 0
-  for author in authors {
+  for i, author in authors {
     name_width = name_width.max(@text.visible_width(author.name))
+    label_width = label_width.max(labels[i].length())
     ago_width = ago_width.max(@text.visible_width(author.ago))
   }
-  let count_width = most.to_string().length()
   let output = StringBuilder()
   output.write_string(
     "\{palette.bold}\{target}\{palette.reset}\{palette.dim} · \{details}\{palette.reset}\n\n",
   )
-  for author in authors {
-    let commits = author.commits.to_string()
-    // Every author shown has committed, so even the smallest share keeps one block.
-    let bar = ((author.commits * bar_width + most / 2) / most).max(1)
+  for i, author in authors {
     output.write_string("  \{palette.bold}\{author.name}\{palette.reset}")
     pad(output, name_width - @text.visible_width(author.name) + 2)
-    output.write_string(palette.accent)
-    for _ in 0..<bar {
-      output.write_char('█')
+    if bars {
+      // Every author shown has committed, so even the smallest share keeps one segment.
+      let filled = ((author.commits * bar_width + most / 2) / most).max(1)
+      output.write_string(palette.accent)
+      for _ in 0..<filled {
+        output.write_char('━')
+      }
+      output.write_string("\{palette.reset}\{palette.dim}")
+      for _ in filled..<bar_width {
+        output.write_char('─')
+      }
+      output.write_string(palette.reset)
+      pad(output, 2)
     }
-    output.write_string(palette.reset)
-    pad(output, bar_width - bar + 2 + count_width - commits.length())
-    output.write_string("\{commits}  \{author.ago}")
+    output.write_string(labels[i])
+    pad(output, label_width - labels[i].length() + 2)
+    output.write_string(author.ago)
     pad(output, ago_width - @text.visible_width(author.ago) + 2)
     output.write_string("\{palette.dim}\{author.email}\{palette.reset}\n")
   }
+  output.write_char('\n')
   output.to_string()
+}
+
+///|
+fn commits_label(commits : Int32, count_width : Int32) -> String {
+  let label = StringBuilder()
+  pad(label, count_width - commits.to_string().length())
+  label.write_string(count(commits, "commit", "commits"))
+  label.to_string()
 }
 
 ///|
