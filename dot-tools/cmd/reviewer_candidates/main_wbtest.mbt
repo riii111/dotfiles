@@ -55,7 +55,7 @@ async fn init_repository(root : String) -> String {
 ///|
 async fn report(cwd : String, args : Array[String]) -> String {
   guard parse_options(args) is Some(options) else { fail("help was parsed") }
-  candidates({ cwd: Some(cwd), }, options)
+  candidates({ cwd: Some(cwd), }, options, Table)
 }
 
 ///|
@@ -138,6 +138,42 @@ async test "without paths, the files the branch changed are looked at from any d
   }
   assert_eq(failure, "no files changed from topic; pass the paths to look at")
   @fs.rmdir(root, recursive=true)
+}
+
+///|
+test "a terminal aligns wide names and scales the bars to the top author" {
+  let authors : Array[Author] = [
+    {
+      name: "Alice",
+      email: "alice@example.com",
+      last: "2026-11-02",
+      ago: "2 weeks ago",
+      commits: 4,
+    },
+    {
+      name: "山田",
+      email: "yamada@example.com",
+      last: "2026-04-28",
+      ago: "7 months ago",
+      commits: 2,
+    },
+  ]
+  assert_eq(
+    view(
+      authors,
+      "app",
+      "since 1 year ago · 3 people",
+      Palette::new(color=false),
+    ),
+    (
+      #|app · since 1 year ago · 3 people
+      #|
+      #|  Alice  ████████████  4  2 weeks ago   alice@example.com
+      #|  山田   ██████        2  7 months ago  yamada@example.com
+      #|
+    ),
+  )
+  assert_eq(described(["app", "docs", "e2e"]), "app and 2 more paths")
 }
 
 ///|

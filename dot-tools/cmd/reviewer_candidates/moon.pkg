@@ -5,6 +5,7 @@ import {
   "moonbitlang/async",
   "moonbitlang/async/process",
   "moonbitlang/async/stdio",
+  "riii111/dot-tools/text",
 }
 
 import {
