@@ -16,6 +16,8 @@ pub fn split_lines(String) -> Array[String]
 
 pub fn strip(StringView) -> String
 
+pub fn visible_width(String) -> Int32
+
 pub fn word_at(String, String, from? : Int32) -> Int32?
 
 // Errors
