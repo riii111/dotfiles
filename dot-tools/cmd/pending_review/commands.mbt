@@ -159,7 +159,7 @@ async fn settle(
   viewer : String,
   message : String,
   saved : (Pull) -> (Int32, Int32),
-  target : Ref[String?],
+  target : String?,
 ) -> Report raise Failure {
   let pull = session.pull(viewer) catch {
     _ =>
@@ -167,7 +167,7 @@ async fn settle(
         "\{message}; the review could not be read back, so what was saved is unknown. Run status before trying again",
       )
   }
-  if target.val is Some(id) && pull.review.map(review => review.id) != Some(id) {
+  if target is Some(id) && pull.review.map(review => review.id) != Some(id) {
     raise NotPending(
       "\{message}; the pending review is gone or replaced, so the comments saved before may have been published. Check the pull request on GitHub now and do not run this again",
     )
@@ -241,7 +241,7 @@ async fn run_add(
     !existing.iter().any(comment => is_saved(comment, owner, draft))
   })
   let skipped = drafts.length() - todo.length()
-  let target = Ref(pull.review.map(review => review.id))
+  let mut target = pull.review.map(review => review.id)
   let count = (pull : Pull) => {
     let comments = comments_of(pull)
     let done = todo
@@ -250,8 +250,8 @@ async fn run_add(
     (done, todo.length())
   }
   if !todo.is_empty() {
-    if target.val is None {
-      target.val = Some(
+    if target is None {
+      target = Some(
         start_review(session, pull, sha) catch {
           Api(message) => return settle(session, viewer, message, count, target)
           failure => raise failure
@@ -259,7 +259,7 @@ async fn run_add(
       )
     }
     for draft in todo {
-      save_draft(session, target.val.unwrap(), draft, owner) catch {
+      save_draft(session, target.unwrap(), draft, owner) catch {
         Api(message) => return settle(session, viewer, message, count, target)
         failure => raise failure
       }
@@ -271,7 +271,7 @@ async fn run_add(
         "the comments were saved but the review could not be read back; run status",
       )
   }
-  let replaced = target.val is Some(id) &&
+  let replaced = target is Some(id) &&
     after.review.map(review => review.id) != Some(id)
   if replaced ||
     (!todo.is_empty() && after.review is None) ||

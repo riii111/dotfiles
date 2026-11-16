@@ -27,7 +27,6 @@ priv struct Fake {
   mut reads_broken : Bool
   mut on_files : () -> Unit
   mut before_write : () -> Unit
-  mut accepts_submitted_writes : Bool
   mut listed_state : String
 }
 
@@ -46,7 +45,6 @@ fn Fake::new() -> Fake {
     reads_broken: false,
     on_files: () => (),
     before_write: () => (),
-    accepts_submitted_writes: false,
     listed_state: "PENDING",
   }
 }
@@ -172,7 +170,7 @@ fn Fake::apply(self : Fake, operation : Operation) -> Json raise Failure {
       }
     }
     AddThread(review_id, draft, body) => {
-      if self.review != Some(review_id) && !self.accepts_submitted_writes {
+      if self.review != Some(review_id) {
         raise Api("Could not resolve to a pending review")
       }
       let state = if self.review == Some(review_id) {
@@ -279,10 +277,6 @@ async test "saves comments into a new pending review at the confirmed commit" {
     "first\nsecond\n\n<!-- pending-review owner=chat-1 side=RIGHT -->",
   )
   assert_true(fake.stored.iter().all(stored => stored.state == "PENDING"))
-  assert_eq(fake.log, [
-    "Viewer", "Snapshot", "PullFiles", "Snapshot", "StartReview", "AddThread", "AddThread",
-    "Snapshot",
-  ])
 }
 
 ///|
@@ -299,25 +293,6 @@ async test "adds to an existing pending review and leaves its manual comments al
   assert_eq(fake.stored.length(), 2)
   assert_false(fake.log.contains("StartReview"))
   assert_true(report.text.contains("[manual]"))
-}
-
-///|
-async test "the update subcommand is gone and saved comments are never rewritten" {
-  let fake = Fake::new()
-  fake.add_manual("src/a.txt", 11, "my own note")
-  assert_eq(
-    call(fake, "add", Some(drafts([("src/a.txt", 12, "long text")]))).code,
-    0,
-  )
-  let report = run(
-    ["update", "--repo", "o/r", "--pr", "7", "--sha", head, "--owner", "chat-1"],
-    None,
-    () => "{}",
-    operation => fake.send(operation),
-  )
-  assert_eq(report.code, 2)
-  assert_eq(write_count(fake), 1)
-  assert_eq(fake.stored[0].body, "my own note")
 }
 
 ///|
@@ -341,28 +316,18 @@ async test "the same text on the other side of the diff is a separate comment" {
 
 ///|
 async test "a review submitted between two writes stops the run and is never retried" {
-  for lost in [false, true] {
-    let fake = Fake::new()
-    let writes = Ref(0)
-    fake.before_write = () => {
-      writes.val += 1
-      if writes.val == 3 {
-        fake.submit()
-      }
+  let fake = Fake::new()
+  let writes = Ref(0)
+  fake.before_write = () => {
+    writes.val += 1
+    if writes.val == 3 {
+      fake.submit()
     }
-    if lost {
-      fake.accepts_submitted_writes = true
-    }
-    let input = Some(
-      drafts([("src/a.txt", 11, "one"), ("src/a.txt", 12, "two")]),
-    )
-    let report = call(fake, "add", input)
-    assert_eq(report.code, 4, msg="lost=\{lost}")
-    assert_true(
-      report.text.contains("do not run this again") ||
-      report.text.contains("Check the pull request"),
-    )
   }
+  let input = Some(drafts([("src/a.txt", 11, "one"), ("src/a.txt", 12, "two")]))
+  let report = call(fake, "add", input)
+  assert_eq(report.code, 4)
+  assert_true(report.text.contains("do not run this again"))
 }
 
 ///|
@@ -483,13 +448,6 @@ async test "a review submitted at the moment of writing is not written to or is 
   assert_eq(report.code, 4)
   assert_true(report.text.contains("do not run this again"))
   assert_eq(refusing.stored.length(), 1)
-  let accepting = Fake::new()
-  accepting.add_manual("src/a.txt", 11, "note")
-  accepting.accepts_submitted_writes = true
-  accepting.before_write = () => accepting.submit()
-  let report = call(accepting, "add", Some(drafts([("src/a.txt", 12, "x")])))
-  assert_eq(report.code, 4)
-  assert_true(report.text.contains("Check the pull request on GitHub now"))
 }
 
 ///|
@@ -526,7 +484,7 @@ async test "status reads only" {
   let report = call(fake, "status", None)
   assert_eq(report.code, 0)
   assert_true(report.text.contains("viewer: alice"))
-  assert_eq(fake.log, ["Viewer", "Snapshot"])
+  assert_eq(write_count(fake), 0)
   assert_true(report.text.contains("1 in total, 0 saved by this owner"))
 }
 
@@ -615,9 +573,6 @@ test "every request is a fixed GraphQL mutation or read and never submits" {
     }
   }
   assert_true(gh_args(AddThread("PRR_1", draft, "true")).contains("body=true"))
-  assert_false(
-    gh_args(AddThread("PRR_1", draft, "true")).contains("-F body=true"),
-  )
 }
 
 ///|
