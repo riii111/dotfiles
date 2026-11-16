@@ -112,6 +112,7 @@ Scheduled Taskの作業ディレクトリは`~/agent-desk/`とし、gitでは管
 2. [起動の手順](references/launch.md#起動の手順)を行う。
    退勤時刻の返事がなかった日は、先に[返事がなかった日](references/launch.md#返事がなかった日)の承認を記録する。
 3. 状態の照合で確かめた続行の理由を、[既存workerへの続行](references/continue.md)に従って送る。
+4. 自分のスレッドのIDを[スレッドの扱い](references/schedule.md#スレッドの扱い)に従って記録する。
 
 ### GitHubと台帳の状態を合わせる
 
@@ -137,7 +138,7 @@ Scheduled Taskの作業ディレクトリは`~/agent-desk/`とし、gitでは管
 その回の手順を終え、記録を書き、`.lock/`を消した時点で1回の実行（返事への対応は1turn）を終える。
 lockは`rm ~/agent-desk/.lock/started_at`と`rmdir ~/agent-desk/.lock`を別々に、`~`を展開した絶対パスで実行して消す。
 無人でも承認されるのはこの形だけとする。
-予定のスレッドは、[次の朝の実行](references/schedule.md#スレッドの扱い)がアーカイブする。
+予定と早朝の実行のスレッドは、[次の朝の実行](references/schedule.md#スレッドの扱い)がアーカイブする。
 途中で止まる場合も、書けた範囲の記録とlockの削除を済ませる。
 
 ## 安全上の制約

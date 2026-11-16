@@ -6,7 +6,7 @@
 
 朝の実行は、報告を書く前に前日以前の分を片付ける。
 
-1. 前日以前の`days/<日付>.yaml`に残っているScheduled Taskを`automation_update`で消し、予定のスレッドをアーカイブして、どちらも空にする。
+1. 前日以前の`days/<日付>.yaml`に残っているScheduled Taskの削除と、予定・早朝の実行のスレッドのアーカイブを、1つの[補助のスレッド](#scheduled-taskの扱い)にまとめて頼み、済んだものを空にする。
 2. 使われていない`planned`（追加分を含む）をすべて`plan_cancelled`（note：持ち越し）で閉じる。
    OKのないまま早朝の実行を過ぎた項目は始めず、次の予定に載せ直す。
    有効なOKは残るため、次の予定で聞き直さない。
@@ -34,6 +34,7 @@ Calendarを使うかは`config.yaml`の`calendar.enabled`で決める。
 leave_at: "17:30"     # 退勤予定。休みはoff、返事待ちは空
 plan_task: ""         # 予定作成の実行のScheduled TaskのID
 plan_thread: ""       # 予定のスレッドのID
+launch_thread: ""     # 早朝の実行のスレッドのID
 no_reply: false       # 退勤時刻を聞いたが、予定作成の実行の時点で返事がなかった日はtrue
 amount: ""            # 量について言われた内容を短く。なければ空
 ```
@@ -60,11 +61,12 @@ amount: ""            # 量について言われた内容を短く。なけれ�
 
 ### Scheduled Taskの扱い
 
-Claudeのスレッドの`automation_update`は、毎回新しいスレッドを作るScheduled Taskを扱えない。
-そのため作成・更新・削除は、`create_thread`で`model`を省略して（Appの既定のCodexモデルで）補助のスレッドを作り、頼む。
+Claudeのスレッドの`automation_update`は、毎回新しいスレッドを作るScheduled Taskを扱えず、スレッドをアーカイブするツール（`set_thread_archived`）も持たない。
+そのためScheduled Taskの作成・更新・削除とスレッドのアーカイブは、`create_thread`で`model`を省略して（Appの既定のCodexモデルで）補助のスレッドを作り、頼む。
 補助のスレッドの作業ディレクトリと、作るScheduled Taskの作業ディレクトリは`~/agent-desk/`にする。
-頼むときは、操作・ID・時刻・モデル・指示を書き、`automation_update`で行ってIDと結果だけを返すよう伝える。
+頼むときは、操作・ID・時刻・モデル・指示を書き、`automation_update`か`set_thread_archived`で行ってIDと結果だけを返すよう伝える。
 `wait_threads`で完了を待ち、`read_thread`で結果を確かめる。
+補助のスレッドは自分をアーカイブするとそのturnが中断されて回答が残らないため、結果を確かめた後に`send_message_to_thread`で自分をアーカイブするよう頼み、完了は待たない。
 結果が分からなければ、作成の結果が分からないときと同じに扱う。
 予定作成の実行は、登録元のモデルによらず`model: claude-opus-5-5`で作る。
 時刻を更新するときも、モデルは変えない。
@@ -83,3 +85,5 @@ Claudeのスレッドの`automation_update`は、毎回新しいスレッドを�
 
 予定のスレッドは、自分のスレッドのID（`CODEX_THREAD_ID`）を`plan_thread`に書き、ユーザーの返事を待つ。
 起動は早朝の実行が行うため、予定のスレッドは自分ではアーカイブせず、次の朝の実行が[前日以前の後始末](#前日以前の後始末)でアーカイブする。
+早朝の実行は、自分のスレッドのIDを`launch_thread`に書く。
+結果は朝の報告で伝えるため、早朝の実行のスレッドも同じ後始末でアーカイブする。
