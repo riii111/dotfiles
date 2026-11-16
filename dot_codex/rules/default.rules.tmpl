@@ -69,6 +69,7 @@ prefix_rule(pattern=["harnexus", "cloud"], decision="allow", justification="Open
 prefix_rule(pattern=["pr-wake", "watch", "link"], decision="allow", justification="Link a PR to the calling chat for the PR watch")
 prefix_rule(pattern=["pr-wake", "watch", "sender"], decision="allow", justification="Register the calling chat as the PR watch's sender")
 prefix_rule(pattern=["pr-wake", "watch", "status"], decision="allow", justification="Show what the PR watch is doing")
+prefix_rule(pattern=["pr-wake", "review", "link"], decision="allow", justification="Link the calling review chat to a PR for its re-requests")
 
 # 名前で許可したwrapperは、絶対パス指定時にインストール先だけを照合する。
 host_executable(name="gh-loupe", paths=["{{ .chezmoi.homeDir }}/.cargo/bin/gh-loupe"])
