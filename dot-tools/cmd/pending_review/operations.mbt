@@ -56,7 +56,7 @@ let snapshot_query : String =
   #|          commit { oid }
   #|          comments(first: 100) {
   #|            pageInfo { hasNextPage }
-  #|            nodes { id path line originalLine body }
+  #|            nodes { path line originalLine body }
   #|          }
   #|        }
   #|      }

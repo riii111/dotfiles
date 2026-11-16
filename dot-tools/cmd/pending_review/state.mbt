@@ -3,7 +3,6 @@ priv suberror Failure {
   Refused(String)
   Api(String)
   Unverified(String)
-  NotPending(String)
 }
 
 ///|
@@ -82,7 +81,6 @@ fn split_marker(raw : String) -> (String, String?, String?) {
 
 ///|
 priv struct Comment {
-  id : String
   path : String
   line : Int32
   text : String
@@ -114,14 +112,7 @@ fn parse_comment(json : Json) -> Comment raise Failure {
     Some(line) => line
     None => json.field("originalLine").int().unwrap_or(0)
   }
-  {
-    id: required_text(json, "id"),
-    path: required_text(json, "path"),
-    line,
-    text,
-    owner,
-    side,
-  }
+  { path: required_text(json, "path"), line, text, owner, side, }
 }
 
 ///|

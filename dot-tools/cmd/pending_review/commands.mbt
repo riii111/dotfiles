@@ -98,16 +98,6 @@ fn preview(text : String) -> String {
 }
 
 ///|
-fn describe(comment : Comment, owner : String?) -> String {
-  let label = match comment.owner {
-    Some(name) if Some(name) == owner => "yours"
-    Some(name) => "owner \{name}"
-    None => "manual"
-  }
-  "  \{comment.id}  \{comment.path}:\{comment.line}  [\{label}]  \{preview(comment.text)}"
-}
-
-///|
 fn render(
   session : Session,
   viewer : String,
@@ -130,9 +120,6 @@ fn render(
       lines.push(
         "comments: \{comments.length()} in total, \{yours} saved by this owner",
       )
-      for comment in comments {
-        lines.push(describe(comment, owner))
-      }
     }
   }
   lines.push("This command cannot submit the review; submit it on GitHub.")
@@ -147,30 +134,17 @@ async fn run_status(session : Session, owner : String?) -> Report raise Failure 
 }
 
 ///|
-fn not_pending(what : String) -> Failure {
-  NotPending(
-    "\{what}; the review may have been submitted. Check the pull request on GitHub now",
-  )
-}
-
-///|
 async fn settle(
   session : Session,
   viewer : String,
   message : String,
   saved : (Pull) -> (Int32, Int32),
-  target : String?,
 ) -> Report raise Failure {
   let pull = session.pull(viewer) catch {
     _ =>
       raise Unverified(
         "\{message}; the review could not be read back, so what was saved is unknown. Run status before trying again",
       )
-  }
-  if target is Some(id) && pull.review.map(review => review.id) != Some(id) {
-    raise NotPending(
-      "\{message}; the pending review is gone or replaced, so the comments saved before may have been published. Check the pull request on GitHub now and do not run this again",
-    )
   }
   let (done, total) = saved(pull)
   {
@@ -191,7 +165,7 @@ async fn start_review(
     .field("addPullRequestReview")
     .field("pullRequestReview")
   if review.field("state").text() != Some("PENDING") {
-    raise not_pending("GitHub did not report the new review as pending")
+    raise Unverified("GitHub did not report the new review as pending")
   }
   required_text(review, "id")
 }
@@ -216,7 +190,7 @@ async fn save_draft(
   if comments
     .iter()
     .any(comment => comment.field("state").text() != Some("PENDING")) {
-    raise not_pending("GitHub did not report a saved comment as pending")
+    raise Unverified("GitHub did not report a saved comment as pending")
   }
 }
 
@@ -241,7 +215,6 @@ async fn run_add(
     !existing.iter().any(comment => is_saved(comment, owner, draft))
   })
   let skipped = drafts.length() - todo.length()
-  let mut target = pull.review.map(review => review.id)
   let count = (pull : Pull) => {
     let comments = comments_of(pull)
     let done = todo
@@ -250,17 +223,17 @@ async fn run_add(
     (done, todo.length())
   }
   if !todo.is_empty() {
-    if target is None {
-      target = Some(
+    let review_id = match pull.review {
+      Some(review) => review.id
+      None =>
         start_review(session, pull, sha) catch {
-          Api(message) => return settle(session, viewer, message, count, target)
+          Api(message) => return settle(session, viewer, message, count)
           failure => raise failure
-        },
-      )
+        }
     }
     for draft in todo {
-      save_draft(session, target.unwrap(), draft, owner) catch {
-        Api(message) => return settle(session, viewer, message, count, target)
+      save_draft(session, review_id, draft, owner) catch {
+        Api(message) => return settle(session, viewer, message, count)
         failure => raise failure
       }
     }
@@ -271,12 +244,8 @@ async fn run_add(
         "the comments were saved but the review could not be read back; run status",
       )
   }
-  let replaced = target is Some(id) &&
-    after.review.map(review => review.id) != Some(id)
-  if replaced ||
-    (!todo.is_empty() && after.review is None) ||
-    count(after).0 != todo.length() {
-    raise not_pending("the saved comments are not found in the pending review")
+  if count(after).0 != todo.length() {
+    raise Unverified("the saved comments are not found in the pending review")
   }
   let head = "saved \{todo.length()} new comments, \{skipped} already saved"
   { text: head + "\n" + render(session, viewer, after, Some(owner)), code: 0, }

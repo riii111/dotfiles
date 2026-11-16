@@ -10,7 +10,7 @@ priv struct Stored {
   path : String
   line : Int32
   body : String
-  mut state : String
+  state : String
 }
 
 ///|
@@ -195,14 +195,6 @@ fn Fake::apply(self : Fake, operation : Operation) -> Json raise Failure {
 }
 
 ///|
-fn Fake::submit(self : Fake) -> Unit {
-  for stored in self.stored {
-    stored.state = "SUBMITTED"
-  }
-  self.review = None
-}
-
-///|
 fn Fake::add_manual(
   self : Fake,
   path : String,
@@ -292,7 +284,6 @@ async test "adds to an existing pending review and leaves its manual comments al
   assert_eq(fake.stored[0].body, "my own note")
   assert_eq(fake.stored.length(), 2)
   assert_false(fake.log.contains("StartReview"))
-  assert_true(report.text.contains("[manual]"))
 }
 
 ///|
@@ -312,22 +303,6 @@ async test "the same text on the other side of the diff is a separate comment" {
   let again = call(fake, "add", Some(left))
   assert_true(again.text.contains("saved 0 new comments, 1 already saved"))
   assert_eq(fake.stored.length(), 2)
-}
-
-///|
-async test "a review submitted between two writes stops the run and is never retried" {
-  let fake = Fake::new()
-  let writes = Ref(0)
-  fake.before_write = () => {
-    writes.val += 1
-    if writes.val == 3 {
-      fake.submit()
-    }
-  }
-  let input = Some(drafts([("src/a.txt", 11, "one"), ("src/a.txt", 12, "two")]))
-  let report = call(fake, "add", input)
-  assert_eq(report.code, 4)
-  assert_true(report.text.contains("do not run this again"))
 }
 
 ///|
@@ -437,17 +412,6 @@ async test "reports an unknown outcome when the review cannot be read back" {
   let report = call(fake, "add", Some(drafts([("src/a.txt", 11, "one")])))
   assert_eq(report.code, 3)
   assert_true(report.text.contains("Run status before trying again"))
-}
-
-///|
-async test "a review submitted at the moment of writing is not written to or is reported" {
-  let refusing = Fake::new()
-  refusing.add_manual("src/a.txt", 11, "note")
-  refusing.before_write = () => refusing.submit()
-  let report = call(refusing, "add", Some(drafts([("src/a.txt", 12, "x")])))
-  assert_eq(report.code, 4)
-  assert_true(report.text.contains("do not run this again"))
-  assert_eq(refusing.stored.length(), 1)
 }
 
 ///|

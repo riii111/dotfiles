@@ -152,8 +152,6 @@ async fn run(
     Refused(message) => return { text: "refused: \{message}\n", code: 1, }
     Api(message) => return { text: "failed: \{message}\n", code: 1, }
     Unverified(message) => return { text: "unverified: \{message}\n", code: 3, }
-    NotPending(message) =>
-      return { text: "not pending: \{message}\n", code: 4, }
   }
   outcome
 }
