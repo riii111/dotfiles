@@ -1,0 +1,7 @@
+interface:
+  display_name: "review-draft"
+  short_description: "会話で調整した指摘を、本人のGitHub Pendingレビューへ行コメントの下書きとして保存する"
+  default_prompt: "$review-draft を使って、ここまでに採用した指摘を自然なコメントにして、このPRの私のPendingレビューへ保存してください。"
+
+policy:
+  allow_implicit_invocation: false

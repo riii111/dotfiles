@@ -35,6 +35,27 @@ test "allows reads and unrelated commands" {
 }
 
 ///|
+test "denies the review mutations that the pending-review command wraps, and allows the command itself" {
+  let denied = [
+    "gh api graphql -f 'query=mutation { addPullRequestReviewThread(input: {}) { thread { id } } }'",
+    "gh api graphql -f 'query=mutation { updatePullRequestReviewComment(input: {}) { clientMutationId } }'",
+    "gh api graphql -f 'query=mutation { addPullRequestReview(input: {}) { clientMutationId } }'",
+    "gh api graphql -f 'query=mutation { submitPullRequestReview(input: {}) { clientMutationId } }'",
+  ]
+  for command in denied {
+    assert_true(@github_comment.is_comment_request(bash(command)), msg=command)
+  }
+  // The command saves only into the user's pending review and cannot submit it, so it is the one exception.
+  let allowed = [
+    "pending-review status --repo a/b --pr 1", "pending-review add --repo a/b --pr 1 --sha abc <<'JSON'\n{\"comments\":[]}\nJSON",
+    "~/.nix-profile/bin/pending-review update --repo a/b --pr 1 --sha abc --owner x",
+  ]
+  for command in allowed {
+    assert_false(@github_comment.is_comment_request(bash(command)), msg=command)
+  }
+}
+
+///|
 test "denies the comment tools of the Codex connector and the GitHub MCP server" {
   let denied = [
     "mcp__github__add_issue_comment", "mcp__github__add_comment_to_pending_review",

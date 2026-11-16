@@ -83,6 +83,7 @@ stdenv.mkDerivation {
     install -Dm755 _build/native/release/build/cmd/claude_statusline/claude_statusline.exe "$out/bin/claude-statusline"
     install -Dm755 _build/native/release/build/cmd/git_tree/git_tree.exe "$out/bin/git-tree"
     install -Dm755 _build/native/release/build/cmd/reviewer_candidates/reviewer_candidates.exe "$out/bin/reviewer-candidates"
+    install -Dm755 _build/native/release/build/cmd/pending_review/pending_review.exe "$out/bin/pending-review"
     runHook postInstall
   '';
 
