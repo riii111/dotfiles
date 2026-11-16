@@ -5,10 +5,9 @@ extern "C" fn exit(code : Int32) = "exit"
 let usage : String =
   #|usage: pending-review status --repo OWNER/REPO --pr N [--owner ID]
   #|       pending-review add    --repo OWNER/REPO --pr N --sha SHA [--owner ID] < comments.json
-  #|       pending-review update --repo OWNER/REPO --pr N --sha SHA [--owner ID] < edits.json
   #|
-  #|add reads {"comments": [{"path", "line", "side"?, "body"}]} and update reads {"comments": [{"id", "body"}]} from stdin.
-  #|The owner defaults to $CODEX_THREAD_ID; only comments saved with the same owner are edited.
+  #|add reads {"comments": [{"path", "line", "side"?, "body"}]} from stdin.
+  #|The owner defaults to $CODEX_THREAD_ID and tells apart the comments saved by each chat.
   #|
 
 ///|
@@ -32,7 +31,6 @@ async fn main {
 priv enum Command {
   Status
   Add
-  Update
 }
 
 ///|
@@ -56,7 +54,6 @@ fn parse_options(args : Array[String]) -> Options? raise Usage {
     "-h" | "--help" => return None
     "status" => Status
     "add" => Add
-    "update" => Update
     _ => raise Usage("unknown subcommand \{name}")
   }
   let mut repo = None
@@ -85,7 +82,7 @@ fn parse_options(args : Array[String]) -> Options? raise Usage {
   }
   guard repo is Some(repo) else { raise Usage("--repo is needed") }
   guard pr is Some(pr) else { raise Usage("--pr is needed") }
-  if command is (Add | Update) && sha is None {
+  if command is Add && sha is None {
     raise Usage("--sha, the commit the review was made on, is needed")
   }
   Some({ command, repo, pr, sha, owner, })
@@ -173,7 +170,7 @@ async fn execute(
   }
   match options.command {
     Status => run_status(session, owner)
-    Add | Update => {
+    Add => {
       guard owner is Some(owner) else {
         raise Refused("--owner is needed when CODEX_THREAD_ID is not set")
       }
@@ -183,10 +180,7 @@ async fn execute(
       let input = @json.parse(read_input()) catch {
         _ => raise Refused("the input is not JSON")
       }
-      match options.command {
-        Add => run_add(session, owner, sha, parse_drafts(input))
-        _ => run_edit(session, owner, sha, parse_edits(input))
-      }
+      run_add(session, owner, sha, parse_drafts(input))
     }
   }
 }

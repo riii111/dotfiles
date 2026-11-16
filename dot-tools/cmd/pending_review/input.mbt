@@ -5,24 +5,18 @@ let max_comments : Int32 = 30
 let max_body_length : Int32 = 60000
 
 ///|
-priv struct Edit {
-  id : String
-  body : String
-}
-
-///|
 fn unknown_keys(json : Json, allowed : Array[String]) -> String? {
   guard json is Object(fields) else { return None }
   fields.keys().find_first(key => !allowed.contains(key))
 }
 
 ///|
-fn entries(json : Json, what : String) -> Array[Json] raise Failure {
+fn entries(json : Json) -> Array[Json] raise Failure {
   if unknown_keys(json, ["comments"]) is Some(key) {
     raise Refused("unknown input key \{key}")
   }
   guard json.field("comments") is Array(items) else {
-    raise Refused("the input needs a \"comments\" array of \{what}")
+    raise Refused("the input needs a \"comments\" array")
   }
   if items.is_empty() || items.length() > max_comments {
     raise Refused("the input needs 1 to \{max_comments} comments")
@@ -51,7 +45,7 @@ fn comment_body(entry : Json) -> String raise Failure {
 ///|
 fn parse_drafts(json : Json) -> Array[Draft] raise Failure {
   let drafts : Array[Draft] = []
-  for entry in entries(json, "{path, line, side, body}") {
+  for entry in entries(json) {
     if unknown_keys(entry, ["path", "line", "side", "body"]) is Some(key) {
       raise Refused("unknown comment key \{key}")
     }
@@ -84,23 +78,4 @@ fn parse_drafts(json : Json) -> Array[Draft] raise Failure {
 ///|
 fn same_position(a : Draft, b : Draft) -> Bool {
   a.path == b.path && a.line == b.line && a.side.name() == b.side.name()
-}
-
-///|
-fn parse_edits(json : Json) -> Array[Edit] raise Failure {
-  let edits : Array[Edit] = []
-  for entry in entries(json, "{id, body}") {
-    if unknown_keys(entry, ["id", "body"]) is Some(key) {
-      raise Refused("unknown comment key \{key}")
-    }
-    let id = match entry.field("id").text() {
-      Some(id) if !id.is_empty() => id
-      _ => raise Refused("every edit needs a comment id")
-    }
-    if edits.iter().any(other => other.id == id) {
-      raise Refused("the comment \{id} appears twice")
-    }
-    edits.push({ id, body: comment_body(entry), })
-  }
-  edits
 }

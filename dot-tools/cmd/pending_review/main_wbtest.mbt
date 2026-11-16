@@ -9,7 +9,7 @@ priv struct Stored {
   id : String
   path : String
   line : Int32
-  mut body : String
+  body : String
   mut state : String
 }
 
@@ -59,7 +59,6 @@ fn operation_name(operation : Operation) -> String {
     PullFiles(_, _) => "PullFiles"
     StartReview(_, _) => "StartReview"
     AddThread(_, _, _) => "AddThread"
-    EditComment(_, _) => "EditComment"
   }
 }
 
@@ -193,20 +192,6 @@ fn Fake::apply(self : Fake, operation : Operation) -> Json raise Failure {
         },
       }
     }
-    EditComment(id, body) =>
-      match self.stored.iter().find_first(stored => stored.id == id) {
-        Some(stored) => {
-          stored.body = body
-          {
-            "data": {
-              "updatePullRequestReviewComment": {
-                "pullRequestReviewComment": { "id": id, "state": stored.state },
-              },
-            },
-          }
-        }
-        None => raise Api("Could not resolve to a node")
-      }
     _ => raise Api("not a write")
   }
 }
@@ -265,19 +250,8 @@ fn drafts(items : Array[(String, Int32, String)]) -> Json {
 }
 
 ///|
-fn edits(items : Array[(String, String)]) -> Json {
-  let comments : Array[Json] = items.map(item => {
-    "id": item.0,
-    "body": item.1,
-  })
-  { "comments": comments }
-}
-
-///|
 fn write_count(fake : Fake) -> Int32 {
-  fake.log
-  .filter(name => name is ("StartReview" | "AddThread" | "EditComment"))
-  .length()
+  fake.log.filter(name => name is ("StartReview" | "AddThread")).length()
 }
 
 ///|
@@ -302,7 +276,7 @@ async test "saves comments into a new pending review at the confirmed commit" {
   assert_eq(fake.stored.length(), 2)
   assert_eq(
     fake.stored[0].body,
-    "first\nsecond\n\n<!-- pending-review owner=chat-1 -->",
+    "first\nsecond\n\n<!-- pending-review owner=chat-1 side=RIGHT -->",
   )
   assert_true(fake.stored.iter().all(stored => stored.state == "PENDING"))
   assert_eq(fake.log, [
@@ -328,41 +302,67 @@ async test "adds to an existing pending review and leaves its manual comments al
 }
 
 ///|
-async test "edits only the comments saved for the same owner" {
+async test "the update subcommand is gone and saved comments are never rewritten" {
   let fake = Fake::new()
   fake.add_manual("src/a.txt", 11, "my own note")
   assert_eq(
     call(fake, "add", Some(drafts([("src/a.txt", 12, "long text")]))).code,
     0,
   )
-  assert_eq(
-    call(
-      fake,
-      "add",
-      Some(drafts([("src/a.txt", 13, "other")])),
-      owner="chat-2",
-    ).code,
-    0,
+  let report = run(
+    ["update", "--repo", "o/r", "--pr", "7", "--sha", head, "--owner", "chat-1"],
+    None,
+    () => "{}",
+    operation => fake.send(operation),
   )
-  let writes = write_count(fake)
-  for id in ["PRRC_1", "PRRC_3", "PRRC_404"] {
-    let report = call(fake, "update", Some(edits([(id, "rewritten")])))
-    assert_eq(report.code, 1, msg=id)
-    assert_true(report.text.contains("refused:"), msg=id)
-  }
-  assert_eq(write_count(fake), writes)
+  assert_eq(report.code, 2)
+  assert_eq(write_count(fake), 1)
   assert_eq(fake.stored[0].body, "my own note")
-  let report = call(fake, "update", Some(edits([("PRRC_2", "short")])))
-  assert_eq(report.code, 0)
-  assert_true(report.text.contains("edited 1 comments, 0 unchanged"))
-  assert_eq(
-    fake.stored[1].body,
-    "short\n\n<!-- pending-review owner=chat-1 -->",
-  )
-  let before = write_count(fake)
-  let again = call(fake, "update", Some(edits([("PRRC_2", "short")])))
-  assert_true(again.text.contains("edited 0 comments, 1 unchanged"))
-  assert_eq(write_count(fake), before)
+}
+
+///|
+async test "the same text on the other side of the diff is a separate comment" {
+  let fake = Fake::new()
+  let right : Json = {
+    "comments": [{ "path": "src/a.txt", "line": 11, "body": "same" }],
+  }
+  let left : Json = {
+    "comments": [
+      { "path": "src/a.txt", "line": 11, "side": "LEFT", "body": "same" },
+    ],
+  }
+  assert_eq(call(fake, "add", Some(right)).code, 0)
+  assert_eq(call(fake, "add", Some(left)).code, 0)
+  assert_eq(fake.stored.length(), 2)
+  let again = call(fake, "add", Some(left))
+  assert_true(again.text.contains("saved 0 new comments, 1 already saved"))
+  assert_eq(fake.stored.length(), 2)
+}
+
+///|
+async test "a review submitted between two writes stops the run and is never retried" {
+  for lost in [false, true] {
+    let fake = Fake::new()
+    let writes = Ref(0)
+    fake.before_write = () => {
+      writes.val += 1
+      if writes.val == 3 {
+        fake.submit()
+      }
+    }
+    if lost {
+      fake.accepts_submitted_writes = true
+    }
+    let input = Some(
+      drafts([("src/a.txt", 11, "one"), ("src/a.txt", 12, "two")]),
+    )
+    let report = call(fake, "add", input)
+    assert_eq(report.code, 4, msg="lost=\{lost}")
+    assert_true(
+      report.text.contains("do not run this again") ||
+      report.text.contains("Check the pull request"),
+    )
+  }
 }
 
 ///|
@@ -388,9 +388,6 @@ async test "does not write when the commit differs from the confirmed one" {
   assert_eq(report.code, 1)
   assert_true(report.text.contains("pending review is on commit"))
   assert_eq(write_count(fake) + write_count(stale) + write_count(moving), 0)
-  let report = call(stale, "update", Some(edits([("PRRC_1", "x")])))
-  assert_eq(report.code, 1)
-  assert_eq(write_count(stale), 0)
 }
 
 ///|
@@ -483,7 +480,8 @@ async test "a review submitted at the moment of writing is not written to or is 
   refusing.add_manual("src/a.txt", 11, "note")
   refusing.before_write = () => refusing.submit()
   let report = call(refusing, "add", Some(drafts([("src/a.txt", 12, "x")])))
-  assert_eq(report.code, 1)
+  assert_eq(report.code, 4)
+  assert_true(report.text.contains("do not run this again"))
   assert_eq(refusing.stored.length(), 1)
   let accepting = Fake::new()
   accepting.add_manual("src/a.txt", 11, "note")
@@ -579,12 +577,11 @@ test "every request is a fixed GraphQL mutation or read and never submits" {
     Snapshot(target),
     PullFiles(target, 2),
     StartReview("PR_7", head),
-    AddThread("PRR_1", draft, "-X POST \"submitPullRequestReview\" event"),
-    EditComment("PRRC_1", "@/etc/passwd"),
+    AddThread(
+      "PRR_1", draft, "@/etc/passwd -X POST \"submitPullRequestReview\" event",
+    ),
   ]
-  let allowed = [
-    "addPullRequestReview", "addPullRequestReviewThread", "updatePullRequestReviewComment",
-  ]
+  let allowed = ["addPullRequestReview", "addPullRequestReviewThread"]
   for operation in operations {
     let args = gh_args(operation)
     assert_eq(args[0], "api")
@@ -602,9 +599,7 @@ test "every request is a fixed GraphQL mutation or read and never submits" {
       assert_false(query.contains("resolveReviewThread"))
       assert_false(query.contains("addPullRequestReviewThreadReply"))
       if query.contains("mutation") {
-        let names = [
-          "addPullRequestReviewThread", "updatePullRequestReviewComment", "addPullRequestReview",
-        ]
+        let names = ["addPullRequestReviewThread", "addPullRequestReview"]
         assert_true(
           allowed.contains(
             names.iter().find_first(name => query.contains(name)).unwrap(),
@@ -627,13 +622,16 @@ test "every request is a fixed GraphQL mutation or read and never submits" {
 
 ///|
 test "markers round-trip and plain comments have none" {
-  let raw = with_marker("text\n\nmore", "chat-1")
-  assert_eq(split_marker(raw), ("text\n\nmore", Some("chat-1")))
-  assert_eq(split_marker("a manual comment\n"), ("a manual comment", None))
+  let raw = with_marker("text\n\nmore", "chat-1", Left)
+  assert_eq(split_marker(raw), ("text\n\nmore", Some("chat-1"), Some("LEFT")))
   assert_eq(
-    split_marker("quoted <!-- pending-review owner=x --> in the middle"),
-    ("quoted <!-- pending-review owner=x --> in the middle", None),
+    split_marker("a manual comment\n"),
+    ("a manual comment", None, None),
   )
+  let quoted = "quoted <!-- pending-review owner=x side=LEFT --> in the middle"
+  assert_eq(split_marker(quoted), (quoted, None, None))
+  let sideless = "text\n\n<!-- pending-review owner=x -->"
+  assert_eq(split_marker(sideless).1, None)
 }
 
 ///|

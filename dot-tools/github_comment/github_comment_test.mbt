@@ -48,7 +48,7 @@ test "denies the review mutations that the pending-review command wraps, and all
   // The command saves only into the user's pending review and cannot submit it, so it is the one exception.
   let allowed = [
     "pending-review status --repo a/b --pr 1", "pending-review add --repo a/b --pr 1 --sha abc <<'JSON'\n{\"comments\":[]}\nJSON",
-    "~/.nix-profile/bin/pending-review update --repo a/b --pr 1 --sha abc --owner x",
+    "~/.nix-profile/bin/pending-review status --repo a/b --pr 1 --owner x",
   ]
   for command in allowed {
     assert_false(@github_comment.is_comment_request(bash(command)), msg=command)

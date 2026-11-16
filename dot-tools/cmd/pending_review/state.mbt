@@ -58,21 +58,26 @@ let marker_prefix : String = "<!-- pending-review owner="
 let marker_suffix : String = " -->"
 
 ///|
-fn with_marker(body : String, owner : String) -> String {
-  "\{body}\n\n\{marker_prefix}\{owner}\{marker_suffix}"
+fn with_marker(body : String, owner : String, side : Side) -> String {
+  "\{body}\n\n\{marker_prefix}\{owner} side=\{side.name()}\{marker_suffix}"
 }
 
 ///|
-fn split_marker(raw : String) -> (String, String?) {
+fn split_marker(raw : String) -> (String, String?, String?) {
+  let plain = (raw.trim().to_owned(), None, None)
   guard raw.has_suffix(marker_suffix) &&
     raw.rev_find(marker_prefix) is Some(start) else {
-    return (raw.trim().to_owned(), None)
+    return plain
   }
-  let owner_start = start + marker_prefix.length()
-  let owner_end = raw.length() - marker_suffix.length()
-  guard owner_start <= owner_end else { return (raw.trim().to_owned(), None) }
-  let owner = raw[owner_start:owner_end].to_owned()
-  (raw[:start].trim().to_owned(), Some(owner))
+  let inner_start = start + marker_prefix.length()
+  let inner_end = raw.length() - marker_suffix.length()
+  guard inner_start <= inner_end else { return plain }
+  guard raw[inner_start:inner_end].to_owned().split(" side=").collect()
+    is [owner, side] &&
+    (side.to_owned() == "LEFT" || side.to_owned() == "RIGHT") else {
+    return plain
+  }
+  (raw[:start].trim().to_owned(), Some(owner.to_owned()), Some(side.to_owned()))
 }
 
 ///|
@@ -80,10 +85,9 @@ priv struct Comment {
   id : String
   path : String
   line : Int32
-  state : String
-  subject : String
   text : String
   owner : String?
+  side : String?
 }
 
 ///|
@@ -105,7 +109,7 @@ priv struct Pull {
 
 ///|
 fn parse_comment(json : Json) -> Comment raise Failure {
-  let (text, owner) = split_marker(required_text(json, "body"))
+  let (text, owner, side) = split_marker(required_text(json, "body"))
   let line = match json.field("line").int() {
     Some(line) => line
     None => json.field("originalLine").int().unwrap_or(0)
@@ -114,10 +118,9 @@ fn parse_comment(json : Json) -> Comment raise Failure {
     id: required_text(json, "id"),
     path: required_text(json, "path"),
     line,
-    state: required_text(json, "state"),
-    subject: required_text(json, "subjectType"),
     text,
     owner,
+    side,
   }
 }
 

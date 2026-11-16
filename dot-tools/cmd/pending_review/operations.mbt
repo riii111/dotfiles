@@ -35,7 +35,6 @@ priv enum Operation {
   PullFiles(Target, Int32)
   StartReview(String, String)
   AddThread(String, Draft, String)
-  EditComment(String, String)
 }
 
 ///|
@@ -57,7 +56,7 @@ let snapshot_query : String =
   #|          commit { oid }
   #|          comments(first: 100) {
   #|            pageInfo { hasNextPage }
-  #|            nodes { id path line originalLine state subjectType body }
+  #|            nodes { id path line originalLine body }
   #|          }
   #|        }
   #|      }
@@ -81,14 +80,6 @@ let add_thread_query : String =
   #|    pullRequestReviewId: $review, path: $path, line: $line, side: $side, body: $body, subjectType: LINE
   #|  }) {
   #|    thread { comments(first: 1) { nodes { id state } } }
-  #|  }
-  #|}
-
-///|
-let edit_comment_query : String =
-  #|mutation($comment: ID!, $body: String!) {
-  #|  updatePullRequestReviewComment(input: { pullRequestReviewCommentId: $comment, body: $body }) {
-  #|    pullRequestReviewComment { id state }
   #|  }
   #|}
 
@@ -139,7 +130,5 @@ fn gh_args(operation : Operation) -> Array[String] {
         ],
         [("line", draft.line)],
       )
-    EditComment(comment_id, body) =>
-      graphql(edit_comment_query, [("comment", comment_id), ("body", body)], [])
   }
 }

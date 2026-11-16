@@ -74,6 +74,7 @@ fn check_pull(pull : Pull, sha : String) -> Unit raise Failure {
 ///|
 fn is_saved(comment : Comment, owner : String, draft : Draft) -> Bool {
   comment.owner == Some(owner) &&
+  comment.side == Some(draft.side.name()) &&
   comment.path == draft.path &&
   comment.line == draft.line &&
   comment.text == draft.body
@@ -158,12 +159,18 @@ async fn settle(
   viewer : String,
   message : String,
   saved : (Pull) -> (Int32, Int32),
+  target : Ref[String?],
 ) -> Report raise Failure {
   let pull = session.pull(viewer) catch {
     _ =>
       raise Unverified(
         "\{message}; the review could not be read back, so what was saved is unknown. Run status before trying again",
       )
+  }
+  if target.val is Some(id) && pull.review.map(review => review.id) != Some(id) {
+    raise NotPending(
+      "\{message}; the pending review is gone or replaced, so the comments saved before may have been published. Check the pull request on GitHub now and do not run this again",
+    )
   }
   let (done, total) = saved(pull)
   {
@@ -197,7 +204,7 @@ async fn save_draft(
   owner : String,
 ) -> Unit raise Failure {
   let json = (session.send)(
-    AddThread(review_id, draft, with_marker(draft.body, owner)),
+    AddThread(review_id, draft, with_marker(draft.body, owner, draft.side)),
   )
   let comments = json
     .field("data")
@@ -234,6 +241,7 @@ async fn run_add(
     !existing.iter().any(comment => is_saved(comment, owner, draft))
   })
   let skipped = drafts.length() - todo.length()
+  let target = Ref(pull.review.map(review => review.id))
   let count = (pull : Pull) => {
     let comments = comments_of(pull)
     let done = todo
@@ -242,17 +250,17 @@ async fn run_add(
     (done, todo.length())
   }
   if !todo.is_empty() {
-    let review_id = match pull.review {
-      Some(review) => review.id
-      None =>
+    if target.val is None {
+      target.val = Some(
         start_review(session, pull, sha) catch {
-          Api(message) => return settle(session, viewer, message, count)
+          Api(message) => return settle(session, viewer, message, count, target)
           failure => raise failure
-        }
+        },
+      )
     }
     for draft in todo {
-      save_draft(session, review_id, draft, owner) catch {
-        Api(message) => return settle(session, viewer, message, count)
+      save_draft(session, target.val.unwrap(), draft, owner) catch {
+        Api(message) => return settle(session, viewer, message, count, target)
         failure => raise failure
       }
     }
@@ -263,73 +271,13 @@ async fn run_add(
         "the comments were saved but the review could not be read back; run status",
       )
   }
-  if after.review is None || count(after).0 != todo.length() {
-    raise not_pending("the saved comments are not found in a pending review")
+  let replaced = target.val is Some(id) &&
+    after.review.map(review => review.id) != Some(id)
+  if replaced ||
+    (!todo.is_empty() && after.review is None) ||
+    count(after).0 != todo.length() {
+    raise not_pending("the saved comments are not found in the pending review")
   }
   let head = "saved \{todo.length()} new comments, \{skipped} already saved"
-  { text: head + "\n" + render(session, viewer, after, Some(owner)), code: 0, }
-}
-
-///|
-async fn run_edit(
-  session : Session,
-  owner : String,
-  sha : String,
-  edits : Array[Edit],
-) -> Report raise Failure {
-  let viewer = session.viewer()
-  let pull = session.pull(viewer)
-  check_pull(pull, sha)
-  let comments = comments_of(pull)
-  if pull.review is None {
-    raise Refused("\{viewer} has no pending review on this pull request")
-  }
-  let problems = []
-  for edit in edits {
-    match comments.iter().find_first(comment => comment.id == edit.id) {
-      None => problems.push("\{edit.id} is not in the pending review")
-      Some(comment) =>
-        if comment.owner != Some(owner) {
-          problems.push(
-            "\{edit.id} was not saved by this command for this owner, so it is left alone",
-          )
-        } else if comment.state != "PENDING" || comment.subject != "LINE" {
-          problems.push("\{edit.id} is not a pending line comment")
-        }
-    }
-  }
-  if !problems.is_empty() {
-    raise Refused(problems.join("; "))
-  }
-  let todo = edits.filter(edit => {
-    comments
-    .iter()
-    .any(comment => comment.id == edit.id && comment.text != edit.body)
-  })
-  let count = (pull : Pull) => {
-    let comments = comments_of(pull)
-    let done = todo
-      .filter(edit => {
-        comments.iter().any(c => c.id == edit.id && c.text == edit.body)
-      })
-      .length()
-    (done, todo.length())
-  }
-  for edit in todo {
-    let _ = (session.send)(EditComment(edit.id, with_marker(edit.body, owner))) catch {
-      Api(message) => return settle(session, viewer, message, count)
-      failure => raise failure
-    }
-  }
-  let after = session.pull(viewer) catch {
-    _ =>
-      raise Unverified(
-        "the comments were edited but the review could not be read back; run status",
-      )
-  }
-  if after.review is None || count(after).0 != todo.length() {
-    raise not_pending("the edited comments are not found in a pending review")
-  }
-  let head = "edited \{todo.length()} comments, \{edits.length() - todo.length()} unchanged"
   { text: head + "\n" + render(session, viewer, after, Some(owner)), code: 0, }
 }
