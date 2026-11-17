@@ -15,7 +15,9 @@ description: |
 - リポジトリの指示を読む。
 - 無関係なworktree変更を保持する。
 - Git状態を変更する前に、source ref・target ref・merge base・各tipを記録する。
-- 明示的な依頼なしに`git reset --hard`、`git checkout --`、force-pushを使わない。
+- 明示的な依頼なしに`git reset --hard`、`git checkout --`を使わない。
+- 強制pushには`--force-with-lease`を使い、`--force`は使わない。
+  競合解消からpushまで依頼されている場合は、再確認せず実行する。
 - 競合を解消する依頼では、作業ツリーの競合マーカーを解消してstageする。
   コミットはユーザーの依頼またはリポジトリの通常フローに従う。
 - 動作確認が対象なら、静的検査の後にリポジトリ標準のbuild/testを実行する。
