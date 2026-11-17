@@ -14,7 +14,7 @@ priv struct Edit {
 priv struct Request {
   target : Target
   sha : String
-  owner : String
+  owner : String?
   drafts : Array[Draft]
   edits : Array[Edit]
 }
@@ -76,6 +76,27 @@ fn comment_body(entry : Json) -> String raise Failure {
 }
 
 ///|
+let levels : Array[String] = [
+  "[must]", "[should]", "[imo]", "[nits]", "[suggest]", "[Q]",
+]
+
+///|
+fn has_level(body : String) -> Bool {
+  levels
+  .iter()
+  .any(level => body.has_prefix(level + " ") || body.has_prefix(level + "\n"))
+}
+
+///|
+fn check_level(body : String) -> Unit raise Failure {
+  if !has_level(body) {
+    raise Refused(
+      "a comment saved by this command starts with one of \{levels.join(", ")} and a space",
+    )
+  }
+}
+
+///|
 fn parse_draft(entry : Json) -> Draft raise Failure {
   check_keys(entry, ["path", "line", "side", "body"])
   let path = match entry.field("path").text() {
@@ -92,7 +113,9 @@ fn parse_draft(entry : Json) -> Draft raise Failure {
     String("LEFT") => Left
     _ => raise Refused("side is LEFT or RIGHT")
   }
-  { path, line, side, body: comment_body(entry), }
+  let body = comment_body(entry)
+  check_level(body)
+  { path, line, side, body, }
 }
 
 ///|
@@ -139,16 +162,22 @@ fn parse_request(json : Json, default_owner : String?) -> Request raise Failure 
       .all(char => char.is_ascii_digit() || (char >= 'a' && char <= 'f')) => sha
     _ => raise Refused("sha is the full 40-character commit ID in lowercase")
   }
-  let owner = match json.field("owner").text() {
-    Some(owner) => owner
-    None => default_owner.unwrap_or("")
+  let owner = match json.field("owner") {
+    String(owner) => Some(owner)
+    Null => default_owner
+    _ => raise Refused("owner is a string")
   }
-  if owner.is_empty() || owner.length() > 64 || !owner.iter().all(is_name_char) {
+  if owner is Some(owner) &&
+    (owner.is_empty() || owner.length() > 64 || !owner.iter().all(is_name_char)) {
     raise Refused(
       "owner is 1 to 64 letters, digits, '-', '_' or '.'; it defaults to CODEX_THREAD_ID",
     )
   }
   let drafts = parse_all(list(json, "add"), parse_draft)
   let edits = parse_all(list(json, "update"), parse_edit)
+  // A chat that only edits or reads has no comments of its own to tell apart, so owner is needed only for add.
+  if !drafts.is_empty() && owner is None {
+    raise Refused("add needs an owner; it defaults to CODEX_THREAD_ID")
+  }
   { target: parse_target(json), sha, owner, drafts, edits, }
 }

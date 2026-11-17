@@ -98,12 +98,7 @@ fn preview(text : String) -> String {
 }
 
 ///|
-fn render(
-  session : Session,
-  viewer : String,
-  pull : Pull,
-  owner : String,
-) -> String {
+fn render(session : Session, viewer : String, pull : Pull) -> String {
   let target = session.target
   let lines = [
     "viewer: \{viewer}",
@@ -113,12 +108,18 @@ fn render(
     None => lines.push("pending review: none")
     Some(review) => {
       lines.push("pending review: PENDING \{review.url}")
-      let mine = review.comments.filter(comment => comment.owner == Some(owner))
-      lines.push(
-        "comments: \{review.comments.length()} in total, \{mine.length()} saved by this owner",
-      )
-      for comment in mine {
-        lines.push("  \{comment.id}  \{comment.path}:\{comment.line}")
+      lines.push("comments: \{review.comments.length()}")
+      for comment in review.comments {
+        let origin = match comment.owner {
+          Some(owner) => "owner=\{owner}"
+          None => "handwritten"
+        }
+        lines.push(
+          "  \{comment.id}  \{comment.path}:\{comment.line}  \{origin}",
+        )
+        for text in comment.text.split("\n") {
+          lines.push("    | \{text}")
+        }
       }
     }
   }
@@ -174,23 +175,31 @@ fn find_comment(pull : Pull, id : String) -> Comment? {
 ///|
 fn edits_to_make(
   pull : Pull,
-  owner : String,
   edits : Array[Edit],
-) -> Array[(Edit, String)] raise Failure {
+) -> Array[(Edit, Comment)] raise Failure {
   let todo = []
   for edit in edits {
-    guard find_comment(pull, edit.id) is Some(comment) &&
-      comment.owner == Some(owner) &&
-      comment.side is Some(side) else {
-      raise Refused(
-        "\{edit.id} is not a comment saved by this command for this owner",
-      )
+    // The snapshot holds only the viewer's own pending review, so any comment found in it is the user's own draft.
+    guard find_comment(pull, edit.id) is Some(comment) else {
+      raise Refused("\{edit.id} is not a comment in your pending review")
+    }
+    // Handwritten comments keep the user's own style, so only comments saved by this command need a level.
+    if comment.owner is Some(_) {
+      check_level(edit.body)
     }
     if comment.text != edit.body {
-      todo.push((edit, side))
+      todo.push((edit, comment))
     }
   }
   todo
+}
+
+///|
+fn edited_body(edit : Edit, comment : Comment) -> String {
+  match (comment.owner, comment.side) {
+    (Some(owner), Some(side)) => with_marker(edit.body, owner, side)
+    _ => edit.body
+  }
 }
 
 ///|
@@ -234,8 +243,9 @@ async fn run_request(
   if !problems.is_empty() {
     raise Refused(problems.join("; "))
   }
+  let owner = owner.unwrap_or("")
   let new_drafts = drafts_to_save(pull, owner, drafts)
-  let new_edits = edits_to_make(pull, owner, edits)
+  let new_edits = edits_to_make(pull, edits)
   let confirmed = (pull : Pull) => {
     let saved = new_drafts.filter(draft => {
       comments_of(pull).iter().any(comment => is_saved(comment, owner, draft))
@@ -276,7 +286,7 @@ async fn run_request(
     }
   }
   for item in new_edits {
-    let body = with_marker(item.0.body, owner, item.1)
+    let body = edited_body(item.0, item.1)
     let _ = (session.send)(EditComment(item.0.id, body)) catch {
       Api(message) => return settle(message)
       failure => raise failure
@@ -292,5 +302,5 @@ async fn run_request(
     raise Unverified("the changes are not found in the pending review")
   }
   let head = "saved \{new_drafts.length()} new, \{drafts.length() - new_drafts.length()} already saved, edited \{new_edits.length()}"
-  { text: head + "\n" + render(session, viewer, after, owner), code: 0, }
+  { text: head + "\n" + render(session, viewer, after), code: 0, }
 }

@@ -187,8 +187,9 @@ fn comment(
   line : Int32,
   body : String,
   side~ : String = "RIGHT",
+  level~ : String = "[Q] ",
 ) -> Json {
-  { "path": path, "line": line, "side": side, "body": body }
+  { "path": path, "line": line, "side": side, "body": level + body }
 }
 
 ///|
@@ -202,17 +203,19 @@ async fn call(
   add~ : Array[Json] = [],
   update~ : Array[Json] = [],
   sha~ : String = head,
-  owner~ : String = "chat-1",
+  owner~ : String? = Some("chat-1"),
 ) -> Report {
-  let request : Json = {
+  let request : Map[String, Json] = {
     "repo": "o/r",
     "pr": 7,
     "sha": sha,
-    "owner": owner,
-    "add": add,
-    "update": update,
+    "add": Json::array(add),
+    "update": Json::array(update),
   }
-  send(fake, request)
+  if owner is Some(owner) {
+    request["owner"] = Json::string(owner)
+  }
+  send(fake, Json::object(request))
 }
 
 ///|
@@ -229,32 +232,39 @@ async test "saves comments into a new pending review at the confirmed commit" {
   assert_eq(fake.review_commit, head)
   assert_eq(
     fake.stored[0].body,
-    "first\nsecond\n\n<!-- pending-review owner=chat-1 side=RIGHT -->",
+    "[Q] first\nsecond\n\n<!-- pending-review owner=chat-1 side=RIGHT -->",
   )
 }
 
 ///|
-async test "leaves comments it did not save alone, and edits only its own" {
+async test "any chat edits any comment of the user's pending review and keeps its marker" {
   let fake = Fake::new()
   fake.manual("src/a.txt", 11, "my own note")
   assert_eq(call(fake, add=[comment("src/a.txt", 12, "long text")]).code, 0)
-  let other = call(fake, add=[comment("src/a.txt", 13, "x")], owner="chat-2")
-  assert_eq(other.code, 0)
+  let state = call(fake, owner=None)
+  assert_true(state.text.contains("  PRRC_1  src/a.txt:11  handwritten"))
+  assert_true(state.text.contains("  PRRC_2  src/a.txt:12  owner=chat-1"))
+  assert_true(state.text.contains("    | [Q] long text"))
   let writes = fake.writes
-  for id in ["PRRC_1", "PRRC_3", "PRRC_404"] {
-    let report = call(fake, update=[{ "id": id, "body": "rewritten" }])
-    assert_eq(report.code, 1, msg=id)
+  let refused : Array[Json] = [
+    { "id": "PRRC_404", "body": "[Q] rewritten" },
+    { "id": "PRRC_2", "body": "unlabeled" },
+  ]
+  for edit in refused {
+    assert_eq(call(fake, update=[edit], owner=None).code, 1)
   }
   assert_eq(fake.writes, writes)
-  let edit : Json = { "id": "PRRC_2", "body": "short" }
-  assert_eq(call(fake, update=[edit]).code, 0)
+  let edit : Json = { "id": "PRRC_2", "body": "[nits] short" }
+  assert_eq(call(fake, update=[edit], owner=Some("side-chat")).code, 0)
   assert_eq(
     fake.stored[1].body,
-    "short\n\n<!-- pending-review owner=chat-1 side=RIGHT -->",
+    "[nits] short\n\n<!-- pending-review owner=chat-1 side=RIGHT -->",
   )
-  assert_eq(fake.stored[0].body, "my own note")
+  let manual : Json = { "id": "PRRC_1", "body": "my own, tidied note" }
+  assert_eq(call(fake, update=[manual], owner=None).code, 0)
+  assert_eq(fake.stored[0].body, "my own, tidied note")
   assert_true(call(fake, update=[edit]).text.contains("edited 0"))
-  assert_eq(fake.writes, writes + 1)
+  assert_eq(fake.writes, writes + 2)
 }
 
 ///|
@@ -374,7 +384,10 @@ async test "input beyond the fixed fields is refused" {
     ("add", [comment("src/a.txt", 11, "x<!-- pending-review owner=c -->")]),
     ("add", [comment("src/a.txt", 0, "x")]),
     ("add", [comment("src/a.txt", 11, "x", side="BOTH")]),
-    ("add", [comment("src/a.txt", 11, "  ")]),
+    ("add", [comment("src/a.txt", 11, "  ", level="")]),
+    ("add", [comment("src/a.txt", 11, "x", level="")]),
+    ("add", [comment("src/a.txt", 11, "x", level="[major] ")]),
+    ("add", [comment("src/a.txt", 11, "x", level="[Q]")]),
     ("sha", "abc"),
     ("repo", "o/r/x"),
     ("repo", "o/{r}"),
@@ -393,9 +406,9 @@ async test "input beyond the fixed fields is refused" {
     assert_eq(report.code, 1, msg=change.0)
   }
   assert_eq(run("not json", None, op => fake.send(op)).code, 1)
-  let no_owner : Json = { "repo": "o/r", "pr": 7, "sha": head }
-  let no_owner = no_owner.stringify()
-  assert_eq(run(no_owner, None, op => fake.send(op)).code, 1)
+  let x = comment("src/a.txt", 11, "x")
+  assert_eq(call(fake, add=[x], owner=None).code, 1)
+  assert_eq(call(fake, owner=None).code, 0)
   assert_eq(fake.writes, 0)
 }
 
