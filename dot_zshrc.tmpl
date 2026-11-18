@@ -76,6 +76,9 @@ export BUN_INSTALL="$HOME/.bun"
 export PATH="$BUN_INSTALL/bin:$PATH"
 export PATH="$HOME/.local/bin:$PATH"
 
+# deno (co-cli)
+export PATH="$PATH:$HOME/.deno/bin"
+
 # Keep dotfiles-wide Nix tools above Homebrew/macOS without overriding
 # project-local toolchains managed by asdf or direnv.
 _dotfiles_place_nix_path
