@@ -23,6 +23,7 @@ fi
 
 typeset -gU path PATH
 [[ -d "$HOME/.local/bin" ]] && path=("$HOME/.local/bin" "${path[@]}")
+[[ -d "$HOME/.deno/bin" ]] && path+=("$HOME/.deno/bin")
 export PATH
 
 _dotfiles_homebrew_env() {
