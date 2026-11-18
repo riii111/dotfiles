@@ -81,8 +81,9 @@ class CloudSetupTest(unittest.TestCase):
         )
         skills = self.home / ".codex/skills"
         for name in (
+            "pr-review",
             "ai-code-review",
-            "code-review",
+            "adr-review",
             "task-review-cycle",
             "task-worker",
         ):
@@ -94,7 +95,7 @@ class CloudSetupTest(unittest.TestCase):
         self.assertTrue(
             (skills / "task-review-cycle/references/reply-Cloud.md").exists()
         )
-        for name in ("task-orchestration", "task-worker", "pr-watch-link"):
+        for name in ("pr-review", "task-orchestration", "task-worker", "pr-watch-link"):
             with self.subTest(claude=name):
                 link = self.home / ".claude/skills" / name
                 self.assertEqual(link.resolve(), (skills / name).resolve())
@@ -126,6 +127,23 @@ class CloudSetupTest(unittest.TestCase):
             check=True,
         )
         self.assertEqual(language.stdout.strip(), "ja")
+
+    def test_replaces_the_retired_code_review_with_the_pr_entrypoint(self):
+        skills = self.home / ".codex/skills"
+        retired = skills / "code-review"
+        retired.mkdir(parents=True)
+        (retired / "SKILL.md").write_text("old review skill")
+        claude = self.home / ".claude/skills"
+        claude.mkdir(parents=True)
+        (claude / "code-review").symlink_to(retired)
+
+        self.run_setup()
+
+        self.assertFalse(retired.exists())
+        self.assertFalse((claude / "code-review").is_symlink())
+        for name in ("pr-review", "ai-code-review", "adr-review", "explain-change"):
+            self.assertTrue((claude / name / "SKILL.md").is_file())
+        self.assertTrue((skills / "ai-code-review/references/review-core.md").is_file())
 
     def test_a_failed_first_taskctl_build_still_installs_the_rest(self):
         settings = self.run_setup(
@@ -372,7 +390,9 @@ class CloudSetupTest(unittest.TestCase):
             "HARNEXUS_TASK_PREFIX": str(self.home / "old bin"),
             **options,
         }
-        text = "".join(f"export {key}={shlex.quote(value)}\n" for key, value in values.items())
+        text = "".join(
+            f"export {key}={shlex.quote(value)}\n" for key, value in values.items()
+        )
         (state / "options").write_text(text)
         return text
 
@@ -403,7 +423,9 @@ class CloudSetupTest(unittest.TestCase):
         self.refresh(HARNEXUS_CREW_REPO=str(crew), HARNEXUS_CREW_REV=rev)
 
         self.assertTrue((prefix / "harnexus-crew").exists())
-        self.assertEqual((prefix / "taskctl").read_text(), "old binary, retained for rollback")
+        self.assertEqual(
+            (prefix / "taskctl").read_text(), "old binary, retained for rollback"
+        )
         self.assertEqual(data.read_text(), "existing user state")
         options = self.cached_options()
         self.assertEqual(options["HARNEXUS_CREW"], "1")
@@ -421,9 +443,13 @@ class CloudSetupTest(unittest.TestCase):
         self.assertEqual(self.cached_options(), options)
 
     def test_new_options_override_the_legacy_cache(self):
-        self.legacy_options(TASKCTL_REPO="old custom repo", TASKCTL_REV="old pinned revision")
+        self.legacy_options(
+            TASKCTL_REPO="old custom repo", TASKCTL_REV="old pinned revision"
+        )
         repo, rev = self.crew_repo()
-        prefix, _ = self.run_task_setup(HARNEXUS_CREW_REPO=str(repo), HARNEXUS_CREW_REV=rev)
+        prefix, _ = self.run_task_setup(
+            HARNEXUS_CREW_REPO=str(repo), HARNEXUS_CREW_REV=rev
+        )
 
         options = self.cached_options()
         self.assertEqual(options["HARNEXUS_CREW"], "1")
@@ -455,22 +481,30 @@ class CloudSetupTest(unittest.TestCase):
                 with self.assertRaises(subprocess.CalledProcessError) as raised:
                     self.run_setup()
                 self.assertIn("HARNEXUS_CREW", raised.exception.stderr)
-                self.assertEqual((self.home / ".cache/cloud-setup/options").read_text(), old)
+                self.assertEqual(
+                    (self.home / ".cache/cloud-setup/options").read_text(), old
+                )
                 self.assertEqual(settings.read_text(), original)
-                self.assertFalse((self.home / ".cache/cloud-setup/options.pre-crew").exists())
+                self.assertFalse(
+                    (self.home / ".cache/cloud-setup/options.pre-crew").exists()
+                )
 
     def test_explicit_empty_new_source_options_choose_the_current_defaults(self):
         self.legacy_options(TASKCTL_REPO="custom repo", TASKCTL_REV="old pin")
         # Disabling installation avoids fetching the default source in this hermetic test.
         self.run_setup(HARNEXUS_CREW="0", HARNEXUS_CREW_REPO="", HARNEXUS_CREW_REV="")
         options = self.cached_options()
-        self.assertEqual(options["HARNEXUS_CREW_REPO"], "https://github.com/riii111/taskctl.git")
+        self.assertEqual(
+            options["HARNEXUS_CREW_REPO"], "https://github.com/riii111/taskctl.git"
+        )
         self.assertEqual(options["HARNEXUS_CREW_REV"], "")
 
     def test_fresh_setup_does_not_silently_accept_the_removed_enable_name(self):
         with self.assertRaises(subprocess.CalledProcessError) as raised:
             self.run_setup(HARNEXUS_TASK="1")
-        self.assertIn("replace HARNEXUS_TASK=1 with HARNEXUS_CREW=1", raised.exception.stderr)
+        self.assertIn(
+            "replace HARNEXUS_TASK=1 with HARNEXUS_CREW=1", raised.exception.stderr
+        )
         self.assertFalse((self.home / ".cache/cloud-setup/options").exists())
         self.assertFalse((self.home / ".claude/settings.json").exists())
 
