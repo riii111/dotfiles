@@ -1,8 +1,8 @@
 ---
 name: ai-code-review
 description: |
-  AI実装者へ返すコードレビューと、変更説明済みの人向け再レビュー。task-review-cycleのreviewerや修正後の再確認で使う。
-  固定差分を調査し、判定・必須修正・任意改善・根拠を返す。人向けの変更解説はcode-reviewを使う。
+  固定差分を調査し、判定・必須修正・任意改善・根拠を返すコードレビュー。task-review-cycleのreviewerやpr-reviewから呼び出す。
+  他者PR全体の初回レビュー・再レビューの受付はpr-reviewを使う。
 ---
 
 # AI Code Review
@@ -12,20 +12,9 @@ description: |
 指摘をGitHubのPendingレビューへ保存するのは、ユーザーが `review-draft` を呼んだときだけとし、このSKILLでは保存しない。
 結果の送信はユーザーが承認した宛先・手順に従い、この SKILL の選択だけで送信権限があるとは扱わない。
 
-## 再依頼の紐づけ
-
-最初に、対象PRのURLで`pr-wake review link <PRのURL>`をサンドボックス外で一度実行する。
-対象にPRがない場合は実行しない。
-Codexは`sandbox_permissions: require_escalated`を付け、Claudeはそのまま実行する。
-パイプ・リダイレクト・`cd`などを付けず単独で実行する。
-
-他人からの依頼かどうかはコマンドが判定するので、条件を付けずに実行する。
-出力が`linked`で始まれば何もしない。
-`skipped`で始まる場合と失敗した場合は、再実行せずレビューを続け、結果に「再依頼はこのスレッドに届かない」と一言添える。
-
 ## 調査と判定
 
-[共通レビュー基準](../code-review/references/review-core.md) を全文読み、調査・分担・採否・検証に従う。
+[共通レビュー基準](references/review-core.md) を全文読み、調査・分担・採否・検証に従う。
 リポジトリ固有の技術・業務規約を根拠に使い、別のレビュー SKILL の回答形式で置き換えない。
 
 依頼された base・head・checkout を確認する。

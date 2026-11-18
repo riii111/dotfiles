@@ -9,7 +9,7 @@ description: |
 
 会話で調整した指摘を、本人のPendingレビューへ保存する。
 Pendingは本人だけが見られ、Submit reviewはユーザーがGitHub上で行う。
-ai-code-reviewやcode-reviewを実施しただけでは保存しない。
+pr-review・ai-code-review・adr-reviewを実施しただけでは保存しない。
 
 ## 保存の道具
 

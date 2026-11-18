@@ -140,7 +140,7 @@ MD
 skills="$HOME/.codex/skills"
 claude_skills="$HOME/.claude/skills"
 config="${XDG_CONFIG_HOME:-$HOME/.config}/harnexus"
-task_skills=(ai-code-review code-review explain-change pr-watch-link task-orchestration task-review-cycle task-session-launch task-worker)
+task_skills=(pr-review ai-code-review adr-review explain-change pr-watch-link task-orchestration task-review-cycle task-session-launch task-worker)
 mkdir -p "$stage/skills" "$stage/config/harnexus"
 for name in "${task_skills[@]}"; do
 	cp -R "$dotfiles/dot_codex/skills/$name" "$stage/skills/$name"
@@ -204,6 +204,7 @@ fi
 # ~/.claude/skills so Claude Code finds it by the same name.
 if [[ $switch_set == yes ]]; then
 	mkdir -p "$skills" "$claude_skills" "$config"
+	rm -rf "${skills:?}/code-review" "${claude_skills:?}/code-review"
 	for name in "${task_skills[@]}"; do
 		rm -rf "${skills:?}/$name" "${claude_skills:?}/$name"
 		mv "$stage/skills/$name" "$skills/$name"
