@@ -2,7 +2,7 @@
 name: adr-review
 description: |
   主張を起点に証拠を集め、実用的にADRをレビューする。
-  ADR単体の確認やpr-reviewからの呼び出しで使う。他者PR全体のレビューの受付はpr-reviewを使う。
+  ADRの追加・変更や、設計判断と根拠の妥当性を確認するときに使う。
 ---
 
 # adr-review

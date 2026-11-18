@@ -1,8 +1,8 @@
 ---
 name: ai-code-review
 description: |
-  固定差分を調査し、判定・必須修正・任意改善・根拠を返すコードレビュー。task-review-cycleのreviewerやpr-reviewから呼び出す。
-  他者PR全体の初回レビュー・再レビューの受付はpr-reviewを使う。
+  固定差分を調査し、判定・必須修正・任意改善・根拠を返すコードレビュー。
+  本人の実装への独立レビュー、ブランチ・ローカル差分のレビュー、修正後の再確認で使う。
 ---
 
 # AI Code Review
