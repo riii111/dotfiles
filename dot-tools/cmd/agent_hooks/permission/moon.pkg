@@ -1,0 +1,13 @@
+import {
+  "riii111/dot-tools/cmd/agent_hooks/git_command",
+  "riii111/dot-tools/shared/git_trust",
+  "riii111/dot-tools/cmd/agent_hooks/shell",
+  "riii111/dot-tools/shared/text",
+  "moonbitlang/async/fs",
+}
+
+import {
+  "moonbitlang/async",
+} for "test"
+
+supported_targets = "+native"

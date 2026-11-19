@@ -29,19 +29,7 @@ stdenv.mkDerivation {
     fileset = lib.fileset.unions [
       ./moon.mod
       ./cmd
-      ./comment_review
-      ./git_command
-      ./git_force
-      ./git_trust
-      ./github_comment
-      ./github_tool
-      ./permission
-      ./pr_format
-      ./pr_state
-      ./reply_reminder
-      ./shell
-      ./statusline
-      ./text
+      ./shared
     ];
   };
 

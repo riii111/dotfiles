@@ -6,6 +6,9 @@ package "riii111/dot-tools/cmd/claude_statusline"
 // Errors
 
 // Types and methods
+type Input
+
+type RateLimit
 
 // Type aliases
 

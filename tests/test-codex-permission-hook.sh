@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The cases that depend on a checkout: its trust, branch, configuration and the Git processes the hook starts.
-# Commands decided by their text alone are tested in dot-tools/permission.
+# Commands decided by their text alone are tested in dot-tools/cmd/agent_hooks/permission.
 
 set -euo pipefail
 
@@ -151,7 +151,7 @@ git -C "$tmpdir" config core.sshCommand 'touch /tmp/outside'
 expect_denied 'git fetch origin'
 git -C "$tmpdir" config --unset-all core.sshCommand
 
-# Remote trust; dot-tools/git_trust covers the other untrusted remotes.
+# Remote trust; dot-tools/shared/git_trust covers the other untrusted remotes.
 git -C "$tmpdir" remote set-url origin https://example.com/riii111/test.git
 expect_silent permission_request 'git push origin HEAD'
 expect_silent permission_request 'git fetch origin'

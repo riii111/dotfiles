@@ -24,7 +24,10 @@ class SelectionTests(unittest.TestCase):
             # Unclassified paths select what --full does, on-demand tests included.
             (["nix/moonbit.nix"], selector.full()),
             (["new-unclassified-file"], selector.full()),
-            (["dot-tools/permission/policy.mbt"], {"dot_tools", "repo", "hooks"}),
+            (
+                ["dot-tools/cmd/agent_hooks/permission/policy.mbt"],
+                {"dot_tools", "repo", "hooks"},
+            ),
             # The CLI profile and the Darwin configurations consume the package recipe.
             (["dot-tools/package.nix"], selector.full()),
             (["scripts/build-open-apps.sh"], {"repo"}),
