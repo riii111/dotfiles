@@ -48,7 +48,7 @@ pr-review・ai-code-review・adr-reviewを実施しただけでは保存しな�
 
 ## 指摘レベル
 
-本文の冒頭に指摘レベルを1つ付け、半角スペースを空けて続ける（`[Q] ここは〜になりませんか？`）。
+1行目には指摘レベルだけを書き、2行目から本文を書く。
 レベルは指摘の重さで選ぶ。
 
 | レベル      | 使う場面                             |
@@ -78,8 +78,8 @@ pending-review <<'JSON'
   "repo": "OWNER/REPO",
   "pr": 12,
   "sha": "<40桁のSHA>",
-  "add": [{"path": "src/a.go", "line": 42, "body": "[Q] ここは〜の場合に〜になりませんか？"}],
-  "update": [{"id": "PRRC_...", "body": "[nits] 短くした文面"}]
+  "add": [{"path": "src/a.go", "line": 42, "body": "[Q]\nここは〜の場合に〜になりませんか？"}],
+  "update": [{"id": "PRRC_...", "body": "[nits]\n短くした文面"}]
 }
 JSON
 ```
