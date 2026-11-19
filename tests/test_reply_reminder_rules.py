@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-REMINDER = ROOT / "dot-tools/reply_reminder/reply_reminder.mbt"
+REMINDER = ROOT / "dot-tools/cmd/agent_hooks/reply_reminder/reply_reminder.mbt"
 RULES = ROOT / ".chezmoitemplates/agents-common.md"
 
 

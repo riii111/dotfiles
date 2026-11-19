@@ -1,6 +1,6 @@
 import {
   "moonbitlang/core/env",
-  "riii111/dot-tools/git_trust",
+  "riii111/dot-tools/shared/git_trust",
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/async/stdio",
