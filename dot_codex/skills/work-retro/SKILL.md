@@ -14,6 +14,7 @@ description: |
 
 - 日数：指定がなければ7日。
 - パターン：`~/.codex/skills/work-retro/references/patterns.json`
+- 候補：`~/.codex/skills/work-retro/references/candidates.json`
 - 出力先：`~/agent-desk/retro`。
   gitでは管理しない。
 
@@ -34,6 +35,6 @@ description: |
 
 ## 制約
 
-- 定期実行では提案と報告の作成だけを行い、dotfiles・harnexus・harnexus-crew・pr-wake・skill・`patterns.json`は変更しない。
+- 定期実行では提案と報告の作成だけを行い、dotfiles・harnexus・harnexus-crew・pr-wake・skill・`patterns.json`・`candidates.json`は変更しない。
   変更は、会話でownerが提案を選んだ場合だけ行う。
 - 最終回答は報告の本文だけにする。
