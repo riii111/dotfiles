@@ -245,6 +245,7 @@ if [[ -o zle ]]; then
   # Rex cannot bind the JIS yen key, so translate its Alt sequence here.
   if [[ "${TERM_PROGRAM:-}" == "rex" ]]; then
     bindkey -s $'\e¥' '\\'
+    bindkey -s $'\e|' '|'
   fi
 fi
 
