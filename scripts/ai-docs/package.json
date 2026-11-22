@@ -20,7 +20,7 @@
     "remark-gfm": "4.0.1",
     "remark-validate-links": "13.1.0",
     "sentence-splitter": "5.1.0",
-    "textlint": "15.8.0",
+    "textlint": "16.1.1",
     "textlint-rule-ja-no-redundant-expression": "4.0.1",
     "textlint-rule-max-ten": "5.0.0",
     "textlint-rule-no-double-negative-ja": "2.0.1",
