@@ -19,7 +19,7 @@
     "remark-frontmatter": "5.0.0",
     "remark-gfm": "4.0.1",
     "remark-validate-links": "13.1.0",
-    "sentence-splitter": "5.0.3",
+    "sentence-splitter": "5.1.0",
     "textlint": "15.8.0",
     "textlint-rule-ja-no-redundant-expression": "4.0.1",
     "textlint-rule-max-ten": "5.0.0",
