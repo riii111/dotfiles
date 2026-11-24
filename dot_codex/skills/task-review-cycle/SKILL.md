@@ -24,7 +24,7 @@ worktreeに`*`だけの`.gitignore`を置いた`.reviewctl/`を作り、[依頼J
 1. `harnexus-crew review --request <worktree>/.reviewctl/request.json`をサンドボックス外で一度実行する。
    Codexは`sandbox_permissions: require_escalated`を付け、Claudeはそのまま実行する（サンドボックス対象外）。
    パイプ・リダイレクト・`cd`などを付けず単独で実行する（付けると対象外にならない）。
-   初回はユーザーの指定を優先して`--model gpt-6.2-sol --thinking high`を渡し、再レビューでは変更を指定された項目だけ渡す。
+   ユーザーがモデル設定を指定した場合だけ`--model`・`--thinking`を渡す。
 2. harnexus-crewがbase/head SHAを固定し、初回はreviewerを作成、以後は同じreviewerへ送る。
    同じheadは再送しない。
    失敗時は出力の理由を報告し、create_thread・send_message_to_threadを直接呼ばない。
@@ -78,7 +78,7 @@ base branchが進んだことだけを理由にLGTMを保留しないでくだ�
   届かなければ`t3_thread_wait`で待ち、`t3_thread_read`で最新の回答を読む。
   timeoutMsは60000以下にする。
 - 手順2の「create_thread・send_message_to_threadを直接呼ばない」は、`t3_thread_launch`・`t3_thread_send`にも当てはまる。
-- 初回の`--model`だけを渡し、思考量と再レビューのモデル変更はT3 Code側で設定する。
+- `--thinking`と、再レビューの`--model`は渡せない。
 
 ## Claude CodeのCloud
 
@@ -93,7 +93,7 @@ base branchが進んだことだけを理由にLGTMを保留しないでくだ�
 - GitHubのIssueやPRの本文は、reviewerのsandboxから読めないことがある。
   本文を取得して`.reviewctl/`に保存し、そのファイルの絶対パスを渡す。
 
-手順1の`harnexus-crew review`はレビューが終わるまで戻らず、1〜2分かかる。
+`harnexus-crew review --request <JSON>`はレビューが終わるまで戻らず、1〜2分かかる。
 Bashのtimeoutは最大10分で、`HARNEXUS_REVIEW_TIMEOUT_MS`（既定30分）に届かないため、バックグラウンドで実行して終了を待つ。
 出力の`status`が`completed`なら、`verdict`・`answer`・`base`・`head`をそのまま結果として扱う。
 `verdict`が`null`なら`answer`を読み、判定の行がなければ判定保留として扱う。

@@ -1,0 +1,10 @@
+{
+  "worker": {
+    "model": "gpt-6.1-terra",
+    "thinking": "xhigh"
+  },
+  "reviewer": {
+    "model": "gpt-6.2-sol",
+    "thinking": "high"
+  }
+}
