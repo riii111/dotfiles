@@ -27,6 +27,7 @@ priv struct Fake {
   mut on_files : () -> Unit
   mut listed_state : String
   mut reply_state : String
+  mut published_comments : Int32
   mut viewer : String
 }
 
@@ -45,6 +46,7 @@ fn Fake::new() -> Fake {
     on_files: () => (),
     listed_state: "PENDING",
     reply_state: "PENDING",
+    published_comments: 0,
     viewer: "alice",
   }
 }
@@ -92,7 +94,10 @@ fn Fake::snapshot(self : Fake) -> Json {
       "url": "https://github.com/o/r/pull/7#pullrequestreview-9",
       "author": { "login": login },
       "commit": { "oid": self.review_commit },
-      "comments": { "pageInfo": { "hasNextPage": false }, "nodes": comments },
+      "comments": {
+        "pageInfo": { "hasNextPage": comments.length() > 100 },
+        "nodes": comments,
+      },
     }
     node
   }
@@ -129,13 +134,41 @@ fn Fake::send(self : Fake, operation : Operation) -> Json raise Failure {
       (self.on_files)()
       return if page == 1 { files_json } else { [] }
     }
-    Thread(id) => {
+    Thread(id, after) => {
       if self.reads_broken {
         raise Api("connection reset")
       }
-      let nodes : Array[Json] = self.stored
+      let all : Array[Json] = []
+      for index in 0..<self.published_comments {
+        all.push({ "id": "published-\{index}" })
+      }
+      let pending : Array[Json] = self.stored
         .filter(item => item.thread == Some(id))
         .map(item => { "id": item.id })
+      for item in pending {
+        all.push(item)
+      }
+      let start = match after {
+        None => 0
+        Some(cursor) => parse_number(cursor).unwrap_or(0)
+      }
+      let end = if start + 100 < all.length() {
+        start + 100
+      } else {
+        all.length()
+      }
+      let nodes : Array[Json] = []
+      for index in start..<end {
+        nodes.push(all[index])
+      }
+      let has_next = end < all.length() || id == "large" || id == "loop"
+      let cursor : Json = if id == "large" {
+        Json::null()
+      } else if id == "loop" {
+        Json::string("0")
+      } else {
+        Json::string("\{end}")
+      }
       let pull = if id == "other" { "PR_other" } else { "PR_7" }
       return {
         "data": {
@@ -144,7 +177,7 @@ fn Fake::send(self : Fake, operation : Operation) -> Json raise Failure {
             "pullRequest": { "id": pull },
             "viewerCanReply": id != "blocked",
             "comments": {
-              "pageInfo": { "hasNextPage": id == "large" },
+              "pageInfo": { "hasNextPage": has_next, "endCursor": cursor },
               "nodes": nodes,
             },
           },
@@ -302,16 +335,78 @@ async test "replies stay in the requested thread and pending review, retry witho
 
 ///|
 async test "refuses replies to another PR, inaccessible threads, stale heads and incomplete thread reads before writing" {
-  for thread in ["other", "blocked", "large"] {
+  for thread in ["other", "blocked"] {
     let fake = Fake::new()
     let reply : Json = { "thread": thread, "body": "thanks" }
     assert_eq(call(fake, reply=[reply]).code, 1)
     assert_eq(fake.writes, 0)
   }
+  let broken = Fake::new()
+  let incomplete : Json = { "thread": "large", "body": "thanks" }
+  assert_eq(call(broken, reply=[incomplete]).code, 3)
+  assert_eq(broken.writes, 0)
+  let repeated : Json = { "thread": "loop", "body": "thanks" }
+  assert_eq(call(broken, reply=[repeated]).code, 3)
+  assert_eq(broken.writes, 0)
   let fake = Fake::new()
   let reply : Json = { "thread": "thread-1", "body": "thanks" }
   assert_eq(call(fake, reply=[reply], sha=moved).code, 1)
   assert_eq(fake.writes, 0)
+}
+
+///|
+async test "reads across the page boundary after saving and on retry" {
+  let success = Fake::new()
+  success.published_comments = 100
+  let reply : Json = { "thread": "thread-1", "body": "thanks" }
+  assert_eq(call(success, reply=[reply]).code, 0)
+  assert_eq(call(success, reply=[reply]).code, 0)
+  assert_eq(success.stored.length(), 1)
+  let fake = Fake::new()
+  fake.published_comments = 100
+  fake.lost_response_write = 2
+  fake.lost_response_applied = true
+  let result = call(fake, reply=[reply])
+  assert_eq(result.code, 1)
+  assert_true(result.text.contains("1 of 1 changes are on the server"))
+  fake.lost_response_write = 0
+  assert_eq(call(fake, reply=[reply]).code, 0)
+  assert_eq(fake.stored.length(), 1)
+}
+
+///|
+async test "refuses additions that would make the pending review unreadable" {
+  let fake = Fake::new()
+  for index in 0..<100 {
+    fake.manual("src/a.txt", 11, "manual \{index}")
+  }
+  let reply : Json = { "thread": "thread-1", "body": "thanks" }
+  assert_eq(call(fake, reply=[reply]).code, 1)
+  assert_eq(fake.writes, 0)
+  assert_eq(fake.stored.length(), 100)
+}
+
+///|
+async test "rejects adding and changing the same saved comment before any write" {
+  let fake = Fake::new()
+  let reply : Json = { "thread": "thread-1", "body": "old" }
+  assert_eq(call(fake, reply=[reply]).code, 0)
+  let edit : Json = { "id": "PRRC_1", "body": "new" }
+  let writes = fake.writes
+  fake.lost_response_write = writes + 1
+  fake.lost_response_applied = true
+  assert_eq(call(fake, reply=[reply], update=[edit]).code, 1)
+  assert_eq(fake.writes, writes)
+  assert_eq(call(fake, reply=[reply], update=[edit]).code, 1)
+  assert_eq(fake.stored.length(), 1)
+  assert_true(fake.stored[0].body.contains("old"))
+  let line = Fake::new()
+  let draft = comment("src/a.txt", 11, "old")
+  assert_eq(call(line, add=[draft]).code, 0)
+  let line_edit : Json = { "id": "PRRC_1", "body": "[Q] new" }
+  let line_writes = line.writes
+  assert_eq(call(line, add=[draft], update=[line_edit]).code, 1)
+  assert_eq(line.writes, line_writes)
 }
 
 ///|
@@ -538,7 +633,8 @@ test "every request is a fixed GraphQL mutation or read and never submits" {
     Viewer,
     Snapshot(target),
     PullFiles(target, 2),
-    Thread("thread"),
+    Thread("thread", None),
+    Thread("thread", Some("cursor")),
     StartReview("PR_7", head),
     AddThread("PRR_1", draft, hostile),
     AddReply("PRR_1", "thread", hostile),

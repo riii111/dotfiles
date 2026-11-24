@@ -33,7 +33,7 @@ priv enum Operation {
   Viewer
   Snapshot(Target)
   PullFiles(Target, Int32)
-  Thread(String)
+  Thread(String, String?)
   StartReview(String, String)
   AddThread(String, Draft, String)
   AddReply(String, String, String)
@@ -42,11 +42,11 @@ priv enum Operation {
 
 ///|
 let thread_query : String =
-  #|query($thread: ID!) {
+  #|query($thread: ID!, $after: String) {
   #|  node(id: $thread) {
   #|    ... on PullRequestReviewThread {
   #|      id pullRequest { id } viewerCanReply
-  #|      comments(first: 100) { pageInfo { hasNextPage } nodes { id } }
+  #|      comments(first: 100, after: $after) { pageInfo { hasNextPage endCursor } nodes { id } }
   #|    }
   #|  }
   #|}
@@ -147,7 +147,13 @@ fn gh_args(operation : Operation) -> Array[String] {
         "api",
         "repos/\{target.owner}/\{target.name}/pulls/\{target.number}/files?per_page=100&page=\{page}",
       ]
-    Thread(id) => graphql(thread_query, [("thread", id)], [])
+    Thread(id, after) => {
+      let strings = [("thread", id)]
+      if after is Some(cursor) {
+        strings.push(("after", cursor))
+      }
+      graphql(thread_query, strings, [])
+    }
     StartReview(pull_id, commit) =>
       graphql(start_review_query, [("pull", pull_id), ("commit", commit)], [])
     AddThread(review_id, draft, body) =>

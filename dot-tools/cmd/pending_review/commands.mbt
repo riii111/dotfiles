@@ -56,25 +56,43 @@ async fn Session::threads(
     if threads.contains(reply.thread) {
       continue
     }
-    let node = (self.send)(Thread(reply.thread)).field("data").field("node")
-    if node.field("id").text() != Some(reply.thread) ||
-      node.field("pullRequest").field("id").text() != Some(pull_id) {
-      raise Refused("thread \{reply.thread} is not in the target pull request")
-    }
-    if !node.field("viewerCanReply").flag() {
-      raise Refused("cannot reply to thread \{reply.thread}")
-    }
-    let comments = node.field("comments")
-    guard comments.field("nodes") is Array(_) &&
-      comments.field("pageInfo").field("hasNextPage") is (True | False) else {
-      raise Unverified("thread \{reply.thread} has an incomplete comment list")
-    }
-    if comments.field("pageInfo").field("hasNextPage").flag() {
-      raise Refused("thread \{reply.thread} has too many comments to check")
-    }
     let ids = []
-    for comment in comments.field("nodes").items() {
-      ids.push(required_text(comment, "id"))
+    let cursors : Array[String] = []
+    let mut after : String? = None
+    while true {
+      let node = (self.send)(Thread(reply.thread, after))
+        .field("data")
+        .field("node")
+      if node.field("id").text() != Some(reply.thread) ||
+        node.field("pullRequest").field("id").text() != Some(pull_id) {
+        raise Refused(
+          "thread \{reply.thread} is not in the target pull request",
+        )
+      }
+      if !node.field("viewerCanReply").flag() {
+        raise Refused("cannot reply to thread \{reply.thread}")
+      }
+      let comments = node.field("comments")
+      let page = comments.field("pageInfo")
+      guard comments.field("nodes") is Array(_) &&
+        page.field("hasNextPage") is (True | False) else {
+        raise Unverified(
+          "thread \{reply.thread} has an incomplete comment list",
+        )
+      }
+      for comment in comments.field("nodes").items() {
+        ids.push(required_text(comment, "id"))
+      }
+      if !page.field("hasNextPage").flag() {
+        break
+      }
+      guard page.field("endCursor").text() is Some(cursor) &&
+        !cursor.is_empty() &&
+        !cursors.contains(cursor) else {
+        raise Unverified("thread \{reply.thread} has an invalid page cursor")
+      }
+      cursors.push(cursor)
+      after = Some(cursor)
     }
     threads[reply.thread] = ids
   }
@@ -296,6 +314,35 @@ fn edited_body(edit : Edit, comment : Comment) -> String {
 }
 
 ///|
+fn check_add_edit_conflicts(
+  drafts : Array[Draft],
+  replies : Array[Reply],
+  threads : Map[String, Array[String]],
+  owner : String,
+  edits : Array[(Edit, Comment)],
+) -> Unit raise Failure {
+  for item in edits {
+    let comment = item.1
+    let matches_draft = drafts
+      .iter()
+      .any(draft => is_saved(comment, owner, draft))
+    let matches_reply = replies
+      .iter()
+      .any(reply => {
+        threads.get(reply.thread).unwrap_or([]).contains(comment.id) &&
+        comment.owner == Some(owner) &&
+        comment.side == Some("REPLY") &&
+        comment.text == reply.body
+      })
+    if matches_draft || matches_reply {
+      raise Refused(
+        "\{comment.id} is both an addition and an update; submit them separately",
+      )
+    }
+  }
+}
+
+///|
 fn drafts_to_save(
   pull : Pull,
   owner : String,
@@ -342,6 +389,12 @@ async fn run_request(
   let new_drafts = drafts_to_save(pull, owner, drafts)
   let new_replies = replies_to_save(pull, threads, owner, replies)
   let new_edits = edits_to_make(pull, edits)
+  check_add_edit_conflicts(drafts, replies, threads, owner, new_edits)
+  // The pending-review snapshot reads at most 100 comments, so keep the result readable after all additions.
+  if comments_of(pull).length() + new_drafts.length() + new_replies.length() >
+    100 {
+    raise Refused("the pending review would have more than 100 comments")
+  }
   let confirmed = (pull : Pull, threads : Map[String, Array[String]]) => {
     let saved = new_drafts.filter(draft => {
       comments_of(pull).iter().any(comment => is_saved(comment, owner, draft))
