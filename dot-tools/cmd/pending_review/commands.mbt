@@ -260,6 +260,31 @@ fn reply_saved(
 }
 
 ///|
+fn check_new_reply_candidates(
+  initial : Pull,
+  pull : Pull,
+  threads : Map[String, Array[String]],
+  owner : String,
+  replies : Array[Reply],
+) -> Unit raise Failure {
+  for comment in comments_of(pull) {
+    let candidate = comment.owner == Some(owner) &&
+      comment.side == Some("REPLY") &&
+      replies.iter().any(reply => reply.body == comment.text)
+    // A reply may appear after the thread read, so do not treat an unlocated new candidate as unsaved.
+    if candidate &&
+      find_comment(initial, comment.id) is None &&
+      !replies
+      .iter()
+      .any(reply => threads.get(reply.thread).unwrap_or([]).contains(comment.id)) {
+      raise Unverified(
+        "a matching reply appeared while reading the review; read it again before saving",
+      )
+    }
+  }
+}
+
+///|
 fn replies_to_save(
   pull : Pull,
   threads : Map[String, Array[String]],
@@ -386,6 +411,7 @@ async fn run_request(
     raise Refused(problems.join("; "))
   }
   let owner = owner.unwrap_or("")
+  check_new_reply_candidates(initial, pull, threads, owner, replies)
   let new_drafts = drafts_to_save(pull, owner, drafts)
   let new_replies = replies_to_save(pull, threads, owner, replies)
   let new_edits = edits_to_make(pull, edits)

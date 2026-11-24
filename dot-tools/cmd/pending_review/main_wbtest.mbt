@@ -25,6 +25,7 @@ priv struct Fake {
   mut reads_broken : Bool
   mut breaks_reads_on_write : Bool
   mut on_files : () -> Unit
+  mut on_thread : () -> Unit
   mut listed_state : String
   mut reply_state : String
   mut published_comments : Int32
@@ -44,6 +45,7 @@ fn Fake::new() -> Fake {
     reads_broken: false,
     breaks_reads_on_write: false,
     on_files: () => (),
+    on_thread: () => (),
     listed_state: "PENDING",
     reply_state: "PENDING",
     published_comments: 0,
@@ -170,7 +172,7 @@ fn Fake::send(self : Fake, operation : Operation) -> Json raise Failure {
         Json::string("\{end}")
       }
       let pull = if id == "other" { "PR_other" } else { "PR_7" }
-      return {
+      let response : Json = {
         "data": {
           "node": {
             "id": id,
@@ -183,6 +185,8 @@ fn Fake::send(self : Fake, operation : Operation) -> Json raise Failure {
           },
         },
       }
+      (self.on_thread)()
+      return response
     }
     _ => ()
   }
@@ -375,6 +379,43 @@ async test "reads across the page boundary after saving and on retry" {
 }
 
 ///|
+async test "does not duplicate a reply that appears between the thread and review reads" {
+  let fake = Fake::new()
+  fake.review = Some("PRR_1")
+  let reply : Json = { "thread": "thread-1", "body": "thanks" }
+  fake.lost_response_write = 1
+  let first = call(fake, reply=[reply])
+  assert_eq(first.code, 1)
+  assert_true(first.text.contains("0 of 1 changes are on the server"))
+  fake.lost_response_write = 0
+  fake.on_thread = () => {
+    fake.on_thread = () => ()
+    fake.stored.push({
+      id: "PRRC_1",
+      path: "src/a.txt",
+      line: 11,
+      body: with_marker("thanks", "chat-1", "REPLY"),
+      thread: Some("thread-1"),
+    })
+  }
+  assert_eq(call(fake, reply=[reply]).code, 3)
+  assert_eq(fake.writes, 1)
+  assert_eq(fake.stored.length(), 1)
+  assert_eq(call(fake, reply=[reply]).code, 0)
+  assert_eq(fake.writes, 1)
+}
+
+///|
+async test "allows the same text in a different thread when the existing reply was already observed" {
+  let fake = Fake::new()
+  let first : Json = { "thread": "thread-1", "body": "thanks" }
+  let second : Json = { "thread": "thread-2", "body": "thanks" }
+  assert_eq(call(fake, reply=[first]).code, 0)
+  assert_eq(call(fake, reply=[second]).code, 0)
+  assert_eq(fake.stored.length(), 2)
+}
+
+///|
 async test "refuses additions that would make the pending review unreadable" {
   let fake = Fake::new()
   for index in 0..<100 {
@@ -393,8 +434,6 @@ async test "rejects adding and changing the same saved comment before any write"
   assert_eq(call(fake, reply=[reply]).code, 0)
   let edit : Json = { "id": "PRRC_1", "body": "new" }
   let writes = fake.writes
-  fake.lost_response_write = writes + 1
-  fake.lost_response_applied = true
   assert_eq(call(fake, reply=[reply], update=[edit]).code, 1)
   assert_eq(fake.writes, writes)
   assert_eq(call(fake, reply=[reply], update=[edit]).code, 1)
