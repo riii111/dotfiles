@@ -27,14 +27,6 @@
       "plan_thinking": "medium",
       "subagent_model": "gpt-5.6-luna",
       "subagent_thinking": "xhigh"
-    },
-    "claude": {
-      "custom_model": {
-        "id": "claude-opus-4-6[1m]",
-        "name": "Opus 4.6 (1M)",
-        "description": "Opus 4.6 with 1M context"
-      },
-      "thinking": "medium"
     }
   }
 }

@@ -1,13 +1,9 @@
-{{- $models := include "private_dot_config/harnexus/models.json" | fromJson -}}
 {
   "env": {
     "RIPGREP_CONFIG_PATH": "{{ .chezmoi.homeDir }}/.ripgreprc",
     "GIT_OPTIONAL_LOCKS": "0",
     "DISABLE_TELEMETRY": "1",
-    "RUST_LOG": "info",
-    "ANTHROPIC_CUSTOM_MODEL_OPTION": {{ $models.clients.claude.custom_model.id | toJson }},
-    "ANTHROPIC_CUSTOM_MODEL_OPTION_NAME": {{ $models.clients.claude.custom_model.name | toJson }},
-    "ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION": {{ $models.clients.claude.custom_model.description | toJson }}
+    "RUST_LOG": "info"
   },
   "outputStyle": "Concise",
   "includeCoAuthoredBy": false,
@@ -414,6 +410,5 @@
     "command": "\"{{ .chezmoi.homeDir }}/.nix-profile/bin/claude-statusline\""
   },
   "alwaysThinkingEnabled": true,
-  "effortLevel": {{ $models.clients.claude.thinking | toJson }},
   "skipDangerousModePermissionPrompt": {{ if eq .type "personal" }}true{{ else }}false{{ end }}
 }
