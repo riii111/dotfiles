@@ -43,7 +43,10 @@ calendar:
 
 ## 実行の時刻
 
-人が作るScheduled Taskは3つで、どれも`~/agent-desk/`を作業ディレクトリにし、モデルを`claude-opus-5-5`にする。
+人が作るScheduled Taskは3つで、どれも`~/agent-desk/`を作業ディレクトリにする。
+登録時は`~/.config/harnexus/models.json`の`skills.dispatch.model`と`skills.dispatch.thinking`を使う。
+予定のスレッドから別のスキルを暗黙に呼び出してworkerを起動する挙動を避けるため、既定はClaudeを使う。
+設定を変更したら、登録済みのScheduled Taskのモデルと思考量も更新する。
 起動は深夜帯（22:00〜5:00）の後、報告は起動した仕事が進む時間を空けた後に置く。
 退勤予定は報告と別のスレッドにし、報告への質問と混ざらないようにする。
 
