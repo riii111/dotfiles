@@ -11,12 +11,28 @@ priv struct Edit {
 }
 
 ///|
+priv struct Reply {
+  thread : String
+  body : String
+}
+
+///|
 priv struct Request {
   target : Target
   sha : String
   owner : String?
   drafts : Array[Draft]
+  replies : Array[Reply]
   edits : Array[Edit]
+}
+
+///|
+fn parse_reply(entry : Json) -> Reply raise Failure {
+  check_keys(entry, ["thread", "body"])
+  guard entry.field("thread").text() is Some(thread) && !thread.is_empty() else {
+    raise Refused("every reply needs a thread id")
+  }
+  { thread, body: comment_body(entry), }
 }
 
 ///|
@@ -154,7 +170,7 @@ fn parse_target(json : Json) -> Target raise Failure {
 
 ///|
 fn parse_request(json : Json, default_owner : String?) -> Request raise Failure {
-  check_keys(json, ["repo", "pr", "sha", "owner", "add", "update"])
+  check_keys(json, ["repo", "pr", "sha", "owner", "add", "reply", "update"])
   let sha = match json.field("sha").text() {
     Some(sha) if sha.length() == 40 &&
       sha
@@ -174,10 +190,11 @@ fn parse_request(json : Json, default_owner : String?) -> Request raise Failure 
     )
   }
   let drafts = parse_all(list(json, "add"), parse_draft)
+  let replies = parse_all(list(json, "reply"), parse_reply)
   let edits = parse_all(list(json, "update"), parse_edit)
-  // A chat that only edits or reads has no comments of its own to tell apart, so owner is needed only for add.
-  if !drafts.is_empty() && owner is None {
-    raise Refused("add needs an owner; it defaults to CODEX_THREAD_ID")
+  // A chat that only edits or reads has no comments of its own to tell apart, so only additions need an owner.
+  if (!drafts.is_empty() || !replies.is_empty()) && owner is None {
+    raise Refused("add and reply need an owner; it defaults to CODEX_THREAD_ID")
   }
-  { target: parse_target(json), sha, owner, drafts, edits, }
+  { target: parse_target(json), sha, owner, drafts, replies, edits, }
 }

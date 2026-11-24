@@ -46,6 +46,42 @@ async fn Session::diff(self : Session) -> Map[String, Hunks?] raise Failure {
 }
 
 ///|
+async fn Session::threads(
+  self : Session,
+  replies : Array[Reply],
+  pull_id : String,
+) -> Map[String, Array[String]] raise Failure {
+  let threads : Map[String, Array[String]] = Map([])
+  for reply in replies {
+    if threads.contains(reply.thread) {
+      continue
+    }
+    let node = (self.send)(Thread(reply.thread)).field("data").field("node")
+    if node.field("id").text() != Some(reply.thread) ||
+      node.field("pullRequest").field("id").text() != Some(pull_id) {
+      raise Refused("thread \{reply.thread} is not in the target pull request")
+    }
+    if !node.field("viewerCanReply").flag() {
+      raise Refused("cannot reply to thread \{reply.thread}")
+    }
+    let comments = node.field("comments")
+    guard comments.field("nodes") is Array(_) &&
+      comments.field("pageInfo").field("hasNextPage") is (True | False) else {
+      raise Unverified("thread \{reply.thread} has an incomplete comment list")
+    }
+    if comments.field("pageInfo").field("hasNextPage").flag() {
+      raise Refused("thread \{reply.thread} has too many comments to check")
+    }
+    let ids = []
+    for comment in comments.field("nodes").items() {
+      ids.push(required_text(comment, "id"))
+    }
+    threads[reply.thread] = ids
+  }
+  threads
+}
+
+///|
 fn short(sha : String) -> String {
   if sha.length() > 7 {
     sha[:7].to_owned()
@@ -168,6 +204,63 @@ async fn save_draft(
 }
 
 ///|
+async fn save_reply(
+  session : Session,
+  review_id : String,
+  reply : Reply,
+  owner : String,
+) -> Unit raise Failure {
+  let json = (session.send)(
+    AddReply(review_id, reply.thread, with_marker(reply.body, owner, "REPLY")),
+  )
+  let comment = json
+    .field("data")
+    .field("addPullRequestReviewThreadReply")
+    .field("comment")
+  if comment.field("state").text() != Some("PENDING") ||
+    comment.field("id").text() is None {
+    raise Unverified("GitHub did not report the reply as pending")
+  }
+}
+
+///|
+fn reply_saved(
+  pull : Pull,
+  threads : Map[String, Array[String]],
+  owner : String,
+  reply : Reply,
+) -> Bool {
+  let ids = threads.get(reply.thread).unwrap_or([])
+  comments_of(pull)
+  .iter()
+  .any(comment => {
+    ids.contains(comment.id) &&
+    comment.owner == Some(owner) &&
+    comment.side == Some("REPLY") &&
+    comment.text == reply.body
+  })
+}
+
+///|
+fn replies_to_save(
+  pull : Pull,
+  threads : Map[String, Array[String]],
+  owner : String,
+  replies : Array[Reply],
+) -> Array[Reply] {
+  let todo : Array[Reply] = []
+  for reply in replies {
+    if !reply_saved(pull, threads, owner, reply) &&
+      !todo
+      .iter()
+      .any(other => other.thread == reply.thread && other.body == reply.body) {
+      todo.push(reply)
+    }
+  }
+  todo
+}
+
+///|
 fn find_comment(pull : Pull, id : String) -> Comment? {
   comments_of(pull).iter().find_first(comment => comment.id == id)
 }
@@ -183,8 +276,8 @@ fn edits_to_make(
     guard find_comment(pull, edit.id) is Some(comment) else {
       raise Refused("\{edit.id} is not a comment in your pending review")
     }
-    // Handwritten comments keep the user's own style, so only comments saved by this command need a level.
-    if comment.owner is Some(_) {
+    // Replies and handwritten comments keep their own style, so only saved line comments need a level.
+    if comment.owner is Some(_) && comment.side != Some("REPLY") {
       check_level(edit.body)
     }
     if comment.text != edit.body {
@@ -233,10 +326,12 @@ async fn run_request(
   session : Session,
   request : Request,
 ) -> Report raise Failure {
-  let { sha, owner, drafts, edits, .. } = request
+  let { sha, owner, drafts, replies, edits, .. } = request
   let viewer = session.viewer()
-  check_pull(session.pull(viewer), sha)
+  let initial = session.pull(viewer)
+  check_pull(initial, sha)
   let files = if drafts.is_empty() { Map([]) } else { session.diff() }
+  let threads = session.threads(replies, initial.id)
   let pull = session.pull(viewer)
   check_pull(pull, sha)
   let problems = drafts.filter_map(draft => position_problem(files, draft))
@@ -245,8 +340,9 @@ async fn run_request(
   }
   let owner = owner.unwrap_or("")
   let new_drafts = drafts_to_save(pull, owner, drafts)
+  let new_replies = replies_to_save(pull, threads, owner, replies)
   let new_edits = edits_to_make(pull, edits)
-  let confirmed = (pull : Pull) => {
+  let confirmed = (pull : Pull, threads : Map[String, Array[String]]) => {
     let saved = new_drafts.filter(draft => {
       comments_of(pull).iter().any(comment => is_saved(comment, owner, draft))
     })
@@ -254,9 +350,12 @@ async fn run_request(
       find_comment(pull, item.0.id).map(comment => comment.text) ==
       Some(item.0.body)
     })
-    saved.length() + edited.length()
+    let replied = new_replies.filter(reply => {
+      reply_saved(pull, threads, owner, reply)
+    })
+    saved.length() + replied.length() + edited.length()
   }
-  let total = new_drafts.length() + new_edits.length()
+  let total = new_drafts.length() + new_replies.length() + new_edits.length()
   let settle = async fn(message : String) -> Report raise Failure {
     let after = session.pull(viewer) catch {
       _ =>
@@ -264,12 +363,18 @@ async fn run_request(
           "\{message}; the review could not be read back, so what was saved is unknown. Read it before trying again",
         )
     }
+    let after_threads = session.threads(replies, after.id) catch {
+      _ =>
+        raise Unverified(
+          "\{message}; the threads could not be read back, so what was saved is unknown. Read them before trying again",
+        )
+    }
     {
-      text: "failed: \{message}\n\{confirmed(after)} of \{total} changes are on the server. Running the same command again does the rest without duplicating the others.\n",
+      text: "failed: \{message}\n\{confirmed(after, after_threads)} of \{total} changes are on the server. Running the same command again does the rest without duplicating the others.\n",
       code: 1,
     }
   }
-  if !new_drafts.is_empty() {
+  if !new_drafts.is_empty() || !new_replies.is_empty() {
     let review_id = match pull.review {
       Some(review) => review.id
       None =>
@@ -280,6 +385,12 @@ async fn run_request(
     }
     for draft in new_drafts {
       save_draft(session, review_id, draft, owner) catch {
+        Api(message) => return settle(message)
+        failure => raise failure
+      }
+    }
+    for reply in new_replies {
+      save_reply(session, review_id, reply, owner) catch {
         Api(message) => return settle(message)
         failure => raise failure
       }
@@ -298,9 +409,15 @@ async fn run_request(
         "the changes were sent but the review could not be read back; read it again",
       )
   }
-  if confirmed(after) != total {
+  let after_threads = session.threads(replies, after.id) catch {
+    _ =>
+      raise Unverified(
+        "the changes were sent but the threads could not be read back; read them again",
+      )
+  }
+  if confirmed(after, after_threads) != total {
     raise Unverified("the changes are not found in the pending review")
   }
-  let head = "saved \{new_drafts.length()} new, \{drafts.length() - new_drafts.length()} already saved, edited \{new_edits.length()}"
+  let head = "saved \{new_drafts.length()} new, \{drafts.length() - new_drafts.length()} already saved, edited \{new_edits.length()}, replied \{new_replies.length()} new, \{replies.length() - new_replies.length()} already saved"
   { text: head + "\n" + render(session, viewer, after), code: 0, }
 }

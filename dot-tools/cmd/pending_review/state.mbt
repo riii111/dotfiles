@@ -73,7 +73,11 @@ fn split_marker(raw : String) -> (String, String?, String?) {
   guard inner_start <= inner_end else { return plain }
   guard raw[inner_start:inner_end].to_owned().split(" side=").collect()
     is [owner, side] &&
-    (side.to_owned() == "LEFT" || side.to_owned() == "RIGHT") else {
+    (
+      side.to_owned() == "LEFT" ||
+      side.to_owned() == "RIGHT" ||
+      side.to_owned() == "REPLY"
+    ) else {
     return plain
   }
   (raw[:start].trim().to_owned(), Some(owner.to_owned()), Some(side.to_owned()))

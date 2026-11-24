@@ -10,6 +10,7 @@ priv struct Stored {
   path : String
   line : Int32
   mut body : String
+  thread : String?
 }
 
 ///|
@@ -25,6 +26,7 @@ priv struct Fake {
   mut breaks_reads_on_write : Bool
   mut on_files : () -> Unit
   mut listed_state : String
+  mut reply_state : String
   mut viewer : String
 }
 
@@ -42,6 +44,7 @@ fn Fake::new() -> Fake {
     breaks_reads_on_write: false,
     on_files: () => (),
     listed_state: "PENDING",
+    reply_state: "PENDING",
     viewer: "alice",
   }
 }
@@ -54,7 +57,13 @@ fn Fake::manual(
   body : String,
 ) -> Unit {
   self.review = Some("PRR_1")
-  self.stored.push({ id: "PRRC_\{self.stored.length() + 1}", path, line, body, })
+  self.stored.push({
+    id: "PRRC_\{self.stored.length() + 1}",
+    path,
+    line,
+    body,
+    thread: None,
+  })
 }
 
 ///|
@@ -120,6 +129,28 @@ fn Fake::send(self : Fake, operation : Operation) -> Json raise Failure {
       (self.on_files)()
       return if page == 1 { files_json } else { [] }
     }
+    Thread(id) => {
+      if self.reads_broken {
+        raise Api("connection reset")
+      }
+      let nodes : Array[Json] = self.stored
+        .filter(item => item.thread == Some(id))
+        .map(item => { "id": item.id })
+      let pull = if id == "other" { "PR_other" } else { "PR_7" }
+      return {
+        "data": {
+          "node": {
+            "id": id,
+            "pullRequest": { "id": pull },
+            "viewerCanReply": id != "blocked",
+            "comments": {
+              "pageInfo": { "hasNextPage": id == "large" },
+              "nodes": nodes,
+            },
+          },
+        },
+      }
+    }
     _ => ()
   }
   self.writes += 1
@@ -159,12 +190,38 @@ fn Fake::apply(self : Fake, operation : Operation) -> Json raise Failure {
         raise Api("Could not resolve to a pending review")
       }
       let id = "PRRC_\{self.stored.length() + 1}"
-      self.stored.push({ id, path: draft.path, line: draft.line, body, })
+      self.stored.push({
+        id,
+        path: draft.path,
+        line: draft.line,
+        body,
+        thread: None,
+      })
       let node : Json = { "id": id, "state": "PENDING" }
       {
         "data": {
           "addPullRequestReviewThread": {
             "thread": { "comments": { "nodes": [node] } },
+          },
+        },
+      }
+    }
+    AddReply(review_id, thread, body) => {
+      if self.review != Some(review_id) {
+        raise Api("Could not resolve to a pending review")
+      }
+      let id = "PRRC_\{self.stored.length() + 1}"
+      self.stored.push({
+        id,
+        path: "src/a.txt",
+        line: 11,
+        body,
+        thread: Some(thread),
+      })
+      {
+        "data": {
+          "addPullRequestReviewThreadReply": {
+            "comment": { "id": id, "state": self.reply_state },
           },
         },
       }
@@ -201,6 +258,7 @@ async fn send(fake : Fake, request : Json) -> Report {
 async fn call(
   fake : Fake,
   add~ : Array[Json] = [],
+  reply~ : Array[Json] = [],
   update~ : Array[Json] = [],
   sha~ : String = head,
   owner~ : String? = Some("chat-1"),
@@ -210,12 +268,64 @@ async fn call(
     "pr": 7,
     "sha": sha,
     "add": Json::array(add),
+    "reply": Json::array(reply),
     "update": Json::array(update),
   }
   if owner is Some(owner) {
     request["owner"] = Json::string(owner)
   }
   send(fake, Json::object(request))
+}
+
+///|
+async test "replies stay in the requested thread and pending review, retry without duplicates, and remain editable" {
+  let fake = Fake::new()
+  let one : Json = { "thread": "thread-1", "body": "ありがとう" }
+  let two : Json = { "thread": "thread-2", "body": "ありがとう" }
+  fake.lost_response_write = 2
+  fake.lost_response_applied = true
+  assert_eq(call(fake, reply=[one, two, one]).code, 1)
+  fake.lost_response_write = 0
+  assert_eq(call(fake, reply=[one, two, one]).code, 0)
+  assert_eq(fake.stored.length(), 2)
+  assert_eq(fake.stored[0].thread, Some("thread-1"))
+  assert_eq(fake.stored[1].thread, Some("thread-2"))
+  let edit : Json = { "id": "PRRC_1", "body": "確認しました" }
+  assert_eq(call(fake, update=[edit], owner=None).code, 0)
+  assert_eq(
+    fake.stored[0].body,
+    "確認しました\n\n<!-- pending-review owner=chat-1 side=REPLY -->",
+  )
+  assert_eq(call(fake, reply=[two]).code, 0)
+  assert_eq(fake.stored.length(), 2)
+}
+
+///|
+async test "refuses replies to another PR, inaccessible threads, stale heads and incomplete thread reads before writing" {
+  for thread in ["other", "blocked", "large"] {
+    let fake = Fake::new()
+    let reply : Json = { "thread": thread, "body": "thanks" }
+    assert_eq(call(fake, reply=[reply]).code, 1)
+    assert_eq(fake.writes, 0)
+  }
+  let fake = Fake::new()
+  let reply : Json = { "thread": "thread-1", "body": "thanks" }
+  assert_eq(call(fake, reply=[reply], sha=moved).code, 1)
+  assert_eq(fake.writes, 0)
+}
+
+///|
+async test "a reply with an unconfirmed state requires inspection and an unapplied request can be retried" {
+  let reply : Json = { "thread": "thread-1", "body": "thanks" }
+  let unknown = Fake::new()
+  unknown.reply_state = "COMMENTED"
+  assert_eq(call(unknown, reply=[reply]).code, 3)
+  let retry = Fake::new()
+  retry.lost_response_write = 2
+  assert_eq(call(retry, reply=[reply]).code, 1)
+  retry.lost_response_write = 0
+  assert_eq(call(retry, reply=[reply]).code, 0)
+  assert_eq(retry.stored.length(), 1)
 }
 
 ///|
@@ -388,6 +498,8 @@ async test "input beyond the fixed fields is refused" {
     ("add", [comment("src/a.txt", 11, "x", level="")]),
     ("add", [comment("src/a.txt", 11, "x", level="[major] ")]),
     ("add", [comment("src/a.txt", 11, "x", level="[Q]")]),
+    ("reply", [{ "thread": "", "body": "thanks" }]),
+    ("reply", [{ "thread": "thread", "body": "thanks", "event": "COMMENT" }]),
     ("sha", "abc"),
     ("repo", "o/r/x"),
     ("repo", "o/{r}"),
@@ -417,20 +529,27 @@ test "every request is a fixed GraphQL mutation or read and never submits" {
   let target = { owner: "o", name: "r", number: 7, }
   let draft = { path: "a=b.txt", line: 3, side: Right, body: "true", }
   let hostile = "@/etc/passwd -X POST submitPullRequestReview event"
+  let reply_args = gh_args(AddReply("PRR_1", "PRRT_1", hostile))
+  assert_true(reply_args.contains("review=PRR_1"))
+  assert_true(reply_args.contains("thread=PRRT_1"))
+  assert_true(add_reply_query.contains("pullRequestReviewId: $review"))
+  assert_true(add_reply_query.contains("pullRequestReviewThreadId: $thread"))
   let operations = [
     Viewer,
     Snapshot(target),
     PullFiles(target, 2),
+    Thread("thread"),
     StartReview("PR_7", head),
     AddThread("PRR_1", draft, hostile),
+    AddReply("PRR_1", "thread", hostile),
     EditComment("PRRC_1", hostile),
   ]
   let allowed = [
-    "addPullRequestReview", "addPullRequestReviewThread", "updatePullRequestReviewComment",
+    "addPullRequestReview", "addPullRequestReviewThread", "addPullRequestReviewThreadReply",
+    "updatePullRequestReviewComment",
   ]
   let forbidden = [
     "submitPullRequestReview", "event", "dismiss", "deletePullRequest", "resolveReviewThread",
-    "ThreadReply",
   ]
   for operation in operations {
     let args = gh_args(operation)

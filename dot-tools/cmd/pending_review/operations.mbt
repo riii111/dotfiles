@@ -28,15 +28,36 @@ priv struct Draft {
 }
 
 ///|
-// Submitting, replying and resolving have no variant, so no input can make this command publish anything.
+// Submitting and resolving have no variant, so no input can make this command publish anything.
 priv enum Operation {
   Viewer
   Snapshot(Target)
   PullFiles(Target, Int32)
+  Thread(String)
   StartReview(String, String)
   AddThread(String, Draft, String)
+  AddReply(String, String, String)
   EditComment(String, String)
 }
+
+///|
+let thread_query : String =
+  #|query($thread: ID!) {
+  #|  node(id: $thread) {
+  #|    ... on PullRequestReviewThread {
+  #|      id pullRequest { id } viewerCanReply
+  #|      comments(first: 100) { pageInfo { hasNextPage } nodes { id } }
+  #|    }
+  #|  }
+  #|}
+
+///|
+let add_reply_query : String =
+  #|mutation($review: ID!, $thread: ID!, $body: String!) {
+  #|  addPullRequestReviewThreadReply(input: {
+  #|    pullRequestReviewId: $review, pullRequestReviewThreadId: $thread, body: $body
+  #|  }) { comment { id state } }
+  #|}
 
 ///|
 let snapshot_query : String =
@@ -126,6 +147,7 @@ fn gh_args(operation : Operation) -> Array[String] {
         "api",
         "repos/\{target.owner}/\{target.name}/pulls/\{target.number}/files?per_page=100&page=\{page}",
       ]
+    Thread(id) => graphql(thread_query, [("thread", id)], [])
     StartReview(pull_id, commit) =>
       graphql(start_review_query, [("pull", pull_id), ("commit", commit)], [])
     AddThread(review_id, draft, body) =>
@@ -138,6 +160,12 @@ fn gh_args(operation : Operation) -> Array[String] {
           ("body", body),
         ],
         [("line", draft.line)],
+      )
+    AddReply(review_id, thread_id, body) =>
+      graphql(
+        add_reply_query,
+        [("review", review_id), ("thread", thread_id), ("body", body)],
+        [],
       )
     EditComment(comment_id, body) =>
       graphql(edit_comment_query, [("comment", comment_id), ("body", body)], [])

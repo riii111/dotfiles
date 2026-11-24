@@ -38,6 +38,7 @@ test "allows reads and unrelated commands" {
 test "denies the review mutations that the pending-review command wraps, and allows the command itself" {
   let denied = [
     "gh api graphql -f 'query=mutation { addPullRequestReviewThread(input: {}) { thread { id } } }'",
+    "gh api graphql -f 'query=mutation { addPullRequestReviewThreadReply(input: {}) { comment { id } } }'",
     "gh api graphql -f 'query=mutation { updatePullRequestReviewComment(input: {}) { clientMutationId } }'",
     "gh api graphql -f 'query=mutation { addPullRequestReview(input: {}) { clientMutationId } }'",
     "gh api graphql -f 'query=mutation { submitPullRequestReview(input: {}) { clientMutationId } }'",

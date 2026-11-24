@@ -1,6 +1,6 @@
 ---
 name: review-draft
-description: ユーザーが `/review-draft` で明示的に呼んだときだけ使う。会話で採用した指摘を、本人のGitHub Pendingレビューへ行コメントの下書きとして追加・更新する。
+description: ユーザーが `/review-draft` で明示的に呼んだときだけ使う。会話で採用した指摘や返信を、本人のGitHub Pendingレビューへ下書きとして追加・更新する。
 user_invocable: true
 disable-model-invocation: true
 ---
