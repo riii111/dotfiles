@@ -9,8 +9,9 @@ description: |
 
 `harnexus-crew environment`が`"host":"claude"`を返す場合は、先に末尾の「Claude CodeのCloud」を読む。
 
-統括役はCodexを既定とし、ユーザーがClaudeでの統括を指示した場合（AppでClaudeを選択した場合を含む）にClaudeを使う。
-workerは既定Claude、reviewerはCodexとし、統括役の選択から変更しない。
+ローカルで統括役を新しく起動するときは、`~/.config/harnexus/models.json`の`skills.orchestration`のモデルと思考量を使う。
+新規起動はユーザーのモデル指定を優先し、既存のチャットは現在のモデルを使う。
+workerとreviewerの起動はtask-session-launchとtask-review-cycleの設定に従う。
 
 開始時と再開時に、ユーザーが指定したタスク管理元を読む。
 タスク管理元に記載された依存関係を確認する。

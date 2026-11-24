@@ -64,12 +64,12 @@ amount: ""            # 量について言われた内容を短く。なけれ�
 Claudeのスレッドの`automation_update`は、毎回新しいスレッドを作るScheduled Taskを扱えず、スレッドをアーカイブするツール（`set_thread_archived`）も持たない。
 そのためScheduled Taskの作成・更新・削除とスレッドのアーカイブは、`create_thread`で`model`を省略して（Appの既定のCodexモデルで）補助のスレッドを作り、頼む。
 補助のスレッドの作業ディレクトリと、作るScheduled Taskの作業ディレクトリは`~/agent-desk/`にする。
-頼むときは、操作・ID・時刻・モデル・指示を書き、`automation_update`か`set_thread_archived`で行ってIDと結果だけを返すよう伝える。
+頼むときは、操作・ID・時刻・モデル・思考量・指示を書き、`automation_update`か`set_thread_archived`で行ってIDと結果だけを返すよう伝える。
 `wait_threads`で完了を待ち、`read_thread`で結果を確かめる。
 補助のスレッドは自分をアーカイブするとそのturnが中断されて回答が残らないため、結果を確かめた後に`send_message_to_thread`で自分をアーカイブするよう頼み、完了は待たない。
 結果が分からなければ、作成の結果が分からないときと同じに扱う。
-予定作成の実行は、登録元のモデルによらず`model: claude-opus-5-5`で作る。
-時刻を更新するときも、モデルは変えない。
+予定作成の実行を登録するときは、`~/.config/harnexus/models.json`の`skills.dispatch.model`を`model`に、`skills.dispatch.thinking`を`reasoningEffort`に渡す。
+時刻だけを更新するときは、登録済みのモデルと思考量を保つ。
 
 - 作る前に`plan_task`を見て、IDがあれば作らずに時刻を更新する。
   作ったらすぐIDを書く。

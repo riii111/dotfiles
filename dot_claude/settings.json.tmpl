@@ -3,10 +3,7 @@
     "RIPGREP_CONFIG_PATH": "{{ .chezmoi.homeDir }}/.ripgreprc",
     "GIT_OPTIONAL_LOCKS": "0",
     "DISABLE_TELEMETRY": "1",
-    "RUST_LOG": "info",
-    "ANTHROPIC_CUSTOM_MODEL_OPTION": "claude-opus-4-6[1m]",
-    "ANTHROPIC_CUSTOM_MODEL_OPTION_NAME": "Opus 4.6 (1M)",
-    "ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION": "Opus 4.6 with 1M context"
+    "RUST_LOG": "info"
   },
   "outputStyle": "Concise",
   "includeCoAuthoredBy": false,
@@ -413,6 +410,5 @@
     "command": "\"{{ .chezmoi.homeDir }}/.nix-profile/bin/claude-statusline\""
   },
   "alwaysThinkingEnabled": true,
-  "effortLevel": "medium",
   "skipDangerousModePermissionPrompt": {{ if eq .type "personal" }}true{{ else }}false{{ end }}
 }
