@@ -19,8 +19,7 @@ description: |
    Codexは`sandbox_permissions: require_escalated`を付ける。
    Claudeはそのまま実行する（サンドボックス対象外）。
    パイプ・リダイレクト・`cd`などを付けず単独で実行する（付けると対象外にならない）。
-   - モデルと思考量は`harnexus-crew`の既定に任せる。
-     ユーザーが別モデルを指定した場合だけ`--model`・`--thinking`を渡す。
+   - 既定は`--model gpt-6.1-terra --thinking xhigh`とし、ユーザーが指定した項目はその値を渡す。
      T3 Codeでは`--thinking`を渡さず、思考量の指定はworkerの作成後にT3 Codeで設定するようユーザーに伝える。
 4. 出力のthreadId・model・effortを報告する。
    失敗時は理由を報告して停止し、create_threadを直接呼ばない。
