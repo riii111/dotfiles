@@ -6,10 +6,17 @@
 
 朝の実行は、報告を書く前に前日以前の分を片付ける。
 
-1. 前日以前の`days/<日付>.yaml`に残っているScheduled Taskの削除と、予定・早朝の実行のスレッドのアーカイブを、1つの[補助のスレッド](#scheduled-taskの扱い)にまとめて頼み、済んだものを空にする。
+1. 前日以前の`days/<日付>.yaml`に残っているIDを片付ける。
+   `plan_task`は`automation_update`で削除する。
+   `plan_thread`と`launch_thread`は`set_thread_archived`でアーカイブする。
+   操作はその場で行い、削除・アーカイブ済みと確認できたIDだけ空にする。
+   結果が不明なら、次の試行前に対象の状態を読み取る。
 2. 使われていない`planned`（追加分を含む）をすべて`plan_cancelled`（note：持ち越し）で閉じる。
    OKのないまま早朝の実行を過ぎた項目は始めず、次の予定に載せ直す。
    有効なOKは残るため、次の予定で聞き直さない。
+
+後始末の失敗は`runs/<日付>-maintenance.md`に操作・ID・理由を残す。
+今日の予定作成や返事に影響し、ユーザーの操作が必要な場合だけ、朝の報告に必要な対応を書く。
 
 ## 今日の予定登録
 
@@ -61,25 +68,25 @@ amount: ""            # 量について言われた内容を短く。なけれ�
 
 ### Scheduled Taskの扱い
 
-Claudeのスレッドの`automation_update`は、毎回新しいスレッドを作るScheduled Taskを扱えず、スレッドをアーカイブするツール（`set_thread_archived`）も持たない。
-そのためScheduled Taskの作成・更新・削除とスレッドのアーカイブは、`create_thread`で`model`を省略して（Appの既定のCodexモデルで）補助のスレッドを作り、頼む。
-補助のスレッドの作業ディレクトリと、作るScheduled Taskの作業ディレクトリは`~/agent-desk/`にする。
-頼むときは、操作・ID・時刻・モデル・思考量・指示を書き、`automation_update`か`set_thread_archived`で行ってIDと結果だけを返すよう伝える。
-`wait_threads`で完了を待ち、`read_thread`で結果を確かめる。
-補助のスレッドは自分をアーカイブするとそのturnが中断されて回答が残らないため、結果を確かめた後に`send_message_to_thread`で自分をアーカイブするよう頼み、完了は待たない。
-結果が分からなければ、作成の結果が分からないときと同じに扱う。
-予定作成の実行を登録するときは、`~/.config/harnexus/models.json`の`skills.dispatch.model`を`model`に、`skills.dispatch.thinking`を`reasoningEffort`に渡す。
-時刻だけを更新するときは、登録済みのモデルと思考量を保つ。
+予定作成の実行は、その場で`automation_update`を呼び、`kind: cron`の単発タスクとして登録する。
+Claudeでは`mcp__codex_link__automation_update`と`mcp__codex_link__set_thread_archived`を使う。
+この経路で作った単発タスクは、別のClaudeスレッドからもIDで更新・削除できる。
+ツールが使えないときは、該当する操作を失敗として記録する。
+
+Appの`list_projects`で`~/agent-desk/`のプロジェクトIDを確かめる。
+登録時のモデルと思考量は`~/.config/harnexus/models.json`の`skills.dispatch`から読む。
+Claudeのツールでは`runSettings`に`model`と`reasoningEffort`を渡す。
+同じ`runSettings`で`target`に`type: project`と`projectId`を、`executionEnvironment`に`local`を指定する。
+時刻を更新するときは、登録済みの設定を読み、時刻以外の値を保つ。
 
 - 作る前に`plan_task`を見て、IDがあれば作らずに時刻を更新する。
-  作ったらすぐIDを書く。
+  作ったらツールが確定したIDをすぐ書く。
   作成の結果が分からなければ作り直さず、`## そのほか`に書き、Appで確かめるよう伝える。
-- 予定作成の実行は1回だけ動かす。
-  予定を書き終えたら、`plan_task`を消して空にする。
-  時間を過ぎても、自分のスレッドの記録と`plan_task`の削除は済ませる。
+- 予定作成の実行は繰り返し回数を1回に設定する。
+  予定を書き終えたら、次の朝の実行に削除を任せるため、`plan_task`を残す。
+  手動で予定を作った時点で、その日の予定作成がまだ予約されていれば取り消す。
+  時間を過ぎても、自分のスレッドのIDは記録する。
   lockを取れなかったときは、自分の時刻を10分後へ移して終了する。
-- 消せなかったIDは`days/<日付>.yaml`に残し、`## そのほか`に書く。
-  次の朝の実行で消す。
 
 ### スレッドの扱い
 
