@@ -44,7 +44,17 @@ fn target(event : Json, cwd : String, home : String) -> Target {
 }
 
 ///|
-/// The folder whose Git configuration holds the target's `pr.language`.
+/// Configuration keys that can hold the target's language, most specific first.
+fn language_keys(target : Target) -> Array[String] {
+  match target {
+    Repository(owner~, repo~, ..) =>
+      ["pr.\{owner}/\{repo}.language", "pr.\{owner}.language", "pr.language"]
+    Folder(_) => ["pr.language"]
+  }
+}
+
+///|
+/// The folder whose Git configuration holds the target's language.
 /// A repository without a ghq checkout is read from `home`, which only the global and system settings apply to.
 async fn language_folder(target : Target, home : String) -> String {
   match target {

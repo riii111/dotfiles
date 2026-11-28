@@ -46,7 +46,7 @@ async fn hook_output(
         None
       }
     "pr-state-check" => pr_state_decision(event, options, @pr_state.run_lookup)
-    "pr-format-check" => pr_format_decision(event, @pr_format.read_language)
+    "pr-format-check" => pr_format_decision(event, @pr_format.read_config)
     "comment-review-check" => comment_review_decision(event)
     _ =>
       fail(
@@ -132,9 +132,9 @@ async fn pr_state_decision(
 /// A failure while reading the event or the configured language lets the call through, as the Python hook did.
 async fn pr_format_decision(
   event : Json,
-  read_language : async (String) -> String?,
+  read_config : async (String, String) -> String?,
 ) -> (String, String)? {
-  let problems = @pr_format.check(event, event_cwd(event), read_language) catch {
+  let problems = @pr_format.check(event, event_cwd(event), read_config) catch {
     _ => return None
   }
   if problems.is_empty() {
