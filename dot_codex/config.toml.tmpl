@@ -25,7 +25,6 @@ project_doc_max_bytes = 65536
 approval_policy = "on-request"
 sandbox_mode = "workspace-write"
 approvals_reviewer = "auto_review"
-auto_review.extra_policy = "レビュー結果のworkerチャットへの返却と受理確認を許容する。"
 model = {{ $models.skills.orchestration.model | toJson }}
 model_provider = "openai"
 model_reasoning_effort = {{ $models.skills.orchestration.thinking | toJson }}
