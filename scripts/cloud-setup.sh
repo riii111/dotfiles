@@ -81,7 +81,7 @@ fi
 # shellcheck disable=SC2034 # Used by crew.sh.
 crew_repo=${HARNEXUS_CREW_REPO:-https://github.com/riii111/taskctl.git}
 # shellcheck disable=SC2034 # Used by crew.sh.
-crew_rev=${HARNEXUS_CREW_REV:-670be108d6013552e22dda54ffe9236a89c27cc3}
+crew_rev=${HARNEXUS_CREW_REV:-f435b3f9290b1f5bb24ae6f4bde705283ae5740a}
 task_prefix=${HARNEXUS_CREW_PREFIX:-/usr/local/bin}
 if [[ -z $dotfiles ]]; then
 	dotfiles=$(mktemp -d)
