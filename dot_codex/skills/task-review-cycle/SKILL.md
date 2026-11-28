@@ -7,8 +7,8 @@ description: |
 
 # Task Review Cycle
 
-`harnexus-crew environment`が`"host":"claude"`を返す場合は、先に末尾の「Claude CodeのCloud」を読む。
-`"host":"codex"`を返す場合は「Codex Cloud」の手順を使う。
+Codex Cloudで起動されたworkerは、先に末尾の「Codex Cloud」の手順を使う。
+その他の実行環境では、`harnexus-crew environment`が`"host":"claude"`を返す場合に「Claude CodeのCloud」を読む。
 `"app":"t3"`を返す場合は、先に「T3 Code」を読む。
 
 commit済み候補をfreshなCodex reviewerへ渡し、以後は同じreview Taskで続ける。
@@ -117,6 +117,7 @@ VMが作り直されると、依頼JSONとレビューの状態とreviewerの会
 ## Codex Cloud
 
 同じVMで動くCodexのサブエージェントを独立reviewerとして1体起動する。
+reviewerはworkerのSubagentsに表示される。
 checkoutの絶対パス、タスクの根拠資料、固定base/head SHA、判断に必要なログや生成物のパスを渡す。
 [ai-code-review](../ai-code-review/SKILL.md)と[レビュー時の確認事項](#レビュー時の確認事項)に従った判定・指摘・base/headを受け取る。
 返ったbase/headが依頼と一致することを確認する。

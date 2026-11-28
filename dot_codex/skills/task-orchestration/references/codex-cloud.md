@@ -13,7 +13,10 @@
      すでにローカルworkerがあるtaskはそのworkerを追う。
    - 登録を読めなければ、その理由を報告する。
 2. Codex Cloudでの実行を指定されたtaskは、`python3 <helper> prepare <owner/repo> <task-id>` で手動起動を予約する。
-   `created: true` のときだけ、[起動依頼](../../task-session-launch/references/worker.md)に対象リポジトリ、開始branch、`task-worker`の「Codex Cloud」に従う指示を添えてユーザーに渡す。
+   `created: true` のときだけ、[起動依頼](../../task-session-launch/references/worker.md)に対象リポジトリと開始branchを添えてユーザーに渡す。
+   起動依頼のSKILLリンクは、Cloud VMの `$HOME/.agents/skills/task-worker/SKILL.md` を優先するよう書き換える。
+   そこにない場合は作業checkoutの `.agents/skills/task-worker/SKILL.md` を使う。
+   `task-review-cycle` も同じ配布先を読み、両SKILLの「Codex Cloud」に従う。
    Codex Cloudの画面でその依頼を使ってタスクを1つ起動し、URLを返してもらう。
    参照文書は開始branchに含まれるパスかCloudから読めるURLを使う。
 3. URLのチャットIDを `mcp__codex_app__read_thread` に `hostId: durable` とともに渡し、起動依頼のタスクID・リポジトリを照合する。
@@ -23,3 +26,10 @@
 起動に失敗した場合は、ユーザーとCloudチャットが作られていないことを確認してから `python3 <helper> cancel <owner/repo> <task-id>` で予約を解除する。
 登録はローカルのXDG stateディレクトリに保存され、同じMac上の別の統括チャットやcheckoutからも読み出せる。
 サンドボックスから状態ディレクトリへ書けない場合は、`prepare`、`attach`、`cancel` を既定の承認経路で実行する。
+
+## PR監視
+
+workerがDraft PRのURLを残したら、ローカルの統括チャットで [pr-watch-link](../../pr-watch-link/SKILL.md) に従ってそのPRを監視に登録する。
+再開時も、担当workerの報告と既存の監視先を確認し、未登録のPRだけを登録する。
+通知が届いたら、報告にあるPR URLと照合し、同じCloud workerへ届ける。
+送信結果を確認し、統括チャットにも中継の結果を残す。
