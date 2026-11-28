@@ -14,7 +14,7 @@ Cloud のセットアップには Linux x86_64、Git、Python、hook ビルド�
 HARNEXUS_CREW_TOOLCHAIN=moon HARNEXUS_CREW_REV=<公開済みのCLIコミット> bash <dotfiles>/scripts/codex-cloud-setup.sh <対象リポジトリ>
 ```
 
-`moon` 版の CLI は、固定された MoonBit を PATH に用意するか、Nix で CLI リポジトリの開発環境を利用できる必要がある。旧 Bun 版には Codex Cloud の独立レビュー経路がない。CLI の変更を公開するまでは上記のコミットを取得できない。Claude Code Cloud で新 CLI を使う場合も `HARNEXUS_CREW_TOOLCHAIN=moon` と同じ commit を指定する。Codex の更新や再開時の既存設定への安全な切り替えは未対応であり、更新には新しい環境が必要。
+MoonBit 版の CLI は、セットアップが固定ツールチェーンと core を GitHub Releases から取得し、SHA-256 を検証してビルドする。ネットワーク制限では `github.com` と `release-assets.githubusercontent.com` を許可する。旧 Bun 版には Codex Cloud の独立レビュー経路がない。CLI の変更を公開するまでは上記のコミットを取得できない。Claude Code Cloud で新 CLI を使う場合も `HARNEXUS_CREW_TOOLCHAIN=moon` と同じ commit を指定する。Codex の更新や再開時の既存設定への安全な切り替えは未対応であり、更新には新しい環境が必要。
 
 Claude Code Cloud の Harnexus チャットで選んだ SKILL は、Cloud 側の `~/.claude/skills/<名前>/SKILL.md` に解決する。配置されていない名前は Cloud 側で読めない。Codex Cloud は `.agents/skills` を利用するが、セットアップ後に作った SKILL が同じセッションの選択欄と明示呼び出しに反映されるかは未確認。
 

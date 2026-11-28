@@ -9,6 +9,8 @@
 #   api.openai.com
 #   cli.moonbitlang.com
 #   download.mooncakes.io
+#   github.com
+#   release-assets.githubusercontent.com
 #   d251robtodj7m8.cloudfront.net
 # The last is where download.mooncakes.io redirects; if the agent-hooks build cannot resolve a new host, add it.
 #

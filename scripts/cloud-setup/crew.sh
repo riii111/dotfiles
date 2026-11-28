@@ -25,8 +25,11 @@ install_crew() {
 		source="$stage/harnexus-crew"
 		fetch_commit "$source" "$crew_repo" "$crew_rev" || exit 1
 		if [[ ${HARNEXUS_CREW_TOOLCHAIN:-moon} == moon ]]; then
+			bash "${HARNEXUS_CREW_MOON_INSTALLER:-$own/crew-moon.sh}" "$stage/moon" || exit 1
+			export MOON_TOOLCHAIN_ROOT="$stage/moon/toolchain"
+			export PATH="$MOON_TOOLCHAIN_ROOT/bin:$PATH"
 			XDG_CONFIG_HOME="$stage/config" bash "$source/scripts/install.sh" \
-				--prefix "$task_prefix" --repo "$source" --rev "$crew_rev" || exit 1
+				--prefix "$task_prefix" --repo "$source" --rev "$crew_rev" --moon "$MOON_TOOLCHAIN_ROOT/bin/moon" || exit 1
 		elif [[ $HARNEXUS_CREW_TOOLCHAIN == bun ]]; then
 			XDG_CONFIG_HOME="$stage/config" bash "$source/scripts/install.sh" \
 				--prefix "$task_prefix" --repo "$source" --rev "$crew_rev" --bun "$bun_bin" || exit 1

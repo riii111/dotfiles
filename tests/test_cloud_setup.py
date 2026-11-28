@@ -27,6 +27,12 @@ class CloudSetupTest(unittest.TestCase):
         self.installer.write_text(
             'printf "#!/bin/sh\\ncat >/dev/null\\n" > "$1/agent-hooks" && chmod +x "$1/agent-hooks"\n'
         )
+        self.moon_installer = self.home / "fake-install-moon.sh"
+        self.moon_installer.write_text(
+            'mkdir -p "$1/toolchain/bin"\n'
+            'printf "#!/bin/sh\\nexit 0\\n" > "$1/toolchain/bin/moon"\n'
+            'chmod +x "$1/toolchain/bin/moon"\n'
+        )
 
     def run_setup(self, piped=False, **env):
         subprocess.run(
@@ -38,6 +44,7 @@ class CloudSetupTest(unittest.TestCase):
                 "HOME": str(self.home),
                 "GIT_CONFIG_NOSYSTEM": "1",
                 "AGENT_HOOKS_INSTALLER": str(self.installer),
+                "HARNEXUS_CREW_MOON_INSTALLER": str(self.moon_installer),
                 **env,
             },
             capture_output=True,
@@ -209,6 +216,7 @@ class CloudSetupTest(unittest.TestCase):
                 "HOME": str(self.home),
                 "GIT_CONFIG_NOSYSTEM": "1",
                 "AGENT_HOOKS_INSTALLER": str(self.installer),
+                "HARNEXUS_CREW_MOON_INSTALLER": str(self.moon_installer),
                 "CLOUD_REFRESH_FOREGROUND": "1",
                 **env,
             },
@@ -263,6 +271,7 @@ class CloudSetupTest(unittest.TestCase):
                         "HOME": str(self.home),
                         "GIT_CONFIG_NOSYSTEM": "1",
                         "AGENT_HOOKS_INSTALLER": str(self.installer),
+                        "HARNEXUS_CREW_MOON_INSTALLER": str(self.moon_installer),
                         "CLOUD_REFRESH_FOREGROUND": "1",
                     },
                     check=True,
@@ -364,7 +373,8 @@ class CloudSetupTest(unittest.TestCase):
             "set -e\n"
             "while [ $# -gt 0 ]; do case $1 in\n"
             "  --prefix) prefix=$2; shift 2 ;; --repo) repo=$2; shift 2 ;;\n"
-            "  --rev) rev=$2; shift 2 ;; --bun) shift 2 ;; *) exit 2 ;;\n"
+            "  --rev) rev=$2; shift 2 ;; --bun) shift 2 ;;\n"
+            '  --moon) test -x "$2" && test "$2" = "$MOON_TOOLCHAIN_ROOT/bin/moon"; shift 2 ;; *) exit 2 ;;\n'
             "esac; done\n"
             'new=$(mktemp); cp "$repo/harnexus-crew" "$new"; chmod +x "$new"; "$new" check\n'
             'printf "%s\\n" "$rev" >"$prefix/installer.log"\n'
@@ -384,6 +394,7 @@ class CloudSetupTest(unittest.TestCase):
                 "HOME": str(self.home),
                 "GIT_CONFIG_NOSYSTEM": "1",
                 "AGENT_HOOKS_INSTALLER": str(self.installer),
+                "HARNEXUS_CREW_MOON_INSTALLER": str(self.moon_installer),
                 "HARNEXUS_CREW": "1",
                 "HARNEXUS_CREW_PREFIX": str(prefix),
                 **env,
@@ -618,6 +629,29 @@ class CloudSetupTest(unittest.TestCase):
                     (prefix / ".harnexus-crew.commit").read_text().strip(), rev
                 )
 
+    def test_a_failed_moon_setup_keeps_the_previous_cli_and_skills(self):
+        repo, rev = self.crew_repo()
+        prefix, _ = self.run_task_setup(
+            HARNEXUS_CREW_REPO=str(repo), HARNEXUS_CREW_REV=rev
+        )
+        previous = (prefix / "harnexus-crew").read_text()
+        skill = self.home / ".codex/skills/task-worker/kept.md"
+        skill.write_text("previous skill")
+        newer, newer_rev = self.crew_repo("newer")
+        broken = self.home / "broken-moon.sh"
+        broken.write_text("exit 1\n")
+
+        _, ran = self.run_task_setup(
+            HARNEXUS_CREW_REPO=str(newer),
+            HARNEXUS_CREW_REV=newer_rev,
+            HARNEXUS_CREW_MOON_INSTALLER=str(broken),
+        )
+
+        self.assertIn("previous skills, task.json and task CLI stay", ran.stderr)
+        self.assertEqual((prefix / "harnexus-crew").read_text(), previous)
+        self.assertEqual((prefix / ".harnexus-crew.commit").read_text().strip(), rev)
+        self.assertEqual(skill.read_text(), "previous skill")
+
     def test_codex_setup_installs_the_shared_skills_and_hook_config(self):
         repo, rev = self.crew_repo()
         project = self.home / "project"
@@ -628,6 +662,7 @@ class CloudSetupTest(unittest.TestCase):
             "HOME": str(self.home),
             "GIT_CONFIG_NOSYSTEM": "1",
             "AGENT_HOOKS_INSTALLER": str(self.installer),
+            "HARNEXUS_CREW_MOON_INSTALLER": str(self.moon_installer),
             "HARNEXUS_CREW_PREFIX": str(prefix),
             "HARNEXUS_CREW_REPO": str(repo),
             "HARNEXUS_CREW_REV": rev,
