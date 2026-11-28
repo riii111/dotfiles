@@ -8,6 +8,7 @@ description: |
 # Task Worker
 
 `harnexus-crew environment`が`"host":"claude"`を返す場合は、先に末尾の「Claude CodeのCloud」を読む。
+`"host":"codex"`を返す場合は「Codex Cloud」を読む。
 
 参照文書の先頭をタスク管理元とし、対象タスク・合意・依存成果・関連規約を確認する。
 再開時は必要な文書を読み直す。
@@ -118,3 +119,11 @@ baseの進行だけでは取り込み・全検証・再レビューを繰り返�
   届いた知らせへの対応は「PRへの指摘対応」に従い、指摘を自動で修正してpushする機能（Auto-fix）は使わない。
 - 統括役が`create_session`で起動したworkerは、「親への通知や完了記録は扱わない」に代えて、次を`send_message`（session_idは`@parent`）で統括役へ送る。
   完了報告、停止や結果不明の報告、PRへの指摘対応の報告。
+
+## Codex Cloud
+
+- セッションのcheckoutでbranchを作る。
+- 独立レビューはtask-review-cycleの「Codex Cloud」に従う。
+- CloudのVMとレビュー記録は再構築で失われる。
+  公開するまでのcommitとレビュー結果はセッションの成果として保持し、再開時は状態を確認する。
+- `harnexus-crew`がCodex Cloudのレビューに対応していない場合は停止し、CLIの更新が必要と報告する。

@@ -112,3 +112,12 @@ reviewerを確かめたうえでownerが送り直すと決めた場合だけ、`
 
 VMが作り直されると、依頼JSONとレビューの状態とreviewerの会話は失われる。
 依頼JSONを作り直して実行すると、新しいreviewerが現在のbase branchのtipを基点に全体をレビューする。
+
+## Codex Cloud
+
+レビューは同じVMで別のCodex CLIを起動し、その実行結果をworkerが受け取る。
+依頼JSONは「Claude CodeのCloud」と同じにし、`workerAI`を`Codex`にする。
+`harnexus-crew review --request <JSON>`の完了を待ち、出力の`status`・`verdict`・`answer`・`base`・`head`を確認する。
+修正後は同じJSONで再実行し、同じreviewerへ再レビューを依頼する。
+判定保留、結果不明、VMの再構築、`--ask`の扱いは「Claude CodeのCloud」と同じ。
+Codex CLIの認証・起動とCloud内の再レビューは実環境で確認する。

@@ -78,8 +78,10 @@ elif [[ ${HARNEXUS_TASK:-} == 1 && ${HARNEXUS_CREW+x} != x ]]; then
 	echo "cloud-setup: replace HARNEXUS_TASK=1 with HARNEXUS_CREW=1 in the Cloud setup script and rerun it" >&2
 	exit 1
 fi
+# shellcheck disable=SC2034 # Used by crew.sh.
 crew_repo=${HARNEXUS_CREW_REPO:-https://github.com/riii111/taskctl.git}
-crew_rev=${HARNEXUS_CREW_REV:-2607176991ea87b731acbbea185edd49e08d5deb}
+# shellcheck disable=SC2034 # Used by crew.sh.
+crew_rev=${HARNEXUS_CREW_REV:-670be108d6013552e22dda54ffe9236a89c27cc3}
 task_prefix=${HARNEXUS_CREW_PREFIX:-/usr/local/bin}
 if [[ -z $dotfiles ]]; then
 	dotfiles=$(mktemp -d)
@@ -123,6 +125,7 @@ install -m 0755 "$own/refresh.sh" "$hooks/cloud-refresh.sh"
 	printf 'export HARNEXUS_CREW_REPO=%q\n' "$crew_repo"
 	printf 'export HARNEXUS_CREW_REV=%q\n' "${HARNEXUS_CREW_REV:-}"
 	printf 'export HARNEXUS_CREW_PREFIX=%q\n' "$task_prefix"
+	printf 'export HARNEXUS_CREW_TOOLCHAIN=%q\n' "${HARNEXUS_CREW_TOOLCHAIN:-moon}"
 } >"$stage/options"
 if [[ $legacy_options == yes && ! -e $state/options.pre-crew ]]; then
 	cp -p "$state/options" "$state/options.pre-crew"
@@ -143,7 +146,10 @@ MD
 skills="$HOME/.codex/skills"
 claude_skills="$HOME/.claude/skills"
 config="${XDG_CONFIG_HOME:-$HOME/.config}/harnexus"
-task_skills=(pr-review ai-code-review adr-review explain-change pr-watch-link task-orchestration task-review-cycle task-session-launch task-worker)
+task_skills=()
+while IFS= read -r name; do
+	[[ -n $name ]] && task_skills+=("$name")
+done <"$own/skills.list"
 mkdir -p "$stage/skills" "$stage/config/harnexus"
 for name in "${task_skills[@]}"; do
 	cp -R "$dotfiles/dot_codex/skills/$name" "$stage/skills/$name"
@@ -160,35 +166,8 @@ JSON
 }
 task_json "$stage/skills" >"$stage/config/harnexus/task.json"
 
-# The task CLI needs the exact Bun its source pins, which the image may not have.
-bun_bin=$(command -v bun || echo "$HOME/.bun/bin/bun")
-
-# Fetches one commit only, so the source built is the commit asked for.
-fetch_commit() {
-	[[ $3 =~ ^[0-9a-f]{40}$ ]] || {
-		echo "cloud-setup: $3 is not a full commit SHA" >&2
-		return 1
-	}
-	git init --quiet "$1" &&
-		git -C "$1" fetch --quiet --depth 1 "$2" "$3" &&
-		git -C "$1" checkout --quiet --detach FETCH_HEAD &&
-		[[ $(git -C "$1" rev-parse HEAD) == "$3" ]]
-}
-
-install_crew() {
-	if [[ -x $task_prefix/harnexus-crew &&
-		$(cat "$task_prefix/.harnexus-crew.commit" 2>/dev/null) == "$crew_rev" ]]; then
-		XDG_CONFIG_HOME="$stage/config" "$task_prefix/harnexus-crew" check >/dev/null
-		return
-	fi
-	(
-		source="$stage/harnexus-crew"
-		fetch_commit "$source" "$crew_repo" "$crew_rev" || exit 1
-		XDG_CONFIG_HOME="$stage/config" bash "$source/scripts/install.sh" \
-			--prefix "$task_prefix" --repo "$source" --rev "$crew_rev" --bun "$bun_bin" || exit 1
-		printf '%s\n' "$crew_rev" >"$task_prefix/.harnexus-crew.commit"
-	)
-}
+# shellcheck source=/dev/null
+. "$own/crew.sh"
 
 switch_set=yes
 if [[ ${HARNEXUS_CREW:-} == 1 ]]; then

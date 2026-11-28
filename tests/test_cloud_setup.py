@@ -111,9 +111,11 @@ class CloudSetupTest(unittest.TestCase):
         )
         self.assertIs(settings["includeCoAuthoredBy"], False)
         self.assertIs(settings["attribution"], False)
-        self.assertEqual(
-            settings["permissions"]["allow"], ["Bash(git push --force-with-lease *)"]
+        self.assertIn("Edit", settings["permissions"]["allow"])
+        self.assertIn(
+            "Bash(git push --force-with-lease *)", settings["permissions"]["allow"]
         )
+        self.assertIn("Bash(gh pr comment*)", settings["permissions"]["deny"])
         memory = (self.home / ".claude/CLAUDE.md").read_text()
         self.assertTrue(
             memory.startswith((ROOT / ".chezmoitemplates/agents-common.md").read_text())
@@ -129,7 +131,9 @@ class CloudSetupTest(unittest.TestCase):
         self.assertEqual(language.stdout.strip(), "ja")
 
     def test_pr_languages_set_owner_and_repository_overrides(self):
-        self.run_setup(PR_LANGUAGE="ja", PR_LANGUAGES="riii111=en acme/app=ja malformed acme=EN")
+        self.run_setup(
+            PR_LANGUAGE="ja", PR_LANGUAGES="riii111=en acme/app=ja malformed acme=EN"
+        )
 
         config = subprocess.run(
             ["git", "config", "--global", "--get-regexp", r"^pr\."],
@@ -614,6 +618,39 @@ class CloudSetupTest(unittest.TestCase):
                     (prefix / ".harnexus-crew.commit").read_text().strip(), rev
                 )
 
+    def test_codex_setup_installs_the_shared_skills_and_hook_config(self):
+        repo, rev = self.crew_repo()
+        project = self.home / "project"
+        project.mkdir()
+        prefix = self.home / "bin"
+        env = {
+            "PATH": os.environ["PATH"],
+            "HOME": str(self.home),
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "AGENT_HOOKS_INSTALLER": str(self.installer),
+            "HARNEXUS_CREW_PREFIX": str(prefix),
+            "HARNEXUS_CREW_REPO": str(repo),
+            "HARNEXUS_CREW_REV": rev,
+        }
+        command = ["bash", str(ROOT / "scripts/codex-cloud-setup.sh"), str(project)]
+        result = subprocess.run(command, env=env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        skills = project / ".agents/skills"
+        for name in (ROOT / "scripts/cloud-setup/skills.list").read_text().splitlines():
+            self.assertEqual(
+                (skills / name / "SKILL.md").read_text(),
+                (ROOT / "dot_codex/skills" / name / "SKILL.md").read_text(),
+            )
+        settings = json.loads((self.home / ".codex/hooks.json").read_text())
+        for event in ("PreToolUse", "PermissionRequest"):
+            self.assertEqual(len(settings["hooks"][event]), 1)
+        self.assertEqual((prefix / ".harnexus-crew.commit").read_text().strip(), rev)
+        task = json.loads((self.home / ".config/harnexus/task.json").read_text())
+        self.assertTrue(Path(task["templates"]["reviewer"]).is_file())
+        second = subprocess.run(command, env=env, capture_output=True, text=True)
+        self.assertNotEqual(second.returncode, 0)
+        self.assertIn("already exists", second.stderr)
+
     def test_clones_the_dotfiles_when_piped_into_bash(self):
         settings = self.run_setup(
             piped=True, DOTFILES_REPO=str(self.dotfiles_repo("dotfiles"))
@@ -636,13 +673,12 @@ class CloudSetupTest(unittest.TestCase):
 
         settings = self.run_setup()
 
-        self.assertEqual(
-            settings["permissions"],
-            {
-                "deny": ["SearchPlugins"],
-                "allow": ["Bash(git push --force-with-lease *)"],
-            },
+        self.assertIn("SearchPlugins", settings["permissions"]["deny"])
+        self.assertIn(
+            "Bash(git push --force-with-lease *)", settings["permissions"]["allow"]
         )
+        for rules in settings["permissions"].values():
+            self.assertEqual(len(rules), len(set(rules)))
         groups = settings["hooks"]["PreToolUse"]
         self.assertEqual(
             [group["matcher"] for group in groups],
