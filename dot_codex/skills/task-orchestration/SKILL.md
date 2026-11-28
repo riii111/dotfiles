@@ -21,7 +21,8 @@ workerとreviewerの起動はtask-session-launchとtask-review-cycleの設定に
 開始対象ごとに、[PRの積み方](../task-session-launch/references/stacking.md)の基準で積むかどうかを決める。
 積み先のPRがまだないtaskは、そのPRができるまで開始しない。
 管理元にない合意や必要な依存成果・担当境界は参照文書へ記録する。
-開始対象を選んだ同じturnで、タスクID・参照文書のパスとURL・許可された到達点を`$task-session-launch`へ渡す。Codex Cloudに割り当てるtaskは登録手順へ進む。
+開始対象を選んだ同じturnで、タスクID・参照文書のパスとURL・許可された到達点を`$task-session-launch`へ渡す。
+Codex Cloudに割り当てるtaskは登録手順へ進む。
 中間報告で停止しない。
 
 開始済みか完了済みかはタスク管理元、既存のCodex Task、GitHubのPRを見て判断する。

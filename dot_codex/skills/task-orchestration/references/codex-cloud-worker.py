@@ -10,7 +10,7 @@ import uuid
 def main():
     parser = argparse.ArgumentParser(description="Track a Codex Cloud worker by task.")
     commands = parser.add_subparsers(dest="command", required=True)
-    for name in ("get", "prepare", "attach"):
+    for name in ("get", "prepare", "attach", "cancel"):
         command = commands.add_parser(name)
         command.add_argument("repository")
         command.add_argument("task_id")
@@ -28,7 +28,9 @@ def main():
     try:
         read_only = args.command == "get"
         if read_only:
-            if not database.exists():
+            try:
+                database.stat()
+            except FileNotFoundError:
                 print("null")
                 return
         else:
@@ -64,10 +66,17 @@ def main():
                 ).rowcount
                 if not updated:
                     parser.error("this task is already attached to a different worker")
+            if args.command == "cancel":
+                db.execute(
+                    "DELETE FROM workers WHERE repository = ? AND task_id = ? AND thread_id IS NULL",
+                    key,
+                )
             row = db.execute(
                 "SELECT thread_id FROM workers WHERE repository = ? AND task_id = ?",
                 key,
             ).fetchone()
+            if args.command == "cancel" and row:
+                parser.error("cannot cancel an attached worker")
     except sqlite3.IntegrityError:
         parser.error("this worker is already attached to a different task")
     except (OSError, sqlite3.Error) as error:

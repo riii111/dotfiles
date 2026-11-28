@@ -117,7 +117,8 @@ VMが作り直されると、依頼JSONとレビューの状態とreviewerの会
 ## Codex Cloud
 
 同じVMで動くCodexのサブエージェントを独立reviewerとして1体起動する。
-checkoutの絶対パス、タスクの根拠資料、固定base/head SHA、判断に必要なログや生成物のパスを渡し、[レビュー時の確認事項](#レビュー時の確認事項)に沿った判定・指摘・base/headをサブエージェントの最終回答で受け取る。
+checkoutの絶対パス、タスクの根拠資料、固定base/head SHA、判断に必要なログや生成物のパスを渡す。
+[ai-code-review](../ai-code-review/SKILL.md)と[レビュー時の確認事項](#レビュー時の確認事項)に従った判定・指摘・base/headを受け取る。
 返ったbase/headが依頼と一致することを確認する。
 修正をcommitしたら、保存した同じreviewer IDへ継続依頼（`followup_task`）を送り、新しいheadをレビューさせる。
 必要な追加質問も同じreviewerへ送る。
