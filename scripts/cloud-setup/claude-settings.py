@@ -1,6 +1,8 @@
 import json
 import os
+import re
 import sys
+from pathlib import Path
 
 path, hooks = sys.argv[1], sys.argv[2]
 # Each hook comes as NAME=agent-hooks or NAME=python; a hook left out is not installed.
@@ -118,11 +120,30 @@ for event, added in (
         ]
     groups[:] = [group for group in groups if group["hooks"]]
     groups.extend(added)
+
+
+def local_permissions():
+    template = Path(__file__).resolve().parents[2] / "dot_claude" / "settings.json.tmpl"
+    text = template.read_text()
+    block = re.search(r'^  "permissions": (\{.*?^  \})', text, re.S | re.M).group(1)
+    # Rules that name local paths through chezmoi variables have no counterpart in the cloud container, so they are dropped rather than rendered.
+    lines = [line for line in block.splitlines() if "{{" not in line]
+    rules = json.loads(re.sub(r",(\s*[\]}])", r"\1", "\n".join(lines)))
+    # The cloud harness exposes claude.ai connectors without the claude_ai_ prefix, so local rules are renamed to match there.
+    return {
+        kind: [rule.replace("mcp__claude_ai_", "mcp__") for rule in rules.get(kind, [])]
+        for kind in ("allow", "deny", "ask")
+    }
+
+
+permissions = settings.setdefault("permissions", {})
 # A narrow allow rule is decided before the auto mode classifier, which refused lease pushes.
-allow = settings.setdefault("permissions", {}).setdefault("allow", [])
-for rule in ("Bash(git push --force-with-lease *)",):
-    if rule not in allow:
-        allow.append(rule)
+extra = {"allow": ["Bash(git push --force-with-lease *)"]}
+for kind, rules in local_permissions().items():
+    current = permissions.setdefault(kind, [])
+    for rule in [*rules, *extra.get(kind, [])]:
+        if rule not in current:
+            current.append(rule)
 settings["attribution"] = False
 settings["includeCoAuthoredBy"] = False
 with open(path, "w") as file:
