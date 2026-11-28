@@ -21,7 +21,7 @@ async fn problems(
   event : Json,
   language~ : String? = Some("ja"),
 ) -> Array[String] {
-  @pr_format.check(event, "/tmp", _ => language)
+  @pr_format.check(event, "/tmp", (_, _) => language)
 }
 
 ///|
@@ -245,13 +245,13 @@ test "references and bullets use Python's Unicode word and digit classes" {
 }
 
 ///|
-/// Returns the folder whose `pr.language` the check reads for `event`, with the session in `/work/session`.
+/// Returns the folder whose language the check reads for `event`, with the session in `/work/session`.
 async fn language_folder(event : Json, home : String) -> String {
   let folder = Ref("")
   let _ = @pr_format.check(
     event,
     "/work/session",
-    path => {
+    (path, _) => {
       folder.val = path
       Some("ja")
     },
@@ -362,4 +362,27 @@ async test "the language is read from the pull request's repository" {
     )
   }
   @fs.rmdir(home, recursive=true)
+}
+
+///|
+async test "repository and owner keys override the default language" {
+  let event : Json = {
+    "tool_name": "mcp__github__update_pull_request",
+    "tool_input": {
+      "owner": "acme",
+      "repo": "app",
+      "pullNumber": 3,
+      "title": "ci: 軽くする",
+    },
+  }
+  let passes = (config : Array[(String, String)]) => {
+    let config = Map::from_array(config)
+    @pr_format.check(event, "/tmp", (_, key) => config.get(key)).is_empty()
+  }
+  assert_true(passes([("pr.language", "en"), ("pr.acme.language", "ja")]))
+  assert_false(passes([("pr.language", "ja"), ("pr.acme.language", "en")]))
+  assert_true(
+    passes([("pr.acme.language", "en"), ("pr.acme/app.language", "ja")]),
+  )
+  assert_true(passes([("pr.acme/other.language", "en"), ("pr.language", "ja")]))
 }

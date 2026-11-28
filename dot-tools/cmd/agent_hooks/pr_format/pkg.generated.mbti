@@ -2,7 +2,7 @@
 package "riii111/dot-tools/cmd/agent_hooks/pr_format"
 
 // Values
-pub async fn check(Json, String, async (String) -> String?, home? : String) -> Array[String]
+pub async fn check(Json, String, async (String, String) -> String?, home? : String) -> Array[String]
 
 pub fn check_body(String) -> Array[String]
 
@@ -16,7 +16,7 @@ pub fn denial_reason(Array[String]) -> String
 
 pub fn read_command(String) -> CommandPr?
 
-pub async fn read_language(String) -> String?
+pub async fn read_config(String, String) -> String?
 
 // Errors
 

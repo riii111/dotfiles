@@ -1,33 +1,40 @@
 // Denies `gh pr create` and `gh pr edit` when the title or body breaks the mechanical format rules.
 // A pull request the GitHub MCP server creates or edits, as in Claude Code cloud sessions, is checked the same way from
 // its structured title and body, and must be created as a draft.
-// The language comes from `git config pr.language` (ja or en) of the pull request's repository, not of the session's
-// folder. The user sets it per repository, so an unset value blocks the pull request instead of being guessed.
+// The language, ja or en, comes from the Git configuration of the pull request's repository, not of the session's folder.
+// `pr.<owner>/<repo>.language` and `pr.<owner>.language` win over `pr.language`, so a repository without a checkout still has its own language.
+// An unset value blocks the pull request instead of being guessed.
 
 ///|
 pub let denial_header : String = "PRのタイトルか本文を次のとおり直し、同じコマンドを再実行してください。"
 
 ///|
-let unset_language : String = "このリポジトリのPRの言語が未設定か不正。ユーザーに英語か日本語かを確認し、`git config pr.language en` か `git config pr.language ja` を設定する"
+let unset_language : String = "このリポジトリのPRの言語が未設定か不正。ユーザーに英語か日本語かを確認し、`git config pr.language en` か `ja` を設定する。チェックアウトのないリポジトリは `git config --global pr.<owner>.language` か `pr.<owner>/<repo>.language` で設定する"
 
 ///|
 let unreadable_body : String = "本文をコマンド内に直接書く。`--body \"$(cat <<'EOF' ... EOF)\"` の形にする。ファイルや変数を経由すると本文を検査できない"
 
 ///|
 /// Returns the problems of the pull request a PreToolUse event creates or edits.
-/// `read_language` returns `git config pr.language` for a folder; an error it raises is passed on.
+/// `read_config` returns `git config <key>` for a folder and key; an error it raises is passed on.
 /// `home` defaults to `$HOME`.
 pub async fn check(
   event : Json,
   cwd : String,
-  read_language : async (String) -> String?,
+  read_config : async (String, String) -> String?,
   home? : String,
 ) -> Array[String] {
   let home = match home {
     Some(home) => home
     None => @env.get_env_var("HOME").unwrap_or("")
   }
-  let folder = () => language_folder(target(event, cwd, home), home)
+  let repository = target(event, cwd, home)
+  // One budget covers every key, so the lookup stays within the three seconds the hook timeout allows for it.
+  let language = () => {
+    @async.with_timeout(3000, () => {
+      configured_language(repository, home, read_config)
+    })
+  }
   let name = match event {
     { "tool_name": String(name), .. } => name
     _ => ""
@@ -46,9 +53,7 @@ pub async fn check(
       problems.push("PRはDraftで作る。`draft: true` を指定する")
     }
     problems.push_iter(format_problems(title, body).iter())
-    problems.push_iter(
-      language_problems(folder, title, body, read_language).iter(),
-    )
+    problems.push_iter(language_problems(language, title, body).iter())
     return problems
   }
 
@@ -60,9 +65,7 @@ pub async fn check(
   if pr.unreadable_body {
     problems.push(unreadable_body)
   }
-  problems.push_iter(
-    language_problems(folder, pr.title, pr.body, read_language).iter(),
-  )
+  problems.push_iter(language_problems(language, pr.title, pr.body).iter())
   problems
 }
 
@@ -91,14 +94,28 @@ fn text_field(input : Json, key : String) -> String? {
 }
 
 ///|
+async fn configured_language(
+  repository : Target,
+  home : String,
+  read_config : async (String, String) -> String?,
+) -> String? {
+  let folder = language_folder(repository, home)
+  for key in language_keys(repository) {
+    if read_config(folder, key) is Some(value) {
+      return Some(value)
+    }
+  }
+  None
+}
+
+///|
 async fn language_problems(
-  folder : async () -> String,
+  language : async () -> String?,
   title : String?,
   body : String?,
-  read_language : async (String) -> String?,
 ) -> Array[String] {
   guard title is Some(_) || body is Some(_) else { return [] }
-  match read_language(folder()) {
+  match language() {
     Some("ja" | "en" as language) => check_language(language, title, body)
     _ => [unset_language]
   }
@@ -116,15 +133,15 @@ pub fn denial_reason(problems : Array[String]) -> String {
 }
 
 ///|
-/// Reads `git config pr.language` in `cwd`; an unset value gives `None`, and Git that cannot run or answer in three seconds raises.
-pub async fn read_language(cwd : String) -> String? {
-  let (_, stdout, _) = @async.with_timeout(3000, () => {
-    @process.collect_output("git", ["-C", cwd, "config", "--get", "pr.language"])
-  })
-  let language = @text.strip(stdout.text())
-  if language == "" {
+/// Reads `git config <key>` in `cwd`; an unset value gives `None`, and Git that cannot run raises.
+pub async fn read_config(cwd : String, key : String) -> String? {
+  let (_, stdout, _) = @process.collect_output("git", [
+    "-C", cwd, "config", "--get", key,
+  ])
+  let value = @text.strip(stdout.text())
+  if value == "" {
     None
   } else {
-    Some(language)
+    Some(value)
   }
 }

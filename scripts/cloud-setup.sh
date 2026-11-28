@@ -13,9 +13,12 @@
 # The last is where download.mooncakes.io redirects; if the agent-hooks build cannot resolve a new host, add it.
 #
 # Setup script (downloaded first, since a failed download piped into bash exits 0):
-#   curl -fsSLo /tmp/cloud-setup.sh https://raw.githubusercontent.com/riii111/dotfiles/main/scripts/cloud-setup.sh && PR_LANGUAGE=ja HARNEXUS_CREW=1 bash /tmp/cloud-setup.sh
+#   curl -fsSLo /tmp/cloud-setup.sh https://raw.githubusercontent.com/riii111/dotfiles/main/scripts/cloud-setup.sh && PR_LANGUAGE=ja PR_LANGUAGES='riii111=en' HARNEXUS_CREW=1 bash /tmp/cloud-setup.sh
 #   npm install -g @openai/codex || true
 #   mkdir -p ~/.codex && printf 'forced_login_method = "chatgpt"\n' > ~/.codex/config.toml
+#
+# PR_LANGUAGE is the default language of pull requests.
+# PR_LANGUAGES overrides it with space-separated OWNER=LANG or OWNER/REPO=LANG entries, since cloud sessions have no ghq checkout whose own setting the PR hook could read.
 #
 # HARNEXUS_CREW=1 installs harnexus-crew from HARNEXUS_CREW_REPO at HARNEXUS_CREW_REV.
 #
@@ -216,6 +219,14 @@ fi
 if [[ -n ${PR_LANGUAGE:-} ]]; then
 	git config --global pr.language "$PR_LANGUAGE"
 fi
+read -ra pr_languages <<<"${PR_LANGUAGES:-}"
+for entry in "${pr_languages[@]}"; do
+	if [[ $entry != ?*=@(ja|en) ]]; then
+		echo "cloud-setup: skipping PR_LANGUAGES entry that is not OWNER=ja or OWNER=en: $entry" >&2
+		continue
+	fi
+	git config --global "pr.${entry%%=*}.language" "${entry#*=}"
+done
 git config --global commit.gpgsign false
 # The rest is installed first, so the session can still start; the exit status reports the missing guards.
 if ((${#missing[@]})); then

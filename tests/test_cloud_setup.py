@@ -128,6 +128,21 @@ class CloudSetupTest(unittest.TestCase):
         )
         self.assertEqual(language.stdout.strip(), "ja")
 
+    def test_pr_languages_set_owner_and_repository_overrides(self):
+        self.run_setup(PR_LANGUAGE="ja", PR_LANGUAGES="riii111=en acme/app=ja malformed acme=EN")
+
+        config = subprocess.run(
+            ["git", "config", "--global", "--get-regexp", r"^pr\."],
+            env={"PATH": os.environ["PATH"], "HOME": str(self.home)},
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        self.assertEqual(
+            config.stdout.splitlines(),
+            ["pr.language ja", "pr.riii111.language en", "pr.acme/app.language ja"],
+        )
+
     def test_replaces_the_retired_code_review_with_the_pr_entrypoint(self):
         skills = self.home / ".codex/skills"
         retired = skills / "code-review"

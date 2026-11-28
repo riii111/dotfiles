@@ -64,7 +64,7 @@ async fn pre_tool_use_output(
   }
   // Codex ran the PR checks on Bash only, and cannot ask, so its merges are denied.
   if bash || (!codex && name.has_prefix("mcp__github__")) {
-    slow.push(() => pr_format_decision(event, @pr_format.read_language))
+    slow.push(() => pr_format_decision(event, @pr_format.read_config))
     let merge_options = if codex { ["--deny-merge"] } else { options }
     slow.push(() => pr_state_decision(event, merge_options, lookup))
   }
