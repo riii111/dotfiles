@@ -1,6 +1,6 @@
-// Finds the repository a pull request belongs to, so its `pr.language` is read there rather than in the session's folder.
+// Finds the repository a pull request belongs to, so its language is read there rather than in the session's folder.
 // A command names it by a pull request URL, by `--repo`, or by a `cd` before `gh`, in that order, as `gh` itself would.
-// A named repository is read from its ghq checkout; without one, only the global setting applies.
+// A named repository is read from its ghq checkout; without one, only the global settings apply.
 
 ///|
 /// The repository a pull request belongs to: one named on a host, or the folder of a checkout.

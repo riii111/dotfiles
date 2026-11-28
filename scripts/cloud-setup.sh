@@ -221,8 +221,8 @@ if [[ -n ${PR_LANGUAGE:-} ]]; then
 fi
 read -ra pr_languages <<<"${PR_LANGUAGES:-}"
 for entry in "${pr_languages[@]}"; do
-	if [[ $entry != ?*=?* ]]; then
-		echo "cloud-setup: skipping PR_LANGUAGES entry without OWNER=LANG: $entry" >&2
+	if [[ $entry != ?*=@(ja|en) ]]; then
+		echo "cloud-setup: skipping PR_LANGUAGES entry that is not OWNER=ja or OWNER=en: $entry" >&2
 		continue
 	fi
 	git config --global "pr.${entry%%=*}.language" "${entry#*=}"

@@ -9,7 +9,7 @@
 pub let denial_header : String = "PRのタイトルか本文を次のとおり直し、同じコマンドを再実行してください。"
 
 ///|
-let unset_language : String = "このリポジトリのPRの言語が未設定か不正。ユーザーに英語か日本語かを確認し、`git config pr.language en` か `git config pr.language ja` を設定する"
+let unset_language : String = "このリポジトリのPRの言語が未設定か不正。ユーザーに英語か日本語かを確認し、`git config pr.language en` か `ja` を設定する。チェックアウトのないリポジトリは `git config --global pr.<owner>.language` か `pr.<owner>/<repo>.language` で設定する"
 
 ///|
 let unreadable_body : String = "本文をコマンド内に直接書く。`--body \"$(cat <<'EOF' ... EOF)\"` の形にする。ファイルや変数を経由すると本文を検査できない"

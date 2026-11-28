@@ -245,7 +245,7 @@ test "references and bullets use Python's Unicode word and digit classes" {
 }
 
 ///|
-/// Returns the folder whose `pr.language` the check reads for `event`, with the session in `/work/session`.
+/// Returns the folder whose language the check reads for `event`, with the session in `/work/session`.
 async fn language_folder(event : Json, home : String) -> String {
   let folder = Ref("")
   let _ = @pr_format.check(
