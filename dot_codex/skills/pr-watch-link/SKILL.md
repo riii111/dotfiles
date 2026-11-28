@@ -8,7 +8,7 @@ description: |
 # PR Watch Link
 
 Codex Cloudのworkerは、監視したいPR URLを[ローカルの統括](../task-orchestration/references/codex-cloud.md#pr監視)に渡す。
-登録は統括側で行う。
+Cloud workerの手順はここで終了し、登録は統括側で行う。
 その他の実行環境では、`harnexus-crew environment`が`"host":"claude"`を返す場合に「Claude CodeのCloud」を読む。
 
 1. `pr-wake watch link <PRのURL>`をサンドボックス外で一度実行する。
