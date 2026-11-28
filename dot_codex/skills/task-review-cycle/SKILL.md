@@ -8,6 +8,7 @@ description: |
 # Task Review Cycle
 
 `harnexus-crew environment`が`"host":"claude"`を返す場合は、先に末尾の「Claude CodeのCloud」を読む。
+`"host":"codex"`を返す場合は「Codex Cloud」の手順を使う。
 `"app":"t3"`を返す場合は、先に「T3 Code」を読む。
 
 commit済み候補をfreshなCodex reviewerへ渡し、以後は同じreview Taskで続ける。
@@ -115,9 +116,11 @@ VMが作り直されると、依頼JSONとレビューの状態とreviewerの会
 
 ## Codex Cloud
 
-レビューは同じVMで別のCodex CLIを起動し、その実行結果をworkerが受け取る。
-依頼JSONは「Claude CodeのCloud」と同じにし、`workerAI`を`Codex`にする。
-`harnexus-crew review --request <JSON>`の完了を待ち、出力の`status`・`verdict`・`answer`・`base`・`head`を確認する。
-修正後は同じJSONで再実行し、同じreviewerへ再レビューを依頼する。
-判定保留、結果不明、VMの再構築、`--ask`の扱いは「Claude CodeのCloud」と同じ。
-Codex CLIの認証・起動とCloud内の再レビューは実環境で確認する。
+同じVMで動くCodexのサブエージェントを独立reviewerとして1体起動する。
+checkoutの絶対パス、タスクの根拠資料、固定base/head SHA、判断に必要なログや生成物のパスを渡す。
+[ai-code-review](../ai-code-review/SKILL.md)と[レビュー時の確認事項](#レビュー時の確認事項)に従った判定・指摘・base/headを受け取る。
+返ったbase/headが依頼と一致することを確認する。
+修正をcommitしたら、保存した同じreviewer IDへ継続依頼（`followup_task`）を送り、新しいheadをレビューさせる。
+必要な追加質問も同じreviewerへ送る。
+各回のreviewer ID・判定・base/headはworkerチャットに残す。
+サブエージェントの起動や同じreviewerへの継続ができない場合は、その時点のSHAと理由を報告する。

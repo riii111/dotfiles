@@ -124,6 +124,6 @@ baseの進行だけでは取り込み・全検証・再レビューを繰り返�
 
 - セッションのcheckoutでbranchを作る。
 - 独立レビューはtask-review-cycleの「Codex Cloud」に従う。
-- CloudのVMとレビュー記録は再構築で失われる。
-  公開するまでのcommitとレビュー結果はセッションの成果として保持し、再開時は状態を確認する。
-- `harnexus-crew`がCodex Cloudのレビューに対応していない場合は停止し、CLIの更新が必要と報告する。
+- 最初のレビュー直前に取得したbase SHAを控え、各レビューではGitで照合したbase/headを渡す。
+- VMの再構築に備え、コミットのSHAとレビュー結果をworkerチャットに残す。
+  再開時にcheckoutとreviewerの状態を確認する。

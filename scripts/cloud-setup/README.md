@@ -14,7 +14,7 @@ Cloud のセットアップには Linux x86_64、Git、Python、hook ビルド�
 HARNEXUS_CREW_TOOLCHAIN=moon HARNEXUS_CREW_REV=<公開済みのCLIコミット> bash <dotfiles>/scripts/codex-cloud-setup.sh <対象リポジトリ>
 ```
 
-MoonBit 版の CLI は、セットアップが固定ツールチェーンと core を GitHub Releases から取得し、SHA-256 を検証してビルドする。ネットワーク制限では `github.com` と `release-assets.githubusercontent.com` を許可する。旧 Bun 版には Codex Cloud の独立レビュー経路がない。CLI の変更を公開するまでは上記のコミットを取得できない。Claude Code Cloud で新 CLI を使う場合も `HARNEXUS_CREW_TOOLCHAIN=moon` と同じ commit を指定する。Codex の更新や再開時の既存設定への安全な切り替えは未対応であり、更新には新しい環境が必要。
+MoonBit 版の CLI は、セットアップが固定ツールチェーンと core を GitHub Releases から取得し、SHA-256 を検証してビルドする。ネットワーク制限では `github.com` と `release-assets.githubusercontent.com` を許可する。CLI の変更を公開するまでは上記のコミットを取得できない。Claude Code Cloud で新 CLI を使う場合も `HARNEXUS_CREW_TOOLCHAIN=moon` と同じ commit を指定する。Codex の更新や再開時の既存設定への安全な切り替えは未対応であり、更新には新しい環境が必要。
 
 Claude Code Cloud の Harnexus チャットで選んだ SKILL は、Cloud 側の `~/.claude/skills/<名前>/SKILL.md` に解決する。配置されていない名前は Cloud 側で読めない。Codex Cloud は `.agents/skills` を利用するが、セットアップ後に作った SKILL が同じセッションの選択欄と明示呼び出しに反映されるかは未確認。
 
@@ -25,6 +25,6 @@ Claude Code Cloud の Harnexus チャットで選んだ SKILL は、Cloud 側の
 1. hook の一時的な観測用ラッパーを用意し、イベント名と判定のみを保存して元の `agent-hooks` に入力を渡す。入力本文や環境変数は保存しない。設定を作業用環境に限ってラッパーへ向け、製品の仕様に従い hook を読み直す。
 2. 一時 Git リポジトリで `git status --short` を実行し、PreToolUse が発火して処理が通ることを確認する。存在しないファイルへの `git add -f` を実行し、hook の拒否を確認する。hook が動かなくても対象ファイルやリモートに変更が生じない条件にする。
 3. Codex の PermissionRequest は承認が必要な操作でのみ発火する。信頼済みの一時 checkout で `git status --short` を承認要求付きで実行し、イベントと許可を観測する。通常の実行でイベントが出ないことも区別する。承認経路がない環境では未検証と記録する。
-4. 新規・再開した各 Cloud で `task-worker` と `task-review-cycle` の本文、参照ファイル、`harnexus-crew` の commit を確かめ、固定 base/head の独立レビューと結果返却を実行する。Claude の選択 SKILL と Codex の選択欄・明示呼び出しも確認する。
+4. 新規・再開した各 Cloud で `task-worker` と `task-review-cycle` の本文と参照ファイルを確かめ、固定 base/head の独立レビューを実行する。Codex Cloud は同じ VM のサブエージェントを使い、Claude Code Cloud は `harnexus-crew` の固定 commit を確かめて別の Codex CLI を使う。Claude の選択 SKILL と Codex の選択欄・明示呼び出しも確認する。
 
-Cloud のネイティブ hook 発火、PermissionRequest、選択 SKILL の解決、独立レビューの実 Cloud 完走は未確認。Codex の設定を生成できたことだけで必須の制限が発火するとは判定しない。
+Codex Cloud のサブエージェントでは、同じ VM の Git 管理外ログを使い、指摘・修正・同じ reviewer での再レビューまで確認済み。Cloud のネイティブ hook 発火、PermissionRequest、選択 SKILL の解決、Claude Code Cloud の独立レビューは実環境で未確認。

@@ -14,6 +14,7 @@ description: |
 workerとreviewerの起動はtask-session-launchとtask-review-cycleの設定に従う。
 
 開始時と再開時に、ユーザーが指定したタスク管理元を読む。
+ローカルのCodexで統括する場合は、起動可否を判断する前に各taskの[Codex Cloud workerの登録](references/codex-cloud.md)を確認する。
 タスク管理元に記載された依存関係を確認する。
 依存が満たされていて、互いに並行して進められるtaskをすべて開始対象にする。
 依存先が未完了でも、依存先のPRに積めるtaskは開始対象にする。
@@ -21,6 +22,7 @@ workerとreviewerの起動はtask-session-launchとtask-review-cycleの設定に
 積み先のPRがまだないtaskは、そのPRができるまで開始しない。
 管理元にない合意や必要な依存成果・担当境界は参照文書へ記録する。
 開始対象を選んだ同じturnで、タスクID・参照文書のパスとURL・許可された到達点を`$task-session-launch`へ渡す。
+Codex Cloudに割り当てるtaskは登録手順へ進む。
 中間報告で停止しない。
 
 開始済みか完了済みかはタスク管理元、既存のCodex Task、GitHubのPRを見て判断する。
